@@ -1,0 +1,17 @@
+[package]
+name = "minimal-server"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+mcp = { path = "../../mcp" }
+mcp-core = { path = "../../crates/mcp-core" }
+mcp-server = { path = "../../crates/mcp-server" }
+mcp-transport = { path = "../../crates/mcp-transport" }
+tokio = { version = "1", features = ["full"] }
+serde_json = "1"
+
+[features]
+default = ["tokio-runtime"]
+tokio-runtime = []

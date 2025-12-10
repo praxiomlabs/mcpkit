@@ -1,0 +1,53 @@
+[package]
+name = "mcp-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+mcp-core = { path = "../crates/mcp-core" }
+serde_json = "1.0"
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "fuzz_jsonrpc_message"
+path = "fuzz_targets/fuzz_jsonrpc_message.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_jsonrpc_request"
+path = "fuzz_targets/fuzz_jsonrpc_request.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_jsonrpc_response"
+path = "fuzz_targets/fuzz_jsonrpc_response.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_progress_token"
+path = "fuzz_targets/fuzz_progress_token.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_jsonrpc_structured"
+path = "fuzz_targets/fuzz_jsonrpc_structured.rs"
+test = false
+doc = false
+bench = false

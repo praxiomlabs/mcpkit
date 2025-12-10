@@ -1,0 +1,24 @@
+[package]
+name = "mcp"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Rust SDK for the Model Context Protocol (MCP)"
+repository.workspace = true
+keywords = ["mcp", "model-context-protocol", "ai", "llm"]
+categories = ["asynchronous", "network-programming"]
+readme = "../README.md"
+
+[dependencies]
+mcp-core = { path = "../crates/mcp-core" }
+mcp-transport = { path = "../crates/mcp-transport" }
+mcp-server = { path = "../crates/mcp-server" }
+mcp-client = { path = "../crates/mcp-client" }
+mcp-macros = { path = "../crates/mcp-macros" }
+
+[features]
+default = ["server", "client", "tokio-runtime"]
+server = []
+client = []
+tokio-runtime = ["mcp-transport/tokio-runtime", "mcp-server/tokio-runtime", "mcp-client/tokio-runtime"]

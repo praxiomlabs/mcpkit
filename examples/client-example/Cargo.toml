@@ -1,0 +1,19 @@
+[package]
+name = "client-example"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "MCP client example demonstrating client usage"
+
+[dependencies]
+mcp = { path = "../../mcp" }
+mcp-core = { path = "../../crates/mcp-core" }
+mcp-client = { path = "../../crates/mcp-client" }
+mcp-transport = { path = "../../crates/mcp-transport", features = ["tokio-runtime"] }
+
+tokio = { version = "1", features = ["full", "process"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+futures = "0.3"
