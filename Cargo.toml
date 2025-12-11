@@ -28,7 +28,7 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/praxislabs/mcpkit"
 homepage = "https://github.com/praxislabs/mcpkit"
 documentation = "https://docs.rs/mcpkit"
-keywords = ["mcp", "model-context-protocol", "ai", "llm", "sdk"]
+keywords = ["mcp", "mcp-protocol", "ai", "llm", "sdk"]
 categories = ["api-bindings", "asynchronous", "network-programming"]
 
 [workspace.dependencies]
