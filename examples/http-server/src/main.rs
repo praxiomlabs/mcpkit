@@ -638,7 +638,8 @@ async fn main() {
         .with_state(state);
 
     // Start server
-    let addr = "127.0.0.1:3000";
+    // Use MCP_BIND_ADDR for containerized deployments (default: 127.0.0.1:3000)
+    let addr = std::env::var("MCP_BIND_ADDR").unwrap_or_else(|_| "127.0.0.1:3000".to_string());
     info!(addr = %addr, "Starting HTTP MCP server");
     println!("\nMCP HTTP Server running at http://{addr}/mcp");
     println!("\nTest with:");
@@ -648,6 +649,6 @@ async fn main() {
     println!("    -d '{{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{{\"protocolVersion\":\"{MCP_PROTOCOL_VERSION}\",\"clientInfo\":{{\"name\":\"curl\",\"version\":\"1.0\"}}}}}}'");
     println!();
 
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }

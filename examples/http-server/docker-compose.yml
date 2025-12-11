@@ -1,0 +1,29 @@
+# mcpkit HTTP Server - Docker Compose
+#
+# Quick start:
+#   cd examples/http-server
+#   docker-compose up --build
+#
+# Test the server:
+#   curl -X POST http://localhost:3000/mcp \
+#     -H "Content-Type: application/json" \
+#     -H "MCP-Protocol-Version: 2025-06-18" \
+#     -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","clientInfo":{"name":"curl","version":"1.0"}}}'
+
+services:
+  mcp-server:
+    build:
+      context: ../..  # Workspace root
+      dockerfile: examples/http-server/Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - RUST_LOG=info,http_server_example=debug
+      - MCP_BIND_ADDR=0.0.0.0:3000
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
