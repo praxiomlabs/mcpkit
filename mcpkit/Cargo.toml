@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 description = "Rust SDK for the Model Context Protocol (MCP)"
 repository.workspace = true
-keywords = ["mcp", "model-context-protocol", "ai", "llm"]
+keywords = ["mcp", "mcp-protocol", "ai", "llm"]
 categories = ["asynchronous", "network-programming"]
 readme = "../README.md"
 

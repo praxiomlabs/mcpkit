@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 description = "Testing utilities for mcpkit"
 repository.workspace = true
-keywords = ["mcp", "model-context-protocol", "testing"]
+keywords = ["mcp", "mcp-protocol", "testing"]
 categories = ["development-tools::testing"]
 
 [dependencies]
