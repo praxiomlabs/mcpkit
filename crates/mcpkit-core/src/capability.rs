@@ -369,7 +369,9 @@ pub const PROTOCOL_VERSION: &str = "2025-11-25";
 /// All protocol versions supported by this implementation.
 ///
 /// The SDK supports multiple protocol versions for backward compatibility:
-/// - `2025-11-25`: Latest version with full feature support
+/// - `2025-11-25`: Latest version with tasks, parallel tools, agent loops
+/// - `2025-06-18`: Elicitation, structured output, resource links
+/// - `2025-03-26`: OAuth 2.1, Streamable HTTP, tool annotations, audio
 /// - `2024-11-05`: Original MCP specification, widely deployed
 ///
 /// Version negotiation happens during initialization:
@@ -377,17 +379,23 @@ pub const PROTOCOL_VERSION: &str = "2025-11-25";
 /// 2. Server responds with the same version if supported, or its own preferred version
 /// 3. Client must support the server's version or disconnect
 ///
+/// For type-safe version handling, use [`crate::protocol_version::ProtocolVersion`].
+///
 /// # Example
 ///
 /// ```
 /// use mcpkit_core::capability::{SUPPORTED_PROTOCOL_VERSIONS, is_version_supported};
 ///
 /// assert!(is_version_supported("2025-11-25"));
+/// assert!(is_version_supported("2025-06-18"));
+/// assert!(is_version_supported("2025-03-26"));
 /// assert!(is_version_supported("2024-11-05"));
 /// assert!(!is_version_supported("1.0.0"));
 /// ```
 pub const SUPPORTED_PROTOCOL_VERSIONS: &[&str] = &[
-    "2025-11-25", // Latest - full feature support
+    "2025-11-25", // Latest - tasks, parallel tools, agent loops
+    "2025-06-18", // Elicitation, structured output, resource links
+    "2025-03-26", // OAuth 2.1, Streamable HTTP, tool annotations
     "2024-11-05", // Original MCP spec - widely deployed
 ];
 

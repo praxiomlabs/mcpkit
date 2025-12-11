@@ -63,6 +63,7 @@ pub mod auth;
 pub mod capability;
 pub mod error;
 pub mod protocol;
+pub mod protocol_version;
 pub mod schema;
 pub mod state;
 pub mod types;
@@ -75,6 +76,7 @@ pub use capability::{
 };
 pub use error::{JsonRpcError, McpError, McpResultExt};
 pub use protocol::{Message, Notification, ProgressToken, Request, RequestId, Response};
+pub use protocol_version::ProtocolVersion;
 pub use state::{Closing, Connected, Connection, Disconnected, Initializing, Ready};
 
 /// Prelude module for convenient imports.
@@ -92,6 +94,7 @@ pub mod prelude {
     };
     pub use crate::error::{McpError, McpResultExt};
     pub use crate::protocol::{Message, Notification, ProgressToken, Request, RequestId, Response};
+    pub use crate::protocol_version::ProtocolVersion;
     pub use crate::schema::{Schema, SchemaBuilder, SchemaType};
     pub use crate::state::{Closing, Connected, Connection, Disconnected, Initializing, Ready};
     pub use crate::types::{
