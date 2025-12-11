@@ -2,17 +2,19 @@
 
 use mcpkit::capability::{ClientCapabilities, ServerCapabilities};
 use mcpkit::protocol::RequestId;
+use mcpkit::protocol_version::ProtocolVersion;
 use mcpkit::types::prompt::PromptMessage;
 use mcpkit_server::capability::prompts::{PromptBuilder, PromptResultBuilder, PromptService};
 use mcpkit_server::context::{Context, NoOpPeer};
 use mcpkit_server::handler::PromptHandler;
 use serde_json::Value;
 
-fn make_test_context() -> (RequestId, ClientCapabilities, ServerCapabilities, NoOpPeer) {
+fn make_test_context() -> (RequestId, ClientCapabilities, ServerCapabilities, ProtocolVersion, NoOpPeer) {
     (
         RequestId::Number(1),
         ClientCapabilities::default(),
         ServerCapabilities::default(),
+        ProtocolVersion::LATEST,
         NoOpPeer,
     )
 }
@@ -71,8 +73,8 @@ async fn test_prompt_render() {
             .build())
     });
 
-    let (req_id, client_caps, server_caps, peer) = make_test_context();
-    let ctx = Context::new(&req_id, None, &client_caps, &server_caps, &peer);
+    let (req_id, client_caps, server_caps, protocol_version, peer) = make_test_context();
+    let ctx = Context::new(&req_id, None, &client_caps, &server_caps, protocol_version, &peer);
 
     let result = service
         .render(
@@ -91,8 +93,8 @@ async fn test_prompt_render() {
 async fn test_prompt_not_found() {
     let service = PromptService::new();
 
-    let (req_id, client_caps, server_caps, peer) = make_test_context();
-    let ctx = Context::new(&req_id, None, &client_caps, &server_caps, &peer);
+    let (req_id, client_caps, server_caps, protocol_version, peer) = make_test_context();
+    let ctx = Context::new(&req_id, None, &client_caps, &server_caps, protocol_version, &peer);
 
     let result = service.render("nonexistent", None, &ctx).await;
     assert!(result.is_err());
@@ -117,8 +119,8 @@ async fn test_prompt_handler_trait() {
             .build())
     });
 
-    let (req_id, client_caps, server_caps, peer) = make_test_context();
-    let ctx = Context::new(&req_id, None, &client_caps, &server_caps, &peer);
+    let (req_id, client_caps, server_caps, protocol_version, peer) = make_test_context();
+    let ctx = Context::new(&req_id, None, &client_caps, &server_caps, protocol_version, &peer);
 
     // Use the PromptHandler trait
     let prompts = service.list_prompts(&ctx).await.unwrap();
@@ -183,8 +185,8 @@ async fn test_multiple_prompts() {
 
     assert_eq!(service.len(), 4);
 
-    let (req_id, client_caps, server_caps, peer) = make_test_context();
-    let ctx = Context::new(&req_id, None, &client_caps, &server_caps, &peer);
+    let (req_id, client_caps, server_caps, protocol_version, peer) = make_test_context();
+    let ctx = Context::new(&req_id, None, &client_caps, &server_caps, protocol_version, &peer);
 
     let prompts = service.list_prompts(&ctx).await.unwrap();
     assert_eq!(prompts.len(), 4);
@@ -202,8 +204,8 @@ async fn test_prompt_with_no_args() {
             .build())
     });
 
-    let (req_id, client_caps, server_caps, peer) = make_test_context();
-    let ctx = Context::new(&req_id, None, &client_caps, &server_caps, &peer);
+    let (req_id, client_caps, server_caps, protocol_version, peer) = make_test_context();
+    let ctx = Context::new(&req_id, None, &client_caps, &server_caps, protocol_version, &peer);
 
     let result = service.render("help", None, &ctx).await;
     assert!(result.is_ok());

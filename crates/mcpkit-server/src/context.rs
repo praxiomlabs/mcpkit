@@ -17,12 +17,14 @@
 //! use mcpkit_server::{Context, NoOpPeer, ContextData};
 //! use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
 //! use mcpkit_core::protocol::RequestId;
+//! use mcpkit_core::protocol_version::ProtocolVersion;
 //!
 //! // Create test context data
 //! let data = ContextData::new(
 //!     RequestId::Number(1),
 //!     ClientCapabilities::default(),
 //!     ServerCapabilities::default(),
+//!     ProtocolVersion::LATEST,
 //! );
 //! let peer = NoOpPeer;
 //!
@@ -32,16 +34,19 @@
 //!     data.progress_token.as_ref(),
 //!     &data.client_caps,
 //!     &data.server_caps,
+//!     data.protocol_version,
 //!     &peer,
 //! );
 //!
-//! // Check for cancellation
+//! // Check for cancellation and protocol version
 //! assert!(!ctx.is_cancelled());
+//! assert!(ctx.protocol_version.supports_tasks());
 //! ```
 
 use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
 use mcpkit_core::error::McpError;
 use mcpkit_core::protocol::{Notification, ProgressToken, RequestId};
+use mcpkit_core::protocol_version::ProtocolVersion;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -150,6 +155,11 @@ pub struct Context<'a> {
     pub client_caps: &'a ClientCapabilities,
     /// Server capabilities advertised during initialization.
     pub server_caps: &'a ServerCapabilities,
+    /// The negotiated protocol version.
+    ///
+    /// Use this to check version-specific feature availability via
+    /// methods like `supports_tasks()`, `supports_elicitation()`, etc.
+    pub protocol_version: ProtocolVersion,
     /// Peer for sending notifications.
     peer: &'a dyn Peer,
     /// Cancellation token for this request.
@@ -164,6 +174,7 @@ impl<'a> Context<'a> {
         progress_token: Option<&'a ProgressToken>,
         client_caps: &'a ClientCapabilities,
         server_caps: &'a ServerCapabilities,
+        protocol_version: ProtocolVersion,
         peer: &'a dyn Peer,
     ) -> Self {
         Self {
@@ -171,6 +182,7 @@ impl<'a> Context<'a> {
             progress_token,
             client_caps,
             server_caps,
+            protocol_version,
             peer,
             cancel: CancellationToken::new(),
         }
@@ -183,6 +195,7 @@ impl<'a> Context<'a> {
         progress_token: Option<&'a ProgressToken>,
         client_caps: &'a ClientCapabilities,
         server_caps: &'a ServerCapabilities,
+        protocol_version: ProtocolVersion,
         peer: &'a dyn Peer,
         cancel: CancellationToken,
     ) -> Self {
@@ -191,6 +204,7 @@ impl<'a> Context<'a> {
             progress_token,
             client_caps,
             server_caps,
+            protocol_version,
             peer,
             cancel,
         }
@@ -279,6 +293,7 @@ impl std::fmt::Debug for Context<'_> {
             .field("progress_token", &self.progress_token)
             .field("client_caps", &self.client_caps)
             .field("server_caps", &self.server_caps)
+            .field("protocol_version", &self.protocol_version)
             .field("is_cancelled", &self.is_cancelled())
             .finish()
     }
@@ -312,6 +327,8 @@ pub struct ContextData {
     pub client_caps: ClientCapabilities,
     /// Server capabilities.
     pub server_caps: ServerCapabilities,
+    /// The negotiated protocol version.
+    pub protocol_version: ProtocolVersion,
 }
 
 impl ContextData {
@@ -321,12 +338,14 @@ impl ContextData {
         request_id: RequestId,
         client_caps: ClientCapabilities,
         server_caps: ServerCapabilities,
+        protocol_version: ProtocolVersion,
     ) -> Self {
         Self {
             request_id,
             progress_token: None,
             client_caps,
             server_caps,
+            protocol_version,
         }
     }
 
@@ -345,6 +364,7 @@ impl ContextData {
             self.progress_token.as_ref(),
             &self.client_caps,
             &self.server_caps,
+            self.protocol_version,
             peer,
         )
     }
@@ -369,10 +389,18 @@ mod tests {
         let server_caps = ServerCapabilities::default();
         let peer = NoOpPeer;
 
-        let ctx = Context::new(&request_id, None, &client_caps, &server_caps, &peer);
+        let ctx = Context::new(
+            &request_id,
+            None,
+            &client_caps,
+            &server_caps,
+            ProtocolVersion::LATEST,
+            &peer,
+        );
 
         assert!(!ctx.is_cancelled());
         assert!(ctx.progress_token.is_none());
+        assert_eq!(ctx.protocol_version, ProtocolVersion::LATEST);
     }
 
     #[test]
@@ -388,10 +416,12 @@ mod tests {
             Some(&progress_token),
             &client_caps,
             &server_caps,
+            ProtocolVersion::V2025_03_26,
             &peer,
         );
 
         assert!(ctx.progress_token.is_some());
+        assert_eq!(ctx.protocol_version, ProtocolVersion::V2025_03_26);
     }
 
     #[test]
@@ -400,6 +430,7 @@ mod tests {
             RequestId::Number(42),
             ClientCapabilities::default(),
             ServerCapabilities::default(),
+            ProtocolVersion::V2025_06_18,
         )
         .with_progress_token(ProgressToken::String("test".to_string()));
 
@@ -407,5 +438,9 @@ mod tests {
         let ctx = data.to_context(&peer);
 
         assert!(ctx.progress_token.is_some());
+        assert_eq!(ctx.protocol_version, ProtocolVersion::V2025_06_18);
+        // Test feature detection via protocol version
+        assert!(ctx.protocol_version.supports_elicitation());
+        assert!(!ctx.protocol_version.supports_tasks()); // Tasks require 2025-11-25
     }
 }

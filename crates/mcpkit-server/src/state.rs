@@ -15,6 +15,7 @@
 
 use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities, ServerInfo};
 use mcpkit_core::error::McpError;
+use mcpkit_core::protocol_version::ProtocolVersion;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
@@ -54,7 +55,9 @@ pub struct ConnectionData {
     /// Server information.
     pub server_info: ServerInfo,
     /// Protocol version negotiated.
-    pub protocol_version: Option<String>,
+    ///
+    /// Stored as a type-safe [`ProtocolVersion`] enum for feature detection.
+    pub protocol_version: Option<ProtocolVersion>,
     /// Session ID if applicable.
     pub session_id: Option<String>,
 }
@@ -148,7 +151,7 @@ impl Connection<state::Connected> {
     /// This transitions from `Connected` to `Initializing` state.
     pub async fn initialize(
         self,
-        _protocol_version: &str,
+        _protocol_version: ProtocolVersion,
     ) -> Result<Connection<state::Initializing>, McpError> {
         // In a real implementation, this would send the initialize request
         Ok(Connection {
@@ -171,7 +174,7 @@ impl Connection<state::Initializing> {
     pub async fn complete(
         self,
         client_capabilities: ClientCapabilities,
-        protocol_version: String,
+        protocol_version: ProtocolVersion,
     ) -> Result<Connection<state::Ready>, McpError> {
         // Update the connection data with negotiated values
         // In a real implementation, we'd use interior mutability
@@ -241,10 +244,9 @@ impl Connection<state::Ready> {
     /// through the typestate transitions. Use `try_protocol_version()`
     /// for a fallible version.
     #[must_use]
-    pub fn protocol_version(&self) -> &str {
+    pub fn protocol_version(&self) -> ProtocolVersion {
         self.inner
             .protocol_version
-            .as_ref()
             .expect("Ready connection must have protocol version")
     }
 
@@ -252,8 +254,8 @@ impl Connection<state::Ready> {
     ///
     /// Returns `None` if version was not set (should not happen in normal use).
     #[must_use]
-    pub fn try_protocol_version(&self) -> Option<&str> {
-        self.inner.protocol_version.as_deref()
+    pub fn try_protocol_version(&self) -> Option<ProtocolVersion> {
+        self.inner.protocol_version
     }
 
     /// Start graceful shutdown.
@@ -335,7 +337,7 @@ pub enum ConnectionEvent {
     /// Initialization completed successfully.
     InitializeCompleted {
         /// Negotiated protocol version.
-        protocol_version: String,
+        protocol_version: ProtocolVersion,
     },
     /// Initialization failed.
     InitializeFailed {
@@ -352,6 +354,7 @@ pub enum ConnectionEvent {
 mod tests {
     use super::*;
     use mcpkit_core::capability::{ServerCapabilities, ServerInfo};
+    use mcpkit_core::protocol_version::ProtocolVersion;
 
     #[test]
     fn test_connection_creation() {
@@ -374,16 +377,16 @@ mod tests {
         let conn = conn.connect().await.unwrap();
 
         // Initialize
-        let conn = conn.initialize("2025-11-25").await.unwrap();
+        let conn = conn.initialize(ProtocolVersion::V2025_11_25).await.unwrap();
 
         // Complete
         let conn = conn
-            .complete(ClientCapabilities::default(), "2025-11-25".to_string())
+            .complete(ClientCapabilities::default(), ProtocolVersion::V2025_11_25)
             .await
             .unwrap();
 
         // Verify ready state
-        assert_eq!(conn.protocol_version(), "2025-11-25");
+        assert_eq!(conn.protocol_version(), ProtocolVersion::V2025_11_25);
 
         // Shutdown
         let conn = conn.shutdown().await.unwrap();

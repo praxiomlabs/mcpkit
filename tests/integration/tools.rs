@@ -1,17 +1,19 @@
 //! Integration tests for tool handling.
 
 use mcpkit_core::types::{Tool, ToolOutput};
+use mcpkit_core::protocol_version::ProtocolVersion;
 use mcpkit_server::capability::tools::{ToolBuilder, ToolService};
 use mcpkit_server::context::{Context, NoOpPeer};
 use mcpkit_server::handler::ToolHandler;
 use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
 use mcpkit_core::protocol::RequestId;
 
-fn make_test_context() -> (RequestId, ClientCapabilities, ServerCapabilities, NoOpPeer) {
+fn make_test_context() -> (RequestId, ClientCapabilities, ServerCapabilities, ProtocolVersion, NoOpPeer) {
     (
         RequestId::Number(1),
         ClientCapabilities::default(),
         ServerCapabilities::default(),
+        ProtocolVersion::LATEST,
         NoOpPeer,
     )
 }
@@ -55,8 +57,8 @@ async fn test_tool_call() {
         Ok(ToolOutput::text((a * b).to_string()))
     });
 
-    let (req_id, client_caps, server_caps, peer) = make_test_context();
-    let ctx = Context::new(&req_id, None, &client_caps, &server_caps, &peer);
+    let (req_id, client_caps, server_caps, protocol_version, peer) = make_test_context();
+    let ctx = Context::new(&req_id, None, &client_caps, &server_caps, protocol_version, &peer);
 
     // Call the tool
     let result = service.call("multiply", serde_json::json!({"a": 3.0, "b": 4.0}), &ctx).await;
@@ -72,8 +74,8 @@ async fn test_tool_call() {
 async fn test_tool_not_found() {
     let service = ToolService::new();
 
-    let (req_id, client_caps, server_caps, peer) = make_test_context();
-    let ctx = Context::new(&req_id, None, &client_caps, &server_caps, &peer);
+    let (req_id, client_caps, server_caps, protocol_version, peer) = make_test_context();
+    let ctx = Context::new(&req_id, None, &client_caps, &server_caps, protocol_version, &peer);
 
     let result = service.call("nonexistent", serde_json::json!({}), &ctx).await;
     assert!(result.is_err());
@@ -92,8 +94,8 @@ async fn test_tool_handler_trait() {
         Ok(ToolOutput::text(format!("Hello, {}!", name)))
     });
 
-    let (req_id, client_caps, server_caps, peer) = make_test_context();
-    let ctx = Context::new(&req_id, None, &client_caps, &server_caps, &peer);
+    let (req_id, client_caps, server_caps, protocol_version, peer) = make_test_context();
+    let ctx = Context::new(&req_id, None, &client_caps, &server_caps, protocol_version, &peer);
 
     // Use the ToolHandler trait
     let tools = service.list_tools(&ctx).await.unwrap();
@@ -121,8 +123,8 @@ async fn test_multiple_tools() {
 
     assert_eq!(service.len(), 4);
 
-    let (req_id, client_caps, server_caps, peer) = make_test_context();
-    let ctx = Context::new(&req_id, None, &client_caps, &server_caps, &peer);
+    let (req_id, client_caps, server_caps, protocol_version, peer) = make_test_context();
+    let ctx = Context::new(&req_id, None, &client_caps, &server_caps, protocol_version, &peer);
 
     let tools = service.list_tools(&ctx).await.unwrap();
     assert_eq!(tools.len(), 4);

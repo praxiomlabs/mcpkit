@@ -180,6 +180,7 @@ async fn main() -> Result<(), McpError> {
     // Set up test context
     use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
     use mcpkit_core::protocol::RequestId;
+    use mcpkit_core::protocol_version::ProtocolVersion;
     use mcpkit_server::NoOpPeer;
 
     let request_id = RequestId::Number(1);
@@ -187,7 +188,7 @@ async fn main() -> Result<(), McpError> {
     let server_caps = ServerCapabilities::default();
     let peer = NoOpPeer;
 
-    let ctx = Context::new(&request_id, None, &client_caps, &server_caps, &peer);
+    let ctx = Context::new(&request_id, None, &client_caps, &server_caps, ProtocolVersion::LATEST, &peer);
 
     // ========== TEST TOOLS ==========
     println!("\n=== Tools ===");

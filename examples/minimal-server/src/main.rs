@@ -56,6 +56,7 @@ async fn main() -> Result<(), McpError> {
     use mcpkit::server::NoOpPeer;
     use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
     use mcpkit_core::protocol::RequestId;
+    use mcpkit_core::protocol_version::ProtocolVersion;
 
     let request_id = RequestId::Number(1);
     let client_caps = ClientCapabilities::default();
@@ -68,6 +69,7 @@ async fn main() -> Result<(), McpError> {
         None, // No progress token
         &client_caps,
         &server_caps,
+        ProtocolVersion::LATEST,
         &peer,
     );
 
@@ -128,12 +130,14 @@ mod tests {
     use mcpkit::server::{Context, NoOpPeer};
     use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
     use mcpkit_core::protocol::RequestId;
+    use mcpkit_core::protocol_version::ProtocolVersion;
 
     // Helper struct to hold owned data for tests
     struct TestContext {
         request_id: RequestId,
         client_caps: ClientCapabilities,
         server_caps: ServerCapabilities,
+        protocol_version: ProtocolVersion,
         peer: NoOpPeer,
     }
 
@@ -143,6 +147,7 @@ mod tests {
                 request_id: RequestId::Number(1),
                 client_caps: ClientCapabilities::default(),
                 server_caps: ServerCapabilities::default(),
+                protocol_version: ProtocolVersion::LATEST,
                 peer: NoOpPeer,
             }
         }
@@ -153,6 +158,7 @@ mod tests {
                 None,
                 &self.client_caps,
                 &self.server_caps,
+                self.protocol_version,
                 &self.peer,
             )
         }

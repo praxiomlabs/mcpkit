@@ -2,6 +2,7 @@
 
 use mcpkit::capability::{ClientCapabilities, ServerCapabilities};
 use mcpkit::protocol::RequestId;
+use mcpkit::protocol_version::ProtocolVersion;
 use mcpkit::types::resource::ResourceContents;
 use mcpkit_server::capability::resources::{
     ResourceBuilder, ResourceService, ResourceTemplateBuilder,
@@ -9,11 +10,12 @@ use mcpkit_server::capability::resources::{
 use mcpkit_server::context::{Context, NoOpPeer};
 use mcpkit_server::handler::ResourceHandler;
 
-fn make_test_context() -> (RequestId, ClientCapabilities, ServerCapabilities, NoOpPeer) {
+fn make_test_context() -> (RequestId, ClientCapabilities, ServerCapabilities, ProtocolVersion, NoOpPeer) {
     (
         RequestId::Number(1),
         ClientCapabilities::default(),
         ServerCapabilities::default(),
+        ProtocolVersion::LATEST,
         NoOpPeer,
     )
 }
@@ -50,8 +52,8 @@ async fn test_resource_read() {
         async move { Ok(ResourceContents::text(uri, "Hello, World!")) }
     });
 
-    let (req_id, client_caps, server_caps, peer) = make_test_context();
-    let ctx = Context::new(&req_id, None, &client_caps, &server_caps, &peer);
+    let (req_id, client_caps, server_caps, protocol_version, peer) = make_test_context();
+    let ctx = Context::new(&req_id, None, &client_caps, &server_caps, protocol_version, &peer);
 
     let result = service.read("file:///data.txt", &ctx).await;
     assert!(result.is_ok());
@@ -64,8 +66,8 @@ async fn test_resource_read() {
 async fn test_resource_not_found() {
     let service = ResourceService::new();
 
-    let (req_id, client_caps, server_caps, peer) = make_test_context();
-    let ctx = Context::new(&req_id, None, &client_caps, &server_caps, &peer);
+    let (req_id, client_caps, server_caps, protocol_version, peer) = make_test_context();
+    let ctx = Context::new(&req_id, None, &client_caps, &server_caps, protocol_version, &peer);
 
     let result = service.read("file:///nonexistent.txt", &ctx).await;
     assert!(result.is_err());
@@ -94,8 +96,8 @@ async fn test_resource_template() {
 
     assert_eq!(service.template_count(), 1);
 
-    let (req_id, client_caps, server_caps, peer) = make_test_context();
-    let ctx = Context::new(&req_id, None, &client_caps, &server_caps, &peer);
+    let (req_id, client_caps, server_caps, protocol_version, peer) = make_test_context();
+    let ctx = Context::new(&req_id, None, &client_caps, &server_caps, protocol_version, &peer);
 
     let result = service.read("db://users/123", &ctx).await;
     assert!(result.is_ok());
@@ -114,8 +116,8 @@ async fn test_resource_handler_trait() {
         async move { Ok(ResourceContents::text(uri, "test content")) }
     });
 
-    let (req_id, client_caps, server_caps, peer) = make_test_context();
-    let ctx = Context::new(&req_id, None, &client_caps, &server_caps, &peer);
+    let (req_id, client_caps, server_caps, protocol_version, peer) = make_test_context();
+    let ctx = Context::new(&req_id, None, &client_caps, &server_caps, protocol_version, &peer);
 
     // Use the ResourceHandler trait
     let resources = service.list_resources(&ctx).await.unwrap();
@@ -166,8 +168,8 @@ async fn test_multiple_resources() {
 
     assert_eq!(service.len(), 5);
 
-    let (req_id, client_caps, server_caps, peer) = make_test_context();
-    let ctx = Context::new(&req_id, None, &client_caps, &server_caps, &peer);
+    let (req_id, client_caps, server_caps, protocol_version, peer) = make_test_context();
+    let ctx = Context::new(&req_id, None, &client_caps, &server_caps, protocol_version, &peer);
 
     let resources = service.list_resources(&ctx).await.unwrap();
     assert_eq!(resources.len(), 5);
@@ -193,8 +195,8 @@ async fn test_binary_resource() {
         }
     });
 
-    let (req_id, client_caps, server_caps, peer) = make_test_context();
-    let ctx = Context::new(&req_id, None, &client_caps, &server_caps, &peer);
+    let (req_id, client_caps, server_caps, protocol_version, peer) = make_test_context();
+    let ctx = Context::new(&req_id, None, &client_caps, &server_caps, protocol_version, &peer);
 
     let result = service.read("file:///image.png", &ctx).await;
     assert!(result.is_ok());

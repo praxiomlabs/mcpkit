@@ -51,7 +51,7 @@ pub use session::{Session, SessionManager, SessionStore};
 pub use state::McpState;
 
 /// Protocol versions supported by this extension.
-pub const SUPPORTED_VERSIONS: &[&str] = &["2024-11-05", "2025-03-26", "2025-06-18"];
+pub const SUPPORTED_VERSIONS: &[&str] = &["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"];
 
 /// Check if a protocol version is supported.
 #[must_use]

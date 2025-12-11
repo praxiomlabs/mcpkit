@@ -35,11 +35,10 @@
 use crate::builder::{NotRegistered, Registered, Server};
 use crate::context::{CancellationToken, Context, Peer};
 use crate::handler::{PromptHandler, ResourceHandler, ServerHandler, ToolHandler};
-use mcpkit_core::capability::{
-    negotiate_version, ClientCapabilities, ServerCapabilities, SUPPORTED_PROTOCOL_VERSIONS,
-};
+use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
 use mcpkit_core::error::McpError;
 use mcpkit_core::protocol::{Message, Notification, ProgressToken, Request, Response};
+use mcpkit_core::protocol_version::ProtocolVersion;
 use mcpkit_core::types::CallToolResult;
 use mcpkit_transport::Transport;
 use std::collections::HashMap;
@@ -58,7 +57,10 @@ pub struct ServerState {
     /// Active cancellation tokens by request ID.
     pub cancellations: RwLock<HashMap<String, CancellationToken>>,
     /// The protocol version negotiated during initialization.
-    pub negotiated_version: RwLock<Option<String>>,
+    ///
+    /// This is stored as a `ProtocolVersion` enum for type-safe feature detection.
+    /// Use methods like `protocol_version().supports_tasks()` to check capabilities.
+    pub negotiated_version: RwLock<Option<ProtocolVersion>>,
 }
 
 impl ServerState {
@@ -77,17 +79,27 @@ impl ServerState {
     /// Get the negotiated protocol version.
     ///
     /// Returns `None` if not yet initialized.
-    pub fn protocol_version(&self) -> Option<String> {
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// if let Some(version) = state.protocol_version() {
+    ///     if version.supports_tasks() {
+    ///         // Tasks are available in this session
+    ///     }
+    /// }
+    /// ```
+    pub fn protocol_version(&self) -> Option<ProtocolVersion> {
         self.negotiated_version
             .read()
             .ok()
-            .and_then(|guard| guard.clone())
+            .and_then(|guard| *guard)
     }
 
     /// Set the negotiated protocol version.
     ///
     /// Silently fails if the lock is poisoned.
-    pub fn set_protocol_version(&self, version: String) {
+    pub fn set_protocol_version(&self, version: ProtocolVersion) {
         if let Ok(mut guard) = self.negotiated_version.write() {
             *guard = Some(version);
         }
@@ -306,32 +318,33 @@ where
             .as_ref()
             .ok_or_else(|| McpError::invalid_params("initialize", "missing params"))?;
 
-        // Extract and negotiate protocol version
-        let requested_version = params
+        // Extract and negotiate protocol version using type-safe enum
+        let requested_version_str = params
             .get("protocolVersion")
             .and_then(|v| v.as_str())
             .unwrap_or("");
 
-        let negotiated_version = negotiate_version(requested_version);
+        // Negotiate using the ProtocolVersion enum for type safety
+        let negotiated_version = ProtocolVersion::negotiate(requested_version_str, ProtocolVersion::ALL)
+            .unwrap_or(ProtocolVersion::LATEST);
 
         // Log version negotiation details for debugging
-        if requested_version == negotiated_version {
+        if requested_version_str == negotiated_version.as_str() {
             tracing::debug!(
                 version = %negotiated_version,
                 "Protocol version negotiated successfully"
             );
         } else {
             tracing::info!(
-                requested = %requested_version,
+                requested = %requested_version_str,
                 negotiated = %negotiated_version,
-                supported = ?SUPPORTED_PROTOCOL_VERSIONS,
-                "Protocol version negotiation: client requested unsupported version"
+                supported = ?ProtocolVersion::ALL.iter().map(|v| v.as_str()).collect::<Vec<_>>(),
+                "Protocol version negotiation: client requested different version"
             );
         }
 
-        // Store the negotiated version
-        self.state
-            .set_protocol_version(negotiated_version.to_string());
+        // Store the negotiated version (type-safe enum)
+        self.state.set_protocol_version(negotiated_version);
 
         // Extract client info and capabilities
         if let Some(caps) = params.get("capabilities") {
@@ -340,9 +353,9 @@ where
             }
         }
 
-        // Build response with negotiated version
+        // Build response with negotiated version (serialized to string by serde)
         let result = serde_json::json!({
-            "protocolVersion": negotiated_version,
+            "protocolVersion": negotiated_version.as_str(),
             "serverInfo": {
                 "name": "mcp-server",
                 "version": "1.0.0"
@@ -366,11 +379,13 @@ where
         // Create context for the handler
         let peer = TransportPeer::new(self.transport.clone());
         let client_caps = self.state.client_caps();
+        let protocol_version = self.state.protocol_version().unwrap_or(ProtocolVersion::LATEST);
         let ctx = Context::new(
             &request.id,
             progress_token.as_ref(),
             &client_caps,
             &self.state.server_caps,
+            protocol_version,
             &peer,
         );
 

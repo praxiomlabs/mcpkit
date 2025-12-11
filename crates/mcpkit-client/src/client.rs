@@ -19,6 +19,7 @@ use mcpkit_core::error::{
     HandshakeDetails, JsonRpcError, McpError, TransportContext, TransportDetails,
     TransportErrorKind,
 };
+use mcpkit_core::protocol_version::ProtocolVersion;
 use mcpkit_core::protocol::{Message, Notification, Request, RequestId, Response};
 use mcpkit_core::types::{
     CallToolRequest, CallToolResult, CancelTaskRequest, CompleteRequest, CompleteResult,
@@ -80,6 +81,11 @@ pub struct Client<T: Transport, H: ClientHandler = crate::handler::NoOpHandler> 
     server_info: ServerInfo,
     /// Server capabilities.
     server_caps: ServerCapabilities,
+    /// Negotiated protocol version.
+    ///
+    /// Use this for feature detection via methods like `supports_tasks()`,
+    /// `supports_elicitation()`, etc.
+    protocol_version: ProtocolVersion,
     /// Client information.
     client_info: ClientInfo,
     /// Client capabilities.
@@ -132,6 +138,12 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
         let handler = Arc::new(handler);
         let running = Arc::new(AtomicBool::new(true));
 
+        // Parse the negotiated protocol version
+        let protocol_version = init_result
+            .protocol_version
+            .parse::<ProtocolVersion>()
+            .unwrap_or(ProtocolVersion::LATEST);
+
         // Create channel for outgoing messages
         let (outgoing_tx, outgoing_rx) = mpsc::channel::<Message>(256);
 
@@ -154,6 +166,7 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
             transport,
             server_info: init_result.server_info,
             server_caps: init_result.capabilities,
+            protocol_version,
             client_info,
             client_caps,
             next_id: AtomicU64::new(1),
@@ -455,6 +468,18 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
     /// Get the server capabilities.
     pub const fn server_capabilities(&self) -> &ServerCapabilities {
         &self.server_caps
+    }
+
+    /// Get the negotiated protocol version.
+    ///
+    /// Use this for feature detection. For example:
+    /// ```rust,ignore
+    /// if client.protocol_version().supports_tasks() {
+    ///     // Use task-related features
+    /// }
+    /// ```
+    pub fn protocol_version(&self) -> ProtocolVersion {
+        self.protocol_version
     }
 
     /// Get the client information.

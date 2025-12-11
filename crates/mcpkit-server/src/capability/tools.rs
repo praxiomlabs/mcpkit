@@ -206,13 +206,15 @@ mod tests {
     use crate::context::{Context, NoOpPeer};
     use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
     use mcpkit_core::protocol::RequestId;
+    use mcpkit_core::protocol_version::ProtocolVersion;
     use mcpkit_core::types::tool::CallToolResult;
 
-    fn make_context() -> (RequestId, ClientCapabilities, ServerCapabilities, NoOpPeer) {
+    fn make_context() -> (RequestId, ClientCapabilities, ServerCapabilities, ProtocolVersion, NoOpPeer) {
         (
             RequestId::Number(1),
             ClientCapabilities::default(),
             ServerCapabilities::default(),
+            ProtocolVersion::LATEST,
             NoOpPeer,
         )
     }
@@ -248,8 +250,8 @@ mod tests {
         assert!(service.contains("echo"));
         assert_eq!(service.len(), 1);
 
-        let (req_id, client_caps, server_caps, peer) = make_context();
-        let ctx = Context::new(&req_id, None, &client_caps, &server_caps, &peer);
+        let (req_id, client_caps, server_caps, protocol_version, peer) = make_context();
+        let ctx = Context::new(&req_id, None, &client_caps, &server_caps, protocol_version, &peer);
 
         let result = service
             .call("echo", serde_json::json!({"hello": "world"}), &ctx)
