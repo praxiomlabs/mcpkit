@@ -230,6 +230,44 @@ Before adding a new dependency:
 4. Ensure license compatibility (MIT/Apache-2.0)
 5. Prefer feature-gated optional dependencies
 
+## Versioning Policy
+
+mcpkit follows [Semantic Versioning 2.0.0](https://semver.org/):
+
+- **MAJOR** (x.0.0): Breaking changes to public API
+- **MINOR** (0.x.0): New features, backward-compatible additions
+- **PATCH** (0.0.x): Bug fixes, security patches, documentation
+
+### Pre-1.0 Stability
+
+During the 0.x.y phase:
+- Minor version bumps (0.x.0) may include breaking changes
+- Patch versions (0.0.x) remain backward compatible
+- We aim to minimize churn, but cannot guarantee full API stability
+
+### What Constitutes a Breaking Change
+
+Breaking changes include:
+- Removing public types, functions, methods, or fields
+- Changing function signatures (parameters, return types)
+- Changing trait definitions
+- Changing macro syntax or behavior
+- Removing or renaming feature flags
+- Increasing MSRV (Minimum Supported Rust Version)
+
+Non-breaking changes include:
+- Adding new public items (types, functions, methods)
+- Adding new optional parameters with defaults
+- Adding new feature flags
+- Deprecating items (but not removing them)
+- Bug fixes that change incorrect behavior
+- Performance improvements
+- Documentation updates
+
+### CI Enforcement
+
+We use `cargo-semver-checks` in CI to automatically detect unintentional breaking changes. All PRs must pass semver checks before merging.
+
 ## Release Process
 
 Releases are handled by maintainers:

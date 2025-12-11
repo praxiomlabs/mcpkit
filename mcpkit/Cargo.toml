@@ -34,3 +34,10 @@ tokio-tungstenite = { workspace = true }
 futures = "0.3"
 reqwest = { workspace = true }
 axum = { workspace = true }
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true

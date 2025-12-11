@@ -1,0 +1,97 @@
+name: RFC (Request for Comments)
+description: Propose a significant change requiring design discussion
+title: "[RFC]: "
+labels: ["rfc", "discussion"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        RFCs are for significant changes that require design discussion before implementation.
+        Examples: new transport types, breaking API changes, major architectural decisions.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One paragraph explanation of the proposal
+      placeholder: This RFC proposes...
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Why are we doing this? What use cases does it support? What problems does it solve?
+      placeholder: |
+        Currently, mcpkit lacks...
+        Users have requested...
+        This would enable...
+    validations:
+      required: true
+
+  - type: textarea
+    id: design
+    attributes:
+      label: Detailed Design
+      description: Explain the design in enough detail for someone familiar with mcpkit to implement
+      placeholder: |
+        ## Types
+
+        ```rust
+        pub struct NewFeature {
+            // ...
+        }
+        ```
+
+        ## Behavior
+
+        ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: drawbacks
+    attributes:
+      label: Drawbacks
+      description: What are the potential downsides of this proposal?
+      placeholder: |
+        - Increased complexity
+        - Breaking changes
+        - Performance impact
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: What other designs have been considered? What is the impact of not doing this?
+      placeholder: |
+        ## Alternative A
+        ...
+
+        ## Alternative B
+        ...
+
+        ## Do nothing
+        ...
+
+  - type: textarea
+    id: unresolved
+    attributes:
+      label: Unresolved Questions
+      description: What parts of the design are still TBD?
+      placeholder: |
+        - Should we...?
+        - How do we handle...?
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      description: How big is this change?
+      options:
+        - Small (single crate, non-breaking)
+        - Medium (multiple crates, minor breaking changes)
+        - Large (architectural, major breaking changes)
+    validations:
+      required: true

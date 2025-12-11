@@ -1,0 +1,74 @@
+name: Feature Request
+description: Suggest a new feature or enhancement
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a feature! Please describe what you'd like to see.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What problem does this feature solve? Is this related to a frustration?
+      placeholder: I'm always frustrated when...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the solution you'd like
+      placeholder: I would like mcpkit to...
+    validations:
+      required: true
+
+  - type: textarea
+    id: api
+    attributes:
+      label: Proposed API (if applicable)
+      description: If you have ideas about how the API should look, share them here
+      render: rust
+      placeholder: |
+        // Example of how you'd like to use the feature
+        #[tool(description = "Example")]
+        async fn my_tool(&self) -> ToolOutput {
+            // ...
+        }
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Describe any alternative solutions or features you've considered
+      placeholder: I also considered...
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      description: What area does this feature relate to?
+      options:
+        - Core types (mcpkit-core)
+        - Server implementation (mcpkit-server)
+        - Client implementation (mcpkit-client)
+        - Transport layer (mcpkit-transport)
+        - Macros (mcpkit-macros)
+        - Testing utilities (mcpkit-testing)
+        - Framework integration (mcpkit-axum, mcpkit-actix)
+        - Documentation
+        - Examples
+        - Other
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      description: Would you be willing to help implement this feature?
+      options:
+        - label: I would be willing to submit a PR to implement this feature
