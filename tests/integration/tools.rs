@@ -1,11 +1,11 @@
 //! Integration tests for tool handling.
 
-use mcp_core::types::{Tool, ToolOutput};
-use mcp_server::capability::tools::{ToolBuilder, ToolService};
-use mcp_server::context::{Context, NoOpPeer};
-use mcp_server::handler::ToolHandler;
-use mcp_core::capability::{ClientCapabilities, ServerCapabilities};
-use mcp_core::protocol::RequestId;
+use mcpkit_core::types::{Tool, ToolOutput};
+use mcpkit_server::capability::tools::{ToolBuilder, ToolService};
+use mcpkit_server::context::{Context, NoOpPeer};
+use mcpkit_server::handler::ToolHandler;
+use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
+use mcpkit_core::protocol::RequestId;
 
 fn make_test_context() -> (RequestId, ClientCapabilities, ServerCapabilities, NoOpPeer) {
     (

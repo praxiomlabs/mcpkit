@@ -16,7 +16,7 @@
 //! - No manual router wiring or initialization
 //! - 66% less boilerplate than rmcp
 
-use mcp::prelude::*;
+use mcpkit::prelude::*;
 
 /// A minimal calculator server with just two tools.
 struct Calculator;
@@ -54,9 +54,9 @@ async fn main() -> Result<(), McpError> {
     println!("Has tools: {}", caps.has_tools());
 
     // Set up owned data for creating contexts
-    use mcp_core::capability::{ClientCapabilities, ServerCapabilities};
-    use mcp_core::protocol::RequestId;
-    use mcp::server::NoOpPeer;
+    use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
+    use mcpkit_core::protocol::RequestId;
+    use mcpkit::server::NoOpPeer;
 
     let request_id = RequestId::Number(1);
     let client_caps = ClientCapabilities::default();
@@ -121,9 +121,9 @@ async fn main() -> Result<(), McpError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mcp_core::capability::{ClientCapabilities, ServerCapabilities};
-    use mcp_core::protocol::RequestId;
-    use mcp::server::{NoOpPeer, Context};
+    use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
+    use mcpkit_core::protocol::RequestId;
+    use mcpkit::server::{NoOpPeer, Context};
 
     // Helper struct to hold owned data for tests
     struct TestContext {

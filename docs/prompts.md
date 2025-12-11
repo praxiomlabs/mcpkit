@@ -7,7 +7,7 @@ Prompts are reusable message templates that AI assistants can use to structure t
 Use the `#[prompt]` attribute to define a prompt handler:
 
 ```rust
-use mcp::prelude::*;
+use mcpkit::prelude::*;
 
 struct PromptServer;
 
@@ -189,7 +189,7 @@ async fn generate_tests(
 ## Complete Example
 
 ```rust
-use mcp::prelude::*;
+use mcpkit::prelude::*;
 
 struct WritingAssistant;
 

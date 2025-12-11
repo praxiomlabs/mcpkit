@@ -17,7 +17,7 @@
 //! cargo run -p client-example
 //! ```
 
-use mcp_core::protocol::{Message, Notification, Request, RequestId};
+use mcpkit_core::protocol::{Message, Notification, Request, RequestId};
 use serde_json::{json, Value};
 use std::{
     process::Stdio,
@@ -220,6 +220,7 @@ impl McpClient {
     }
 
     /// Read a resource.
+    #[allow(dead_code)]
     async fn read_resource(&mut self, uri: &str) -> Result<Value, Box<dyn std::error::Error>> {
         let result = self
             .request(
@@ -246,6 +247,7 @@ impl McpClient {
     }
 
     /// Get a prompt.
+    #[allow(dead_code)]
     async fn get_prompt(
         &mut self,
         name: &str,

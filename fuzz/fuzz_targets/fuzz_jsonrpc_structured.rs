@@ -7,7 +7,7 @@
 
 use arbitrary::{Arbitrary, Unstructured};
 use libfuzzer_sys::fuzz_target;
-use mcp_core::protocol::{Message, Notification, Request, Response};
+use mcpkit_core::protocol::{Message, Notification, Request, Response};
 use serde_json::Value;
 
 /// A structured input for fuzzing JSON-RPC messages.

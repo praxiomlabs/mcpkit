@@ -1,0 +1,31 @@
+[package]
+name = "mcpkit-server"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Server implementation for mcpkit"
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+mcpkit-core = { version = "0.1.0", path = "../mcpkit-core" }
+mcpkit-transport = { version = "0.1.0", path = "../mcpkit-transport" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+futures = { workspace = true }
+tokio = { version = "1", features = ["sync", "rt"], optional = true }
+tracing = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full", "test-util"] }
+
+[features]
+default = ["tokio-runtime"]
+tokio-runtime = ["tokio", "mcpkit-transport/tokio-runtime"]
+
+[lints]
+workspace = true

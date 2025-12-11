@@ -21,12 +21,12 @@
 //!
 //! Then send JSON-RPC messages via stdin.
 
-use mcp_core::{
+use mcpkit_core::{
     error::JsonRpcError,
     protocol::{Message, Request, Response as JsonRpcResponse},
     types::{CallToolResult, Tool, ToolOutput},
 };
-use mcp_transport::{
+use mcpkit_transport::{
     middleware::{ExponentialBackoff, LayerStack, LoggingLayer, RetryLayer, TimeoutLayer},
     stdio::StdioTransport, Transport,
 };
@@ -327,7 +327,7 @@ fn middleware_configuration_examples() {
 /// This shows how to implement custom retry logic.
 #[allow(dead_code)]
 mod custom_policy {
-    use mcp_transport::{error::TransportError, middleware::RetryPolicy};
+    use mcpkit_transport::{error::TransportError, middleware::RetryPolicy};
 
     /// A custom retry policy that only retries on specific errors.
     #[derive(Debug, Clone)]

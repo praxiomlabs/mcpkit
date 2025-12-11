@@ -1,0 +1,13 @@
+error: Missing field `uri_pattern`
+ --> tests/compile-fail/resource_missing_uri.rs:9:6
+  |
+9 |     #[resource(name = "Config")]
+  |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `resource`
+ --> tests/compile-fail/resource_missing_uri.rs:3:33
+  |
+3 | use mcpkit_macros::{mcp_server, resource};
+  |                                 ^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default

@@ -7,7 +7,7 @@ Tools are the primary way MCP servers expose functionality to AI assistants. Thi
 Use the `#[tool]` attribute to mark a method as an MCP tool:
 
 ```rust
-use mcp::prelude::*;
+use mcpkit::prelude::*;
 
 struct MyServer;
 
@@ -79,7 +79,7 @@ async fn greet(&self, name: String, title: Option<String>) -> ToolOutput {
 For complex inputs, use `#[derive(ToolInput)]`:
 
 ```rust
-use mcp::prelude::*;
+use mcpkit::prelude::*;
 use serde::Deserialize;
 
 #[derive(ToolInput, Deserialize)]
@@ -181,7 +181,7 @@ async fn get_time(&self) -> ToolOutput {
 Tools can access the request context for advanced operations:
 
 ```rust
-use mcp_server::Context;
+use mcpkit_server::Context;
 
 #[tool(description = "Tool with context")]
 async fn with_context(&self, ctx: &Context<'_>, input: String) -> ToolOutput {
@@ -208,8 +208,8 @@ async fn with_context(&self, ctx: &Context<'_>, input: String) -> ToolOutput {
 ## Example: Full-Featured Tool
 
 ```rust
-use mcp::prelude::*;
-use mcp_server::Context;
+use mcpkit::prelude::*;
+use mcpkit_server::Context;
 
 struct DatabaseServer {
     db: Database,

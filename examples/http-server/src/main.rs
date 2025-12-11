@@ -31,7 +31,7 @@ use axum::{
     routing::{delete, get, post},
     Router,
 };
-use mcp_core::{
+use mcpkit_core::{
     capability::{ClientCapabilities, ServerCapabilities, ServerInfo},
     error::JsonRpcError,
     protocol::{Message, Request, Response as JsonRpcResponse},

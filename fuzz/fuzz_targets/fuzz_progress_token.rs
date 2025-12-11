@@ -6,7 +6,7 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use mcp_core::protocol::ProgressToken;
+use mcpkit_core::protocol::ProgressToken;
 
 fuzz_target!(|data: &[u8]| {
     // Try to parse as UTF-8 first

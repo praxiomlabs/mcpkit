@@ -6,7 +6,7 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use mcp_core::protocol::Request;
+use mcpkit_core::protocol::Request;
 
 fuzz_target!(|data: &[u8]| {
     // Try to parse as UTF-8 first

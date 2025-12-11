@@ -1,4 +1,4 @@
-# Contributing to rust-mcp-sdk
+# Contributing to mcpkit
 
 Thank you for your interest in contributing to the Rust MCP SDK! This document provides guidelines and instructions for contributing.
 
@@ -18,12 +18,12 @@ This project follows the [Rust Code of Conduct](https://www.rust-lang.org/polici
 1. Fork the repository
 2. Clone your fork:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/rust-mcp-sdk.git
-   cd rust-mcp-sdk
+   git clone https://github.com/YOUR_USERNAME/mcpkit.git
+   cd mcpkit
    ```
 3. Add upstream remote:
    ```bash
-   git remote add upstream https://github.com/anthropics/rust-mcp-sdk.git
+   git remote add upstream https://github.com/anthropics/mcpkit.git
    ```
 4. Build the project:
    ```bash
@@ -93,20 +93,34 @@ docs(readme): update quick start example
 ## Project Structure
 
 ```
-rust-mcp-sdk/
+mcpkit/
 ├── crates/
 │   ├── mcp-core/        # Core types (runtime-agnostic)
 │   ├── mcp-transport/   # Transport implementations
 │   ├── mcp-server/      # Server implementation
 │   ├── mcp-client/      # Client implementation
 │   ├── mcp-macros/      # Procedural macros
-│   └── mcp-testing/     # Test utilities
+│   ├── mcp-testing/     # Test utilities
+│   ├── mcp-axum/        # Axum web framework integration
+│   └── mcp-actix/       # Actix-web framework integration
 ├── mcp/                 # Facade crate
 ├── examples/            # Example servers
 ├── tests/               # Integration tests
 ├── benches/             # Benchmarks
 └── docs/                # Documentation
 ```
+
+## Contributing Extensions
+
+We welcome contributions for framework integrations and extensions! See [`docs/extensions.md`](docs/extensions.md) for patterns and guidelines.
+
+When contributing a new extension:
+
+1. Follow the patterns established in `mcp-axum` and `mcp-actix`
+2. Include session management with automatic cleanup
+3. Support protocol version validation
+4. Add comprehensive tests
+5. Document all public APIs
 
 ## Testing
 
@@ -227,8 +241,8 @@ Releases are handled by maintainers:
 
 ## Getting Help
 
-- **Questions**: Open a [Discussion](https://github.com/anthropics/rust-mcp-sdk/discussions)
-- **Bugs**: Open an [Issue](https://github.com/anthropics/rust-mcp-sdk/issues)
+- **Questions**: Open a [Discussion](https://github.com/anthropics/mcpkit/discussions)
+- **Bugs**: Open an [Issue](https://github.com/anthropics/mcpkit/issues)
 - **Security**: See [SECURITY.md](SECURITY.md)
 
 ## Recognition

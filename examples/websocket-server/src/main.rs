@@ -20,7 +20,7 @@
 //! ```
 
 use futures::{SinkExt, StreamExt};
-use mcp_core::{
+use mcpkit_core::{
     capability::{ServerCapabilities, ServerInfo},
     error::JsonRpcError,
     protocol::{Message, Request, Response as JsonRpcResponse},

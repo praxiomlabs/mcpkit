@@ -1,0 +1,7 @@
+error: Missing field `name`
+ --> tests/compile-fail/missing_server_name.rs:7:1
+  |
+7 | #[mcp_server(version = "1.0.0")]
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the attribute macro `mcp_server` (in Nightly builds, run with -Z macro-backtrace for more info)

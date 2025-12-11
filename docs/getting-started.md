@@ -1,4 +1,4 @@
-# Getting Started with rust-mcp-sdk
+# Getting Started with mcpkit
 
 This guide walks you through creating your first MCP server using the Rust MCP SDK.
 
@@ -27,7 +27,7 @@ Let's create a simple calculator server that exposes add and multiply tools.
 ### Step 1: Define Your Server
 
 ```rust
-use mcp::prelude::*;
+use mcpkit::prelude::*;
 
 struct Calculator;
 ```
@@ -54,8 +54,8 @@ impl Calculator {
 ### Step 3: Create the Main Function
 
 ```rust
-use mcp_server::ServerBuilder;
-use mcp_transport::stdio::StdioTransport;
+use mcpkit_server::ServerBuilder;
+use mcpkit_transport::stdio::StdioTransport;
 
 #[tokio::main]
 async fn main() -> Result<(), McpError> {
@@ -72,9 +72,9 @@ async fn main() -> Result<(), McpError> {
 ### Complete Example
 
 ```rust
-use mcp::prelude::*;
-use mcp_server::ServerBuilder;
-use mcp_transport::stdio::StdioTransport;
+use mcpkit::prelude::*;
+use mcpkit_server::ServerBuilder;
+use mcpkit_transport::stdio::StdioTransport;
 
 struct Calculator;
 

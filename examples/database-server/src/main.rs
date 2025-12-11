@@ -21,8 +21,8 @@
 //! DATABASE_URL=sqlite:test.db cargo run -p database-server-example
 //! ```
 
-use mcp::prelude::*;
-use mcp_server::Context;
+use mcpkit::prelude::*;
+use mcpkit_server::Context;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -457,9 +457,9 @@ async fn main() -> Result<(), McpError> {
     println!();
     println!("=== Demo: Executing query ===");
 
-    use mcp_core::capability::{ClientCapabilities, ServerCapabilities};
-    use mcp_core::protocol::RequestId;
-    use mcp_server::context::NoOpPeer;
+    use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
+    use mcpkit_core::protocol::RequestId;
+    use mcpkit_server::context::NoOpPeer;
 
     let request_id = RequestId::Number(1);
     let client_caps = ClientCapabilities::default();

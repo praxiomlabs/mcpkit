@@ -90,7 +90,7 @@ pub enum McpError {
 
 **Context Chaining:**
 ```rust
-use mcp_core::error::{McpError, McpResultExt};
+use mcpkit_core::error::{McpError, McpResultExt};
 
 fn process() -> Result<(), McpError> {
     read_config()

@@ -18,50 +18,50 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       # Publish crates in dependency order
-      - name: Publish mcp-core
-        run: cargo publish -p mcp-core --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - name: Publish mcpkit-core
+        run: cargo publish -p mcpkit-core --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
         continue-on-error: true
 
       - name: Wait for crates.io index update
         run: sleep 30
 
-      - name: Publish mcp-macros
-        run: cargo publish -p mcp-macros --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - name: Publish mcpkit-macros
+        run: cargo publish -p mcpkit-macros --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
         continue-on-error: true
 
       - name: Wait for crates.io index update
         run: sleep 30
 
-      - name: Publish mcp-transport
-        run: cargo publish -p mcp-transport --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - name: Publish mcpkit-transport
+        run: cargo publish -p mcpkit-transport --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
         continue-on-error: true
 
       - name: Wait for crates.io index update
         run: sleep 30
 
-      - name: Publish mcp-server
-        run: cargo publish -p mcp-server --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - name: Publish mcpkit-server
+        run: cargo publish -p mcpkit-server --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
         continue-on-error: true
 
       - name: Wait for crates.io index update
         run: sleep 30
 
-      - name: Publish mcp-client
-        run: cargo publish -p mcp-client --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - name: Publish mcpkit-client
+        run: cargo publish -p mcpkit-client --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
         continue-on-error: true
 
       - name: Wait for crates.io index update
         run: sleep 30
 
-      - name: Publish mcp-testing
-        run: cargo publish -p mcp-testing --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - name: Publish mcpkit-testing
+        run: cargo publish -p mcpkit-testing --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
         continue-on-error: true
 
       - name: Wait for crates.io index update
         run: sleep 30
 
-      - name: Publish mcp (facade)
-        run: cargo publish -p mcp --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - name: Publish mcpkit (facade)
+        run: cargo publish -p mcpkit --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
   github-release:
     name: Create GitHub Release

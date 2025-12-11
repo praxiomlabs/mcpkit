@@ -1,12 +1,12 @@
-# Rust MCP SDK
+# mcpkit
 
-[![CI](https://github.com/anthropics/rust-mcp-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/anthropics/rust-mcp-sdk/actions/workflows/ci.yml)
-[![Crates.io](https://img.shields.io/crates/v/mcp.svg)](https://crates.io/crates/mcp)
-[![Documentation](https://docs.rs/mcp/badge.svg)](https://docs.rs/mcp)
-[![License](https://img.shields.io/crates/l/mcp.svg)](LICENSE-MIT)
+[![CI](https://github.com/praxislabs/mcpkit/actions/workflows/ci.yml/badge.svg)](https://github.com/praxislabs/mcpkit/actions/workflows/ci.yml)
+[![Crates.io](https://img.shields.io/crates/v/mcpkit.svg)](https://crates.io/crates/mcpkit)
+[![Documentation](https://docs.rs/mcpkit/badge.svg)](https://docs.rs/mcpkit)
+[![License](https://img.shields.io/crates/l/mcpkit.svg)](LICENSE-MIT)
 [![MSRV](https://img.shields.io/badge/MSRV-1.75-blue.svg)](https://blog.rust-lang.org/2023/12/28/Rust-1.75.0.html)
 
-A production-grade Rust SDK for the Model Context Protocol (MCP) that dramatically reduces boilerplate compared to rmcp through a unified `#[mcp_server]` macro.
+A production-grade Rust SDK for the Model Context Protocol (MCP) that dramatically reduces boilerplate through a unified `#[mcp_server]` macro.
 
 ## Features
 
@@ -23,9 +23,7 @@ Add the dependency to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-mcp = { path = "mcp" }  # or from crates.io once published
-mcp-server = { path = "crates/mcp-server" }
-mcp-transport = { path = "crates/mcp-transport" }
+mcpkit = "0.1"
 tokio = { version = "1.0", features = ["full"] }
 serde_json = "1"
 ```
@@ -33,9 +31,9 @@ serde_json = "1"
 Create a simple MCP server:
 
 ```rust
-use mcp::prelude::*;
-use mcp_server::ServerBuilder;
-use mcp_transport::stdio::StdioTransport;
+use mcpkit::prelude::*;
+use mcpkit_server::ServerBuilder;
+use mcpkit_transport::stdio::StdioTransport;
 
 struct Calculator;
 
@@ -87,20 +85,22 @@ async fn main() -> Result<(), McpError> {
 ## Crate Structure
 
 ```
-rust-mcp-sdk/
-├── mcp/                    # Facade crate (use this!)
+mcpkit/
+├── mcpkit/                     # Facade crate (use this)
 ├── crates/
-│   ├── mcp-core/           # Protocol types, traits (no async runtime)
-│   ├── mcp-transport/      # Transport abstractions
-│   │   ├── stdio           # Standard I/O transport
-│   │   ├── http            # Streamable HTTP transport
-│   │   ├── websocket       # WebSocket transport
-│   │   └── unix            # Unix domain sockets
-│   ├── mcp-server/         # Server implementation
-│   ├── mcp-client/         # Client implementation
-│   ├── mcp-macros/         # Procedural macros
-│   └── mcp-testing/        # Test utilities
-└── examples/               # Example servers
+│   ├── mcpkit-core/            # Protocol types, traits
+│   ├── mcpkit-transport/       # Transport abstractions
+│   │   ├── stdio               # Standard I/O transport
+│   │   ├── http                # Streamable HTTP transport
+│   │   ├── websocket           # WebSocket transport
+│   │   └── unix                # Unix domain sockets
+│   ├── mcpkit-server/          # Server implementation
+│   ├── mcpkit-client/          # Client implementation
+│   ├── mcpkit-macros/          # Procedural macros
+│   ├── mcpkit-testing/         # Test utilities
+│   ├── mcpkit-axum/            # Axum web framework integration
+│   └── mcpkit-actix/           # Actix-web framework integration
+└── examples/                   # Example servers
 ```
 
 ## Examples
@@ -108,7 +108,7 @@ rust-mcp-sdk/
 ### Minimal Server
 
 ```rust
-use mcp::prelude::*;
+use mcpkit::prelude::*;
 
 struct MyServer;
 
@@ -125,7 +125,7 @@ impl MyServer {
 ### With Resources
 
 ```rust
-use mcp::prelude::*;
+use mcpkit::prelude::*;
 
 struct ConfigServer;
 
@@ -145,7 +145,7 @@ impl ConfigServer {
 ### With Prompts
 
 ```rust
-use mcp::prelude::*;
+use mcpkit::prelude::*;
 
 struct PromptServer;
 
@@ -174,7 +174,7 @@ The SDK is runtime-agnostic. You choose the transport and the async runtime.
 ### Standard I/O
 
 ```rust
-use mcp_transport::stdio::StdioTransport;
+use mcpkit_transport::stdio::StdioTransport;
 
 let transport = StdioTransport::new();
 ```
@@ -182,7 +182,7 @@ let transport = StdioTransport::new();
 ### HTTP (Streamable)
 
 ```rust
-use mcp_transport::http::HttpTransport;
+use mcpkit_transport::http::HttpTransport;
 
 let transport = HttpTransport::new(HttpTransportConfig::new("http://localhost:8080"));
 ```
@@ -190,7 +190,7 @@ let transport = HttpTransport::new(HttpTransportConfig::new("http://localhost:80
 ### WebSocket
 
 ```rust
-use mcp_transport::websocket::WebSocketTransport;
+use mcpkit_transport::websocket::WebSocketTransport;
 
 let transport = WebSocketTransport::new(WebSocketConfig::new("ws://localhost:9000"));
 ```
@@ -199,7 +199,7 @@ let transport = WebSocketTransport::new(WebSocketConfig::new("ws://localhost:900
 
 ```rust
 #[cfg(unix)]
-use mcp_transport::unix::UnixTransport;
+use mcpkit_transport::unix::UnixTransport;
 
 #[cfg(unix)]
 let transport = UnixTransport::new("/tmp/mcp.sock");
@@ -208,8 +208,8 @@ let transport = UnixTransport::new("/tmp/mcp.sock");
 ## Middleware
 
 ```rust
-use mcp_transport::stdio::StdioTransport;
-use mcp_transport::middleware::{LoggingLayer, TimeoutLayer, LayerStack};
+use mcpkit_transport::stdio::StdioTransport;
+use mcpkit_transport::middleware::{LoggingLayer, TimeoutLayer, LayerStack};
 use std::time::Duration;
 use log::Level;
 
@@ -222,7 +222,7 @@ let stack = LayerStack::new(transport)
 ## Error Handling
 
 ```rust
-use mcp::prelude::*;
+use mcpkit::prelude::*;
 
 fn process() -> Result<(), McpError> {
     let result = something_risky()

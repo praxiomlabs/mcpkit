@@ -1,0 +1,29 @@
+[package]
+name = "mcpkit-macros"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Procedural macros for mcpkit"
+repository.workspace = true
+keywords = ["mcp", "model-context-protocol", "ai", "macros", "proc-macro"]
+categories = ["development-tools::procedural-macro-helpers"]
+
+[lints]
+workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", features = ["full", "parsing", "extra-traits"] }
+darling = "0.20"
+
+[dev-dependencies]
+mcpkit-core = { version = "0.1.0", path = "../mcpkit-core" }
+mcpkit-server = { version = "0.1.0", path = "../mcpkit-server" }
+serde_json.workspace = true
+trybuild = "1.0"
+tokio = { workspace = true, features = ["rt", "macros"] }

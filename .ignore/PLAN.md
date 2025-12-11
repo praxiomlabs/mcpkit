@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-Build a new Rust MCP SDK from scratch at `~/rust-mcp-sdk` that dramatically improves upon rmcp through:
+Build a new Rust MCP SDK from scratch at `~/mcpkit` that dramatically improves upon rmcp through:
 - **66% less boilerplate** via unified `#[mcp_server]` macro
 - **Runtime-agnostic** async support (Tokio, async-std, smol)
 - **Type-safe state machines** via typestate pattern for connection lifecycle
@@ -18,7 +18,7 @@ Build a new Rust MCP SDK from scratch at `~/rust-mcp-sdk` that dramatically impr
 ## Project Structure
 
 ```
-~/rust-mcp-sdk/
+~/mcpkit/
 ├── Cargo.toml                      # Workspace root
 ├── README.md                       # Project documentation
 ├── CHANGELOG.md                    # Version history
@@ -556,7 +556,7 @@ impl TaskHandle {
 ## Implementation Order
 
 ### Sprint 1: Foundation
-1. [ ] Create workspace structure at `~/rust-mcp-sdk`
+1. [ ] Create workspace structure at `~/mcpkit`
 2. [ ] Implement `mcp-core`: error types, protocol types, JSON-RPC
 3. [ ] Implement typestate connection model
 4. [ ] Write comprehensive tests for core types
@@ -610,12 +610,12 @@ impl TaskHandle {
 
 ## Critical Files to Create First
 
-1. `~/rust-mcp-sdk/Cargo.toml` - Workspace configuration
-2. `~/rust-mcp-sdk/crates/mcp-core/src/error.rs` - Unified error system
-3. `~/rust-mcp-sdk/crates/mcp-core/src/protocol.rs` - JSON-RPC types
-4. `~/rust-mcp-sdk/crates/mcp-transport/src/traits.rs` - Transport abstraction
-5. `~/rust-mcp-sdk/crates/mcp-server/src/handler.rs` - Handler traits
-6. `~/rust-mcp-sdk/crates/mcp-macros/src/lib.rs` - Macro entry point
+1. `~/mcpkit/Cargo.toml` - Workspace configuration
+2. `~/mcpkit/crates/mcp-core/src/error.rs` - Unified error system
+3. `~/mcpkit/crates/mcp-core/src/protocol.rs` - JSON-RPC types
+4. `~/mcpkit/crates/mcp-transport/src/traits.rs` - Transport abstraction
+5. `~/mcpkit/crates/mcp-server/src/handler.rs` - Handler traits
+6. `~/mcpkit/crates/mcp-macros/src/lib.rs` - Macro entry point
 
 ---
 

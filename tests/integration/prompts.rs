@@ -1,11 +1,11 @@
 //! Integration tests for prompt handling.
 
-use mcp_core::types::prompt::{GetPromptResult, Prompt, PromptArgument, PromptMessage};
-use mcp_server::capability::prompts::{PromptBuilder, PromptResultBuilder, PromptService};
-use mcp_server::context::{Context, NoOpPeer};
-use mcp_server::handler::PromptHandler;
-use mcp_core::capability::{ClientCapabilities, ServerCapabilities};
-use mcp_core::protocol::RequestId;
+use mcpkit_core::types::prompt::{GetPromptResult, Prompt, PromptArgument, PromptMessage};
+use mcpkit_server::capability::prompts::{PromptBuilder, PromptResultBuilder, PromptService};
+use mcpkit_server::context::{Context, NoOpPeer};
+use mcpkit_server::handler::PromptHandler;
+use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
+use mcpkit_core::protocol::RequestId;
 use serde_json::Value;
 
 fn make_test_context() -> (RequestId, ClientCapabilities, ServerCapabilities, NoOpPeer) {

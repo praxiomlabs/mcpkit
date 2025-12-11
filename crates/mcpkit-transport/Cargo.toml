@@ -1,0 +1,56 @@
+[package]
+name = "mcpkit-transport"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Transport abstractions for mcpkit"
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+mcpkit-core = { version = "0.1.0", path = "../mcpkit-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+futures = { workspace = true }
+pin-project-lite = { workspace = true }
+bytes = { workspace = true }
+tracing = { workspace = true }
+
+# Runtime-specific dependencies
+tokio = { version = "1", features = ["io-util", "io-std", "sync", "rt", "net", "time", "process"], optional = true }
+async-std = { version = "1", optional = true }
+smol = { version = "2", optional = true }
+async-io = { version = "2", optional = true }
+
+# Runtime-agnostic sync primitives
+async-lock = "3.4"
+
+# HTTP transport
+reqwest = { workspace = true, optional = true }
+axum = { workspace = true, optional = true }
+hyper = { workspace = true, optional = true }
+
+# WebSocket transport
+tokio-tungstenite = { workspace = true, optional = true }
+
+# Utilities
+uuid = { workspace = true }
+url = { workspace = true }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full", "test-util"] }
+
+[features]
+default = ["tokio-runtime"]
+tokio-runtime = ["tokio"]
+async-std-runtime = ["async-std", "async-io"]
+smol-runtime = ["smol", "async-io"]
+http = ["reqwest", "axum", "hyper", "tokio-runtime"]
+websocket = ["tokio-tungstenite", "tokio-runtime"]
+full = ["http", "websocket"]
+
+[lints]
+workspace = true

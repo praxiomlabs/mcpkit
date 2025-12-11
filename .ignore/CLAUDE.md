@@ -111,7 +111,7 @@ With methods: create, handle, get, cancel, list
 ## Required File Structure
 
 ```
-~/rust-mcp-sdk/
+~/mcpkit/
 ├── Cargo.toml                      # Workspace root
 ├── README.md                       # Project documentation
 ├── CHANGELOG.md                    # Version history

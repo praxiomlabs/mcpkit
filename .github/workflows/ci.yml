@@ -56,6 +56,50 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --all-features
 
+  test-arm64:
+    name: Test ARM64
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --all-features
+
+  cross-compile:
+    name: Cross Compile
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          - aarch64-unknown-linux-gnu
+          - armv7-unknown-linux-gnueabihf
+          - x86_64-unknown-linux-musl
+          - aarch64-apple-darwin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cross-compilation tools
+        run: |
+          case "${{ matrix.target }}" in
+            aarch64-unknown-linux-gnu)
+              sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+              ;;
+            armv7-unknown-linux-gnueabihf)
+              sudo apt-get update && sudo apt-get install -y gcc-arm-linux-gnueabihf
+              ;;
+            x86_64-unknown-linux-musl)
+              sudo apt-get update && sudo apt-get install -y musl-tools
+              ;;
+          esac
+      - name: Build for ${{ matrix.target }}
+        run: cargo build --target ${{ matrix.target }} --no-default-features
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+          CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER: arm-linux-gnueabihf-gcc
+
   coverage:
     name: Code Coverage
     runs-on: ubuntu-latest
@@ -110,6 +154,22 @@ jobs:
         uses: taiki-e/install-action@cargo-semver-checks
       - run: cargo semver-checks check-release --workspace
         continue-on-error: true  # First release, no baseline
+
+  bench:
+    name: Benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build benchmarks
+        run: cargo build --package mcpkit-benches --benches --release
+      - name: Run benchmarks (quick check)
+        run: |
+          cargo bench --package mcpkit-benches --bench serialization -- --sample-size 10 --warm-up-time 1
+          cargo bench --package mcpkit-benches --bench tool_invocation -- --sample-size 10 --warm-up-time 1
+          cargo bench --package mcpkit-benches --bench transport -- --sample-size 10 --warm-up-time 1
+          cargo bench --package mcpkit-benches --bench memory -- --sample-size 10 --warm-up-time 1
 
   security:
     name: Security Audit

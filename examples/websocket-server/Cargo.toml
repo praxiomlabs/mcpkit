@@ -6,10 +6,10 @@ publish = false
 description = "MCP server using WebSocket transport"
 
 [dependencies]
-mcp = { path = "../../mcp" }
-mcp-core = { path = "../../crates/mcp-core" }
-mcp-server = { path = "../../crates/mcp-server" }
-mcp-transport = { path = "../../crates/mcp-transport", features = ["websocket", "tokio-runtime"] }
+mcpkit = { path = "../../mcpkit" }
+mcpkit-core = { path = "../../crates/mcpkit-core" }
+mcpkit-server = { path = "../../crates/mcpkit-server" }
+mcpkit-transport = { path = "../../crates/mcpkit-transport", features = ["websocket", "tokio-runtime"] }
 
 tokio = { version = "1", features = ["full"] }
 tokio-tungstenite = { version = "0.21", features = ["native-tls"] }

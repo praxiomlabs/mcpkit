@@ -3,7 +3,7 @@
 //! These tests verify that the SDK correctly implements the MCP
 //! initialization handshake.
 
-use mcp_core::capability::{
+use mcpkit_core::capability::{
     ClientCapabilities, ClientInfo, InitializeRequest, InitializeResult,
     ServerCapabilities, ServerInfo, PROTOCOL_VERSION,
 };

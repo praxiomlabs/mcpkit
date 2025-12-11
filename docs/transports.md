@@ -7,7 +7,7 @@ The Rust MCP SDK supports multiple transport mechanisms for different deployment
 The most common transport for subprocess-based MCP servers:
 
 ```rust
-use mcp_transport::stdio::StdioTransport;
+use mcpkit_transport::stdio::StdioTransport;
 
 let transport = StdioTransport::new();
 ```
@@ -20,7 +20,7 @@ let transport = StdioTransport::new();
 ### Configuration
 
 ```rust
-use mcp_transport::stdio::StdioTransportBuilder;
+use mcpkit_transport::stdio::StdioTransportBuilder;
 
 let transport = StdioTransportBuilder::new()
     .buffer_size(8192)
@@ -32,14 +32,14 @@ let transport = StdioTransportBuilder::new()
 For web-based deployments:
 
 ```rust
-use mcp_transport::http::{HttpTransport, HttpTransportConfig};
+use mcpkit_transport::http::{HttpTransport, HttpTransportConfig};
 
 // Client
 let config = HttpTransportConfig::new("http://localhost:8080/mcp");
 let transport = HttpTransport::new(config);
 
 // Server
-use mcp_transport::http::HttpTransportListener;
+use mcpkit_transport::http::HttpTransportListener;
 
 let listener = HttpTransportListener::bind("0.0.0.0:8080").await?;
 while let Some(transport) = listener.accept().await? {
@@ -52,7 +52,7 @@ while let Some(transport) = listener.accept().await? {
 ### Configuration Options
 
 ```rust
-use mcp_transport::http::HttpTransportBuilder;
+use mcpkit_transport::http::HttpTransportBuilder;
 
 let transport = HttpTransportBuilder::new("http://localhost:8080")
     .timeout(Duration::from_secs(30))
@@ -71,7 +71,7 @@ let transport = HttpTransportBuilder::new("http://localhost:8080")
 For bidirectional real-time communication:
 
 ```rust
-use mcp_transport::websocket::{WebSocketTransport, WebSocketConfig};
+use mcpkit_transport::websocket::{WebSocketTransport, WebSocketConfig};
 
 let config = WebSocketConfig::new("ws://localhost:9000");
 let transport = WebSocketTransport::new(config);
@@ -80,7 +80,7 @@ let transport = WebSocketTransport::new(config);
 ### Server-Side
 
 ```rust
-use mcp_transport::websocket::WebSocketListener;
+use mcpkit_transport::websocket::WebSocketListener;
 
 let listener = WebSocketListener::bind("0.0.0.0:9000").await?;
 while let Some(transport) = listener.accept().await? {
@@ -91,7 +91,7 @@ while let Some(transport) = listener.accept().await? {
 ### Configuration
 
 ```rust
-use mcp_transport::websocket::WebSocketConfig;
+use mcpkit_transport::websocket::WebSocketConfig;
 
 let config = WebSocketConfig::new("wss://example.com/mcp")
     .with_reconnect(true)
@@ -107,7 +107,7 @@ let transport = WebSocketTransport::new(config);
 WebSocket transport supports automatic reconnection:
 
 ```rust
-use mcp_transport::websocket::{WebSocketTransport, ExponentialBackoff};
+use mcpkit_transport::websocket::{WebSocketTransport, ExponentialBackoff};
 
 let config = WebSocketConfig::new("ws://localhost:9000")
     .with_reconnect(true)
@@ -123,7 +123,7 @@ let config = WebSocketConfig::new("ws://localhost:9000")
 Monitor connection state:
 
 ```rust
-use mcp_transport::websocket::ConnectionState;
+use mcpkit_transport::websocket::ConnectionState;
 
 let state = transport.connection_state();
 match state {
@@ -141,7 +141,7 @@ For local IPC on Unix systems:
 
 ```rust
 #[cfg(unix)]
-use mcp_transport::unix::{UnixTransport, UnixSocketConfig};
+use mcpkit_transport::unix::{UnixTransport, UnixSocketConfig};
 
 let config = UnixSocketConfig::new("/tmp/mcp.sock");
 let transport = UnixTransport::new(config);
@@ -151,7 +151,7 @@ let transport = UnixTransport::new(config);
 
 ```rust
 #[cfg(unix)]
-use mcp_transport::unix::UnixListener;
+use mcpkit_transport::unix::UnixListener;
 
 let listener = UnixListener::bind("/tmp/mcp.sock")?;
 while let Some(transport) = listener.accept().await? {
@@ -165,12 +165,70 @@ while let Some(transport) = listener.accept().await? {
 - No network overhead
 - Unix/Linux/macOS only
 
+## Spawned Process Transport
+
+For managing MCP servers as child processes:
+
+```rust
+use mcpkit_transport::spawn::{SpawnedTransport, SpawnedTransportBuilder};
+
+// Spawn an MCP server as a child process
+let transport = SpawnedTransportBuilder::new("my-mcp-server")
+    .arg("--config")
+    .arg("config.json")
+    .env("DEBUG", "true")
+    .working_directory("/path/to/server")
+    .build()
+    .await?;
+
+// Use like any other transport
+let response = transport.send(request).await?;
+
+// Process is killed when transport is dropped
+```
+
+### Configuration Options
+
+```rust
+let transport = SpawnedTransportBuilder::new("npx")
+    .args(["mcp-server-sqlite", "--db", "database.db"])
+    .env("NODE_ENV", "production")
+    .inherit_env(true)  // Inherit parent environment
+    .kill_on_drop(true) // Kill child when transport drops (default)
+    .build()
+    .await?;
+```
+
+### Process Management
+
+```rust
+// Check if process is still running
+if transport.is_running() {
+    println!("Server is running");
+}
+
+// Get process ID
+if let Some(pid) = transport.pid() {
+    println!("Server PID: {}", pid);
+}
+
+// Manually terminate (normally happens on drop)
+transport.kill().await?;
+```
+
+### Use Cases
+
+- Running Node.js MCP servers from Rust
+- Managing Python MCP server subprocesses
+- Testing MCP servers in isolation
+- Claude Desktop-style server management
+
 ## In-Memory Transport
 
 For testing:
 
 ```rust
-use mcp_transport::memory::MemoryTransport;
+use mcpkit_transport::memory::MemoryTransport;
 
 let (client_transport, server_transport) = MemoryTransport::pair();
 
@@ -187,7 +245,7 @@ let response = client_transport.send(request).await?;
 Reuse connections for efficiency:
 
 ```rust
-use mcp_transport::pool::{Pool, PoolConfig};
+use mcpkit_transport::pool::{Pool, PoolConfig};
 
 let config = PoolConfig::new()
     .max_connections(10)
@@ -229,9 +287,9 @@ println!("Total reused: {}", stats.total_reused);
 Implement the `Transport` trait for custom transports:
 
 ```rust
-use mcp_transport::traits::Transport;
-use mcp_core::protocol::Message;
-use mcp_core::error::McpError;
+use mcpkit_transport::traits::Transport;
+use mcpkit_core::protocol::Message;
+use mcpkit_core::error::McpError;
 
 struct MyCustomTransport {
     // Your state
@@ -258,9 +316,9 @@ impl Transport for MyCustomTransport {
 ## Complete Example: Multi-Transport Server
 
 ```rust
-use mcp::prelude::*;
-use mcp_server::ServerBuilder;
-use mcp_transport::{
+use mcpkit::prelude::*;
+use mcpkit_server::ServerBuilder;
+use mcpkit_transport::{
     stdio::StdioTransport,
     websocket::{WebSocketListener, WebSocketConfig},
 };

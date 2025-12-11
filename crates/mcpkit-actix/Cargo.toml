@@ -1,0 +1,43 @@
+[package]
+name = "mcpkit-actix"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Actix-web integration for mcpkit"
+repository.workspace = true
+keywords = ["mcp", "actix-web", "web", "api", "rust"]
+categories = ["web-programming::http-server", "asynchronous"]
+
+[dependencies]
+# Internal crates
+mcpkit-core = { version = "0.1.0", path = "../mcpkit-core" }
+mcpkit-server = { version = "0.1.0", path = "../mcpkit-server" }
+mcpkit-transport = { version = "0.1.0", path = "../mcpkit-transport", features = ["http"] }
+
+# Web framework
+actix-web = "4"
+actix-rt = "2"
+actix-web-actors = "4"
+
+# Async runtime
+tokio = { workspace = true, features = ["sync", "rt"] }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Utilities
+uuid = { workspace = true }
+dashmap = "6"
+tracing = { workspace = true }
+thiserror = { workspace = true }
+futures = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
+tokio-test.workspace = true
+actix-rt = "2"
+
+[lints]
+workspace = true

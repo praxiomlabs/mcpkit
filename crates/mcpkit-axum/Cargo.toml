@@ -1,0 +1,43 @@
+[package]
+name = "mcpkit-axum"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Axum integration for mcpkit"
+repository.workspace = true
+keywords = ["mcp", "axum", "web", "api", "rust"]
+categories = ["web-programming::http-server", "asynchronous"]
+
+[dependencies]
+# Internal crates
+mcpkit-core = { version = "0.1.0", path = "../mcpkit-core" }
+mcpkit-server = { version = "0.1.0", path = "../mcpkit-server" }
+mcpkit-transport = { version = "0.1.0", path = "../mcpkit-transport", features = ["http"] }
+
+# Web framework
+axum = { workspace = true }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["trace", "cors"] }
+
+# Async runtime
+tokio = { workspace = true, features = ["sync", "rt"] }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Utilities
+uuid = { workspace = true }
+dashmap = "6"
+tracing = { workspace = true }
+thiserror = { workspace = true }
+async-stream = "0.3"
+futures = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
+tokio-test.workspace = true
+
+[lints]
+workspace = true

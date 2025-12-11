@@ -6,10 +6,10 @@ publish = false
 description = "MCP server using HTTP/SSE transport"
 
 [dependencies]
-mcp = { path = "../../mcp" }
-mcp-core = { path = "../../crates/mcp-core" }
-mcp-server = { path = "../../crates/mcp-server" }
-mcp-transport = { path = "../../crates/mcp-transport", features = ["http", "tokio-runtime"] }
+mcpkit = { path = "../../mcpkit" }
+mcpkit-core = { path = "../../crates/mcpkit-core" }
+mcpkit-server = { path = "../../crates/mcpkit-server" }
+mcpkit-transport = { path = "../../crates/mcpkit-transport", features = ["http", "tokio-runtime"] }
 
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }

@@ -1,0 +1,14 @@
+error: missing prompt attributes
+       help: add description, e.g., #[prompt(description = "...")]
+ --> tests/compile-fail/prompt_missing_description.rs:9:5
+  |
+9 |     #[prompt]
+  |     ^^^^^^^^^
+
+warning: unused import: `prompt`
+ --> tests/compile-fail/prompt_missing_description.rs:3:33
+  |
+3 | use mcpkit_macros::{mcp_server, prompt};
+  |                                 ^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default

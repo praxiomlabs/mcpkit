@@ -2,12 +2,87 @@
 
 The Rust MCP SDK provides a unified error handling system that's both ergonomic and compatible with JSON-RPC error responses.
 
+## Design Philosophy
+
+The SDK uses a **single, context-rich error type** rather than nested error hierarchies. This design provides:
+
+- **Single error type**: All errors flow through `McpError`
+- **Rich context**: Errors preserve context through the entire call stack
+- **JSON-RPC compatible**: Easy conversion to JSON-RPC error responses
+- **Diagnostic-friendly**: Integrates with `miette` for beautiful error reports
+- **Size-optimized**: Large error variants are boxed to keep `Result<T, McpError>` small (~24 bytes)
+
+### Two Error Patterns
+
+The SDK has **two distinct error handling patterns** for different scenarios:
+
+#### Pattern 1: `Result<T, McpError>` - SDK/Framework Errors
+
+Use `Result<T, McpError>` for errors that indicate something went wrong with the MCP protocol, transport, or SDK internals:
+
+| Scenario | Use `McpError` |
+|----------|----------------|
+| Transport failures | Connection lost, timeout, I/O errors |
+| Protocol errors | Invalid JSON-RPC, version mismatch, missing fields |
+| Resource not found | Requested resource/tool/prompt doesn't exist |
+| Capability errors | Feature not supported by client/server |
+| Internal errors | Unexpected SDK state, serialization failures |
+
+These errors typically indicate the request cannot be completed and require intervention (reconnection, configuration change, bug fix).
+
+```rust
+async fn list_tools(&self) -> Result<Vec<Tool>, McpError> {
+    self.ensure_capability("tools", self.has_tools())?;
+    // Transport errors propagate as McpError
+    let result = self.request("tools/list", None).await?;
+    Ok(result.tools)
+}
+```
+
+#### Pattern 2: `ToolOutput::error()` - User/LLM-Correctable Errors
+
+Use `ToolOutput::error()` for errors that the LLM can potentially self-correct by adjusting its input:
+
+| Scenario | Use `ToolOutput::error()` |
+|----------|--------------------------|
+| Validation failures | Invalid argument format, out-of-range values |
+| Business logic errors | Division by zero, empty query, invalid date |
+| Missing optional data | Lookup returned no results |
+| Rate limiting | Too many requests (suggest retry) |
+
+These errors are returned to the LLM with `is_error: true` in the response, allowing the model to understand what went wrong and try again.
+
+```rust
+#[tool(description = "Divide two numbers")]
+async fn divide(&self, a: f64, b: f64) -> ToolOutput {
+    if b == 0.0 {
+        return ToolOutput::error_with_suggestion(
+            "Cannot divide by zero",
+            "Use a non-zero divisor",
+        );
+    }
+    ToolOutput::text((a / b).to_string())
+}
+```
+
+### Decision Guide
+
+| Scenario | Use | Reason |
+|----------|-----|--------|
+| Database connection failed | `McpError` | Infrastructure issue |
+| User provided invalid email format | `ToolOutput::error` | LLM can fix input |
+| Tool doesn't exist | `McpError` | Protocol/discovery issue |
+| Search returned no results | `ToolOutput::text("No results")` | Expected outcome, not an error |
+| API rate limit exceeded | `ToolOutput::error_with_suggestion` | Temporary, can retry |
+| Authentication required | `McpError` | Configuration issue |
+| Invalid number format in input | `ToolOutput::error` | LLM can fix input |
+
 ## The McpError Type
 
 All errors in the SDK flow through `McpError`:
 
 ```rust
-use mcp_core::error::McpError;
+use mcpkit_core::error::McpError;
 
 fn process() -> Result<(), McpError> {
     // Your code here
@@ -67,7 +142,7 @@ McpError::cancelled("file upload")
 ### Transport Errors
 
 ```rust
-use mcp_core::error::{McpError, TransportErrorKind, TransportContext};
+use mcpkit_core::error::{McpError, TransportErrorKind, TransportContext};
 
 // Using the helper function (recommended)
 McpError::transport_with_context(
@@ -86,7 +161,7 @@ McpError::transport(TransportErrorKind::ConnectionFailed, "Connection refused")
 Add context to errors using the `McpResultExt` trait:
 
 ```rust
-use mcp_core::error::{McpError, McpResultExt};
+use mcpkit_core::error::{McpError, McpResultExt};
 
 fn load_config() -> Result<Config, McpError> {
     let content = read_file("config.json")
@@ -166,7 +241,7 @@ assert_eq!(error.code(), -32601);  // Standard JSON-RPC code
 Errors convert to JSON-RPC error responses:
 
 ```rust
-use mcp_core::error::JsonRpcError;
+use mcpkit_core::error::JsonRpcError;
 
 let mcp_error = McpError::method_not_found("unknown");
 let json_error: JsonRpcError = (&mcp_error).into();
@@ -246,8 +321,8 @@ async fn get_data(&self, uri: &str) -> Result<ResourceContents, McpError> {
 ## Complete Example
 
 ```rust
-use mcp::prelude::*;
-use mcp_core::error::{McpError, McpResultExt};
+use mcpkit::prelude::*;
+use mcpkit_core::error::{McpError, McpResultExt};
 
 struct DataService {
     db: Database,

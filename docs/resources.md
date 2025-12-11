@@ -7,7 +7,7 @@ Resources allow MCP servers to expose data that AI assistants can read. Unlike t
 Use the `#[resource]` attribute to define a resource handler:
 
 ```rust
-use mcp::prelude::*;
+use mcpkit::prelude::*;
 
 struct ConfigServer;
 
@@ -114,7 +114,7 @@ impl FileServer {
 Clients can subscribe to resource updates. Implement subscription support:
 
 ```rust
-use mcp_server::handler::ResourceHandler;
+use mcpkit_server::handler::ResourceHandler;
 
 impl ResourceHandler for MyServer {
     async fn subscribe(&self, uri: &str, ctx: &Context<'_>) -> Result<bool, McpError> {
@@ -153,7 +153,7 @@ async fn get_data(&self, uri: &str) -> Result<ResourceContents, McpError> {
 ## Complete Example
 
 ```rust
-use mcp::prelude::*;
+use mcpkit::prelude::*;
 use std::collections::HashMap;
 use std::sync::RwLock;
 

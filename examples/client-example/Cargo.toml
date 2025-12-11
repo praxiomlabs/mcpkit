@@ -6,10 +6,10 @@ publish = false
 description = "MCP client example demonstrating client usage"
 
 [dependencies]
-mcp = { path = "../../mcp" }
-mcp-core = { path = "../../crates/mcp-core" }
-mcp-client = { path = "../../crates/mcp-client" }
-mcp-transport = { path = "../../crates/mcp-transport", features = ["tokio-runtime"] }
+mcpkit = { path = "../../mcpkit" }
+mcpkit-core = { path = "../../crates/mcpkit-core" }
+mcpkit-client = { path = "../../crates/mcpkit-client" }
+mcpkit-transport = { path = "../../crates/mcpkit-transport", features = ["tokio-runtime"] }
 
 tokio = { version = "1", features = ["full", "process"] }
 serde = { version = "1", features = ["derive"] }

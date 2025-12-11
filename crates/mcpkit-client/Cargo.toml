@@ -1,0 +1,44 @@
+[package]
+name = "mcpkit-client"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Client implementation for mcpkit"
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+# Internal crates - path takes precedence locally, version used for publishing
+mcpkit-core = { version = "0.1.0", path = "../mcpkit-core" }
+mcpkit-transport = { version = "0.1.0", path = "../mcpkit-transport" }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Async
+futures = { workspace = true }
+tokio = { workspace = true, optional = true, features = ["sync", "rt"] }
+
+# Runtime-agnostic sync primitives
+async-lock = "3.4"
+
+# Error handling
+thiserror = { workspace = true }
+
+# Utilities
+tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
+tokio-test.workspace = true
+pretty_assertions.workspace = true
+
+[features]
+default = ["tokio-runtime"]
+tokio-runtime = ["tokio", "mcpkit-transport/tokio-runtime"]
+
+[lints]
+workspace = true

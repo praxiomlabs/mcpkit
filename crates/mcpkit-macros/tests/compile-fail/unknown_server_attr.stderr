@@ -1,0 +1,7 @@
+error: Unknown field: `unknown_attr`
+ --> tests/compile-fail/unknown_server_attr.rs:7:1
+  |
+7 | #[mcp_server(name = "test", version = "1.0.0", unknown_attr = "value")]
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the attribute macro `mcp_server` (in Nightly builds, run with -Z macro-backtrace for more info)

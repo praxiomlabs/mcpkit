@@ -1,0 +1,30 @@
+[package]
+name = "mcpkit-testing"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Testing utilities for mcpkit"
+repository.workspace = true
+keywords = ["mcp", "model-context-protocol", "testing"]
+categories = ["development-tools::testing"]
+
+[dependencies]
+# Internal crates - path takes precedence locally, version used for publishing
+mcpkit-core = { version = "0.1.0", path = "../mcpkit-core" }
+mcpkit-transport = { version = "0.1.0", path = "../mcpkit-transport" }
+mcpkit-server = { version = "0.1.0", path = "../mcpkit-server" }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Async
+futures = { workspace = true }
+tokio = { workspace = true, features = ["sync", "rt"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
+
+[lints]
+workspace = true

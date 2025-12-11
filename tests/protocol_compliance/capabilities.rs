@@ -2,10 +2,10 @@
 //!
 //! These tests verify that capability types and negotiation work correctly.
 
-use mcp_core::capability::{
+use mcpkit_core::capability::{
     ClientCapabilities, ServerCapabilities,
 };
-use mcp_core::types::{Tool, ToolAnnotations, Resource, Prompt};
+use mcpkit_core::types::{Tool, ToolAnnotations, Resource, Prompt};
 use serde_json::json;
 
 #[test]
@@ -73,7 +73,7 @@ fn test_prompt_definition() {
         name: "code_review".to_string(),
         description: Some("Review code for issues".to_string()),
         arguments: Some(vec![
-            mcp_core::types::prompt::PromptArgument {
+            mcpkit_core::types::prompt::PromptArgument {
                 name: "code".to_string(),
                 description: Some("The code to review".to_string()),
                 required: Some(true),

@@ -1,0 +1,7 @@
+error: Missing field `version`
+ --> tests/compile-fail/missing_server_version.rs:7:1
+  |
+7 | #[mcp_server(name = "test-server")]
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the attribute macro `mcp_server` (in Nightly builds, run with -Z macro-backtrace for more info)

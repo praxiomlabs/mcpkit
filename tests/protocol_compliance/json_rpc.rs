@@ -3,7 +3,7 @@
 //! These tests verify that the SDK correctly implements JSON-RPC 2.0
 //! as required by the MCP protocol.
 
-use mcp_core::protocol::{Message, Request, Response, Notification, RequestId};
+use mcpkit_core::protocol::{Message, Request, Response, Notification, RequestId};
 use serde_json::{json, Value};
 
 #[test]

@@ -1,13 +1,15 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/mcp-core",
-    "crates/mcp-transport",
-    "crates/mcp-server",
-    "crates/mcp-client",
-    "crates/mcp-macros",
-    "crates/mcp-testing",
-    "mcp",
+    "crates/mcpkit-core",
+    "crates/mcpkit-transport",
+    "crates/mcpkit-server",
+    "crates/mcpkit-client",
+    "crates/mcpkit-macros",
+    "crates/mcpkit-testing",
+    "crates/mcpkit-axum",
+    "crates/mcpkit-actix",
+    "mcpkit",
     "examples/minimal-server",
     "examples/full-server",
     "examples/http-server",
@@ -15,6 +17,7 @@ members = [
     "examples/client-example",
     "examples/with-middleware",
     "examples/database-server",
+    "benches",
 ]
 
 [workspace.package]
@@ -22,10 +25,10 @@ version = "0.1.0"
 edition = "2021"
 rust-version = "1.75"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/anthropics/rust-mcp-sdk"
-homepage = "https://github.com/anthropics/rust-mcp-sdk"
-documentation = "https://docs.rs/mcp"
-keywords = ["mcp", "model-context-protocol", "ai", "llm", "claude"]
+repository = "https://github.com/praxislabs/mcpkit"
+homepage = "https://github.com/praxislabs/mcpkit"
+documentation = "https://docs.rs/mcpkit"
+keywords = ["mcp", "model-context-protocol", "ai", "llm", "sdk"]
 categories = ["api-bindings", "asynchronous", "network-programming"]
 
 [workspace.dependencies]
@@ -76,13 +79,16 @@ darling = "0.20"
 tokio-test = "0.4"
 pretty_assertions = "1.4"
 
-# Internal crates
-mcp-core = { path = "crates/mcp-core" }
-mcp-transport = { path = "crates/mcp-transport" }
-mcp-server = { path = "crates/mcp-server" }
-mcp-client = { path = "crates/mcp-client" }
-mcp-macros = { path = "crates/mcp-macros" }
-mcp-testing = { path = "crates/mcp-testing" }
+# Benchmarking
+criterion = { version = "0.5", features = ["html_reports", "async_tokio"] }
+
+# Internal crates - path takes precedence locally, version used for publishing
+mcpkit-core = { version = "0.1.0", path = "crates/mcpkit-core" }
+mcpkit-transport = { version = "0.1.0", path = "crates/mcpkit-transport" }
+mcpkit-server = { version = "0.1.0", path = "crates/mcpkit-server" }
+mcpkit-client = { version = "0.1.0", path = "crates/mcpkit-client" }
+mcpkit-macros = { version = "0.1.0", path = "crates/mcpkit-macros" }
+mcpkit-testing = { version = "0.1.0", path = "crates/mcpkit-testing" }
 
 [workspace.lints.rust]
 unsafe_code = "deny"

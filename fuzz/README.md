@@ -85,11 +85,34 @@ cargo +nightly fuzz cmin fuzz_jsonrpc_message
 
 ## CI Integration
 
-For CI, run fuzzers for a limited time:
+### Automated Fuzzing
+
+The SDK includes automated fuzzing via GitHub Actions (`.github/workflows/fuzz.yml`):
+
+- **Nightly runs**: Fuzzing runs automatically every night at 2 AM UTC
+- **Duration**: Each target runs for 5 minutes (300 seconds) by default
+- **Corpus caching**: The fuzzing corpus is cached between runs to accumulate interesting inputs
+- **Crash notifications**: If a crash is found, a GitHub issue is automatically created
+
+### Manual Triggering
+
+You can trigger fuzzing manually via the GitHub Actions UI:
+
+1. Go to Actions > Fuzzing
+2. Click "Run workflow"
+3. Optionally specify:
+   - **duration**: Seconds to run each target (default: 300)
+   - **target**: Specific target to run (leave empty for all)
+
+### Local CI Simulation
+
+To simulate CI fuzzing locally:
 
 ```bash
-# Run for 60 seconds
-cargo +nightly fuzz run fuzz_jsonrpc_message -- -max_total_time=60
+# Run all targets for 60 seconds each
+for target in fuzz_jsonrpc_message fuzz_jsonrpc_request fuzz_jsonrpc_response fuzz_progress_token fuzz_jsonrpc_structured; do
+    cargo +nightly fuzz run $target -- -max_total_time=60
+done
 ```
 
 ## Security

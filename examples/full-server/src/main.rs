@@ -16,9 +16,9 @@
 //! - Prompts: Code review and summarization prompts
 //! - All generated from a single `#[mcp_server]` macro
 
-use mcp::prelude::*;
-use mcp_core::types::{GetPromptResult, PromptMessage, ResourceContents};
-use mcp_server::{Context, PromptHandler, ResourceHandler, ServerHandler, ToolHandler};
+use mcpkit::prelude::*;
+use mcpkit_core::types::{GetPromptResult, PromptMessage, ResourceContents};
+use mcpkit_server::{Context, PromptHandler, ResourceHandler, ServerHandler, ToolHandler};
 use std::collections::HashMap;
 use std::sync::RwLock;
 
@@ -174,9 +174,9 @@ async fn main() -> Result<(), McpError> {
     println!("  - Prompts: {}", caps.has_prompts());
 
     // Set up test context
-    use mcp_core::capability::{ClientCapabilities, ServerCapabilities};
-    use mcp_core::protocol::RequestId;
-    use mcp_server::NoOpPeer;
+    use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
+    use mcpkit_core::protocol::RequestId;
+    use mcpkit_server::NoOpPeer;
 
     let request_id = RequestId::Number(1);
     let client_caps = ClientCapabilities::default();
@@ -267,8 +267,8 @@ async fn main() -> Result<(), McpError> {
     println!("Messages:");
     for msg in &result.messages {
         let role_str = match msg.role {
-            mcp_core::types::Role::User => "user",
-            mcp_core::types::Role::Assistant => "assistant",
+            mcpkit_core::types::Role::User => "user",
+            mcpkit_core::types::Role::Assistant => "assistant",
         };
         // Get first 80 chars of content for display
         let content_preview: String = format!("{:?}", msg.content).chars().take(80).collect();
