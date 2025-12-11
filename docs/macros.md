@@ -516,5 +516,5 @@ If you're stuck:
 1. Check this troubleshooting guide
 2. Enable `debug_expand = true`
 3. Use `cargo expand` for full expansion
-4. Search [GitHub issues](https://github.com/anthropics/mcpkit/issues)
+4. Search [GitHub issues](https://github.com/praxislabs/mcpkit/issues)
 5. Ask in the community forums

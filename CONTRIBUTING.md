@@ -23,7 +23,7 @@ This project follows the [Rust Code of Conduct](https://www.rust-lang.org/polici
    ```
 3. Add upstream remote:
    ```bash
-   git remote add upstream https://github.com/anthropics/mcpkit.git
+   git remote add upstream https://github.com/praxislabs/mcpkit.git
    ```
 4. Build the project:
    ```bash
@@ -95,15 +95,15 @@ docs(readme): update quick start example
 ```
 mcpkit/
 ├── crates/
-│   ├── mcp-core/        # Core types (runtime-agnostic)
-│   ├── mcp-transport/   # Transport implementations
-│   ├── mcp-server/      # Server implementation
-│   ├── mcp-client/      # Client implementation
-│   ├── mcp-macros/      # Procedural macros
-│   ├── mcp-testing/     # Test utilities
-│   ├── mcp-axum/        # Axum web framework integration
-│   └── mcp-actix/       # Actix-web framework integration
-├── mcp/                 # Facade crate
+│   ├── mcpkit-core/        # Core types (runtime-agnostic)
+│   ├── mcpkit-transport/   # Transport implementations
+│   ├── mcpkit-server/      # Server implementation
+│   ├── mcpkit-client/      # Client implementation
+│   ├── mcpkit-macros/      # Procedural macros
+│   ├── mcpkit-testing/     # Test utilities
+│   ├── mcpkit-axum/        # Axum web framework integration
+│   └── mcpkit-actix/       # Actix-web framework integration
+├── mcpkit/                 # Facade crate
 ├── examples/            # Example servers
 ├── tests/               # Integration tests
 ├── benches/             # Benchmarks
@@ -116,7 +116,7 @@ We welcome contributions for framework integrations and extensions! See [`docs/e
 
 When contributing a new extension:
 
-1. Follow the patterns established in `mcp-axum` and `mcp-actix`
+1. Follow the patterns established in `mcpkit-axum` and `mcpkit-actix`
 2. Include session management with automatic cleanup
 3. Support protocol version validation
 4. Add comprehensive tests
@@ -131,7 +131,7 @@ When contributing a new extension:
 cargo test
 
 # Specific crate
-cargo test -p mcp-core
+cargo test -p mcpkit-core
 
 # With output
 cargo test -- --nocapture
@@ -144,7 +144,7 @@ cargo test --test '*'
 
 - Place unit tests in the same file as the code
 - Place integration tests in `tests/`
-- Use `mcp-testing` utilities for complex tests
+- Use `mcpkit-testing` utilities for complex tests
 
 ```rust
 #[cfg(test)]
@@ -241,8 +241,8 @@ Releases are handled by maintainers:
 
 ## Getting Help
 
-- **Questions**: Open a [Discussion](https://github.com/anthropics/mcpkit/discussions)
-- **Bugs**: Open an [Issue](https://github.com/anthropics/mcpkit/issues)
+- **Questions**: Open a [Discussion](https://github.com/praxislabs/mcpkit/discussions)
+- **Bugs**: Open an [Issue](https://github.com/praxislabs/mcpkit/issues)
 - **Security**: See [SECURITY.md](SECURITY.md)
 
 ## Recognition
