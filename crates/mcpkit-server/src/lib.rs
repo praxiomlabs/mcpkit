@@ -68,6 +68,7 @@ pub mod builder;
 pub mod capability;
 pub mod context;
 pub mod handler;
+pub mod metrics;
 pub mod router;
 pub mod server;
 pub mod state;
@@ -81,6 +82,7 @@ pub use handler::{
     CompletionHandler, ElicitationHandler, LogLevel, LoggingHandler, PromptHandler,
     ResourceHandler, SamplingHandler, ServerHandler, TaskHandler, ToolHandler,
 };
+pub use metrics::{MethodStats, MetricsSnapshot, ServerMetrics};
 pub use server::{RequestRouter, RuntimeConfig, ServerRuntime, ServerState, TransportPeer};
 
 /// Prelude module for convenient imports.
@@ -93,4 +95,5 @@ pub mod prelude {
         CompletionHandler, ElicitationHandler, LogLevel, LoggingHandler, PromptHandler,
         ResourceHandler, SamplingHandler, ServerHandler, TaskHandler, ToolHandler,
     };
+    pub use crate::metrics::{MethodStats, MetricsSnapshot, ServerMetrics};
 }
