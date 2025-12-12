@@ -19,8 +19,8 @@ use mcpkit_core::error::{
     HandshakeDetails, JsonRpcError, McpError, TransportContext, TransportDetails,
     TransportErrorKind,
 };
-use mcpkit_core::protocol_version::ProtocolVersion;
 use mcpkit_core::protocol::{Message, Notification, Request, RequestId, Response};
+use mcpkit_core::protocol_version::ProtocolVersion;
 use mcpkit_core::types::{
     CallToolRequest, CallToolResult, CancelTaskRequest, CompleteRequest, CompleteResult,
     CompletionArgument, CompletionRef, CreateMessageRequest, ElicitRequest, GetPromptRequest,

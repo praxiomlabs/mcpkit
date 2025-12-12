@@ -188,7 +188,14 @@ async fn main() -> Result<(), McpError> {
     let server_caps = ServerCapabilities::default();
     let peer = NoOpPeer;
 
-    let ctx = Context::new(&request_id, None, &client_caps, &server_caps, ProtocolVersion::LATEST, &peer);
+    let ctx = Context::new(
+        &request_id,
+        None,
+        &client_caps,
+        &server_caps,
+        ProtocolVersion::LATEST,
+        &peer,
+    );
 
     // ========== TEST TOOLS ==========
     println!("\n=== Tools ===");

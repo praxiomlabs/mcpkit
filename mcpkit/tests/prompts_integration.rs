@@ -9,7 +9,13 @@ use mcpkit_server::context::{Context, NoOpPeer};
 use mcpkit_server::handler::PromptHandler;
 use serde_json::Value;
 
-fn make_test_context() -> (RequestId, ClientCapabilities, ServerCapabilities, ProtocolVersion, NoOpPeer) {
+fn make_test_context() -> (
+    RequestId,
+    ClientCapabilities,
+    ServerCapabilities,
+    ProtocolVersion,
+    NoOpPeer,
+) {
     (
         RequestId::Number(1),
         ClientCapabilities::default(),
@@ -74,7 +80,14 @@ async fn test_prompt_render() {
     });
 
     let (req_id, client_caps, server_caps, protocol_version, peer) = make_test_context();
-    let ctx = Context::new(&req_id, None, &client_caps, &server_caps, protocol_version, &peer);
+    let ctx = Context::new(
+        &req_id,
+        None,
+        &client_caps,
+        &server_caps,
+        protocol_version,
+        &peer,
+    );
 
     let result = service
         .render(
@@ -94,7 +107,14 @@ async fn test_prompt_not_found() {
     let service = PromptService::new();
 
     let (req_id, client_caps, server_caps, protocol_version, peer) = make_test_context();
-    let ctx = Context::new(&req_id, None, &client_caps, &server_caps, protocol_version, &peer);
+    let ctx = Context::new(
+        &req_id,
+        None,
+        &client_caps,
+        &server_caps,
+        protocol_version,
+        &peer,
+    );
 
     let result = service.render("nonexistent", None, &ctx).await;
     assert!(result.is_err());
@@ -120,7 +140,14 @@ async fn test_prompt_handler_trait() {
     });
 
     let (req_id, client_caps, server_caps, protocol_version, peer) = make_test_context();
-    let ctx = Context::new(&req_id, None, &client_caps, &server_caps, protocol_version, &peer);
+    let ctx = Context::new(
+        &req_id,
+        None,
+        &client_caps,
+        &server_caps,
+        protocol_version,
+        &peer,
+    );
 
     // Use the PromptHandler trait
     let prompts = service.list_prompts(&ctx).await.unwrap();
@@ -186,7 +213,14 @@ async fn test_multiple_prompts() {
     assert_eq!(service.len(), 4);
 
     let (req_id, client_caps, server_caps, protocol_version, peer) = make_test_context();
-    let ctx = Context::new(&req_id, None, &client_caps, &server_caps, protocol_version, &peer);
+    let ctx = Context::new(
+        &req_id,
+        None,
+        &client_caps,
+        &server_caps,
+        protocol_version,
+        &peer,
+    );
 
     let prompts = service.list_prompts(&ctx).await.unwrap();
     assert_eq!(prompts.len(), 4);
@@ -205,7 +239,14 @@ async fn test_prompt_with_no_args() {
     });
 
     let (req_id, client_caps, server_caps, protocol_version, peer) = make_test_context();
-    let ctx = Context::new(&req_id, None, &client_caps, &server_caps, protocol_version, &peer);
+    let ctx = Context::new(
+        &req_id,
+        None,
+        &client_caps,
+        &server_caps,
+        protocol_version,
+        &peer,
+    );
 
     let result = service.render("help", None, &ctx).await;
     assert!(result.is_ok());

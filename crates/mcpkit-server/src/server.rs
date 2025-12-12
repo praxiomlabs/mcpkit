@@ -90,10 +90,7 @@ impl ServerState {
     /// }
     /// ```
     pub fn protocol_version(&self) -> Option<ProtocolVersion> {
-        self.negotiated_version
-            .read()
-            .ok()
-            .and_then(|guard| *guard)
+        self.negotiated_version.read().ok().and_then(|guard| *guard)
     }
 
     /// Set the negotiated protocol version.
@@ -325,8 +322,9 @@ where
             .unwrap_or("");
 
         // Negotiate using the ProtocolVersion enum for type safety
-        let negotiated_version = ProtocolVersion::negotiate(requested_version_str, ProtocolVersion::ALL)
-            .unwrap_or(ProtocolVersion::LATEST);
+        let negotiated_version =
+            ProtocolVersion::negotiate(requested_version_str, ProtocolVersion::ALL)
+                .unwrap_or(ProtocolVersion::LATEST);
 
         // Log version negotiation details for debugging
         if requested_version_str == negotiated_version.as_str() {
@@ -338,7 +336,7 @@ where
             tracing::info!(
                 requested = %requested_version_str,
                 negotiated = %negotiated_version,
-                supported = ?ProtocolVersion::ALL.iter().map(|v| v.as_str()).collect::<Vec<_>>(),
+                supported = ?ProtocolVersion::ALL.iter().map(ProtocolVersion::as_str).collect::<Vec<_>>(),
                 "Protocol version negotiation: client requested different version"
             );
         }
@@ -379,7 +377,10 @@ where
         // Create context for the handler
         let peer = TransportPeer::new(self.transport.clone());
         let client_caps = self.state.client_caps();
-        let protocol_version = self.state.protocol_version().unwrap_or(ProtocolVersion::LATEST);
+        let protocol_version = self
+            .state
+            .protocol_version()
+            .unwrap_or(ProtocolVersion::LATEST);
         let ctx = Context::new(
             &request.id,
             progress_token.as_ref(),

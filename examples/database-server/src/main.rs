@@ -475,7 +475,14 @@ async fn main() -> Result<(), McpError> {
     let client_caps = ClientCapabilities::default();
     let server_caps = ServerCapabilities::default();
     let peer = NoOpPeer;
-    let _ctx = Context::new(&request_id, None, &client_caps, &server_caps, ProtocolVersion::LATEST, &peer);
+    let _ctx = Context::new(
+        &request_id,
+        None,
+        &client_caps,
+        &server_caps,
+        ProtocolVersion::LATEST,
+        &peer,
+    );
 
     let result = server
         .query("SELECT * FROM users".to_string(), Some(10))

@@ -262,7 +262,13 @@ mod tests {
     use mcpkit_core::protocol::RequestId;
     use mcpkit_core::protocol_version::ProtocolVersion;
 
-    fn make_context() -> (RequestId, ClientCapabilities, ServerCapabilities, ProtocolVersion, NoOpPeer) {
+    fn make_context() -> (
+        RequestId,
+        ClientCapabilities,
+        ServerCapabilities,
+        ProtocolVersion,
+        NoOpPeer,
+    ) {
         (
             RequestId::Number(1),
             ClientCapabilities::default(),
@@ -323,7 +329,14 @@ mod tests {
         assert_eq!(service.len(), 1);
 
         let (req_id, client_caps, server_caps, protocol_version, peer) = make_context();
-        let ctx = Context::new(&req_id, None, &client_caps, &server_caps, protocol_version, &peer);
+        let ctx = Context::new(
+            &req_id,
+            None,
+            &client_caps,
+            &server_caps,
+            protocol_version,
+            &peer,
+        );
 
         let result = service
             .render("greeting", Some(serde_json::json!({"name": "Alice"})), &ctx)
