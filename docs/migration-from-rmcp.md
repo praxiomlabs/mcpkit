@@ -404,6 +404,6 @@ Update error handling from `Error` to `McpError`:
 
 ## Getting Help
 
-- [GitHub Issues](https://github.com/praxislabs/mcpkit/issues)
+- [GitHub Issues](https://github.com/praxiomlabs/mcpkit/issues)
 - [Documentation](https://docs.rs/mcpkit)
 - [MCP Specification](https://modelcontextprotocol.io)

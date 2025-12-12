@@ -1,6 +1,6 @@
 # mcpkit
 
-[![CI](https://github.com/praxislabs/mcpkit/actions/workflows/ci.yml/badge.svg)](https://github.com/praxislabs/mcpkit/actions/workflows/ci.yml)
+[![CI](https://github.com/praxiomlabs/mcpkit/actions/workflows/ci.yml/badge.svg)](https://github.com/praxiomlabs/mcpkit/actions/workflows/ci.yml)
 [![Crates.io](https://img.shields.io/crates/v/mcpkit.svg)](https://crates.io/crates/mcpkit)
 [![Documentation](https://docs.rs/mcpkit/badge.svg)](https://docs.rs/mcpkit)
 [![License](https://img.shields.io/crates/l/mcpkit.svg)](LICENSE-MIT)

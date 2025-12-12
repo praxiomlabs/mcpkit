@@ -148,7 +148,7 @@ jobs:
 
             - [crates.io](https://crates.io/crates/mcpkit/${{ steps.version.outputs.version }})
             - [docs.rs](https://docs.rs/mcpkit/${{ steps.version.outputs.version }})
-            - [Full Changelog](https://github.com/praxislabs/mcpkit/blob/main/CHANGELOG.md)
+            - [Full Changelog](https://github.com/praxiomlabs/mcpkit/blob/main/CHANGELOG.md)
           draft: false
           prerelease: ${{ contains(steps.version.outputs.version, '-') }}
         env:

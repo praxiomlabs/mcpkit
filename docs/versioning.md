@@ -214,7 +214,7 @@ unix = []  # Unix-only
 If you encounter breaking changes or deprecation issues:
 
 1. Check the [CHANGELOG.md](../CHANGELOG.md) for migration notes
-2. Search existing [GitHub issues](https://github.com/praxislabs/mcpkit/issues)
+2. Search existing [GitHub issues](https://github.com/praxiomlabs/mcpkit/issues)
 3. Open a new issue with reproduction steps
 
 ## Summary

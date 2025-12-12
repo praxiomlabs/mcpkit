@@ -23,7 +23,7 @@ This project follows the [Rust Code of Conduct](https://www.rust-lang.org/polici
    ```
 3. Add upstream remote:
    ```bash
-   git remote add upstream https://github.com/praxislabs/mcpkit.git
+   git remote add upstream https://github.com/praxiomlabs/mcpkit.git
    ```
 4. Build the project:
    ```bash
@@ -279,8 +279,8 @@ Releases are handled by maintainers:
 
 ## Getting Help
 
-- **Questions**: Open a [Discussion](https://github.com/praxislabs/mcpkit/discussions)
-- **Bugs**: Open an [Issue](https://github.com/praxislabs/mcpkit/issues)
+- **Questions**: Open a [Discussion](https://github.com/praxiomlabs/mcpkit/discussions)
+- **Bugs**: Open an [Issue](https://github.com/praxiomlabs/mcpkit/issues)
 - **Security**: See [SECURITY.md](SECURITY.md)
 
 ## Recognition

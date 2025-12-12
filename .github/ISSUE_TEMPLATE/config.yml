@@ -1,10 +1,10 @@
 blank_issues_enabled: false
 contact_links:
   - name: Questions & Discussions
-    url: https://github.com/praxislabs/mcpkit/discussions
+    url: https://github.com/praxiomlabs/mcpkit/discussions
     about: Ask questions and discuss ideas in GitHub Discussions
   - name: Security Vulnerabilities
-    url: https://github.com/praxislabs/mcpkit/security/advisories/new
+    url: https://github.com/praxiomlabs/mcpkit/security/advisories/new
     about: Report security vulnerabilities privately
   - name: Documentation
     url: https://docs.rs/mcpkit
