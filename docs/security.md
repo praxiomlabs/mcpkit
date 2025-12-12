@@ -851,6 +851,356 @@ async fn run_command(&self, operation: String, args: Vec<String>) -> Result<Tool
 - [ ] Have incident response procedures
 - [ ] Regular security assessments
 
+## OWASP Alignment
+
+This section maps common OWASP vulnerabilities to MCP-specific mitigations.
+
+### A01:2021 - Broken Access Control
+
+**Risk**: Unauthorized access to tools, resources, or operations.
+
+**Mitigations**:
+- [ ] Implement capability-based access control in `ServerCapabilities`
+- [ ] Validate client capabilities before exposing features
+- [ ] Use OAuth 2.1 with resource indicators (RFC 8707)
+- [ ] Enforce PKCE for all OAuth flows
+- [ ] Implement per-tool authorization checks
+
+```rust
+// Check capabilities before tool execution
+async fn call_tool(&self, name: &str, args: Value, ctx: &Context<'_>) -> Result<ToolOutput, McpError> {
+    // Verify client is authorized for this tool
+    if !self.is_authorized(ctx.request_meta(), name) {
+        return Err(McpError::ResourceAccessDenied {
+            uri: format!("tool://{}", name),
+            reason: Some("Insufficient permissions".to_string()),
+        });
+    }
+    // Proceed with tool execution
+}
+```
+
+### A02:2021 - Cryptographic Failures
+
+**Risk**: Exposure of sensitive data through weak cryptography.
+
+**Mitigations**:
+- [ ] Use TLS 1.3 for all network transports
+- [ ] Use `rustls` (default) instead of OpenSSL
+- [ ] Store credentials using secure OS-level key storage
+- [ ] Never log sensitive data (tokens, passwords, PII)
+- [ ] Encrypt sensitive data at rest
+
+```rust
+// Ensure TLS 1.3 only
+let config = ClientConfig::builder()
+    .with_safe_default_cipher_suites()
+    .with_safe_default_kx_groups()
+    .with_protocol_versions(&[&version::TLS13])
+    .expect("TLS 1.3 required")
+    .with_root_certificates(roots)
+    .with_no_client_auth();
+```
+
+### A03:2021 - Injection
+
+**Risk**: Injection attacks via tool parameters or resource URIs.
+
+**Types relevant to MCP**:
+- Command injection (shell commands in tools)
+- SQL injection (database-backed resources)
+- Path traversal (file system tools)
+- Prompt injection (LLM manipulation via outputs)
+
+**Mitigations**:
+- [ ] Validate and sanitize all inputs
+- [ ] Use parameterized queries for databases
+- [ ] Canonicalize and validate file paths
+- [ ] Avoid shell execution; use direct command APIs
+- [ ] Sanitize outputs to prevent prompt injection
+
+```rust
+// Path traversal prevention
+fn validate_path(path: &str, allowed_root: &Path) -> Result<PathBuf, McpError> {
+    // Reject obvious attacks early
+    if path.contains("..") || path.contains('\0') {
+        return Err(McpError::invalid_params("path", "Invalid path characters"));
+    }
+
+    // Canonicalize to resolve symlinks and ..
+    let canonical = std::fs::canonicalize(path)
+        .map_err(|_| McpError::resource_not_found(path))?;
+
+    // Verify within allowed directory
+    if !canonical.starts_with(allowed_root) {
+        return Err(McpError::ResourceAccessDenied {
+            uri: path.to_string(),
+            reason: Some("Path outside allowed directory".to_string()),
+        });
+    }
+
+    Ok(canonical)
+}
+```
+
+### A04:2021 - Insecure Design
+
+**Risk**: Architecture flaws enabling attacks.
+
+**Mitigations**:
+- [ ] Follow principle of least privilege for capabilities
+- [ ] Design tools with minimal required permissions
+- [ ] Implement defense in depth (multiple validation layers)
+- [ ] Use typestate pattern to enforce connection lifecycle
+- [ ] Require explicit capability negotiation
+
+```rust
+// Principle of least privilege in capabilities
+let capabilities = ServerCapabilities::new()
+    .with_tools()  // Only what's needed
+    // Don't expose resources or prompts if not required
+    ;
+```
+
+### A05:2021 - Security Misconfiguration
+
+**Risk**: Insecure default configurations.
+
+**Mitigations**:
+- [ ] Use secure defaults (mcpkit does this)
+- [ ] Disable unnecessary capabilities
+- [ ] Set appropriate message size limits
+- [ ] Configure proper timeouts
+- [ ] Review and harden production configurations
+
+```rust
+// Secure configuration example
+let config = WebSocketConfig::new("wss://secure.example.com/mcp")
+    .max_message_size(4 * 1024 * 1024)  // 4MB limit
+    .with_reconnect(true)
+    .with_max_reconnect_attempts(5)
+    .with_ping_interval(Duration::from_secs(30));
+```
+
+### A06:2021 - Vulnerable Components
+
+**Risk**: Using dependencies with known vulnerabilities.
+
+**Mitigations**:
+- [ ] Run `cargo audit` regularly
+- [ ] Keep dependencies updated
+- [ ] Use `cargo deny` for license and vulnerability checking
+- [ ] Prefer well-maintained crates with security track records
+- [ ] Review dependency tree with `cargo tree`
+
+```bash
+# Regular security checks
+cargo audit
+cargo deny check
+cargo update --dry-run  # Check for updates
+```
+
+### A07:2021 - Authentication Failures
+
+**Risk**: Weak or missing authentication.
+
+**Mitigations**:
+- [ ] Implement OAuth 2.1 for production deployments
+- [ ] Always use PKCE (required by MCP spec)
+- [ ] Use short-lived tokens with refresh capability
+- [ ] Implement proper token validation
+- [ ] Support client certificate authentication (mTLS)
+
+```rust
+// OAuth 2.1 with required PKCE
+let pkce = PkceChallenge::new();  // Required, not optional
+let auth_request = AuthorizationRequest::new(
+    client_id,
+    &pkce,
+    resource_uri,
+);
+```
+
+### A08:2021 - Software and Data Integrity Failures
+
+**Risk**: Code or data tampering.
+
+**Mitigations**:
+- [ ] Verify checksums of downloaded dependencies
+- [ ] Use signed releases
+- [ ] Implement request/response integrity checks
+- [ ] Validate JSON-RPC message structure
+- [ ] Use certificate pinning for high-security deployments
+
+```rust
+// Certificate pinning for integrity
+let verifier = Arc::new(PinnedCertVerifier::new(
+    vec![expected_cert_hash],
+    vec![expected_key_hash],
+    roots,
+));
+```
+
+### A09:2021 - Security Logging and Monitoring
+
+**Risk**: Unable to detect or respond to attacks.
+
+**Mitigations**:
+- [ ] Log authentication events (success/failure)
+- [ ] Log tool invocations with parameters (sanitized)
+- [ ] Log rate limit violations
+- [ ] Log security-relevant errors
+- [ ] Integrate with monitoring systems
+- [ ] Set up alerts for suspicious patterns
+
+```rust
+// Security-relevant logging
+tracing::warn!(
+    client_id = %ctx.client_id(),
+    tool = %name,
+    "Tool invocation rate limit exceeded"
+);
+
+tracing::info!(
+    client_id = %ctx.client_id(),
+    tool = %name,
+    success = %result.is_ok(),
+    duration_ms = %duration.as_millis(),
+    "Tool invocation completed"
+);
+```
+
+### A10:2021 - Server-Side Request Forgery (SSRF)
+
+**Risk**: Server makes requests to unintended destinations.
+
+**Mitigations**:
+- [ ] Validate and sanitize URLs in tool parameters
+- [ ] Use allowlists for external resource access
+- [ ] Block requests to internal networks (127.0.0.0/8, 10.0.0.0/8, etc.)
+- [ ] Use DNS resolution checks before requests
+- [ ] Implement network egress controls
+
+```rust
+// SSRF prevention
+fn validate_url(url: &str) -> Result<Url, McpError> {
+    let parsed = Url::parse(url)
+        .map_err(|_| McpError::invalid_params("url", "Invalid URL"))?;
+
+    // Only allow HTTPS
+    if parsed.scheme() != "https" {
+        return Err(McpError::invalid_params("url", "Only HTTPS allowed"));
+    }
+
+    // Block internal networks
+    if let Some(host) = parsed.host_str() {
+        if is_internal_address(host) {
+            return Err(McpError::invalid_params("url", "Internal addresses blocked"));
+        }
+    }
+
+    Ok(parsed)
+}
+
+fn is_internal_address(host: &str) -> bool {
+    // Check for localhost
+    if host == "localhost" || host.ends_with(".localhost") {
+        return true;
+    }
+
+    // Check for IP addresses
+    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        return match ip {
+            std::net::IpAddr::V4(v4) => {
+                v4.is_loopback() ||
+                v4.is_private() ||
+                v4.is_link_local()
+            }
+            std::net::IpAddr::V6(v6) => {
+                v6.is_loopback() ||
+                v6.is_unspecified()
+            }
+        };
+    }
+
+    false
+}
+```
+
+## MCP-Specific Threats
+
+### Prompt Injection via Tool Results
+
+**Risk**: Malicious content in tool outputs manipulates the LLM.
+
+**Mitigation**:
+```rust
+fn sanitize_for_llm(content: &str) -> String {
+    content
+        // Escape markdown that could alter LLM interpretation
+        .replace("```", "'''")
+        .replace("[[", "[ [")
+        .replace("]]", "] ]")
+        // Remove control characters except safe ones
+        .chars()
+        .filter(|c| !c.is_control() || *c == '\n' || *c == '\t' || *c == '\r')
+        // Limit length to prevent context stuffing
+        .take(100_000)
+        .collect()
+}
+```
+
+### Capability Escalation
+
+**Risk**: Client gains access to undeclared capabilities.
+
+**Mitigation**:
+```rust
+// Verify capabilities before every operation
+impl ServerHandler for MyServer {
+    fn capabilities(&self) -> ServerCapabilities {
+        ServerCapabilities::new().with_tools()
+        // Explicitly NOT including .with_resources()
+    }
+}
+
+// In resource handler (even if implemented)
+async fn read_resource(&self, uri: &str, ctx: &Context<'_>) -> Result<ResourceContents, McpError> {
+    // Double-check capability is enabled
+    if !self.capabilities().has_resources() {
+        return Err(McpError::CapabilityNotSupported {
+            capability: "resources".to_string(),
+            available: Box::new([]),
+        });
+    }
+    // Proceed...
+}
+```
+
+### Resource Exhaustion
+
+**Risk**: Denial of service through excessive requests.
+
+**Mitigation**:
+```rust
+// Comprehensive rate limiting
+struct RateLimits {
+    requests_per_minute: usize,
+    tool_calls_per_minute: usize,
+    bytes_per_minute: usize,
+    concurrent_requests: usize,
+}
+
+impl RateLimiter {
+    async fn check_all(&self, client: &str, request_size: usize) -> Result<(), McpError> {
+        self.check_request_rate(client).await?;
+        self.check_concurrent(client).await?;
+        self.check_bandwidth(client, request_size).await?;
+        Ok(())
+    }
+}
+```
+
 ## Reporting Security Issues
 
 If you discover a security vulnerability in the Rust MCP SDK, please report it responsibly:

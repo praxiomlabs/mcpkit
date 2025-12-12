@@ -284,30 +284,349 @@ println!("Total reused: {}", stats.total_reused);
 
 ## Custom Transports
 
-Implement the `Transport` trait for custom transports:
+Implementing custom transports allows integration with any communication layer. This section provides a comprehensive guide to building production-ready transports.
+
+### The Transport Trait
 
 ```rust
-use mcpkit_transport::traits::Transport;
+use mcpkit_transport::traits::{Transport, TransportMetadata};
 use mcpkit_core::protocol::Message;
-use mcpkit_core::error::McpError;
+use std::future::Future;
 
-struct MyCustomTransport {
-    // Your state
+pub trait Transport: Send + Sync {
+    /// Error type for transport operations
+    type Error: std::error::Error + Send + Sync + 'static;
+
+    /// Send a message over the transport
+    fn send(&self, msg: Message) -> impl Future<Output = Result<(), Self::Error>> + Send;
+
+    /// Receive a message (returns None on clean close)
+    fn recv(&self) -> impl Future<Output = Result<Option<Message>, Self::Error>> + Send;
+
+    /// Close the transport gracefully
+    fn close(&self) -> impl Future<Output = Result<(), Self::Error>> + Send;
+
+    /// Check if the transport is connected
+    fn is_connected(&self) -> bool;
+
+    /// Get transport metadata
+    fn metadata(&self) -> TransportMetadata;
+}
+```
+
+### Complete Implementation Example
+
+Here's a full example implementing a Redis-based transport:
+
+```rust
+use mcpkit_transport::{Transport, TransportMetadata, TransportError};
+use mcpkit_core::protocol::Message;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
+/// A transport that uses Redis pub/sub for message passing.
+pub struct RedisTransport {
+    client: redis::Client,
+    pubsub: Mutex<Option<redis::aio::PubSub>>,
+    channel: String,
+    connected: Arc<AtomicBool>,
+    metadata: TransportMetadata,
 }
 
-impl Transport for MyCustomTransport {
-    async fn send(&self, message: Message) -> Result<(), McpError> {
-        // Send the message
+impl RedisTransport {
+    /// Create a new Redis transport.
+    pub async fn connect(
+        url: &str,
+        channel: &str,
+    ) -> Result<Self, TransportError> {
+        let client = redis::Client::open(url)
+            .map_err(|e| TransportError::Connection {
+                message: format!("Failed to create Redis client: {}", e),
+            })?;
+
+        let mut pubsub = client.get_async_pubsub().await
+            .map_err(|e| TransportError::Connection {
+                message: format!("Failed to connect: {}", e),
+            })?;
+
+        pubsub.subscribe(channel).await
+            .map_err(|e| TransportError::Connection {
+                message: format!("Failed to subscribe: {}", e),
+            })?;
+
+        Ok(Self {
+            client,
+            pubsub: Mutex::new(Some(pubsub)),
+            channel: channel.to_string(),
+            connected: Arc::new(AtomicBool::new(true)),
+            metadata: TransportMetadata::new("redis")
+                .remote_addr(url)
+                .connected_now(),
+        })
+    }
+}
+
+impl Transport for RedisTransport {
+    type Error = TransportError;
+
+    async fn send(&self, msg: Message) -> Result<(), Self::Error> {
+        if !self.is_connected() {
+            return Err(TransportError::NotConnected);
+        }
+
+        let json = serde_json::to_string(&msg)?;
+
+        let mut conn = self.client.get_multiplexed_async_connection().await
+            .map_err(|e| TransportError::Connection {
+                message: format!("Failed to get connection: {}", e),
+            })?;
+
+        redis::cmd("PUBLISH")
+            .arg(&self.channel)
+            .arg(&json)
+            .query_async(&mut conn)
+            .await
+            .map_err(|e| TransportError::Connection {
+                message: format!("Failed to publish: {}", e),
+            })?;
+
         Ok(())
     }
 
-    async fn recv(&self) -> Result<Option<Message>, McpError> {
-        // Receive a message
-        Ok(None)
+    async fn recv(&self) -> Result<Option<Message>, Self::Error> {
+        if !self.is_connected() {
+            return Err(TransportError::NotConnected);
+        }
+
+        let mut guard = self.pubsub.lock().await;
+        let pubsub = guard.as_mut().ok_or(TransportError::ConnectionClosed)?;
+
+        match pubsub.on_message().next().await {
+            Some(msg) => {
+                let payload: String = msg.get_payload()
+                    .map_err(|e| TransportError::Deserialization {
+                        message: format!("Failed to get payload: {}", e),
+                    })?;
+
+                let message: Message = serde_json::from_str(&payload)?;
+                Ok(Some(message))
+            }
+            None => {
+                self.connected.store(false, Ordering::SeqCst);
+                Ok(None)
+            }
+        }
     }
 
-    async fn close(&self) -> Result<(), McpError> {
-        // Clean up
+    async fn close(&self) -> Result<(), Self::Error> {
+        self.connected.store(false, Ordering::SeqCst);
+
+        let mut guard = self.pubsub.lock().await;
+        if let Some(mut pubsub) = guard.take() {
+            let _ = pubsub.unsubscribe(&self.channel).await;
+        }
+
+        Ok(())
+    }
+
+    fn is_connected(&self) -> bool {
+        self.connected.load(Ordering::SeqCst)
+    }
+
+    fn metadata(&self) -> TransportMetadata {
+        self.metadata.clone()
+    }
+}
+```
+
+### Custom Error Types
+
+You can use `TransportError` or define your own error type:
+
+```rust
+use thiserror::Error;
+use mcpkit_core::error::McpError;
+
+#[derive(Error, Debug)]
+pub enum MyTransportError {
+    #[error("Connection failed: {0}")]
+    ConnectionFailed(String),
+
+    #[error("Not connected")]
+    NotConnected,
+
+    #[error("Serialization error: {0}")]
+    Serialization(#[from] serde_json::Error),
+
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+}
+
+// Convert to McpError for integration with the SDK
+impl From<MyTransportError> for McpError {
+    fn from(err: MyTransportError) -> Self {
+        use mcpkit_core::error::{TransportDetails, TransportErrorKind, TransportContext};
+
+        let kind = match &err {
+            MyTransportError::ConnectionFailed(_) => TransportErrorKind::ConnectionFailed,
+            MyTransportError::NotConnected => TransportErrorKind::ConnectionFailed,
+            MyTransportError::Serialization(_) => TransportErrorKind::InvalidMessage,
+            MyTransportError::Io(_) => TransportErrorKind::ReadFailed,
+        };
+
+        McpError::Transport(Box::new(TransportDetails {
+            kind,
+            message: err.to_string(),
+            context: TransportContext::default(),
+            source: Some(Box::new(err)),
+        }))
+    }
+}
+```
+
+### Implementing TransportListener
+
+For server-side transports that accept connections:
+
+```rust
+use mcpkit_transport::{Transport, TransportListener, TransportError};
+
+pub struct MyListener {
+    inner: tokio::net::TcpListener,
+}
+
+impl MyListener {
+    pub async fn bind(addr: &str) -> Result<Self, TransportError> {
+        let inner = tokio::net::TcpListener::bind(addr).await?;
+        Ok(Self { inner })
+    }
+}
+
+impl TransportListener for MyListener {
+    type Transport = MyTransport;
+    type Error = TransportError;
+
+    async fn accept(&self) -> Result<Self::Transport, Self::Error> {
+        let (stream, addr) = self.inner.accept().await?;
+        Ok(MyTransport::from_stream(stream, addr))
+    }
+
+    fn local_addr(&self) -> Option<String> {
+        self.inner.local_addr()
+            .ok()
+            .map(|a| a.to_string())
+    }
+}
+```
+
+### Testing Custom Transports
+
+Use the `MemoryTransport` pattern for testing:
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_send_receive() {
+        // For network transports, consider using testcontainers
+        // or mocking the underlying connection
+
+        let transport = MyTransport::connect("test://localhost").await.unwrap();
+
+        let msg = Message::Notification(Notification::new("test/ping"));
+        transport.send(msg.clone()).await.unwrap();
+
+        let received = transport.recv().await.unwrap();
+        assert!(received.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_close_behavior() {
+        let transport = MyTransport::connect("test://localhost").await.unwrap();
+
+        assert!(transport.is_connected());
+        transport.close().await.unwrap();
+        assert!(!transport.is_connected());
+
+        // Send after close should fail
+        let msg = Message::Notification(Notification::new("test"));
+        let result = transport.send(msg).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_metadata() {
+        let transport = MyTransport::connect("test://localhost").await.unwrap();
+        let meta = transport.metadata();
+
+        assert_eq!(meta.transport_type, "my-transport");
+        assert!(meta.connected_at.is_some());
+    }
+}
+```
+
+### Adding Middleware Support
+
+Wrap your transport with telemetry or other middleware:
+
+```rust
+use mcpkit_transport::telemetry::{TelemetryTransport, TelemetryConfig};
+
+// Wrap any transport with telemetry
+let base_transport = MyTransport::connect("...").await?;
+let transport = TelemetryTransport::new(
+    base_transport,
+    TelemetryConfig::default(),
+);
+
+// Now all messages are tracked with metrics
+```
+
+### Thread Safety Requirements
+
+Transports must be `Send + Sync`. Key patterns:
+
+```rust
+use std::sync::Arc;
+use tokio::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+pub struct SafeTransport {
+    // Use Arc for shared state
+    state: Arc<TransportState>,
+    // Use async Mutex for async operations
+    reader: Mutex<Reader>,
+    // Use atomic for simple flags
+    connected: AtomicBool,
+}
+
+// This pattern allows concurrent send/recv from different tasks
+impl Transport for SafeTransport {
+    // ...
+}
+```
+
+### Performance Considerations
+
+1. **Minimize lock contention**: Use separate locks for send and receive paths
+2. **Buffer appropriately**: Batch small messages when possible
+3. **Handle backpressure**: Implement flow control for high-throughput scenarios
+4. **Use zero-copy where possible**: Avoid unnecessary allocations
+
+```rust
+impl Transport for HighPerfTransport {
+    async fn send(&self, msg: Message) -> Result<(), Self::Error> {
+        // Pre-serialize outside any locks
+        let bytes = serde_json::to_vec(&msg)?;
+
+        // Brief lock only for the actual write
+        let mut writer = self.writer.lock().await;
+        writer.write_all(&bytes).await?;
+        writer.flush().await?;
+
         Ok(())
     }
 }
