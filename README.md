@@ -6,15 +6,15 @@
 [![License](https://img.shields.io/crates/l/mcpkit.svg)](LICENSE-MIT)
 [![MSRV](https://img.shields.io/badge/MSRV-1.75-blue.svg)](https://blog.rust-lang.org/2023/12/28/Rust-1.75.0.html)
 
-A production-grade Rust SDK for the Model Context Protocol (MCP) that dramatically reduces boilerplate through a unified `#[mcp_server]` macro.
+A Rust SDK for the Model Context Protocol (MCP) that simplifies server development through a unified `#[mcp_server]` macro.
 
 ## Features
 
-- **66% less boilerplate** via unified `#[mcp_server]` macro
+- **Reduced boilerplate** via unified `#[mcp_server]` macro
 - **Runtime-agnostic** async support (Tokio, async-std, smol)
 - **Type-safe state machines** via typestate pattern for connection lifecycle
 - **Rich error handling** with context chains
-- **Full MCP 2025-11-25 protocol coverage** including Tasks (which rmcp lacks)
+- **Full MCP 2025-11-25 protocol coverage** including Tasks
 - **First-class middleware** via Tower-compatible Layer pattern
 
 ## Quick Start
@@ -74,11 +74,11 @@ async fn main() -> Result<(), McpError> {
 | Aspect | rmcp | This SDK |
 |--------|------|----------|
 | Macros | 4 interdependent | 1 unified `#[mcp_server]` |
-| Boilerplate | Manual router wiring | Zero initialization |
+| Boilerplate | Manual router wiring | Automatic wiring |
 | Parameters | `Parameters<T>` wrapper | Direct from signature |
 | Error types | 3 nested layers | 1 unified `McpError` |
-| Tasks | Not implemented | Full support |
-| WebSocket | Custom implementation | First-class |
+| Tasks | Limited | Full support |
+| WebSocket | Custom implementation | Built-in |
 | Middleware | Manual/Tower separate | Built-in Layer system |
 | Runtime | Tokio-only | Runtime-agnostic |
 

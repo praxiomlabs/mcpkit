@@ -1,7 +1,7 @@
 //! Procedural macros for the MCP SDK.
 //!
-//! This crate provides the unified `#[mcp_server]` macro that dramatically
-//! reduces boilerplate compared to rmcp's 4-macro approach.
+//! This crate provides the unified `#[mcp_server]` macro that simplifies
+//! MCP server development.
 //!
 //! # Overview
 //!
@@ -48,7 +48,7 @@
 //! - `#[tool_handler]`
 //! - Manual `new()` constructor
 //!
-//! **Result: 66% less boilerplate code.**
+//! **Result: Reduced boilerplate code.**
 
 #![deny(missing_docs)]
 #![warn(clippy::all)]

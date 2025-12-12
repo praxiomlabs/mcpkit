@@ -11,10 +11,9 @@
 //!
 //! ## What This Demonstrates
 //!
-//! - Single `#[mcp_server]` macro replaces 4 rmcp macros
+//! - Single `#[mcp_server]` macro for server definition
 //! - Direct parameter extraction from function signatures
-//! - No manual router wiring or initialization
-//! - 66% less boilerplate than rmcp
+//! - Automatic router wiring
 
 use mcpkit::prelude::*;
 

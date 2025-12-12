@@ -1,11 +1,11 @@
 //! # MCP - Model Context Protocol SDK for Rust
 //!
-//! A production-grade Rust SDK for the Model Context Protocol that dramatically
-//! reduces boilerplate compared to rmcp through a unified `#[mcp_server]` macro.
+//! A Rust SDK for the Model Context Protocol that simplifies server development
+//! through a unified `#[mcp_server]` macro.
 //!
 //! ## Features
 //!
-//! - **66% less boilerplate** via unified `#[mcp_server]` macro
+//! - **Reduced boilerplate** via unified `#[mcp_server]` macro
 //! - **Type-safe state machines** via typestate pattern for connection lifecycle
 //! - **Rich error handling** with context chains and miette diagnostics
 //! - **Full MCP 2025-11-25 protocol coverage** including Tasks

@@ -8,7 +8,7 @@
 //! - **Single error type**: All errors flow through [`McpError`]
 //! - **Rich context**: Errors preserve context through the entire call stack
 //! - **JSON-RPC compatible**: Easy conversion to JSON-RPC error responses
-//! - **Diagnostic-friendly**: Integrates with [`miette`] for beautiful error reports
+//! - **Diagnostic-friendly**: Integrates with [`miette`] for detailed error reports
 //! - **Size-optimized**: Large error variants are boxed to keep `Result<T, McpError>` small
 //!
 //! # Error Handling Patterns

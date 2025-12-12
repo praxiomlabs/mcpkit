@@ -76,7 +76,7 @@ impl Calculator {
 
 ### Positive
 
-- **66% less boilerplate** for typical servers
+- **Reduced boilerplate** for typical servers
 - **Lower barrier to entry** for new developers
 - **Single point of documentation** for the macro
 - **Consistent patterns** across tools, resources, and prompts
