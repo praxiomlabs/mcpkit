@@ -18,10 +18,12 @@ use mcpkit_core::capability::{
 use mcpkit_core::error::{HandshakeDetails, JsonRpcError, McpError, TransportContext, TransportDetails, TransportErrorKind};
 use mcpkit_core::protocol::{Message, Notification, Request, RequestId, Response};
 use mcpkit_core::types::{
-    CallToolRequest, CallToolResult, CreateMessageRequest, ElicitRequest,
-    GetPromptRequest, GetPromptResult, ListPromptsResult, ListResourcesResult,
-    ListResourceTemplatesResult, ListToolsResult, Prompt, ReadResourceRequest,
-    ReadResourceResult, Resource, ResourceContents, ResourceTemplate, Tool,
+    CallToolRequest, CallToolResult, CompleteRequest, CompleteResult, CompletionArgument,
+    CompletionRef, CreateMessageRequest, ElicitRequest, GetPromptRequest, GetPromptResult,
+    GetTaskRequest, CancelTaskRequest, ListPromptsResult, ListResourcesResult,
+    ListResourceTemplatesResult, ListTasksRequest, ListTasksResult, ListToolsResult, Prompt,
+    ReadResourceRequest, ReadResourceResult, Resource, ResourceContents, ResourceTemplate,
+    Task, TaskStatus, TaskSummary, Tool,
 };
 use mcpkit_transport::Transport;
 use std::collections::HashMap;
@@ -392,13 +394,13 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
     }
 
     /// Handle a notification from the server.
-    async fn handle_notification(notification: Notification, _handler: &Arc<H>) {
+    async fn handle_notification(notification: Notification, handler: &Arc<H>) {
         trace!(method = %notification.method, "Received server notification");
 
         match notification.method.as_ref() {
             "notifications/cancelled" => {
                 // Handle cancellation notifications
-                if let Some(params) = notification.params {
+                if let Some(params) = &notification.params {
                     if let Some(request_id) = params.get("requestId") {
                         debug!(?request_id, "Server cancelled request");
                     }
@@ -406,16 +408,37 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
             }
             "notifications/progress" => {
                 // Handle progress notifications
-                trace!("Received progress notification");
+                if let Some(params) = notification.params {
+                    if let (Some(task_id), Some(progress)) = (
+                        params.get("progressToken").and_then(|v| v.as_str()),
+                        params.get("progress"),
+                    ) {
+                        if let Ok(progress) = serde_json::from_value::<mcpkit_core::types::TaskProgress>(progress.clone()) {
+                            debug!(task_id = %task_id, "Task progress update");
+                            handler.on_task_progress(task_id.into(), progress).await;
+                        }
+                    }
+                }
             }
             "notifications/resources/updated" => {
-                trace!("Resources updated notification");
+                if let Some(params) = notification.params {
+                    if let Some(uri) = params.get("uri").and_then(|v| v.as_str()) {
+                        debug!(uri = %uri, "Resource updated");
+                        handler.on_resource_updated(uri.to_string()).await;
+                    }
+                }
+            }
+            "notifications/resources/list_changed" => {
+                debug!("Resources list changed");
+                handler.on_resources_list_changed().await;
             }
             "notifications/tools/list_changed" => {
-                trace!("Tools list changed notification");
+                debug!("Tools list changed");
+                handler.on_tools_list_changed().await;
             }
             "notifications/prompts/list_changed" => {
-                trace!("Prompts list changed notification");
+                debug!("Prompts list changed");
+                handler.on_prompts_list_changed().await;
             }
             _ => {
                 trace!(method = %notification.method, "Unhandled notification");
@@ -466,6 +489,11 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
     /// Check if the server supports tasks.
     pub fn has_tasks(&self) -> bool {
         self.server_caps.has_tasks()
+    }
+
+    /// Check if the server supports completions.
+    pub fn has_completions(&self) -> bool {
+        self.server_caps.has_completions()
     }
 
     /// Check if the client is still connected.
@@ -640,6 +668,188 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
     }
 
     // ==========================================================================
+    // Task Operations
+    // ==========================================================================
+
+    /// List all tasks.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if tasks are not supported or the request fails.
+    pub async fn list_tasks(&self) -> Result<Vec<TaskSummary>, McpError> {
+        self.ensure_capability("tasks", self.has_tasks())?;
+
+        let result: ListTasksResult = self.request("tasks/list", None).await?;
+        Ok(result.tasks)
+    }
+
+    /// List tasks with optional status filter and pagination.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if tasks are not supported or the request fails.
+    pub async fn list_tasks_filtered(
+        &self,
+        status: Option<TaskStatus>,
+        cursor: Option<&str>,
+    ) -> Result<ListTasksResult, McpError> {
+        self.ensure_capability("tasks", self.has_tasks())?;
+
+        let request = ListTasksRequest {
+            status,
+            cursor: cursor.map(String::from),
+        };
+        self.request("tasks/list", Some(serde_json::to_value(request)?))
+            .await
+    }
+
+    /// Get a task by ID.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if tasks are not supported or the task is not found.
+    pub async fn get_task(&self, id: impl Into<String>) -> Result<Task, McpError> {
+        self.ensure_capability("tasks", self.has_tasks())?;
+
+        let request = GetTaskRequest {
+            id: id.into().into(),
+        };
+        self.request("tasks/get", Some(serde_json::to_value(request)?))
+            .await
+    }
+
+    /// Cancel a running task.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if tasks are not supported, cancellation is not supported,
+    /// or the task is not found.
+    pub async fn cancel_task(&self, id: impl Into<String>) -> Result<(), McpError> {
+        self.ensure_capability("tasks", self.has_tasks())?;
+
+        let request = CancelTaskRequest {
+            id: id.into().into(),
+        };
+        let _: serde_json::Value = self
+            .request("tasks/cancel", Some(serde_json::to_value(request)?))
+            .await?;
+        Ok(())
+    }
+
+    // ==========================================================================
+    // Completion Operations
+    // ==========================================================================
+
+    /// Get completions for a prompt argument.
+    ///
+    /// # Arguments
+    ///
+    /// * `prompt_name` - The name of the prompt
+    /// * `argument_name` - The name of the argument to complete
+    /// * `current_value` - The current partial value being typed
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if completions are not supported or the request fails.
+    pub async fn complete_prompt_argument(
+        &self,
+        prompt_name: impl Into<String>,
+        argument_name: impl Into<String>,
+        current_value: impl Into<String>,
+    ) -> Result<CompleteResult, McpError> {
+        self.ensure_capability("completions", self.has_completions())?;
+
+        let request = CompleteRequest {
+            ref_: CompletionRef::prompt(prompt_name),
+            argument: CompletionArgument {
+                name: argument_name.into(),
+                value: current_value.into(),
+            },
+        };
+        self.request("completion/complete", Some(serde_json::to_value(request)?))
+            .await
+    }
+
+    /// Get completions for a resource argument.
+    ///
+    /// # Arguments
+    ///
+    /// * `resource_uri` - The URI of the resource
+    /// * `argument_name` - The name of the argument to complete
+    /// * `current_value` - The current partial value being typed
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if completions are not supported or the request fails.
+    pub async fn complete_resource_argument(
+        &self,
+        resource_uri: impl Into<String>,
+        argument_name: impl Into<String>,
+        current_value: impl Into<String>,
+    ) -> Result<CompleteResult, McpError> {
+        self.ensure_capability("completions", self.has_completions())?;
+
+        let request = CompleteRequest {
+            ref_: CompletionRef::resource(resource_uri),
+            argument: CompletionArgument {
+                name: argument_name.into(),
+                value: current_value.into(),
+            },
+        };
+        self.request("completion/complete", Some(serde_json::to_value(request)?))
+            .await
+    }
+
+    // ==========================================================================
+    // Resource Subscription Operations
+    // ==========================================================================
+
+    /// Subscribe to updates for a resource.
+    ///
+    /// When subscribed, the server will send `notifications/resources/updated`
+    /// when the resource changes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if resource subscriptions are not supported or the request fails.
+    pub async fn subscribe_resource(&self, uri: impl Into<String>) -> Result<(), McpError> {
+        self.ensure_capability("resources", self.has_resources())?;
+
+        // Check if subscribe is supported
+        if !self.server_caps.has_resource_subscribe() {
+            return Err(McpError::CapabilityNotSupported {
+                capability: "resources.subscribe".to_string(),
+                available: self.available_capabilities().into_boxed_slice(),
+            });
+        }
+
+        let params = serde_json::json!({ "uri": uri.into() });
+        let _: serde_json::Value = self.request("resources/subscribe", Some(params)).await?;
+        Ok(())
+    }
+
+    /// Unsubscribe from updates for a resource.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if resource subscriptions are not supported or the request fails.
+    pub async fn unsubscribe_resource(&self, uri: impl Into<String>) -> Result<(), McpError> {
+        self.ensure_capability("resources", self.has_resources())?;
+
+        // Check if subscribe is supported
+        if !self.server_caps.has_resource_subscribe() {
+            return Err(McpError::CapabilityNotSupported {
+                capability: "resources.subscribe".to_string(),
+                available: self.available_capabilities().into_boxed_slice(),
+            });
+        }
+
+        let params = serde_json::json!({ "uri": uri.into() });
+        let _: serde_json::Value = self.request("resources/unsubscribe", Some(params)).await?;
+        Ok(())
+    }
+
+    // ==========================================================================
     // Connection Operations
     // ==========================================================================
 
@@ -779,6 +989,9 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
         }
         if self.has_tasks() {
             caps.push("tasks".to_string());
+        }
+        if self.has_completions() {
+            caps.push("completions".to_string());
         }
         caps
     }

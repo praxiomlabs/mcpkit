@@ -122,6 +122,21 @@ impl ServerCapabilities {
     pub fn has_tasks(&self) -> bool {
         self.tasks.is_some()
     }
+
+    /// Check if completions are supported.
+    #[must_use]
+    pub fn has_completions(&self) -> bool {
+        self.completions.is_some()
+    }
+
+    /// Check if resource subscriptions are supported.
+    #[must_use]
+    pub fn has_resource_subscribe(&self) -> bool {
+        self.resources
+            .as_ref()
+            .and_then(|r| r.subscribe)
+            .unwrap_or(false)
+    }
 }
 
 /// Client capabilities advertised during initialization.

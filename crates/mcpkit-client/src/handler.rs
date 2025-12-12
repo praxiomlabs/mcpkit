@@ -11,6 +11,7 @@
 use mcpkit_core::error::McpError;
 use mcpkit_core::types::{
     CreateMessageRequest, CreateMessageResult, ElicitRequest, ElicitResult,
+    TaskProgress, TaskId,
 };
 use std::future::Future;
 
@@ -101,6 +102,49 @@ pub trait ClientHandler: Send + Sync {
     ///
     /// Override this to perform cleanup.
     fn on_disconnected(&self) -> impl Future<Output = ()> + Send {
+        async {}
+    }
+
+    // =========================================================================
+    // Notification Handlers
+    // =========================================================================
+
+    /// Called when a task makes progress.
+    ///
+    /// Override this to track task progress updates from the server.
+    fn on_task_progress(
+        &self,
+        _task_id: TaskId,
+        _progress: TaskProgress,
+    ) -> impl Future<Output = ()> + Send {
+        async {}
+    }
+
+    /// Called when a resource has been updated.
+    ///
+    /// Override this to react to resource changes (requires subscription).
+    fn on_resource_updated(&self, _uri: String) -> impl Future<Output = ()> + Send {
+        async {}
+    }
+
+    /// Called when the list of available resources has changed.
+    ///
+    /// Override this to refresh your cached resource list.
+    fn on_resources_list_changed(&self) -> impl Future<Output = ()> + Send {
+        async {}
+    }
+
+    /// Called when the list of available tools has changed.
+    ///
+    /// Override this to refresh your cached tool list.
+    fn on_tools_list_changed(&self) -> impl Future<Output = ()> + Send {
+        async {}
+    }
+
+    /// Called when the list of available prompts has changed.
+    ///
+    /// Override this to refresh your cached prompt list.
+    fn on_prompts_list_changed(&self) -> impl Future<Output = ()> + Send {
         async {}
     }
 }
