@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Client APIs for Tasks (list, get, cancel)
+- Client APIs for Completions (prompt arguments, resource arguments)
+- Client resource subscription support (subscribe, unsubscribe)
+- Client progress callback handling via `ClientHandler` trait
+- Server-level request metrics (`ServerMetrics`)
+- Comprehensive error scenario tests
+- Middleware interaction tests
+- Async cancellation tests
+
+### Changed
+
+- Expanded custom transport documentation with Redis example
+- Enhanced security documentation with OWASP Top 10 alignment
+
+## [0.1.0] - 2025-12-11
+
+### Added
+
 - Initial release of the Rust MCP SDK
 - Unified `#[mcp_server]` macro for defining MCP servers
 - `#[tool]` attribute for defining tools with automatic schema generation
@@ -32,28 +50,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Typestate pattern for connection lifecycle
 - Rich error handling with context chains
 - Comprehensive test suite
-- Example servers (minimal-server, full-server)
+- Example servers (minimal-server, full-server, database-server)
+- Client library with connection pooling
+- Server discovery for stdio-based servers
+- `mcpkit-testing` crate for test utilities
+- Protocol version detection and capability negotiation
 
-### Changed
-
-- N/A (initial release)
-
-### Deprecated
-
-- N/A (initial release)
-
-### Removed
-
-- N/A (initial release)
-
-### Fixed
-
-- N/A (initial release)
-
-### Security
-
-- N/A (initial release)
-
-## [0.1.0] - 2025-12-11
-
-Initial release.
+[Unreleased]: https://github.com/praxiomlabs/mcpkit/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/praxiomlabs/mcpkit/releases/tag/v0.1.0
