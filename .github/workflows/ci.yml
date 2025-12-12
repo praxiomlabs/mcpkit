@@ -11,17 +11,12 @@ env:
   RUSTFLAGS: -Dwarnings
 
 jobs:
-  check:
-    name: Check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo check --all-features --all-targets
+  # ==========================================================================
+  # Fast checks - run first, fail fast
+  # ==========================================================================
 
   fmt:
-    name: Rustfmt
+    name: Format
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -41,14 +36,32 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --all-features --all-targets -- -D warnings
 
-  test:
-    name: Test Suite
+  check:
+    name: Check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - run: cargo check --all-features --all-targets
+
+  # ==========================================================================
+  # Core tests - run after fast checks pass
+  # ==========================================================================
+
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    needs: [fmt, clippy, check]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
       - run: cargo test --all-features
+
+  # ==========================================================================
+  # Security & compliance
+  # ==========================================================================
 
   deny:
     name: Cargo Deny
@@ -59,33 +72,71 @@ jobs:
         with:
           command: check all
 
-  # === DISABLED FOR SPEED - Re-enable for releases ===
-  # test-matrix:
-  #   name: Test Suite (Full Matrix)
-  #   runs-on: ${{ matrix.os }}
-  #   strategy:
-  #     matrix:
-  #       os: [ubuntu-latest, macos-latest, windows-latest]
-  #       rust: [stable, "1.85"]
-  #
-  # test-arm64:
-  #   name: Test ARM64
-  #   runs-on: ubuntu-24.04-arm
-  #
-  # coverage:
-  #   name: Code Coverage
-  #
-  # docs:
-  #   name: Documentation
-  #
-  # msrv:
-  #   name: Minimum Supported Rust Version
-  #
-  # semver:
-  #   name: Semver Check
-  #
-  # bench:
-  #   name: Benchmarks
-  #
-  # security:
-  #   name: Security Audit
+  # ==========================================================================
+  # Documentation
+  # ==========================================================================
+
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    needs: [fmt, clippy, check]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build documentation
+        run: cargo doc --no-deps --all-features
+        env:
+          RUSTDOCFLAGS: -Dwarnings
+
+  # ==========================================================================
+  # MSRV - Minimum Supported Rust Version
+  # ==========================================================================
+
+  msrv:
+    name: MSRV (1.85)
+    runs-on: ubuntu-latest
+    needs: [fmt, clippy, check]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.85
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --all-features --all-targets
+
+  # ==========================================================================
+  # Cross-platform matrix - PRs only (to save CI minutes)
+  # ==========================================================================
+
+  test-matrix:
+    name: Test (${{ matrix.os }})
+    if: github.event_name == 'pull_request'
+    runs-on: ${{ matrix.os }}
+    needs: [test]
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --all-features
+
+  # ==========================================================================
+  # Semver check - ensure no accidental breaking changes
+  # ==========================================================================
+
+  semver:
+    name: Semver Check
+    runs-on: ubuntu-latest
+    needs: [fmt, clippy, check]
+    # Only run on PRs (not pushes to main) to compare against baseline
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-semver-checks
+        run: cargo install cargo-semver-checks --locked
+      - name: Check semver
+        run: cargo semver-checks check-release --package mcpkit

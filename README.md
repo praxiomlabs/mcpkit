@@ -4,7 +4,7 @@
 [![Crates.io](https://img.shields.io/crates/v/mcpkit.svg)](https://crates.io/crates/mcpkit)
 [![Documentation](https://docs.rs/mcpkit/badge.svg)](https://docs.rs/mcpkit)
 [![License](https://img.shields.io/crates/l/mcpkit.svg)](LICENSE-MIT)
-[![MSRV](https://img.shields.io/badge/MSRV-1.75-blue.svg)](https://blog.rust-lang.org/2023/12/28/Rust-1.75.0.html)
+[![MSRV](https://img.shields.io/badge/MSRV-1.85-blue.svg)](https://blog.rust-lang.org/2025/02/20/Rust-1.85.0.html)
 
 A Rust SDK for the Model Context Protocol (MCP) that simplifies server development through a unified `#[mcp_server]` macro.
 

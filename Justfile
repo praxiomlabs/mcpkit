@@ -27,7 +27,7 @@
 
 project_name := "mcpkit"
 version := "0.2.0"
-msrv := "1.75"
+msrv := "1.85"
 edition := "2021"
 docker_image := project_name
 docker_tag := version
