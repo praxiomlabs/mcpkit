@@ -1,5 +1,6 @@
 // Test: Missing required 'description' attribute on prompt
 
+#[allow(unused_imports)]
 use mcpkit_macros::{mcp_server, prompt};
 
 struct MyServer;

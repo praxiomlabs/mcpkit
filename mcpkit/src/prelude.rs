@@ -17,19 +17,19 @@
 //!
 //! ### Core Types
 //! - Protocol types (Request, Response, Notification, Message)
-//! - Error types (McpError, JsonRpcError)
-//! - Capability types (ServerCapabilities, ClientCapabilities)
-//! - Result types (CallToolResult, GetPromptResult, etc.)
+//! - Error types (`McpError`, `JsonRpcError`)
+//! - Capability types (`ServerCapabilities`, `ClientCapabilities`)
+//! - Result types (`CallToolResult`, `GetPromptResult`, etc.)
 //!
 //! ### Server Types
-//! - Handler traits (ToolHandler, ResourceHandler, PromptHandler, etc.)
-//! - Server and ServerBuilder
-//! - Context and ContextData
+//! - Handler traits (`ToolHandler`, `ResourceHandler`, `PromptHandler`, etc.)
+//! - Server and `ServerBuilder`
+//! - Context and `ContextData`
 //!
 //! ### Transport Types
 //! - Transport trait
-//! - TransportListener trait
-//! - TransportMetadata
+//! - `TransportListener` trait
+//! - `TransportMetadata`
 //!
 //! ### Macros
 //! - `#[mcp_server]` - Main server macro

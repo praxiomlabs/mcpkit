@@ -115,10 +115,10 @@ pub fn expand_mcp_server(attr: TokenStream, item: TokenStream) -> Result<TokenSt
     // Debug output if requested
     if attrs.debug_expand {
         eprintln!("=== Generated code for {} ===", quote!(#self_ty));
-        eprintln!("{}", server_handler_impl);
-        eprintln!("{}", tool_handler_impl);
-        eprintln!("{}", resource_handler_impl);
-        eprintln!("{}", prompt_handler_impl);
+        eprintln!("{server_handler_impl}");
+        eprintln!("{tool_handler_impl}");
+        eprintln!("{resource_handler_impl}");
+        eprintln!("{prompt_handler_impl}");
         eprintln!("=== End generated code ===");
     }
 
@@ -190,6 +190,7 @@ fn find_tool_attr(attrs: &[Attribute]) -> Result<Option<(usize, ToolAttrs)>> {
 }
 
 /// Extract tool information from a method.
+#[allow(clippy::unnecessary_wraps)] // Returns Result for future validation extensibility
 fn extract_tool_info(method: &ImplItemFn, attrs: ToolAttrs) -> Result<ToolMethod> {
     let name = method.sig.ident.clone();
     let tool_name = attrs.name.unwrap_or_else(|| name.to_string());
@@ -273,6 +274,7 @@ fn find_resource_attr(attrs: &[Attribute]) -> Result<Option<(usize, ResourceAttr
 }
 
 /// Extract resource information from a method.
+#[allow(clippy::unnecessary_wraps)] // Returns Result for future validation extensibility
 fn extract_resource_info(method: &ImplItemFn, attrs: ResourceAttrs) -> Result<ResourceMethod> {
     let name = method.sig.ident.clone();
     let resource_name = attrs.name.unwrap_or_else(|| name.to_string());
@@ -343,6 +345,7 @@ fn find_prompt_attr(attrs: &[Attribute]) -> Result<Option<(usize, PromptAttrs)>>
 }
 
 /// Extract prompt information from a method.
+#[allow(clippy::unnecessary_wraps)] // Returns Result for future validation extensibility
 fn extract_prompt_info(method: &ImplItemFn, attrs: PromptAttrs) -> Result<PromptMethod> {
     let name = method.sig.ident.clone();
     let prompt_name = attrs.name.unwrap_or_else(|| name.to_string());
@@ -352,7 +355,7 @@ fn extract_prompt_info(method: &ImplItemFn, attrs: PromptAttrs) -> Result<Prompt
         .sig
         .inputs
         .iter()
-        .filter_map(|arg| extract_prompt_param(arg))
+        .filter_map(extract_prompt_param)
         .collect();
 
     let is_async = method.sig.asyncness.is_some();
@@ -440,7 +443,7 @@ fn extract_option_inner_type(ty: &syn::Type) -> syn::Type {
     ty.clone()
 }
 
-/// Generate the ServerHandler implementation.
+/// Generate the `ServerHandler` implementation.
 fn generate_server_handler(
     attrs: &ServerAttrs,
     self_ty: &syn::Type,
@@ -450,10 +453,10 @@ fn generate_server_handler(
 ) -> TokenStream {
     let name = &attrs.name;
     let version = &attrs.version;
-    let instructions = attrs.instructions.as_ref().map_or_else(
-        || quote!(None),
-        |s| quote!(Some(#s.to_string())),
-    );
+    let instructions = attrs
+        .instructions
+        .as_ref()
+        .map_or_else(|| quote!(None), |s| quote!(Some(#s.to_string())));
 
     // Build capabilities chain based on what's implemented
     let mut capability_chain = vec![quote!(::mcpkit_core::capability::ServerCapabilities::new())];
@@ -496,7 +499,7 @@ fn generate_server_handler(
     }
 }
 
-/// Generate the ToolHandler implementation.
+/// Generate the `ToolHandler` implementation.
 fn generate_tool_handler(tools: &[ToolMethod], self_ty: &syn::Type) -> TokenStream {
     // Generate tool definitions
     let tool_defs: Vec<_> = tools
@@ -529,7 +532,10 @@ fn generate_tool_handler(tools: &[ToolMethod], self_ty: &syn::Type) -> TokenStre
         .collect();
 
     // Generate dispatch arms
-    let dispatch_arms: Vec<_> = tools.iter().map(|tool| tool.generate_call_dispatch()).collect();
+    let dispatch_arms: Vec<_> = tools
+        .iter()
+        .map(super::codegen::ToolMethod::generate_call_dispatch)
+        .collect();
 
     // Get the list of tool names for error message
     let tool_names: Vec<_> = tools.iter().map(|t| t.tool_name.as_str()).collect();
@@ -576,7 +582,7 @@ fn generate_tool_handler(tools: &[ToolMethod], self_ty: &syn::Type) -> TokenStre
     }
 }
 
-/// Generate the ResourceHandler implementation.
+/// Generate the `ResourceHandler` implementation.
 fn generate_resource_handler(resources: &[ResourceMethod], self_ty: &syn::Type) -> TokenStream {
     // Generate resource definitions
     let resource_defs: Vec<_> = resources
@@ -698,7 +704,7 @@ fn generate_resource_handler(resources: &[ResourceMethod], self_ty: &syn::Type) 
     }
 }
 
-/// Generate the PromptHandler implementation.
+/// Generate the `PromptHandler` implementation.
 fn generate_prompt_handler(prompts: &[PromptMethod], self_ty: &syn::Type) -> TokenStream {
     // Generate prompt definitions
     let prompt_defs: Vec<_> = prompts

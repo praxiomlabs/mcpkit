@@ -10,8 +10,7 @@
 
 use mcpkit_core::error::McpError;
 use mcpkit_core::types::{
-    CreateMessageRequest, CreateMessageResult, ElicitRequest, ElicitResult,
-    TaskProgress, TaskId,
+    CreateMessageRequest, CreateMessageResult, ElicitRequest, ElicitResult, TaskId, TaskProgress,
 };
 use std::future::Future;
 
@@ -152,7 +151,7 @@ pub trait ClientHandler: Send + Sync {
 /// A root directory that the client exposes to servers.
 #[derive(Debug, Clone)]
 pub struct Root {
-    /// URI of the root (e.g., "file:///home/user/project").
+    /// URI of the root (e.g., "<file:///home/user/project>").
     pub uri: String,
     /// Human-readable name for the root.
     pub name: Option<String>,
@@ -193,7 +192,7 @@ where
     Fut: Future<Output = Result<CreateMessageResult, McpError>> + Send,
 {
     /// Create a new sampling handler.
-    pub fn new(handler: F) -> Self {
+    pub const fn new(handler: F) -> Self {
         Self { handler }
     }
 }

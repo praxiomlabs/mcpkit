@@ -40,8 +40,7 @@ use {
     futures::{SinkExt, StreamExt},
     tokio::net::TcpStream,
     tokio_tungstenite::{
-        connect_async, tungstenite::protocol::Message as WsMessage, MaybeTlsStream,
-        WebSocketStream,
+        connect_async, tungstenite::protocol::Message as WsMessage, MaybeTlsStream, WebSocketStream,
     },
 };
 
@@ -115,8 +114,12 @@ impl WebSocketConfig {
 
     /// Set multiple allowed origins at once.
     #[must_use]
-    pub fn with_allowed_origins(mut self, origins: impl IntoIterator<Item = impl Into<String>>) -> Self {
-        self.allowed_origins.extend(origins.into_iter().map(Into::into));
+    pub fn with_allowed_origins(
+        mut self,
+        origins: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
+        self.allowed_origins
+            .extend(origins.into_iter().map(Into::into));
         self
     }
 
@@ -132,42 +135,42 @@ impl WebSocketConfig {
 
     /// Set the connection timeout.
     #[must_use]
-    pub fn with_connect_timeout(mut self, timeout: Duration) -> Self {
+    pub const fn with_connect_timeout(mut self, timeout: Duration) -> Self {
         self.connect_timeout = timeout;
         self
     }
 
     /// Set the ping interval.
     #[must_use]
-    pub fn with_ping_interval(mut self, interval: Duration) -> Self {
+    pub const fn with_ping_interval(mut self, interval: Duration) -> Self {
         self.ping_interval = interval;
         self
     }
 
     /// Set the pong timeout.
     #[must_use]
-    pub fn with_pong_timeout(mut self, timeout: Duration) -> Self {
+    pub const fn with_pong_timeout(mut self, timeout: Duration) -> Self {
         self.pong_timeout = timeout;
         self
     }
 
     /// Set the maximum message size.
     #[must_use]
-    pub fn with_max_message_size(mut self, size: usize) -> Self {
+    pub const fn with_max_message_size(mut self, size: usize) -> Self {
         self.max_message_size = size;
         self
     }
 
     /// Disable automatic reconnection.
     #[must_use]
-    pub fn without_auto_reconnect(mut self) -> Self {
+    pub const fn without_auto_reconnect(mut self) -> Self {
         self.auto_reconnect = false;
         self
     }
 
     /// Set maximum reconnection attempts.
     #[must_use]
-    pub fn with_max_reconnect_attempts(mut self, attempts: u32) -> Self {
+    pub const fn with_max_reconnect_attempts(mut self, attempts: u32) -> Self {
         self.max_reconnect_attempts = attempts;
         self
     }
@@ -207,7 +210,7 @@ pub struct ExponentialBackoff {
 impl ExponentialBackoff {
     /// Create a new exponential backoff configuration.
     #[must_use]
-    pub fn new(initial_delay: Duration, max_delay: Duration, multiplier: f64) -> Self {
+    pub const fn new(initial_delay: Duration, max_delay: Duration, multiplier: f64) -> Self {
         Self {
             initial_delay,
             max_delay,
@@ -288,7 +291,7 @@ pub struct WebSocketTransport {
 impl WebSocketTransport {
     /// Create a new WebSocket transport (not yet connected).
     #[must_use]
-    pub fn new(config: WebSocketConfig) -> Self {
+    pub const fn new(config: WebSocketConfig) -> Self {
         Self {
             config,
             state: AsyncMutex::new(WebSocketState {
@@ -406,8 +409,7 @@ impl WebSocketTransport {
 
     /// Set the connection state.
     fn set_connection_state(&self, state: ConnectionState) {
-        self.connection_state
-            .store(state as u32, Ordering::Release);
+        self.connection_state.store(state as u32, Ordering::Release);
     }
 
     /// Get the WebSocket URL.
@@ -434,9 +436,12 @@ impl WebSocketTransport {
         })?;
 
         let mut state = self.state.lock().await;
-        let stream = state.stream.as_mut().ok_or_else(|| TransportError::Connection {
-            message: "WebSocket not connected".to_string(),
-        })?;
+        let stream = state
+            .stream
+            .as_mut()
+            .ok_or_else(|| TransportError::Connection {
+                message: "WebSocket not connected".to_string(),
+            })?;
 
         stream
             .send(WsMessage::Text(json))
@@ -633,35 +638,35 @@ impl WebSocketTransportBuilder {
 
     /// Set the connection timeout.
     #[must_use]
-    pub fn connect_timeout(mut self, timeout: Duration) -> Self {
+    pub const fn connect_timeout(mut self, timeout: Duration) -> Self {
         self.config.connect_timeout = timeout;
         self
     }
 
     /// Set the ping interval.
     #[must_use]
-    pub fn ping_interval(mut self, interval: Duration) -> Self {
+    pub const fn ping_interval(mut self, interval: Duration) -> Self {
         self.config.ping_interval = interval;
         self
     }
 
     /// Set the pong timeout.
     #[must_use]
-    pub fn pong_timeout(mut self, timeout: Duration) -> Self {
+    pub const fn pong_timeout(mut self, timeout: Duration) -> Self {
         self.config.pong_timeout = timeout;
         self
     }
 
     /// Set maximum message size.
     #[must_use]
-    pub fn max_message_size(mut self, size: usize) -> Self {
+    pub const fn max_message_size(mut self, size: usize) -> Self {
         self.config.max_message_size = size;
         self
     }
 
     /// Disable automatic reconnection.
     #[must_use]
-    pub fn no_auto_reconnect(mut self) -> Self {
+    pub const fn no_auto_reconnect(mut self) -> Self {
         self.config.auto_reconnect = false;
         self
     }
@@ -698,7 +703,7 @@ pub struct WebSocketServerConfig {
 impl WebSocketServerConfig {
     /// Create a new server configuration.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             allowed_origins: Vec::new(),
             max_message_size: 16 * 1024 * 1024, // 16 MB
@@ -714,14 +719,18 @@ impl WebSocketServerConfig {
 
     /// Set multiple allowed origins at once.
     #[must_use]
-    pub fn with_allowed_origins(mut self, origins: impl IntoIterator<Item = impl Into<String>>) -> Self {
-        self.allowed_origins.extend(origins.into_iter().map(Into::into));
+    pub fn with_allowed_origins(
+        mut self,
+        origins: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
+        self.allowed_origins
+            .extend(origins.into_iter().map(Into::into));
         self
     }
 
     /// Set maximum message size.
     #[must_use]
-    pub fn with_max_message_size(mut self, size: usize) -> Self {
+    pub const fn with_max_message_size(mut self, size: usize) -> Self {
         self.max_message_size = size;
         self
     }
@@ -765,7 +774,7 @@ impl WebSocketListener {
 
     /// Get the server configuration.
     #[must_use]
-    pub fn config(&self) -> &WebSocketServerConfig {
+    pub const fn config(&self) -> &WebSocketServerConfig {
         &self.config
     }
 
@@ -773,11 +782,12 @@ impl WebSocketListener {
     pub async fn start(&self) -> Result<(), TransportError> {
         use tokio::net::TcpListener;
 
-        let listener = TcpListener::bind(&self.bind_addr)
-            .await
-            .map_err(|e| TransportError::Connection {
-                message: format!("Failed to bind WebSocket listener: {e}"),
-            })?;
+        let listener =
+            TcpListener::bind(&self.bind_addr)
+                .await
+                .map_err(|e| TransportError::Connection {
+                    message: format!("Failed to bind WebSocket listener: {e}"),
+                })?;
 
         self.running.store(true, Ordering::Release);
         tracing::info!(addr = %self.bind_addr, "WebSocket listener started");
@@ -895,7 +905,7 @@ impl WebSocketListener {
 
     /// Get the server configuration.
     #[must_use]
-    pub fn config(&self) -> &WebSocketServerConfig {
+    pub const fn config(&self) -> &WebSocketServerConfig {
         &self.config
     }
 
@@ -973,8 +983,7 @@ mod tests {
     #[test]
     fn test_origin_validation_with_multiple_origins() {
         let origins = vec!["https://app1.com", "https://app2.com", "https://app3.com"];
-        let config = WebSocketConfig::new("ws://example.com/mcp")
-            .with_allowed_origins(origins);
+        let config = WebSocketConfig::new("ws://example.com/mcp").with_allowed_origins(origins);
 
         assert!(config.is_origin_allowed("https://app1.com"));
         assert!(config.is_origin_allowed("https://app2.com"));
@@ -984,11 +993,8 @@ mod tests {
 
     #[test]
     fn test_exponential_backoff() {
-        let backoff = ExponentialBackoff::new(
-            Duration::from_millis(100),
-            Duration::from_secs(10),
-            2.0,
-        );
+        let backoff =
+            ExponentialBackoff::new(Duration::from_millis(100), Duration::from_secs(10), 2.0);
 
         assert_eq!(backoff.delay_for_attempt(0), Duration::from_millis(100));
         assert_eq!(backoff.delay_for_attempt(1), Duration::from_millis(200));

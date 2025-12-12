@@ -14,7 +14,8 @@ use crate::attrs::ToolAttrs;
 /// preserves the method but adds metadata that `#[mcp_server]` can discover.
 pub fn expand_tool(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
     // Parse the attribute
-    let attrs = ToolAttrs::parse(attr).map_err(|e| Error::new(proc_macro2::Span::call_site(), e))?;
+    let attrs =
+        ToolAttrs::parse(attr).map_err(|e| Error::new(proc_macro2::Span::call_site(), e))?;
 
     // Parse the method
     let method: ImplItemFn = parse2(item)?;
@@ -26,13 +27,11 @@ pub fn expand_tool(attr: TokenStream, item: TokenStream) -> Result<TokenStream> 
     // The actual code generation happens in mcp_server
     let description = &attrs.description;
     let tool_name = attrs.name.unwrap_or_else(|| method.sig.ident.to_string());
-    let _destructive = attrs.destructive;
-    let _idempotent = attrs.idempotent;
-    let _read_only = attrs.read_only;
+    // TODO: Use these attributes in generated code when implementing tool metadata
+    let _ = (attrs.destructive, attrs.idempotent, attrs.read_only);
 
     // Generate a hidden constant that mcp_server can find
-    let marker_name =
-        syn::Ident::new(&format!("__MCP_TOOL_{}", tool_name), method.sig.ident.span());
+    let marker_name = syn::Ident::new(&format!("__MCP_TOOL_{tool_name}"), method.sig.ident.span());
 
     Ok(quote! {
         #[doc(hidden)]

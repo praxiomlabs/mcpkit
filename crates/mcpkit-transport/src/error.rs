@@ -13,7 +13,7 @@ pub enum TransportError {
         message: String,
     },
 
-    /// I/O error from std::io::Error.
+    /// I/O error from `std::io::Error`.
     #[error("I/O error: {0}")]
     IoError(#[from] std::io::Error),
 
@@ -87,7 +87,7 @@ pub enum TransportError {
     AlreadyClosed,
 
     /// Rate limit exceeded.
-    #[error("Rate limit exceeded{}", retry_after.map(|d| format!(", retry after {:?}", d)).unwrap_or_default())]
+    #[error("Rate limit exceeded{}", retry_after.map(|d| format!(", retry after {d:?}")).unwrap_or_default())]
     RateLimited {
         /// Suggested retry delay.
         retry_after: Option<std::time::Duration>,
@@ -118,8 +118,9 @@ impl TransportError {
                 std::io::ErrorKind::ConnectionRefused
                 | std::io::ErrorKind::ConnectionAborted
                 | std::io::ErrorKind::NotConnected => TransportErrorKind::ConnectionFailed,
-                std::io::ErrorKind::ConnectionReset
-                | std::io::ErrorKind::BrokenPipe => TransportErrorKind::ConnectionClosed,
+                std::io::ErrorKind::ConnectionReset | std::io::ErrorKind::BrokenPipe => {
+                    TransportErrorKind::ConnectionClosed
+                }
                 std::io::ErrorKind::TimedOut => TransportErrorKind::Timeout,
                 std::io::ErrorKind::WouldBlock
                 | std::io::ErrorKind::Interrupted
@@ -167,7 +168,8 @@ mod tests {
             TransportError::Timeout {
                 operation: "test".to_string(),
                 duration: std::time::Duration::from_secs(1),
-            }.kind(),
+            }
+            .kind(),
             TransportErrorKind::Timeout
         );
         assert_eq!(

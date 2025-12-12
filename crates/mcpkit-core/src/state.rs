@@ -167,7 +167,7 @@ impl Connection<Connected> {
 
     /// Get when the connection was established.
     #[must_use]
-    pub fn connected_at(&self) -> Option<Instant> {
+    pub const fn connected_at(&self) -> Option<Instant> {
         self.inner.connected_at
     }
 
@@ -184,6 +184,7 @@ impl Connection<Connected> {
     ///
     /// For clients: Send initialize request with client info and capabilities.
     /// For servers: This is called when receiving an initialize request.
+    #[must_use]
     pub fn initialize(
         mut self,
         client_info: ClientInfo,
@@ -223,13 +224,13 @@ impl Connection<Initializing> {
 
     /// Get the client info.
     #[must_use]
-    pub fn client_info(&self) -> Option<&ClientInfo> {
+    pub const fn client_info(&self) -> Option<&ClientInfo> {
         self.inner.client_info.as_ref()
     }
 
     /// Get the client capabilities.
     #[must_use]
-    pub fn client_capabilities(&self) -> Option<&ClientCapabilities> {
+    pub const fn client_capabilities(&self) -> Option<&ClientCapabilities> {
         self.inner.client_capabilities.as_ref()
     }
 
@@ -237,6 +238,7 @@ impl Connection<Initializing> {
     ///
     /// This is called after the initialize response is received (client)
     /// or sent (server).
+    #[must_use]
     pub fn complete(
         mut self,
         server_info: ServerInfo,
@@ -271,7 +273,7 @@ impl Connection<Ready> {
 
     /// Get when the connection was established.
     #[must_use]
-    pub fn connected_at(&self) -> Option<Instant> {
+    pub const fn connected_at(&self) -> Option<Instant> {
         self.inner.connected_at
     }
 
@@ -286,7 +288,7 @@ impl Connection<Ready> {
 
     /// Get the last activity timestamp.
     #[must_use]
-    pub fn last_activity(&self) -> Option<Instant> {
+    pub const fn last_activity(&self) -> Option<Instant> {
         self.inner.last_activity
     }
 
@@ -299,14 +301,17 @@ impl Connection<Ready> {
     /// Use `try_client_info()` for a fallible version.
     #[must_use]
     pub fn client_info(&self) -> &ClientInfo {
-        self.inner.client_info.as_ref().expect("client_info should be set in Ready state")
+        self.inner
+            .client_info
+            .as_ref()
+            .expect("client_info should be set in Ready state")
     }
 
     /// Try to get the client info.
     ///
     /// Returns `None` if the client info was not set (should not happen in normal use).
     #[must_use]
-    pub fn try_client_info(&self) -> Option<&ClientInfo> {
+    pub const fn try_client_info(&self) -> Option<&ClientInfo> {
         self.inner.client_info.as_ref()
     }
 
@@ -319,14 +324,17 @@ impl Connection<Ready> {
     /// Use `try_server_info()` for a fallible version.
     #[must_use]
     pub fn server_info(&self) -> &ServerInfo {
-        self.inner.server_info.as_ref().expect("server_info should be set in Ready state")
+        self.inner
+            .server_info
+            .as_ref()
+            .expect("server_info should be set in Ready state")
     }
 
     /// Try to get the server info.
     ///
     /// Returns `None` if the server info was not set (should not happen in normal use).
     #[must_use]
-    pub fn try_server_info(&self) -> Option<&ServerInfo> {
+    pub const fn try_server_info(&self) -> Option<&ServerInfo> {
         self.inner.server_info.as_ref()
     }
 
@@ -339,14 +347,17 @@ impl Connection<Ready> {
     /// Use `try_client_capabilities()` for a fallible version.
     #[must_use]
     pub fn client_capabilities(&self) -> &ClientCapabilities {
-        self.inner.client_capabilities.as_ref().expect("client_capabilities should be set in Ready state")
+        self.inner
+            .client_capabilities
+            .as_ref()
+            .expect("client_capabilities should be set in Ready state")
     }
 
     /// Try to get the client capabilities.
     ///
     /// Returns `None` if the client capabilities were not set (should not happen in normal use).
     #[must_use]
-    pub fn try_client_capabilities(&self) -> Option<&ClientCapabilities> {
+    pub const fn try_client_capabilities(&self) -> Option<&ClientCapabilities> {
         self.inner.client_capabilities.as_ref()
     }
 
@@ -359,14 +370,17 @@ impl Connection<Ready> {
     /// Use `try_server_capabilities()` for a fallible version.
     #[must_use]
     pub fn server_capabilities(&self) -> &ServerCapabilities {
-        self.inner.server_capabilities.as_ref().expect("server_capabilities should be set in Ready state")
+        self.inner
+            .server_capabilities
+            .as_ref()
+            .expect("server_capabilities should be set in Ready state")
     }
 
     /// Try to get the server capabilities.
     ///
     /// Returns `None` if the server capabilities were not set (should not happen in normal use).
     #[must_use]
-    pub fn try_server_capabilities(&self) -> Option<&ServerCapabilities> {
+    pub const fn try_server_capabilities(&self) -> Option<&ServerCapabilities> {
         self.inner.server_capabilities.as_ref()
     }
 
@@ -385,8 +399,7 @@ impl Connection<Ready> {
     pub fn is_idle(&self, timeout: Duration) -> bool {
         self.inner
             .last_activity
-            .map(|t| t.elapsed() > timeout)
-            .unwrap_or(false)
+            .is_some_and(|t| t.elapsed() > timeout)
     }
 
     /// Begin shutdown (transition to Closing state).
@@ -488,7 +501,7 @@ impl InitializeResultBuilder {
 }
 
 /// Validate that a connection can transition to the ready state.
-pub fn validate_initialization(
+pub const fn validate_initialization(
     _client_caps: &ClientCapabilities,
     _server_caps: &ServerCapabilities,
 ) -> Result<(), McpError> {
@@ -514,7 +527,7 @@ mod tests {
         // Initialize
         let client = ClientInfo::new("test", "1.0.0");
         let caps = ClientCapabilities::new();
-        let (conn, request): (Connection<Initializing>, _) = conn.initialize(client, caps);
+        let (conn, _request): (Connection<Initializing>, _) = conn.initialize(client, caps);
         assert!(conn.client_info().is_some());
 
         // Complete
@@ -593,11 +606,9 @@ mod tests {
         let client_caps = ClientCapabilities::new();
         let server_caps = ServerCapabilities::new().with_tools();
 
-        let (conn, _) = Connection::new()
-            .connect()
-            .initialize(client.clone(), client_caps.clone());
+        let (conn, _) = Connection::new().connect().initialize(client, client_caps);
 
-        let conn = conn.complete(server.clone(), server_caps.clone());
+        let conn = conn.complete(server, server_caps);
 
         // Test fallible accessors return Some
         assert!(conn.try_client_info().is_some());

@@ -309,9 +309,7 @@ fn test_initialize_request_minimal() {
 #[test]
 fn test_initialize_result_serialization() {
     let server_info = ServerInfo::new("test-server", "2.0.0");
-    let caps = ServerCapabilities::new()
-        .with_tools()
-        .with_resources();
+    let caps = ServerCapabilities::new().with_tools().with_resources();
     let result = InitializeResult::new(server_info, caps)
         .instructions("Use this server to perform operations");
 
@@ -328,7 +326,10 @@ fn test_initialize_result_serialization() {
     assert!(json["capabilities"]["tools"].is_object());
     assert!(json["capabilities"]["resources"].is_object());
     assert_eq!(json["serverInfo"]["name"], "test-server");
-    assert_eq!(json["instructions"], "Use this server to perform operations");
+    assert_eq!(
+        json["instructions"],
+        "Use this server to perform operations"
+    );
 }
 
 #[test]
@@ -645,7 +646,10 @@ fn test_negotiate_version_detailed_accepted() {
 fn test_negotiate_version_detailed_counter_offer() {
     let result = negotiate_version_detailed("1.0.0");
 
-    assert!(matches!(result, VersionNegotiationResult::CounterOffer { .. }));
+    assert!(matches!(
+        result,
+        VersionNegotiationResult::CounterOffer { .. }
+    ));
     assert!(!result.is_exact_match());
     assert_eq!(result.version(), PROTOCOL_VERSION);
 
@@ -707,9 +711,7 @@ fn test_full_handshake_rmcp_version() {
     assert_eq!(negotiated, "2024-11-05"); // Should accept the original version
 
     let server_info = ServerInfo::new("rust-mcp-server", "0.1.0");
-    let server_caps = ServerCapabilities::new()
-        .with_tools()
-        .with_resources();
+    let server_caps = ServerCapabilities::new().with_tools().with_resources();
 
     let result = InitializeResult {
         protocol_version: negotiated.to_string(),
@@ -847,12 +849,33 @@ fn test_capabilities_with_extra_fields() {
 fn test_empty_capability_structs_serialize_to_empty_object() {
     // Per MCP spec, empty capability objects should be {}
     assert_eq!(serde_json::to_string(&LoggingCapability {}).unwrap(), "{}");
-    assert_eq!(serde_json::to_string(&CompletionCapability {}).unwrap(), "{}");
+    assert_eq!(
+        serde_json::to_string(&CompletionCapability {}).unwrap(),
+        "{}"
+    );
     assert_eq!(serde_json::to_string(&SamplingCapability {}).unwrap(), "{}");
-    assert_eq!(serde_json::to_string(&ElicitationCapability {}).unwrap(), "{}");
-    assert_eq!(serde_json::to_string(&ToolCapability::default()).unwrap(), "{}");
-    assert_eq!(serde_json::to_string(&ResourceCapability::default()).unwrap(), "{}");
-    assert_eq!(serde_json::to_string(&PromptCapability::default()).unwrap(), "{}");
-    assert_eq!(serde_json::to_string(&TaskCapability::default()).unwrap(), "{}");
-    assert_eq!(serde_json::to_string(&RootsCapability::default()).unwrap(), "{}");
+    assert_eq!(
+        serde_json::to_string(&ElicitationCapability {}).unwrap(),
+        "{}"
+    );
+    assert_eq!(
+        serde_json::to_string(&ToolCapability::default()).unwrap(),
+        "{}"
+    );
+    assert_eq!(
+        serde_json::to_string(&ResourceCapability::default()).unwrap(),
+        "{}"
+    );
+    assert_eq!(
+        serde_json::to_string(&PromptCapability::default()).unwrap(),
+        "{}"
+    );
+    assert_eq!(
+        serde_json::to_string(&TaskCapability::default()).unwrap(),
+        "{}"
+    );
+    assert_eq!(
+        serde_json::to_string(&RootsCapability::default()).unwrap(),
+        "{}"
+    );
 }

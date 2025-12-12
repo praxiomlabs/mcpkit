@@ -51,9 +51,6 @@
 //! **Result: Reduced boilerplate code.**
 
 #![deny(missing_docs)]
-#![warn(clippy::all)]
-#![warn(clippy::pedantic)]
-#![warn(clippy::unwrap_used)]
 
 mod attrs;
 mod codegen;

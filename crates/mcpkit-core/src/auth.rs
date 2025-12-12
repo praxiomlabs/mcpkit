@@ -103,7 +103,7 @@ pub struct OAuthErrorResponse {
 impl OAuthErrorResponse {
     /// Create a new error response.
     #[must_use]
-    pub fn new(error: OAuthError) -> Self {
+    pub const fn new(error: OAuthError) -> Self {
         Self {
             error,
             error_description: None,
@@ -199,7 +199,9 @@ impl ProtectedResourceMetadata {
             return Err("Resource identifier is required".to_string());
         }
         if self.authorization_servers.is_empty() {
-            return Err("At least one authorization server is required per MCP specification".to_string());
+            return Err(
+                "At least one authorization server is required per MCP specification".to_string(),
+            );
         }
         Ok(())
     }
@@ -208,15 +210,13 @@ impl ProtectedResourceMetadata {
     #[must_use]
     pub fn well_known_url(resource_url: &str) -> Option<String> {
         // Parse the URL and construct the well-known path
-        url::Url::parse(resource_url)
-            .ok()
-            .map(|url| {
-                format!(
-                    "{}://{}/.well-known/oauth-protected-resource",
-                    url.scheme(),
-                    url.host_str().unwrap_or("localhost")
-                )
-            })
+        url::Url::parse(resource_url).ok().map(|url| {
+            format!(
+                "{}://{}/.well-known/oauth-protected-resource",
+                url.scheme(),
+                url.host_str().unwrap_or("localhost")
+            )
+        })
     }
 }
 
@@ -330,15 +330,13 @@ impl AuthorizationServerMetadata {
     /// Get the well-known URL for discovering this metadata.
     #[must_use]
     pub fn well_known_url(issuer: &str) -> Option<String> {
-        url::Url::parse(issuer)
-            .ok()
-            .map(|url| {
-                format!(
-                    "{}://{}/.well-known/oauth-authorization-server",
-                    url.scheme(),
-                    url.host_str().unwrap_or("localhost")
-                )
-            })
+        url::Url::parse(issuer).ok().map(|url| {
+            format!(
+                "{}://{}/.well-known/oauth-authorization-server",
+                url.scheme(),
+                url.host_str().unwrap_or("localhost")
+            )
+        })
     }
 }
 
@@ -550,7 +548,7 @@ impl AuthorizationRequest {
 pub struct TokenRequest {
     /// The grant type.
     pub grant_type: String,
-    /// The authorization code (for authorization_code grant).
+    /// The authorization code (for `authorization_code` grant).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub code: Option<String>,
     /// The redirect URI (must match the one in authorization request).
@@ -567,7 +565,7 @@ pub struct TokenRequest {
     /// Resource indicator (RFC 8707).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub resource: Option<String>,
-    /// Refresh token (for refresh_token grant).
+    /// Refresh token (for `refresh_token` grant).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub refresh_token: Option<String>,
     /// Requested scope.
@@ -619,10 +617,7 @@ impl TokenRequest {
 
     /// Create a token request for refresh token grant.
     #[must_use]
-    pub fn refresh(
-        refresh_token: impl Into<String>,
-        client_id: impl Into<String>,
-    ) -> Self {
+    pub fn refresh(refresh_token: impl Into<String>, client_id: impl Into<String>) -> Self {
         Self {
             grant_type: "refresh_token".to_string(),
             code: None,
@@ -762,7 +757,7 @@ impl WwwAuthenticate {
 
     /// Set the error.
     #[must_use]
-    pub fn with_error(mut self, error: OAuthError) -> Self {
+    pub const fn with_error(mut self, error: OAuthError) -> Self {
         self.error = Some(error);
         self
     }
@@ -777,7 +772,10 @@ impl WwwAuthenticate {
     /// Build the header value string per RFC 9728.
     #[must_use]
     pub fn to_header_value(&self) -> String {
-        let mut parts = vec![format!("Bearer resource_metadata=\"{}\"", self.resource_metadata)];
+        let mut parts = vec![format!(
+            "Bearer resource_metadata=\"{}\"",
+            self.resource_metadata
+        )];
 
         if let Some(ref realm) = self.realm {
             parts.push(format!("realm=\"{realm}\""));
@@ -902,7 +900,7 @@ impl AuthorizationConfig {
 
     /// Check if this is a public client (no client secret).
     #[must_use]
-    pub fn is_public_client(&self) -> bool {
+    pub const fn is_public_client(&self) -> bool {
         self.client_secret.is_none()
     }
 }
@@ -1028,7 +1026,10 @@ mod tests {
         let metadata = AuthorizationServerMetadata::from_issuer("https://auth.example.com");
 
         assert_eq!(metadata.issuer, "https://auth.example.com");
-        assert_eq!(metadata.authorization_endpoint, "https://auth.example.com/authorize");
+        assert_eq!(
+            metadata.authorization_endpoint,
+            "https://auth.example.com/authorize"
+        );
         assert_eq!(metadata.token_endpoint, "https://auth.example.com/token");
     }
 
@@ -1040,10 +1041,18 @@ mod tests {
         assert_ne!(pkce.verifier, pkce.challenge);
 
         // Verification should work
-        assert!(PkceChallenge::verify(&pkce.verifier, &pkce.challenge, CodeChallengeMethod::S256));
+        assert!(PkceChallenge::verify(
+            &pkce.verifier,
+            &pkce.challenge,
+            CodeChallengeMethod::S256
+        ));
 
         // Wrong verifier should fail
-        assert!(!PkceChallenge::verify("wrong", &pkce.challenge, CodeChallengeMethod::S256));
+        assert!(!PkceChallenge::verify(
+            "wrong",
+            &pkce.challenge,
+            CodeChallengeMethod::S256
+        ));
     }
 
     #[test]
@@ -1081,11 +1090,8 @@ mod tests {
 
     #[test]
     fn test_token_request_client_credentials() {
-        let request = TokenRequest::client_credentials(
-            "client123",
-            "secret456",
-            "https://mcp.example.com",
-        );
+        let request =
+            TokenRequest::client_credentials("client123", "secret456", "https://mcp.example.com");
 
         assert_eq!(request.grant_type, "client_credentials");
         assert_eq!(request.client_secret, Some("secret456".to_string()));
@@ -1093,10 +1099,11 @@ mod tests {
 
     #[test]
     fn test_www_authenticate_header() {
-        let header = WwwAuthenticate::new("https://mcp.example.com/.well-known/oauth-protected-resource")
-            .with_realm("mcp")
-            .with_error(OAuthError::InvalidToken)
-            .with_error_description("Token expired");
+        let header =
+            WwwAuthenticate::new("https://mcp.example.com/.well-known/oauth-protected-resource")
+                .with_realm("mcp")
+                .with_error(OAuthError::InvalidToken)
+                .with_error_description("Token expired");
 
         let value = header.to_header_value();
         assert!(value.starts_with("Bearer resource_metadata="));
@@ -1111,7 +1118,10 @@ mod tests {
 
         assert!(parsed.is_some());
         let parsed = parsed.unwrap();
-        assert_eq!(parsed.resource_metadata, "https://example.com/.well-known/oauth-protected-resource");
+        assert_eq!(
+            parsed.resource_metadata,
+            "https://example.com/.well-known/oauth-protected-resource"
+        );
         assert_eq!(parsed.realm, Some("mcp".to_string()));
     }
 
@@ -1158,6 +1168,9 @@ mod tests {
     fn test_oauth_error_display() {
         assert_eq!(OAuthError::InvalidRequest.to_string(), "invalid_request");
         assert_eq!(OAuthError::InvalidToken.to_string(), "invalid_token");
-        assert_eq!(OAuthError::InsufficientScope.to_string(), "insufficient_scope");
+        assert_eq!(
+            OAuthError::InsufficientScope.to_string(),
+            "insufficient_scope"
+        );
     }
 }

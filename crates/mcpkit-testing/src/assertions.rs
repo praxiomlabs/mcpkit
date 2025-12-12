@@ -26,9 +26,7 @@ pub fn assert_tool_success(result: &CallToolResult, expected_text: &str) {
 
     assert!(
         text.contains(expected_text),
-        "Expected tool result to contain '{}', but got '{}'",
-        expected_text,
-        text
+        "Expected tool result to contain '{expected_text}', but got '{text}'"
     );
 }
 
@@ -52,13 +50,11 @@ pub fn assert_tool_error(result: &CallToolResult, expected_message: &str) {
 
     assert!(
         text.contains(expected_message),
-        "Expected error message to contain '{}', but got '{}'",
-        expected_message,
-        text
+        "Expected error message to contain '{expected_message}', but got '{text}'"
     );
 }
 
-/// Assert that a ToolOutput is successful with expected text.
+/// Assert that a `ToolOutput` is successful with expected text.
 ///
 /// # Panics
 ///
@@ -67,15 +63,12 @@ pub fn assert_output_success(output: &ToolOutput, expected_text: &str) {
     match output {
         ToolOutput::Success(result) => assert_tool_success(result, expected_text),
         ToolOutput::RecoverableError { message, .. } => {
-            panic!(
-                "Expected successful output, but got error: {}",
-                message
-            );
+            panic!("Expected successful output, but got error: {message}");
         }
     }
 }
 
-/// Assert that a ToolOutput is an error.
+/// Assert that a `ToolOutput` is an error.
 ///
 /// # Panics
 ///
@@ -88,9 +81,7 @@ pub fn assert_output_error(output: &ToolOutput, expected_message: &str) {
         ToolOutput::RecoverableError { message, .. } => {
             assert!(
                 message.contains(expected_message),
-                "Expected error message to contain '{}', but got '{}'",
-                expected_message,
-                message
+                "Expected error message to contain '{expected_message}', but got '{message}'"
             );
         }
     }

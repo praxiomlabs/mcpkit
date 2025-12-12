@@ -1,3 +1,4 @@
+#![allow(missing_docs)]
 //! Comparison benchmarks between rust-mcp-sdk and rmcp.
 //!
 //! Run with: `cargo bench --bench comparison`
@@ -23,7 +24,7 @@ fn bench_request_serialization_comparison(c: &mut Criterion) {
     let our_request = OurRequest::with_params("tools/list", 1u64, json!({}));
 
     group.bench_function("mcpkit_sdk", |b| {
-        b.iter(|| serde_json::to_string(black_box(&our_request)).unwrap())
+        b.iter(|| serde_json::to_string(black_box(&our_request)).unwrap());
     });
 
     // rmcp uses its own JsonRpc types, benchmark raw JSON serialization as comparable baseline
@@ -35,7 +36,7 @@ fn bench_request_serialization_comparison(c: &mut Criterion) {
     });
 
     group.bench_function("rmcp_json_baseline", |b| {
-        b.iter(|| serde_json::to_string(black_box(&rmcp_json)).unwrap())
+        b.iter(|| serde_json::to_string(black_box(&rmcp_json)).unwrap());
     });
 
     group.finish();
@@ -49,12 +50,12 @@ fn bench_request_deserialization_comparison(c: &mut Criterion) {
 
     // Our SDK deserialization
     group.bench_function("mcpkit_sdk", |b| {
-        b.iter(|| serde_json::from_str::<OurRequest>(black_box(json_str)).unwrap())
+        b.iter(|| serde_json::from_str::<OurRequest>(black_box(json_str)).unwrap());
     });
 
     // rmcp JSON baseline
     group.bench_function("rmcp_json_baseline", |b| {
-        b.iter(|| serde_json::from_str::<Value>(black_box(json_str)).unwrap())
+        b.iter(|| serde_json::from_str::<Value>(black_box(json_str)).unwrap());
     });
 
     group.finish();
@@ -70,28 +71,28 @@ fn bench_message_parsing_comparison(c: &mut Criterion) {
 
     // Our SDK request parsing
     group.bench_function("mcpkit_sdk_request", |b| {
-        b.iter(|| serde_json::from_str::<OurMessage>(black_box(request_json)).unwrap())
+        b.iter(|| serde_json::from_str::<OurMessage>(black_box(request_json)).unwrap());
     });
 
     group.bench_function("mcpkit_sdk_response", |b| {
-        b.iter(|| serde_json::from_str::<OurMessage>(black_box(response_json)).unwrap())
+        b.iter(|| serde_json::from_str::<OurMessage>(black_box(response_json)).unwrap());
     });
 
     group.bench_function("mcpkit_sdk_notification", |b| {
-        b.iter(|| serde_json::from_str::<OurMessage>(black_box(notification_json)).unwrap())
+        b.iter(|| serde_json::from_str::<OurMessage>(black_box(notification_json)).unwrap());
     });
 
     // rmcp JSON baseline
     group.bench_function("rmcp_json_baseline_request", |b| {
-        b.iter(|| serde_json::from_str::<Value>(black_box(request_json)).unwrap())
+        b.iter(|| serde_json::from_str::<Value>(black_box(request_json)).unwrap());
     });
 
     group.bench_function("rmcp_json_baseline_response", |b| {
-        b.iter(|| serde_json::from_str::<Value>(black_box(response_json)).unwrap())
+        b.iter(|| serde_json::from_str::<Value>(black_box(response_json)).unwrap());
     });
 
     group.bench_function("rmcp_json_baseline_notification", |b| {
-        b.iter(|| serde_json::from_str::<Value>(black_box(notification_json)).unwrap())
+        b.iter(|| serde_json::from_str::<Value>(black_box(notification_json)).unwrap());
     });
 
     group.finish();
@@ -113,7 +114,7 @@ fn bench_tool_operations_comparison(c: &mut Criterion) {
                     },
                     "required": ["query"]
                 }))
-        })
+        });
     });
 
     // rmcp tool creation (if available - using JSON baseline)
@@ -130,7 +131,7 @@ fn bench_tool_operations_comparison(c: &mut Criterion) {
     });
 
     group.bench_function("rmcp_json_baseline_tool", |b| {
-        b.iter(|| serde_json::to_string(black_box(&tool_json)).unwrap())
+        b.iter(|| serde_json::to_string(black_box(&tool_json)).unwrap());
     });
 
     group.finish();
@@ -140,15 +141,11 @@ fn bench_tool_operations_comparison(c: &mut Criterion) {
 fn bench_payload_sizes_comparison(c: &mut Criterion) {
     let mut group = c.benchmark_group("payload_sizes_comparison");
 
-    for size in [100, 1000, 10000].iter() {
+    for size in &[100, 1000, 10000] {
         let payload: String = (0..*size).map(|_| 'x').collect();
 
         // Our SDK
-        let our_request = OurRequest::with_params(
-            "tools/call",
-            1u64,
-            json!({"data": payload}),
-        );
+        let our_request = OurRequest::with_params("tools/call", 1u64, json!({"data": payload}));
 
         group.bench_with_input(
             BenchmarkId::new("mcpkit_sdk_serialize", size),
@@ -174,7 +171,7 @@ fn bench_payload_sizes_comparison(c: &mut Criterion) {
     group.finish();
 }
 
-/// Benchmark CallToolRequestParam: our SDK representation vs rmcp
+/// Benchmark `CallToolRequestParam`: our SDK representation vs rmcp
 fn bench_tool_call_params_comparison(c: &mut Criterion) {
     let mut group = c.benchmark_group("tool_call_params_comparison");
 
@@ -195,33 +192,33 @@ fn bench_tool_call_params_comparison(c: &mut Criterion) {
     // Our SDK approach: inline in request params
     let our_params = json!({
         "name": "search",
-        "arguments": args.clone()
+        "arguments": args
     });
 
     group.bench_function("mcpkit_sdk_serialize", |b| {
-        b.iter(|| serde_json::to_string(black_box(&our_params)).unwrap())
+        b.iter(|| serde_json::to_string(black_box(&our_params)).unwrap());
     });
 
     // rmcp uses CallToolRequestParam
     let rmcp_params = CallToolRequestParam {
         name: "search".into(),
-        arguments: Some(args.clone().as_object().unwrap().clone()),
+        arguments: Some(args.as_object().unwrap().clone()),
     };
 
     group.bench_function("rmcp_serialize", |b| {
-        b.iter(|| serde_json::to_string(black_box(&rmcp_params)).unwrap())
+        b.iter(|| serde_json::to_string(black_box(&rmcp_params)).unwrap());
     });
 
     // Deserialization
     let param_json = serde_json::to_string(&our_params).unwrap();
 
     group.bench_function("mcpkit_sdk_deserialize", |b| {
-        b.iter(|| serde_json::from_str::<Value>(black_box(&param_json)).unwrap())
+        b.iter(|| serde_json::from_str::<Value>(black_box(&param_json)).unwrap());
     });
 
     let rmcp_json = serde_json::to_string(&rmcp_params).unwrap();
     group.bench_function("rmcp_deserialize", |b| {
-        b.iter(|| serde_json::from_str::<CallToolRequestParam>(black_box(&rmcp_json)).unwrap())
+        b.iter(|| serde_json::from_str::<CallToolRequestParam>(black_box(&rmcp_json)).unwrap());
     });
 
     group.finish();

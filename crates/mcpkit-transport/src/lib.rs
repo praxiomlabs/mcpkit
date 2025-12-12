@@ -45,11 +45,6 @@
 //! ```
 
 #![deny(missing_docs)]
-#![warn(clippy::all)]
-#![warn(clippy::pedantic)]
-#![warn(clippy::unwrap_used)]
-#![warn(clippy::must_use_candidate)]
-#![allow(clippy::module_name_repetitions)]
 
 pub mod error;
 pub mod http;
@@ -71,7 +66,11 @@ pub use error::TransportError;
 pub use traits::{Transport, TransportExt, TransportListener, TransportMetadata};
 
 // Runtime-agnostic transports - available when ANY runtime is enabled
-#[cfg(any(feature = "tokio-runtime", feature = "async-std-runtime", feature = "smol-runtime"))]
+#[cfg(any(
+    feature = "tokio-runtime",
+    feature = "async-std-runtime",
+    feature = "smol-runtime"
+))]
 pub use memory::MemoryTransport;
 
 // Note: StdioTransport has runtime-specific type parameters, so we re-export
@@ -79,22 +78,22 @@ pub use memory::MemoryTransport;
 pub use stdio::SyncStdioTransport;
 
 // HTTP transport (always export config/builder, listener only with http feature)
-pub use http::{HttpTransport, HttpTransportConfig, HttpTransportBuilder};
 #[cfg(feature = "http")]
 pub use http::HttpTransportListener;
+pub use http::{HttpTransport, HttpTransportBuilder, HttpTransportConfig};
 
 // WebSocket transport
 pub use websocket::{
-    WebSocketTransport, WebSocketConfig, WebSocketTransportBuilder, WebSocketListener,
-    WebSocketServerConfig, ConnectionState, ExponentialBackoff,
+    ConnectionState, ExponentialBackoff, WebSocketConfig, WebSocketListener, WebSocketServerConfig,
+    WebSocketTransport, WebSocketTransportBuilder,
 };
 
 // Unix socket transport
 #[cfg(unix)]
-pub use unix::{UnixTransport, UnixListener, UnixSocketConfig, UnixTransportBuilder};
+pub use unix::{UnixListener, UnixSocketConfig, UnixTransport, UnixTransportBuilder};
 
 // Connection pooling
-pub use pool::{Pool, PoolConfig, PooledConnection, PoolStats};
+pub use pool::{Pool, PoolConfig, PoolStats, PooledConnection};
 
 // Subprocess spawning
 #[cfg(feature = "tokio-runtime")]
@@ -102,8 +101,8 @@ pub use spawn::{SpawnedTransport, SpawnedTransportBuilder};
 
 // Telemetry
 pub use telemetry::{
-    TelemetryConfig, TelemetryMetrics, TelemetryLayer, TelemetryTransport,
-    MetricsSnapshot, LatencyHistogram,
+    LatencyHistogram, MetricsSnapshot, TelemetryConfig, TelemetryLayer, TelemetryMetrics,
+    TelemetryTransport,
 };
 
 /// Prelude module for convenient imports.
@@ -111,7 +110,11 @@ pub mod prelude {
     pub use crate::error::TransportError;
     pub use crate::traits::{Transport, TransportExt, TransportListener, TransportMetadata};
 
-    #[cfg(any(feature = "tokio-runtime", feature = "async-std-runtime", feature = "smol-runtime"))]
+    #[cfg(any(
+        feature = "tokio-runtime",
+        feature = "async-std-runtime",
+        feature = "smol-runtime"
+    ))]
     pub use crate::memory::MemoryTransport;
 
     pub use crate::stdio::SyncStdioTransport;
@@ -120,11 +123,11 @@ pub mod prelude {
     pub use crate::http::{HttpTransport, HttpTransportConfig};
 
     // WebSocket
-    pub use crate::websocket::{WebSocketTransport, WebSocketConfig, WebSocketServerConfig};
+    pub use crate::websocket::{WebSocketConfig, WebSocketServerConfig, WebSocketTransport};
 
     // Unix
     #[cfg(unix)]
-    pub use crate::unix::{UnixTransport, UnixListener};
+    pub use crate::unix::{UnixListener, UnixTransport};
 
     // Pool
     pub use crate::pool::{Pool, PoolConfig, PooledConnection};

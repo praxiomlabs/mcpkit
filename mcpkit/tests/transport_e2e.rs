@@ -119,7 +119,7 @@ async fn test_message_sequence() {
         let request = msg.as_request().unwrap();
         assert_eq!(request.id, RequestId::Number(i));
 
-        let response = Response::success(i as u64, json!({"pong": i}));
+        let response = Response::success(i, json!({"pong": i}));
         server.send(Message::Response(response)).await.unwrap();
     }
 
@@ -229,7 +229,10 @@ async fn test_tool_call_lifecycle() {
             }]
         }),
     );
-    server.send(Message::Response(tools_response)).await.unwrap();
+    server
+        .send(Message::Response(tools_response))
+        .await
+        .unwrap();
 
     let msg = client.recv().await.unwrap().unwrap();
     let response = msg.as_response().unwrap();

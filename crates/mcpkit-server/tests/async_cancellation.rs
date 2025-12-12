@@ -87,12 +87,12 @@ async fn test_cancelled_future_completes_immediately_when_already_cancelled() {
     token.cancel();
 
     // Future should complete immediately
-    let result = tokio::time::timeout(
-        Duration::from_millis(10),
-        token.cancelled()
-    ).await;
+    let result = tokio::time::timeout(Duration::from_millis(10), token.cancelled()).await;
 
-    assert!(result.is_ok(), "Should complete immediately when already cancelled");
+    assert!(
+        result.is_ok(),
+        "Should complete immediately when already cancelled"
+    );
 }
 
 #[tokio::test]
@@ -107,10 +107,7 @@ async fn test_cancelled_future_waits_for_cancellation() {
     });
 
     // Wait for cancellation
-    let result = tokio::time::timeout(
-        Duration::from_millis(200),
-        token.cancelled()
-    ).await;
+    let result = tokio::time::timeout(Duration::from_millis(200), token.cancelled()).await;
 
     assert!(result.is_ok(), "Should complete when cancelled");
     assert!(token.is_cancelled());
@@ -121,10 +118,7 @@ async fn test_cancelled_future_does_not_complete_if_not_cancelled() {
     let token = CancellationToken::new();
 
     // Future should not complete within timeout
-    let result = tokio::time::timeout(
-        Duration::from_millis(50),
-        token.cancelled()
-    ).await;
+    let result = tokio::time::timeout(Duration::from_millis(50), token.cancelled()).await;
 
     assert!(result.is_err(), "Should timeout when not cancelled");
     assert!(!token.is_cancelled());
@@ -224,8 +218,11 @@ async fn test_cancellation_stops_work() {
 
     // Some work should have been done before cancellation
     let work = work_done.load(Ordering::Relaxed);
-    assert!(work > 0, "Should have done some work before cancellation: {}", work);
-    assert!(work < 100, "Should have stopped after cancellation: {}", work);
+    assert!(
+        work > 0,
+        "Should have done some work before cancellation: {work}"
+    );
+    assert!(work < 100, "Should have stopped after cancellation: {work}");
 }
 
 #[tokio::test]
@@ -237,11 +234,11 @@ async fn test_cancellation_with_select() {
     let token_clone = token.clone();
     let worker = tokio::spawn(async move {
         tokio::select! {
-            _ = token_clone.cancelled() => {
+            () = token_clone.cancelled() => {
                 // Cancelled
                 return false;
             }
-            _ = async {
+            () = async {
                 // Long running work
                 tokio::time::sleep(Duration::from_secs(10)).await;
                 completed_clone.fetch_add(1, Ordering::Relaxed);
@@ -260,7 +257,11 @@ async fn test_cancellation_with_select() {
     let result = tokio::time::timeout(Duration::from_millis(100), worker).await;
     assert!(result.is_ok(), "Should complete via cancellation");
     assert!(!result.unwrap().unwrap(), "Should indicate cancellation");
-    assert_eq!(completed.load(Ordering::Relaxed), 0, "Work should not have completed");
+    assert_eq!(
+        completed.load(Ordering::Relaxed),
+        0,
+        "Work should not have completed"
+    );
 }
 
 // =============================================================================
@@ -316,7 +317,10 @@ fn test_cancellation_check_is_lock_free() {
         checks += 1;
     }
 
-    assert_eq!(checks, 1_000_000, "Should complete all checks without blocking");
+    assert_eq!(
+        checks, 1_000_000,
+        "Should complete all checks without blocking"
+    );
 }
 
 #[tokio::test]
@@ -331,7 +335,10 @@ async fn test_cancel_before_future_created() {
 
     // Should complete immediately
     let result = tokio::time::timeout(Duration::from_millis(10), fut).await;
-    assert!(result.is_ok(), "Future created after cancel should complete immediately");
+    assert!(
+        result.is_ok(),
+        "Future created after cancel should complete immediately"
+    );
 }
 
 // =============================================================================
@@ -350,7 +357,10 @@ async fn test_independent_tokens_dont_affect_each_other() {
     token1.cancel();
 
     assert!(token1.is_cancelled());
-    assert!(!token2.is_cancelled(), "token2 should not be affected by token1");
+    assert!(
+        !token2.is_cancelled(),
+        "token2 should not be affected by token1"
+    );
 }
 
 // =============================================================================

@@ -125,7 +125,7 @@ impl PromptMessage {
 
     /// Create a message with custom content.
     #[must_use]
-    pub fn with_content(role: Role, content: Content) -> Self {
+    pub const fn with_content(role: Role, content: Content) -> Self {
         Self { role, content }
     }
 }
@@ -161,7 +161,7 @@ impl GetPromptResult {
 
     /// Create a prompt result with multiple messages.
     #[must_use]
-    pub fn messages(messages: Vec<PromptMessage>) -> Self {
+    pub const fn messages(messages: Vec<PromptMessage>) -> Self {
         Self {
             description: None,
             messages,
@@ -204,7 +204,7 @@ impl PromptOutput {
 
     /// Create a conversation with multiple messages.
     #[must_use]
-    pub fn conversation(messages: Vec<PromptMessage>) -> Self {
+    pub const fn conversation(messages: Vec<PromptMessage>) -> Self {
         Self::Messages(messages)
     }
 }
@@ -212,9 +212,9 @@ impl PromptOutput {
 impl From<PromptOutput> for GetPromptResult {
     fn from(output: PromptOutput) -> Self {
         match output {
-            PromptOutput::User(text) => GetPromptResult::user(text),
-            PromptOutput::Assistant(text) => GetPromptResult::assistant(text),
-            PromptOutput::Messages(messages) => GetPromptResult::messages(messages),
+            PromptOutput::User(text) => Self::user(text),
+            PromptOutput::Assistant(text) => Self::assistant(text),
+            PromptOutput::Messages(messages) => Self::messages(messages),
             PromptOutput::Full(result) => result,
         }
     }
@@ -280,8 +280,8 @@ mod tests {
 
     #[test]
     fn test_prompt_result() {
-        let result = GetPromptResult::user("Please analyze this data")
-            .description("Data analysis prompt");
+        let result =
+            GetPromptResult::user("Please analyze this data").description("Data analysis prompt");
 
         assert_eq!(result.messages.len(), 1);
         assert!(result.description.is_some());

@@ -84,21 +84,21 @@ impl TelemetryConfig {
 
     /// Enable recording of message contents (use with caution).
     #[must_use]
-    pub fn with_message_content(mut self) -> Self {
+    pub const fn with_message_content(mut self) -> Self {
         self.record_message_content = true;
         self
     }
 
     /// Set maximum message size to record.
     #[must_use]
-    pub fn with_max_recorded_size(mut self, size: usize) -> Self {
+    pub const fn with_max_recorded_size(mut self, size: usize) -> Self {
         self.max_recorded_message_size = size;
         self
     }
 
     /// Disable timing recording.
     #[must_use]
-    pub fn without_timing(mut self) -> Self {
+    pub const fn without_timing(mut self) -> Self {
         self.record_timing = false;
         self
     }
@@ -154,7 +154,8 @@ impl TelemetryMetrics {
     /// Record a received message.
     pub fn record_receive(&self, size: usize) {
         self.messages_received.fetch_add(1, Ordering::Relaxed);
-        self.bytes_received.fetch_add(size as u64, Ordering::Relaxed);
+        self.bytes_received
+            .fetch_add(size as u64, Ordering::Relaxed);
     }
 
     /// Record an error.
@@ -257,7 +258,9 @@ impl LatencyHistogram {
     #[must_use]
     pub fn new() -> Self {
         // Default buckets: 1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000 ms
-        Self::with_buckets(vec![1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000])
+        Self::with_buckets(vec![
+            1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000,
+        ])
     }
 
     /// Create a histogram with custom bucket boundaries.
@@ -430,7 +433,7 @@ impl<T: Transport> TelemetryTransport<T> {
     }
 
     /// Get the inner transport.
-    pub fn inner(&self) -> &T {
+    pub const fn inner(&self) -> &T {
         &self.inner
     }
 }

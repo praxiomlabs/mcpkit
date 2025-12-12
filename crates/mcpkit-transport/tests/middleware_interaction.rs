@@ -3,12 +3,12 @@
 //! Tests verifying correct behavior when multiple middleware layers
 //! are composed together.
 
+use mcpkit_core::protocol::{Message, Notification};
 use mcpkit_transport::memory::MemoryTransport;
 use mcpkit_transport::middleware::{
     IdentityLayer, LayerStack, LoggingLayer, MetricsLayer, TimeoutLayer,
 };
 use mcpkit_transport::traits::Transport;
-use mcpkit_core::protocol::{Message, Notification};
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::Level;
@@ -35,8 +35,7 @@ fn test_identity_layer_composition() {
 async fn test_timeout_layer_applies() {
     let (client, _server) = MemoryTransport::pair();
 
-    let stack = LayerStack::new(client)
-        .with(TimeoutLayer::new(Duration::from_secs(30)));
+    let stack = LayerStack::new(client).with(TimeoutLayer::new(Duration::from_secs(30)));
 
     let transport = stack.into_inner();
     assert!(transport.is_connected());
@@ -50,8 +49,7 @@ async fn test_timeout_layer_applies() {
 async fn test_logging_layer_applies() {
     let (client, _server) = MemoryTransport::pair();
 
-    let stack = LayerStack::new(client)
-        .with(LoggingLayer::new(Level::DEBUG));
+    let stack = LayerStack::new(client).with(LoggingLayer::new(Level::DEBUG));
 
     let transport = stack.into_inner();
     assert!(transport.is_connected());
@@ -108,8 +106,7 @@ async fn test_timeout_on_slow_receive() {
     let (_client, server) = MemoryTransport::pair();
 
     // Very short timeout
-    let stack = LayerStack::new(server)
-        .with(TimeoutLayer::new(Duration::from_millis(10)));
+    let stack = LayerStack::new(server).with(TimeoutLayer::new(Duration::from_millis(10)));
 
     let transport = stack.into_inner();
 
@@ -122,11 +119,10 @@ async fn test_timeout_on_slow_receive() {
     let err_msg = err.to_string();
     // The error message contains "timed out" which is good
     assert!(
-        err_msg.to_lowercase().contains("timed out") ||
-        err_msg.to_lowercase().contains("timeout") ||
-        err_msg.to_lowercase().contains("elapsed"),
-        "Error should indicate timeout: {}",
-        err_msg
+        err_msg.to_lowercase().contains("timed out")
+            || err_msg.to_lowercase().contains("timeout")
+            || err_msg.to_lowercase().contains("elapsed"),
+        "Error should indicate timeout: {err_msg}"
     );
 }
 
@@ -205,7 +201,10 @@ async fn test_metrics_track_errors() {
     // Check stats - either message went through or there was an error
     let sent = handle.messages_sent();
     let errors = handle.send_errors();
-    assert!(sent > 0 || errors > 0, "Should have recorded either send or error");
+    assert!(
+        sent > 0 || errors > 0,
+        "Should have recorded either send or error"
+    );
 }
 
 // =============================================================================
@@ -270,8 +269,7 @@ async fn test_close_propagates_through_layers() {
 async fn test_double_close_through_layers() {
     let (client, _server) = MemoryTransport::pair();
 
-    let stack = LayerStack::new(client)
-        .with(TimeoutLayer::new(Duration::from_secs(30)));
+    let stack = LayerStack::new(client).with(TimeoutLayer::new(Duration::from_secs(30)));
 
     let transport = stack.into_inner();
 
@@ -311,11 +309,7 @@ async fn test_concurrent_sends_through_layers() {
     let (client, server) = MemoryTransport::pair_with_capacity(200);
 
     let (metrics_layer, handle) = MetricsLayer::new_with_handle();
-    let client = Arc::new(
-        LayerStack::new(client)
-            .with(metrics_layer)
-            .into_inner(),
-    );
+    let client = Arc::new(LayerStack::new(client).with(metrics_layer).into_inner());
     let server = Arc::new(server);
 
     // Spawn receiver
@@ -472,9 +466,7 @@ fn test_timeout_layer_custom_send_recv() {
 
 #[test]
 fn test_timeout_layer_disable_timeouts() {
-    let layer = TimeoutLayer::default()
-        .no_send_timeout()
-        .no_recv_timeout();
+    let layer = TimeoutLayer::default().no_send_timeout().no_recv_timeout();
 
     let (client, _server) = MemoryTransport::pair();
     let stack = LayerStack::new(client).with(layer);

@@ -1,5 +1,6 @@
 // Test: Typo in tool attribute should suggest correct spelling
 
+#[allow(unused_imports)]
 use mcpkit_macros::{mcp_server, tool};
 
 struct MyServer;

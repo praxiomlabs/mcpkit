@@ -49,28 +49,28 @@ impl PoolConfig {
 
     /// Set the maximum number of connections.
     #[must_use]
-    pub fn max_connections(mut self, max: usize) -> Self {
+    pub const fn max_connections(mut self, max: usize) -> Self {
         self.max_connections = max;
         self
     }
 
     /// Set the acquire timeout.
     #[must_use]
-    pub fn acquire_timeout(mut self, timeout: std::time::Duration) -> Self {
+    pub const fn acquire_timeout(mut self, timeout: std::time::Duration) -> Self {
         self.acquire_timeout = timeout;
         self
     }
 
     /// Set whether to validate connections before use.
     #[must_use]
-    pub fn validate_on_acquire(mut self, validate: bool) -> Self {
+    pub const fn validate_on_acquire(mut self, validate: bool) -> Self {
         self.validate_on_acquire = validate;
         self
     }
 
     /// Set the maximum idle time.
     #[must_use]
-    pub fn max_idle_time(mut self, time: std::time::Duration) -> Self {
+    pub const fn max_idle_time(mut self, time: std::time::Duration) -> Self {
         self.max_idle_time = time;
         self
     }
@@ -165,10 +165,7 @@ impl<T: Transport> ClientPoolInner<T> {
         };
 
         let mut connections = self.connections.lock().await;
-        connections
-            .entry(key)
-            .or_insert_with(Vec::new)
-            .push(entry);
+        connections.entry(key).or_insert_with(Vec::new).push(entry);
     }
 
     /// Get a semaphore for rate limiting connections to a server.
@@ -220,16 +217,19 @@ pub struct ClientPool<T: Transport> {
 
 impl<T: Transport + 'static> ClientPool<T> {
     /// Create a new pool builder.
+    #[must_use]
     pub fn builder() -> ClientPoolBuilder {
         ClientPoolBuilder::new()
     }
 
     /// Create a new pool with default configuration.
+    #[must_use]
     pub fn new(client_info: ClientInfo, client_caps: ClientCapabilities) -> Self {
         Self::with_config(client_info, client_caps, PoolConfig::default())
     }
 
     /// Create a new pool with custom configuration.
+    #[must_use]
     pub fn with_config(
         client_info: ClientInfo,
         client_caps: ClientCapabilities,
@@ -275,19 +275,17 @@ impl<T: Transport + 'static> ClientPool<T> {
         let semaphore = self.inner.get_semaphore(&key).await;
 
         // Acquire a permit (with timeout)
-        let _permit = tokio::time::timeout(
-            self.inner.config.acquire_timeout,
-            semaphore.acquire_owned(),
-        )
-        .await
-        .map_err(|_| McpError::Internal {
-            message: format!("Timeout acquiring connection for {key}"),
-            source: None,
-        })?
-        .map_err(|_| McpError::Internal {
-            message: "Pool semaphore closed".to_string(),
-            source: None,
-        })?;
+        let _permit =
+            tokio::time::timeout(self.inner.config.acquire_timeout, semaphore.acquire_owned())
+                .await
+                .map_err(|_| McpError::Internal {
+                    message: format!("Timeout acquiring connection for {key}"),
+                    source: None,
+                })?
+                .map_err(|_| McpError::Internal {
+                    message: "Pool semaphore closed".to_string(),
+                    source: None,
+                })?;
 
         // Try to get an existing connection
         {
@@ -403,6 +401,7 @@ pub struct ClientPoolBuilder {
 
 impl ClientPoolBuilder {
     /// Create a new pool builder.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             config: PoolConfig::default(),
@@ -421,31 +420,36 @@ impl ClientPoolBuilder {
     }
 
     /// Set the client capabilities.
+    #[must_use]
     pub fn capabilities(mut self, caps: ClientCapabilities) -> Self {
         self.client_caps = caps;
         self
     }
 
     /// Set the maximum number of connections per server.
-    pub fn max_connections(mut self, max: usize) -> Self {
+    #[must_use]
+    pub const fn max_connections(mut self, max: usize) -> Self {
         self.config.max_connections = max;
         self
     }
 
     /// Set the acquire timeout.
-    pub fn acquire_timeout(mut self, timeout: std::time::Duration) -> Self {
+    #[must_use]
+    pub const fn acquire_timeout(mut self, timeout: std::time::Duration) -> Self {
         self.config.acquire_timeout = timeout;
         self
     }
 
     /// Set whether to validate connections on acquire.
-    pub fn validate_on_acquire(mut self, validate: bool) -> Self {
+    #[must_use]
+    pub const fn validate_on_acquire(mut self, validate: bool) -> Self {
         self.config.validate_on_acquire = validate;
         self
     }
 
     /// Set the maximum idle time.
-    pub fn max_idle_time(mut self, time: std::time::Duration) -> Self {
+    #[must_use]
+    pub const fn max_idle_time(mut self, time: std::time::Duration) -> Self {
         self.config.max_idle_time = time;
         self
     }
@@ -454,7 +458,8 @@ impl ClientPoolBuilder {
     ///
     /// # Panics
     ///
-    /// Panics if client_info was not set.
+    /// Panics if `client_info` was not set.
+    #[must_use]
     pub fn build<T: Transport + 'static>(self) -> ClientPool<T> {
         let client_info = self
             .client_info

@@ -7,9 +7,9 @@
 //! - Resource access errors
 //! - Error propagation and context preservation
 
+use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
 use mcpkit_core::error::{codes, McpError, McpResultExt};
 use mcpkit_core::protocol::{RequestId, Response};
-use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
 
 // =============================================================================
 // Protocol Error Scenarios
@@ -108,11 +108,7 @@ fn test_recoverable_errors() {
     ];
 
     for err in recoverable {
-        assert!(
-            err.is_recoverable(),
-            "Expected {:?} to be recoverable",
-            err
-        );
+        assert!(err.is_recoverable(), "Expected {err:?} to be recoverable");
     }
 }
 
@@ -137,8 +133,7 @@ fn test_non_recoverable_errors() {
     for err in non_recoverable {
         assert!(
             !err.is_recoverable(),
-            "Expected {:?} to NOT be recoverable",
-            err
+            "Expected {err:?} to NOT be recoverable"
         );
     }
 }
@@ -229,16 +224,17 @@ fn test_error_messages_are_descriptive() {
         (McpError::invalid_request("missing method"), "method"),
         (McpError::method_not_found("test_method"), "test_method"),
         (McpError::resource_not_found("file://x"), "file://x"),
-        (McpError::invalid_params("calculator", "missing arg"), "calculator"),
+        (
+            McpError::invalid_params("calculator", "missing arg"),
+            "calculator",
+        ),
     ];
 
     for (err, expected_substring) in errors {
         let msg = err.to_string();
         assert!(
             msg.to_lowercase().contains(expected_substring),
-            "Error message '{}' should contain '{}'",
-            msg,
-            expected_substring
+            "Error message '{msg}' should contain '{expected_substring}'"
         );
     }
 }
@@ -246,7 +242,7 @@ fn test_error_messages_are_descriptive() {
 #[test]
 fn test_debug_format_includes_details() {
     let err = McpError::invalid_params("tools/call", "missing 'name' field");
-    let debug = format!("{:?}", err);
+    let debug = format!("{err:?}");
 
     // Debug should include more details
     assert!(debug.len() > err.to_string().len());
@@ -298,9 +294,7 @@ fn test_error_data_preserved_in_response() {
 
 #[test]
 fn test_capabilities_mismatch_detection() {
-    let server_caps = ServerCapabilities::new()
-        .with_tools()
-        .with_resources();
+    let server_caps = ServerCapabilities::new().with_tools().with_resources();
 
     // Server supports tools and resources
     assert!(server_caps.has_tools());
@@ -311,8 +305,7 @@ fn test_capabilities_mismatch_detection() {
 
 #[test]
 fn test_client_capabilities_detection() {
-    let client_caps = ClientCapabilities::new()
-        .with_sampling();
+    let client_caps = ClientCapabilities::new().with_sampling();
 
     assert!(client_caps.has_sampling());
     assert!(!client_caps.has_elicitation());
@@ -329,7 +322,7 @@ fn test_retry_with_modified_params() {
         if attempt < 3 {
             Err(McpError::invalid_params(
                 "search",
-                format!("query too short (attempt {})", attempt),
+                format!("query too short (attempt {attempt})"),
             ))
         } else {
             Ok("success".to_string())
@@ -342,8 +335,7 @@ fn test_retry_with_modified_params() {
         match try_operation(attempt) {
             Ok(value) => break Ok(value),
             Err(err) if err.is_recoverable() && attempt < 5 => {
-                // Retry for recoverable errors
-                continue;
+                // Retry for recoverable errors - loop continues naturally
             }
             Err(err) => break Err(err),
         }
@@ -371,10 +363,10 @@ async fn test_concurrent_errors_are_isolated() {
             barrier.wait().await;
 
             // Each task creates its own error
-            let err = McpError::internal(format!("error from task {}", i));
+            let err = McpError::internal(format!("error from task {i}"));
 
             // Error should contain task-specific info
-            assert!(err.to_string().contains(&format!("{}", i)));
+            assert!(err.to_string().contains(&format!("{i}")));
 
             err
         }));
@@ -428,10 +420,7 @@ fn test_mcp_error_codes_in_server_range() {
     // MCP-specific errors should be in the server error range (-32000 to -32099)
     // or use custom positive codes
 
-    let mcp_codes = vec![
-        codes::RESOURCE_NOT_FOUND,
-        codes::USER_REJECTED,
-    ];
+    let mcp_codes = vec![codes::RESOURCE_NOT_FOUND, codes::USER_REJECTED];
 
     for code in mcp_codes {
         // Should not conflict with standard JSON-RPC codes

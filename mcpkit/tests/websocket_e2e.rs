@@ -21,7 +21,7 @@ async fn get_available_addr() -> SocketAddr {
 }
 
 /// Helper to send a text message over WebSocket
-fn ws_text(s: String) -> WsMessage {
+const fn ws_text(s: String) -> WsMessage {
     WsMessage::Text(s)
 }
 
@@ -58,10 +58,9 @@ async fn spawn_test_server(listener: TcpListener) -> tokio::task::JoinHandle<()>
                                                 "capabilities": {}
                                             }),
                                         ),
-                                        "tools/list" => Response::success(
-                                            req.id,
-                                            json!({ "tools": [] }),
-                                        ),
+                                        "tools/list" => {
+                                            Response::success(req.id, json!({ "tools": [] }))
+                                        }
                                         "ping" => Response::success(req.id, json!({})),
                                         _ => Response::error(
                                             req.id,
@@ -99,7 +98,7 @@ async fn test_websocket_connect() {
     let _server = spawn_test_server(listener).await;
 
     // Connect as client
-    let url = format!("ws://{}", addr);
+    let url = format!("ws://{addr}");
     let result = timeout(Duration::from_secs(5), connect_async(&url)).await;
 
     assert!(result.is_ok(), "WebSocket connection should succeed");
@@ -115,7 +114,7 @@ async fn test_websocket_initialize_handshake() {
     let _server = spawn_test_server(listener).await;
 
     // Connect
-    let url = format!("ws://{}", addr);
+    let url = format!("ws://{addr}");
     let (ws_stream, _) = connect_async(&url).await.unwrap();
     let (mut tx, mut rx) = ws_stream.split();
 
@@ -161,7 +160,7 @@ async fn test_websocket_request_response_cycle() {
     let _server = spawn_test_server(listener).await;
 
     // Connect
-    let url = format!("ws://{}", addr);
+    let url = format!("ws://{addr}");
     let (ws_stream, _) = connect_async(&url).await.unwrap();
     let (mut tx, mut rx) = ws_stream.split();
 
@@ -195,7 +194,7 @@ async fn test_websocket_tools_list() {
     let _server = spawn_test_server(listener).await;
 
     // Connect
-    let url = format!("ws://{}", addr);
+    let url = format!("ws://{addr}");
     let (ws_stream, _) = connect_async(&url).await.unwrap();
     let (mut tx, mut rx) = ws_stream.split();
 
@@ -226,7 +225,7 @@ async fn test_websocket_method_not_found() {
     let _server = spawn_test_server(listener).await;
 
     // Connect
-    let url = format!("ws://{}", addr);
+    let url = format!("ws://{addr}");
     let (ws_stream, _) = connect_async(&url).await.unwrap();
     let (mut tx, mut rx) = ws_stream.split();
 
@@ -256,23 +255,27 @@ async fn test_websocket_bidirectional() {
     let _server = spawn_test_server(listener).await;
 
     // Connect
-    let url = format!("ws://{}", addr);
+    let url = format!("ws://{addr}");
     let (ws_stream, _) = connect_async(&url).await.unwrap();
     let (mut tx, mut rx) = ws_stream.split();
 
     // Send and receive interleaved
     let request1 = Request::new("ping", 1u64);
-    tx.send(ws_text(serde_json::to_string(&Message::Request(request1)).unwrap()))
-        .await
-        .unwrap();
+    tx.send(ws_text(
+        serde_json::to_string(&Message::Request(request1)).unwrap(),
+    ))
+    .await
+    .unwrap();
 
     let resp1 = timeout(Duration::from_secs(5), rx.next()).await;
     assert!(resp1.is_ok());
 
     let request2 = Request::new("tools/list", 2u64);
-    tx.send(ws_text(serde_json::to_string(&Message::Request(request2)).unwrap()))
-        .await
-        .unwrap();
+    tx.send(ws_text(
+        serde_json::to_string(&Message::Request(request2)).unwrap(),
+    ))
+    .await
+    .unwrap();
 
     let resp2 = timeout(Duration::from_secs(5), rx.next()).await;
     assert!(resp2.is_ok());
@@ -285,7 +288,7 @@ async fn test_websocket_graceful_close() {
     let _server = spawn_test_server(listener).await;
 
     // Connect
-    let url = format!("ws://{}", addr);
+    let url = format!("ws://{addr}");
     let (ws_stream, _) = connect_async(&url).await.unwrap();
     let (mut tx, _rx) = ws_stream.split();
 

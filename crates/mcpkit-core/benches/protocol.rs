@@ -1,3 +1,4 @@
+#![allow(missing_docs)]
 //! Benchmarks for MCP protocol operations.
 //!
 //! Run with: `cargo bench --bench protocol`
@@ -20,7 +21,7 @@ fn bench_request_serialization(c: &mut Criterion) {
 
     group.throughput(Throughput::Elements(1));
     group.bench_function("simple_request", |b| {
-        b.iter(|| serde_json::to_string(black_box(&simple_request)).unwrap())
+        b.iter(|| serde_json::to_string(black_box(&simple_request)).unwrap());
     });
 
     // Complex request with nested params
@@ -42,7 +43,7 @@ fn bench_request_serialization(c: &mut Criterion) {
     let complex_request = Request::with_params("tools/call", 42u64, complex_params);
 
     group.bench_function("complex_request", |b| {
-        b.iter(|| serde_json::to_string(black_box(&complex_request)).unwrap())
+        b.iter(|| serde_json::to_string(black_box(&complex_request)).unwrap());
     });
 
     group.finish();
@@ -76,12 +77,12 @@ fn bench_request_deserialization(c: &mut Criterion) {
 
     group.throughput(Throughput::Bytes(simple_json.len() as u64));
     group.bench_function("simple_request", |b| {
-        b.iter(|| serde_json::from_str::<Request>(black_box(simple_json)).unwrap())
+        b.iter(|| serde_json::from_str::<Request>(black_box(simple_json)).unwrap());
     });
 
     group.throughput(Throughput::Bytes(complex_json.len() as u64));
     group.bench_function("complex_request", |b| {
-        b.iter(|| serde_json::from_str::<Request>(black_box(complex_json)).unwrap())
+        b.iter(|| serde_json::from_str::<Request>(black_box(complex_json)).unwrap());
     });
 
     group.finish();
@@ -95,7 +96,7 @@ fn bench_response_serialization(c: &mut Criterion) {
     let success = Response::success(1u64, json!({"tools": []}));
 
     group.bench_function("success_response", |b| {
-        b.iter(|| serde_json::to_string(black_box(&success)).unwrap())
+        b.iter(|| serde_json::to_string(black_box(&success)).unwrap());
     });
 
     // Error response
@@ -109,7 +110,7 @@ fn bench_response_serialization(c: &mut Criterion) {
     );
 
     group.bench_function("error_response", |b| {
-        b.iter(|| serde_json::to_string(black_box(&error)).unwrap())
+        b.iter(|| serde_json::to_string(black_box(&error)).unwrap());
     });
 
     // Large tool list response
@@ -130,7 +131,7 @@ fn bench_response_serialization(c: &mut Criterion) {
     let large_response = Response::success(1u64, json!({"tools": tools}));
 
     group.bench_function("large_tool_list_response", |b| {
-        b.iter(|| serde_json::to_string(black_box(&large_response)).unwrap())
+        b.iter(|| serde_json::to_string(black_box(&large_response)).unwrap());
     });
 
     group.finish();
@@ -145,15 +146,15 @@ fn bench_message_parsing(c: &mut Criterion) {
     let notification_json = r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#;
 
     group.bench_function("parse_request", |b| {
-        b.iter(|| serde_json::from_str::<Message>(black_box(request_json)).unwrap())
+        b.iter(|| serde_json::from_str::<Message>(black_box(request_json)).unwrap());
     });
 
     group.bench_function("parse_response", |b| {
-        b.iter(|| serde_json::from_str::<Message>(black_box(response_json)).unwrap())
+        b.iter(|| serde_json::from_str::<Message>(black_box(response_json)).unwrap());
     });
 
     group.bench_function("parse_notification", |b| {
-        b.iter(|| serde_json::from_str::<Message>(black_box(notification_json)).unwrap())
+        b.iter(|| serde_json::from_str::<Message>(black_box(notification_json)).unwrap());
     });
 
     group.finish();
@@ -175,12 +176,12 @@ fn bench_tool_operations(c: &mut Criterion) {
                     },
                     "required": ["query"]
                 }))
-        })
+        });
     });
 
     // ToolOutput creation
     group.bench_function("tool_output_text", |b| {
-        b.iter(|| ToolOutput::text(black_box("Hello, World!")))
+        b.iter(|| ToolOutput::text(black_box("Hello, World!")));
     });
 
     group.bench_function("tool_output_json", |b| {
@@ -190,9 +191,7 @@ fn bench_tool_operations(c: &mut Criterion) {
                 "items": [1, 2, 3, 4, 5]
             }
         });
-        b.iter(|| {
-            ToolOutput::json(black_box(&value)).unwrap()
-        })
+        b.iter(|| ToolOutput::json(black_box(&value)).unwrap());
     });
 
     group.finish();
@@ -204,13 +203,13 @@ fn bench_content_operations(c: &mut Criterion) {
 
     // Text content
     group.bench_function("text_content_creation", |b| {
-        b.iter(|| Content::text(black_box("This is some text content")))
+        b.iter(|| Content::text(black_box("This is some text content")));
     });
 
     // Content serialization
     let text_content = Content::text("This is text content for serialization benchmark");
     group.bench_function("text_content_serialization", |b| {
-        b.iter(|| serde_json::to_string(black_box(&text_content)).unwrap())
+        b.iter(|| serde_json::to_string(black_box(&text_content)).unwrap());
     });
 
     group.finish();
@@ -220,17 +219,13 @@ fn bench_content_operations(c: &mut Criterion) {
 fn bench_payload_sizes(c: &mut Criterion) {
     let mut group = c.benchmark_group("payload_sizes");
 
-    for size in [10, 100, 1000, 10000].iter() {
+    for size in &[10, 100, 1000, 10000] {
         let payload: String = (0..*size).map(|_| 'x').collect();
-        let request = Request::with_params(
-            "tools/call",
-            1u64,
-            json!({"data": payload}),
-        );
+        let request = Request::with_params("tools/call", 1u64, json!({"data": payload}));
 
         group.throughput(Throughput::Bytes(*size as u64));
         group.bench_with_input(BenchmarkId::new("serialize", size), &request, |b, req| {
-            b.iter(|| serde_json::to_string(black_box(req)).unwrap())
+            b.iter(|| serde_json::to_string(black_box(req)).unwrap());
         });
 
         let json_str = serde_json::to_string(&request).unwrap();
@@ -244,28 +239,26 @@ fn bench_payload_sizes(c: &mut Criterion) {
     group.finish();
 }
 
-/// Benchmark RequestId operations
+/// Benchmark `RequestId` operations
 fn bench_request_id(c: &mut Criterion) {
     let mut group = c.benchmark_group("request_id");
 
     group.bench_function("number_id_serialize", |b| {
         let id = RequestId::Number(12345);
-        b.iter(|| serde_json::to_string(black_box(&id)).unwrap())
+        b.iter(|| serde_json::to_string(black_box(&id)).unwrap());
     });
 
     group.bench_function("string_id_serialize", |b| {
         let id = RequestId::String("request-uuid-12345".to_string());
-        b.iter(|| serde_json::to_string(black_box(&id)).unwrap())
+        b.iter(|| serde_json::to_string(black_box(&id)).unwrap());
     });
 
     group.bench_function("number_id_deserialize", |b| {
-        b.iter(|| serde_json::from_str::<RequestId>(black_box("12345")).unwrap())
+        b.iter(|| serde_json::from_str::<RequestId>(black_box("12345")).unwrap());
     });
 
     group.bench_function("string_id_deserialize", |b| {
-        b.iter(|| {
-            serde_json::from_str::<RequestId>(black_box("\"request-uuid-12345\"")).unwrap()
-        })
+        b.iter(|| serde_json::from_str::<RequestId>(black_box("\"request-uuid-12345\"")).unwrap());
     });
 
     group.finish();

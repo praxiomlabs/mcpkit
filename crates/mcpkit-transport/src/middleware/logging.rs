@@ -23,7 +23,7 @@ pub struct LoggingLayer {
 impl LoggingLayer {
     /// Create a new logging layer with the specified log level.
     #[must_use]
-    pub fn new(level: Level) -> Self {
+    pub const fn new(level: Level) -> Self {
         Self {
             level,
             log_contents: false,
@@ -34,7 +34,7 @@ impl LoggingLayer {
     ///
     /// Warning: This may log sensitive data!
     #[must_use]
-    pub fn with_contents(mut self, log_contents: bool) -> Self {
+    pub const fn with_contents(mut self, log_contents: bool) -> Self {
         self.log_contents = log_contents;
         self
     }

@@ -12,7 +12,13 @@ use quote::quote_spanned;
 const SERVER_ATTRS: &[&str] = &["name", "version", "instructions", "debug_expand"];
 
 /// Known attribute names for `#[tool]`.
-const TOOL_ATTRS: &[&str] = &["description", "name", "destructive", "idempotent", "read_only"];
+const TOOL_ATTRS: &[&str] = &[
+    "description",
+    "name",
+    "destructive",
+    "idempotent",
+    "read_only",
+];
 
 /// Known attribute names for `#[resource]`.
 const RESOURCE_ATTRS: &[&str] = &["uri_pattern", "name", "description", "mime_type"];
@@ -66,20 +72,13 @@ pub fn missing_attr_error(attr_name: &str, context: AttrContext, span: Span) -> 
 }
 
 /// Create an error for an invalid attribute value.
-pub fn invalid_value_error(
-    attr_name: &str,
-    expected: &str,
-    got: &str,
-    span: Span,
-) -> TokenStream {
-    let message = format!(
-        "invalid value for `{attr_name}`: expected {expected}, got `{got}`"
-    );
+pub fn invalid_value_error(attr_name: &str, expected: &str, got: &str, span: Span) -> TokenStream {
+    let message = format!("invalid value for `{attr_name}`: expected {expected}, got `{got}`");
 
     quote_spanned!(span => compile_error!(#message);)
 }
 
-/// Create an error for using tool outside mcp_server.
+/// Create an error for using tool outside `mcp_server`.
 pub fn tool_outside_server_error(span: Span) -> TokenStream {
     let message = "\
         #[tool] must be used inside an #[mcp_server] impl block\n\n\
@@ -156,7 +155,7 @@ fn levenshtein(a: &str, b: &str) -> usize {
 
     for (i, a_char) in a.chars().enumerate() {
         for (j, b_char) in b.chars().enumerate() {
-            let cost = if a_char == b_char { 0 } else { 1 };
+            let cost = usize::from(a_char != b_char);
             matrix[i + 1][j + 1] = (matrix[i][j + 1] + 1)
                 .min(matrix[i + 1][j] + 1)
                 .min(matrix[i][j] + cost);

@@ -28,9 +28,7 @@ pub fn expand_prompt(attr: TokenStream, item: TokenStream) -> Result<TokenStream
 
     // Extract info
     let description = &attrs.description;
-    let prompt_name = attrs
-        .name
-        .unwrap_or_else(|| method.sig.ident.to_string());
+    let prompt_name = attrs.name.unwrap_or_else(|| method.sig.ident.to_string());
 
     // Generate a hidden constant that mcp_server can find
     let marker_name = syn::Ident::new(

@@ -114,7 +114,11 @@ impl FullServer {
     async fn get_config_value(&self, uri: &str) -> ResourceContents {
         // Extract key from URI like "config://app/debug"
         let key = uri.strip_prefix("config://app/").unwrap_or("");
-        let value = self.config.get(key).map(|s| s.as_str()).unwrap_or("not found");
+        let value = self
+            .config
+            .get(key)
+            .map(|s| s.as_str())
+            .unwrap_or("not found");
         ResourceContents::text(uri, value)
     }
 
@@ -190,7 +194,11 @@ async fn main() -> Result<(), McpError> {
     let tools = <FullServer as ToolHandler>::list_tools(&server, &ctx).await?;
     println!("Available tools:");
     for tool in &tools {
-        println!("  - {} : {}", tool.name, tool.description.as_deref().unwrap_or(""));
+        println!(
+            "  - {} : {}",
+            tool.name,
+            tool.description.as_deref().unwrap_or("")
+        );
     }
 
     // Test add tool
@@ -221,7 +229,8 @@ async fn main() -> Result<(), McpError> {
 
     // Test reading config resource
     println!("\nReading config://app...");
-    let contents = <FullServer as ResourceHandler>::read_resource(&server, "config://app", &ctx).await?;
+    let contents =
+        <FullServer as ResourceHandler>::read_resource(&server, "config://app", &ctx).await?;
     for content in &contents {
         if let Some(text) = &content.text {
             println!("Content:\n{}", text);
@@ -230,7 +239,8 @@ async fn main() -> Result<(), McpError> {
 
     // Test reading config value
     println!("\nReading config://app/debug...");
-    let contents = <FullServer as ResourceHandler>::read_resource(&server, "config://app/debug", &ctx).await?;
+    let contents =
+        <FullServer as ResourceHandler>::read_resource(&server, "config://app/debug", &ctx).await?;
     for content in &contents {
         if let Some(text) = &content.text {
             println!("Content: {}", text);
@@ -255,14 +265,22 @@ async fn main() -> Result<(), McpError> {
                     .join(", ")
             })
             .unwrap_or_default();
-        println!("  - {}({}) : {}", prompt.name, args_str, prompt.description.as_deref().unwrap_or(""));
+        println!(
+            "  - {}({}) : {}",
+            prompt.name,
+            args_str,
+            prompt.description.as_deref().unwrap_or("")
+        );
     }
 
     // Test code_review prompt
     println!("\nGetting code_review prompt...");
-    let args = serde_json::json!({"code": "fn main() { println!(\"Hello\"); }", "language": "rust"});
+    let args =
+        serde_json::json!({"code": "fn main() { println!(\"Hello\"); }", "language": "rust"});
     let args_map: serde_json::Map<String, serde_json::Value> = args.as_object().unwrap().clone();
-    let result = <FullServer as PromptHandler>::get_prompt(&server, "code_review", Some(args_map), &ctx).await?;
+    let result =
+        <FullServer as PromptHandler>::get_prompt(&server, "code_review", Some(args_map), &ctx)
+            .await?;
     println!("Description: {:?}", result.description);
     println!("Messages:");
     for msg in &result.messages {
@@ -279,7 +297,9 @@ async fn main() -> Result<(), McpError> {
     println!("\nGetting summarize prompt...");
     let args = serde_json::json!({"text": "The quick brown fox jumps over the lazy dog.", "max_words": 10});
     let args_map: serde_json::Map<String, serde_json::Value> = args.as_object().unwrap().clone();
-    let result = <FullServer as PromptHandler>::get_prompt(&server, "summarize", Some(args_map), &ctx).await?;
+    let result =
+        <FullServer as PromptHandler>::get_prompt(&server, "summarize", Some(args_map), &ctx)
+            .await?;
     println!("Description: {:?}", result.description);
     for msg in &result.messages {
         println!("  [user]: {:?}", msg.content);

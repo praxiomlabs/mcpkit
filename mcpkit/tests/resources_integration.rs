@@ -3,7 +3,9 @@
 use mcpkit::capability::{ClientCapabilities, ServerCapabilities};
 use mcpkit::protocol::RequestId;
 use mcpkit::types::resource::ResourceContents;
-use mcpkit_server::capability::resources::{ResourceBuilder, ResourceService, ResourceTemplateBuilder};
+use mcpkit_server::capability::resources::{
+    ResourceBuilder, ResourceService, ResourceTemplateBuilder,
+};
 use mcpkit_server::context::{Context, NoOpPeer};
 use mcpkit_server::handler::ResourceHandler;
 
@@ -27,12 +29,7 @@ async fn test_resource_service_basic() {
 
     service.register(resource, |uri, _ctx| {
         let uri = uri.to_string();
-        async move {
-            Ok(ResourceContents::text(
-                uri,
-                r#"{"debug": true}"#,
-            ))
-        }
+        async move { Ok(ResourceContents::text(uri, r#"{"debug": true}"#)) }
     });
 
     assert!(!service.is_empty());
@@ -50,9 +47,7 @@ async fn test_resource_read() {
 
     service.register(resource, |uri, _ctx| {
         let uri = uri.to_string();
-        async move {
-            Ok(ResourceContents::text(uri, "Hello, World!"))
-        }
+        async move { Ok(ResourceContents::text(uri, "Hello, World!")) }
     });
 
     let (req_id, client_caps, server_caps, peer) = make_test_context();
@@ -92,7 +87,7 @@ async fn test_resource_template() {
             let id = uri.strip_prefix("db://users/").unwrap_or("unknown");
             Ok(ResourceContents::text(
                 uri.clone(),
-                format!(r#"{{"id": "{}", "name": "User {}"}}"#, id, id),
+                format!(r#"{{"id": "{id}", "name": "User {id}"}}"#),
             ))
         }
     });
@@ -116,9 +111,7 @@ async fn test_resource_handler_trait() {
 
     service.register(resource, |uri, _ctx| {
         let uri = uri.to_string();
-        async move {
-            Ok(ResourceContents::text(uri, "test content"))
-        }
+        async move { Ok(ResourceContents::text(uri, "test content")) }
     });
 
     let (req_id, client_caps, server_caps, peer) = make_test_context();
@@ -162,17 +155,12 @@ async fn test_multiple_resources() {
     let mut service = ResourceService::new();
 
     for i in 1..=5 {
-        let resource = ResourceBuilder::new(
-            format!("file:///file{}.txt", i),
-            format!("File {}", i),
-        )
-        .build();
+        let resource =
+            ResourceBuilder::new(format!("file:///file{i}.txt"), format!("File {i}")).build();
 
         service.register(resource, move |uri, _ctx| {
             let uri = uri.to_string();
-            async move {
-                Ok(ResourceContents::text(uri, format!("Content of file")))
-            }
+            async move { Ok(ResourceContents::text(uri, "Content of file".to_string())) }
         });
     }
 
@@ -197,7 +185,11 @@ async fn test_binary_resource() {
         let uri = uri.to_string();
         async move {
             // Simulate binary content as blob
-            Ok(ResourceContents::blob(uri, &[0x89, 0x50, 0x4E, 0x47], "image/png"))
+            Ok(ResourceContents::blob(
+                uri,
+                &[0x89, 0x50, 0x4E, 0x47],
+                "image/png",
+            ))
         }
     });
 

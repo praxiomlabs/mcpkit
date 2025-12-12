@@ -37,7 +37,7 @@ impl SamplingMessage {
 
     /// Create a message with custom content.
     #[must_use]
-    pub fn with_content(role: Role, content: Content) -> Self {
+    pub const fn with_content(role: Role, content: Content) -> Self {
         Self { role, content }
     }
 }
@@ -55,7 +55,10 @@ pub struct ModelPreferences {
     #[serde(rename = "speedPriority", skip_serializing_if = "Option::is_none")]
     pub speed_priority: Option<f64>,
     /// Priority for intelligence (0.0 = basic model, 1.0 = most capable).
-    #[serde(rename = "intelligencePriority", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "intelligencePriority",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub intelligence_priority: Option<f64>,
 }
 
@@ -144,7 +147,7 @@ pub struct CreateMessageRequest {
 impl CreateMessageRequest {
     /// Create a new sampling request.
     #[must_use]
-    pub fn new(messages: Vec<SamplingMessage>, max_tokens: u32) -> Self {
+    pub const fn new(messages: Vec<SamplingMessage>, max_tokens: u32) -> Self {
         Self {
             messages,
             max_tokens,
@@ -179,7 +182,7 @@ impl CreateMessageRequest {
 
     /// Set context inclusion.
     #[must_use]
-    pub fn include_context(mut self, context: IncludeContext) -> Self {
+    pub const fn include_context(mut self, context: IncludeContext) -> Self {
         self.include_context = Some(context);
         self
     }
@@ -204,19 +207,15 @@ impl CreateMessageRequest {
 /// What context to include in sampling.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum IncludeContext {
     /// Include no additional context.
+    #[default]
     None,
     /// Include context from this server only.
     ThisServer,
     /// Include context from all connected servers.
     AllServers,
-}
-
-impl Default for IncludeContext {
-    fn default() -> Self {
-        Self::None
-    }
 }
 
 /// Result of a sampling request.
@@ -278,8 +277,7 @@ mod tests {
 
     #[test]
     fn test_model_preferences() {
-        let prefs = ModelPreferences::smart()
-            .hint(ModelHint::name("claude-3-opus"));
+        let prefs = ModelPreferences::smart().hint(ModelHint::name("claude-3-opus"));
 
         assert_eq!(prefs.intelligence_priority, Some(1.0));
         assert_eq!(prefs.hints.as_ref().unwrap().len(), 1);

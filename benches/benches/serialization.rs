@@ -7,7 +7,7 @@
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use mcpkit_core::{
-    protocol::{Request, Response, RequestId},
+    protocol::{Request, RequestId, Response},
     types::{CallToolResult, Tool, ToolAnnotations},
 };
 use serde_json::{json, Value};
@@ -114,7 +114,7 @@ fn tool_definition() -> Tool {
     }
 }
 
-/// Create a CallToolResult
+/// Create a `CallToolResult`
 fn call_tool_result() -> CallToolResult {
     CallToolResult::text("Query executed successfully. Found 42 results.")
 }
@@ -127,13 +127,21 @@ fn bench_request_serialization(c: &mut Criterion) {
 
     group.throughput(Throughput::Elements(1));
 
-    group.bench_with_input(BenchmarkId::new("minimal", "to_string"), &minimal, |b, req| {
-        b.iter(|| serde_json::to_string(black_box(req)).unwrap());
-    });
+    group.bench_with_input(
+        BenchmarkId::new("minimal", "to_string"),
+        &minimal,
+        |b, req| {
+            b.iter(|| serde_json::to_string(black_box(req)).unwrap());
+        },
+    );
 
-    group.bench_with_input(BenchmarkId::new("complex", "to_string"), &complex, |b, req| {
-        b.iter(|| serde_json::to_string(black_box(req)).unwrap());
-    });
+    group.bench_with_input(
+        BenchmarkId::new("complex", "to_string"),
+        &complex,
+        |b, req| {
+            b.iter(|| serde_json::to_string(black_box(req)).unwrap());
+        },
+    );
 
     group.bench_with_input(BenchmarkId::new("minimal", "to_vec"), &minimal, |b, req| {
         b.iter(|| serde_json::to_vec(black_box(req)).unwrap());
@@ -181,9 +189,13 @@ fn bench_response_serialization(c: &mut Criterion) {
 
     group.throughput(Throughput::Elements(1));
 
-    group.bench_with_input(BenchmarkId::new("success", "to_string"), &success, |b, resp| {
-        b.iter(|| serde_json::to_string(black_box(resp)).unwrap());
-    });
+    group.bench_with_input(
+        BenchmarkId::new("success", "to_string"),
+        &success,
+        |b, resp| {
+            b.iter(|| serde_json::to_string(black_box(resp)).unwrap());
+        },
+    );
 
     group.bench_with_input(BenchmarkId::new("large", "to_string"), &large, |b, resp| {
         b.iter(|| serde_json::to_string(black_box(resp)).unwrap());

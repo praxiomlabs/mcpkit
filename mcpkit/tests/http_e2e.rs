@@ -111,7 +111,7 @@ async fn handle_mcp_request(
             return (
                 StatusCode::ACCEPTED,
                 [(axum::http::header::CONTENT_TYPE, "application/json")],
-                "".to_string(),
+                String::new(),
             )
                 .into_response();
         }
@@ -165,7 +165,7 @@ async fn test_http_basic_request() {
 
     // Create HTTP client
     let client = reqwest::Client::new();
-    let url = format!("http://{}/mcp", addr);
+    let url = format!("http://{addr}/mcp");
 
     // Send ping request
     let request = Request::new("ping", 1u64);
@@ -199,7 +199,7 @@ async fn test_http_initialize_handshake() {
     tokio::time::sleep(Duration::from_millis(50)).await;
 
     let client = reqwest::Client::new();
-    let url = format!("http://{}/mcp", addr);
+    let url = format!("http://{addr}/mcp");
 
     // Send initialize request
     let init_request = Request::with_params(
@@ -249,7 +249,7 @@ async fn test_http_tools_list() {
     tokio::time::sleep(Duration::from_millis(50)).await;
 
     let client = reqwest::Client::new();
-    let url = format!("http://{}/mcp", addr);
+    let url = format!("http://{addr}/mcp");
 
     let request = Request::new("tools/list", 1u64);
     let body = serde_json::to_string(&Message::Request(request)).unwrap();
@@ -280,7 +280,7 @@ async fn test_http_method_not_found() {
     tokio::time::sleep(Duration::from_millis(50)).await;
 
     let client = reqwest::Client::new();
-    let url = format!("http://{}/mcp", addr);
+    let url = format!("http://{addr}/mcp");
 
     let request = Request::new("unknown/method", 1u64);
     let body = serde_json::to_string(&Message::Request(request)).unwrap();
@@ -310,7 +310,7 @@ async fn test_http_parse_error() {
     tokio::time::sleep(Duration::from_millis(50)).await;
 
     let client = reqwest::Client::new();
-    let url = format!("http://{}/mcp", addr);
+    let url = format!("http://{addr}/mcp");
 
     // Send invalid JSON
     let response = client
@@ -336,11 +336,11 @@ async fn test_http_multiple_requests() {
     tokio::time::sleep(Duration::from_millis(50)).await;
 
     let client = reqwest::Client::new();
-    let url = format!("http://{}/mcp", addr);
+    let url = format!("http://{addr}/mcp");
 
     // Send multiple sequential requests
     for i in 1..=5 {
-        let request = Request::new("ping", i as u64);
+        let request = Request::new("ping", i);
         let body = serde_json::to_string(&Message::Request(request)).unwrap();
 
         let response = client
@@ -369,7 +369,7 @@ async fn test_http_notification() {
     tokio::time::sleep(Duration::from_millis(50)).await;
 
     let client = reqwest::Client::new();
-    let url = format!("http://{}/mcp", addr);
+    let url = format!("http://{addr}/mcp");
 
     // Send a notification (no response expected)
     let notification = mcpkit::protocol::Notification::new("notifications/initialized");

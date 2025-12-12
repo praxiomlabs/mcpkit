@@ -39,7 +39,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 #[cfg(feature = "tokio-runtime")]
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter},
-    net::{UnixStream, UnixListener as TokioUnixListener},
+    net::{UnixListener as TokioUnixListener, UnixStream},
 };
 
 /// Default maximum message size (16 MB).
@@ -74,28 +74,28 @@ impl UnixSocketConfig {
 
     /// Set whether to cleanup the socket file on close.
     #[must_use]
-    pub fn with_cleanup_on_close(mut self, cleanup: bool) -> Self {
+    pub const fn with_cleanup_on_close(mut self, cleanup: bool) -> Self {
         self.cleanup_on_close = cleanup;
         self
     }
 
     /// Set the read buffer size.
     #[must_use]
-    pub fn with_read_buffer_size(mut self, size: usize) -> Self {
+    pub const fn with_read_buffer_size(mut self, size: usize) -> Self {
         self.read_buffer_size = size;
         self
     }
 
     /// Set the write buffer size.
     #[must_use]
-    pub fn with_write_buffer_size(mut self, size: usize) -> Self {
+    pub const fn with_write_buffer_size(mut self, size: usize) -> Self {
         self.write_buffer_size = size;
         self
     }
 
     /// Set the maximum message size.
     #[must_use]
-    pub fn with_max_message_size(mut self, size: usize) -> Self {
+    pub const fn with_max_message_size(mut self, size: usize) -> Self {
         self.max_message_size = size;
         self
     }
@@ -188,11 +188,16 @@ impl UnixTransport {
     /// Connect with custom configuration.
     #[cfg(feature = "tokio-runtime")]
     pub async fn connect_with_config(config: UnixSocketConfig) -> Result<Self, TransportError> {
-        let stream = UnixStream::connect(&config.path)
-            .await
-            .map_err(|e| TransportError::Connection {
-                message: format!("Failed to connect to Unix socket '{}': {}", config.path.display(), e),
-            })?;
+        let stream =
+            UnixStream::connect(&config.path)
+                .await
+                .map_err(|e| TransportError::Connection {
+                    message: format!(
+                        "Failed to connect to Unix socket '{}': {}",
+                        config.path.display(),
+                        e
+                    ),
+                })?;
 
         tracing::debug!(path = %config.path.display(), "Connected to Unix socket");
         Ok(Self::from_stream(config, stream, false))
@@ -325,11 +330,10 @@ impl Transport for UnixTransport {
                     });
                 }
 
-                let msg: Message = serde_json::from_str(line).map_err(|e| {
-                    TransportError::Deserialization {
+                let msg: Message =
+                    serde_json::from_str(line).map_err(|e| TransportError::Deserialization {
                         message: format!("Failed to deserialize message: {e}"),
-                    }
-                })?;
+                    })?;
 
                 self.messages_received.fetch_add(1, Ordering::Relaxed);
                 Ok(Some(msg))
@@ -358,10 +362,8 @@ impl Transport for UnixTransport {
         state.writer = None;
 
         // Cleanup socket file if this is server-side and cleanup is enabled
-        if self.is_server_side && self.config.cleanup_on_close {
-            if self.config.path.exists() {
-                let _ = std::fs::remove_file(&self.config.path);
-            }
+        if self.is_server_side && self.config.cleanup_on_close && self.config.path.exists() {
+            let _ = std::fs::remove_file(&self.config.path);
         }
 
         Ok(())
@@ -378,8 +380,7 @@ impl Transport for UnixTransport {
     }
 
     fn metadata(&self) -> TransportMetadata {
-        TransportMetadata::new("unix")
-            .remote_addr(self.config.path.display().to_string())
+        TransportMetadata::new("unix").remote_addr(self.config.path.display().to_string())
     }
 }
 
@@ -477,13 +478,21 @@ impl TransportListener for UnixListener {
 
         let mut guard = self.listener.lock().await;
         if let Some(listener) = guard.as_mut() {
-            let (stream, addr) = listener.accept().await.map_err(|e| TransportError::Connection {
-                message: format!("Failed to accept connection: {e}"),
-            })?;
+            let (stream, addr) =
+                listener
+                    .accept()
+                    .await
+                    .map_err(|e| TransportError::Connection {
+                        message: format!("Failed to accept connection: {e}"),
+                    })?;
 
             tracing::debug!(addr = ?addr, "Accepted Unix socket connection");
 
-            Ok(UnixTransport::from_stream(self.config.clone(), stream, true))
+            Ok(UnixTransport::from_stream(
+                self.config.clone(),
+                stream,
+                true,
+            ))
         } else {
             Err(TransportError::Connection {
                 message: "Listener has been stopped".to_string(),
@@ -530,6 +539,7 @@ impl AbstractSocket {
     }
 
     /// Get the socket name.
+    #[must_use]
     pub fn name(&self) -> &str {
         &self.name
     }
@@ -537,6 +547,7 @@ impl AbstractSocket {
     /// Convert to a socket path for use with standard Unix socket APIs.
     ///
     /// Returns a path starting with a null byte to indicate an abstract socket.
+    #[must_use]
     pub fn to_path(&self) -> Vec<u8> {
         let mut path = vec![0u8];
         path.extend_from_slice(self.name.as_bytes());
@@ -559,21 +570,21 @@ impl UnixTransportBuilder {
 
     /// Set whether to cleanup the socket file on close.
     #[must_use]
-    pub fn cleanup_on_close(mut self, cleanup: bool) -> Self {
+    pub const fn cleanup_on_close(mut self, cleanup: bool) -> Self {
         self.config.cleanup_on_close = cleanup;
         self
     }
 
     /// Set the read buffer size.
     #[must_use]
-    pub fn read_buffer_size(mut self, size: usize) -> Self {
+    pub const fn read_buffer_size(mut self, size: usize) -> Self {
         self.config.read_buffer_size = size;
         self
     }
 
     /// Set the write buffer size.
     #[must_use]
-    pub fn write_buffer_size(mut self, size: usize) -> Self {
+    pub const fn write_buffer_size(mut self, size: usize) -> Self {
         self.config.write_buffer_size = size;
         self
     }

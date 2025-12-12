@@ -256,9 +256,7 @@ fn test_server_capabilities_all() {
 
 #[test]
 fn test_client_capabilities_has_methods() {
-    let caps = ClientCapabilities::default()
-        .with_roots()
-        .with_sampling();
+    let caps = ClientCapabilities::default().with_roots().with_sampling();
 
     assert!(caps.has_roots());
     assert!(caps.has_sampling());

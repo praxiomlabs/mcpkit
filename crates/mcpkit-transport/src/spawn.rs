@@ -82,7 +82,8 @@ pub const MAX_MESSAGE_SIZE: usize = 16 * 1024 * 1024;
 #[cfg(feature = "tokio-runtime")]
 pub struct SpawnedTransport {
     stdin: AsyncMutex<TokioAsyncWriteWrapper<tokio::process::ChildStdin>>,
-    stdout: AsyncMutex<crate::runtime::BufReader<TokioAsyncReadWrapper<tokio::process::ChildStdout>>>,
+    stdout:
+        AsyncMutex<crate::runtime::BufReader<TokioAsyncReadWrapper<tokio::process::ChildStdout>>>,
     child: AsyncMutex<tokio::process::Child>,
     connected: AtomicBool,
     metadata: TransportMetadata,
@@ -122,7 +123,10 @@ impl SpawnedTransport {
         I: IntoIterator<Item = A>,
         A: AsRef<OsStr>,
     {
-        SpawnedTransportBuilder::new(program).args(args).spawn().await
+        SpawnedTransportBuilder::new(program)
+            .args(args)
+            .spawn()
+            .await
     }
 
     /// Create a builder for more advanced configuration.
@@ -176,7 +180,7 @@ impl SpawnedTransport {
 
     /// Kill the child process forcefully.
     ///
-    /// This sends SIGKILL on Unix and TerminateProcess on Windows.
+    /// This sends SIGKILL on Unix and `TerminateProcess` on Windows.
     pub async fn kill(&self) -> Result<(), TransportError> {
         let mut child = self.child.lock().await;
         child.kill().await.map_err(TransportError::from)
@@ -366,7 +370,7 @@ impl SpawnedTransportBuilder {
     ///
     /// By default, the child inherits the parent's environment.
     #[must_use]
-    pub fn clear_env(mut self) -> Self {
+    pub const fn clear_env(mut self) -> Self {
         self.clear_env = true;
         self
     }
@@ -398,32 +402,39 @@ impl SpawnedTransportBuilder {
         }
 
         let mut child = command.spawn().map_err(|e| TransportError::Connection {
-            message: format!("Failed to spawn process '{}': {}", self.program.display(), e),
+            message: format!(
+                "Failed to spawn process '{}': {}",
+                self.program.display(),
+                e
+            ),
         })?;
 
         let stdin = child.stdin.take().ok_or_else(|| TransportError::Protocol {
             message: "Failed to capture child stdin".to_string(),
         })?;
 
-        let stdout = child.stdout.take().ok_or_else(|| TransportError::Protocol {
-            message: "Failed to capture child stdout".to_string(),
-        })?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| TransportError::Protocol {
+                message: "Failed to capture child stdout".to_string(),
+            })?;
 
-        let command_str = format!(
-            "{} {}",
-            self.program.display(),
-            self.args.join(" ")
-        );
+        let command_str = format!("{} {}", self.program.display(), self.args.join(" "));
 
-        let pid = child.id().map(|id| id.to_string()).unwrap_or_else(|| "unknown".to_string());
+        let pid = child
+            .id()
+            .map_or_else(|| "unknown".to_string(), |id| id.to_string());
 
         Ok(SpawnedTransport {
             stdin: AsyncMutex::new(TokioAsyncWriteWrapper(stdin)),
-            stdout: AsyncMutex::new(crate::runtime::BufReader::new(TokioAsyncReadWrapper(stdout))),
+            stdout: AsyncMutex::new(crate::runtime::BufReader::new(TokioAsyncReadWrapper(
+                stdout,
+            ))),
             child: AsyncMutex::new(child),
             connected: AtomicBool::new(true),
             metadata: TransportMetadata::new("spawned-stdio")
-                .remote_addr(&format!("pid:{}", pid))
+                .remote_addr(format!("pid:{pid}"))
                 .local_addr("parent")
                 .connected_now(),
             command: command_str,
@@ -445,7 +456,10 @@ mod tests {
 
         assert_eq!(builder.program.to_string_lossy(), "echo");
         assert_eq!(builder.args, vec!["hello", "world"]);
-        assert_eq!(builder.envs, vec![("TEST_VAR".to_string(), "value".to_string())]);
+        assert_eq!(
+            builder.envs,
+            vec![("TEST_VAR".to_string(), "value".to_string())]
+        );
         assert_eq!(builder.current_dir, Some(PathBuf::from("/tmp")));
     }
 

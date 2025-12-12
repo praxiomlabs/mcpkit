@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 /// of data: files, database entries, API endpoints, etc.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Resource {
-    /// URI identifying the resource (e.g., "file:///path", "myserver://data/123").
+    /// URI identifying the resource (e.g., "<file:///path>", "<myserver://data/123>").
     pub uri: String,
     /// Human-readable name for the resource.
     pub name: String,
@@ -60,7 +60,7 @@ impl Resource {
 
     /// Set the size.
     #[must_use]
-    pub fn size(mut self, size: u64) -> Self {
+    pub const fn size(mut self, size: u64) -> Self {
         self.size = Some(size);
         self
     }
@@ -95,7 +95,7 @@ pub struct ResourceAnnotations {
 /// where the URI contains placeholders like `{id}` or `{query}`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResourceTemplate {
-    /// URI template with placeholders (e.g., "myserver://users/{userId}").
+    /// URI template with placeholders (e.g., "<myserver://users/{userId>}").
     #[serde(rename = "uriTemplate")]
     pub uri_template: String,
     /// Human-readable name for this resource type.
@@ -172,7 +172,10 @@ impl ResourceContents {
     /// # Errors
     ///
     /// Returns an error if serialization fails.
-    pub fn json<T: Serialize>(uri: impl Into<String>, value: &T) -> Result<Self, serde_json::Error> {
+    pub fn json<T: Serialize>(
+        uri: impl Into<String>,
+        value: &T,
+    ) -> Result<Self, serde_json::Error> {
         let json = serde_json::to_string_pretty(value)?;
         Ok(Self {
             uri: uri.into(),
@@ -196,13 +199,13 @@ impl ResourceContents {
 
     /// Check if this is text content.
     #[must_use]
-    pub fn is_text(&self) -> bool {
+    pub const fn is_text(&self) -> bool {
         self.text.is_some()
     }
 
     /// Check if this is binary content.
     #[must_use]
-    pub fn is_blob(&self) -> bool {
+    pub const fn is_blob(&self) -> bool {
         self.blob.is_some()
     }
 

@@ -10,7 +10,7 @@
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use mcpkit_core::{
-    protocol::{Request, Response, RequestId},
+    protocol::{Request, RequestId, Response},
     types::{CallToolResult, Tool, ToolAnnotations},
 };
 use serde_json::json;
@@ -59,8 +59,7 @@ fn simulate_tool_handler(iterations: u64) -> Vec<CallToolResult> {
 
     for i in 0..iterations {
         let result = CallToolResult::text(format!(
-            "Result for iteration {} with some additional content to make it more realistic in size",
-            i
+            "Result for iteration {i} with some additional content to make it more realistic in size"
         ));
         results.push(result);
     }
@@ -73,8 +72,8 @@ fn simulate_tool_registry(num_tools: usize) -> HashMap<String, Tool> {
     let mut registry = HashMap::with_capacity(num_tools);
 
     for i in 0..num_tools {
-        let tool = Tool::new(format!("tool_{}", i))
-            .description(format!("A test tool number {}", i))
+        let tool = Tool::new(format!("tool_{i}"))
+            .description(format!("A test tool number {i}"))
             .input_schema(json!({
                 "type": "object",
                 "properties": {
@@ -85,7 +84,7 @@ fn simulate_tool_registry(num_tools: usize) -> HashMap<String, Tool> {
             }))
             .annotations(ToolAnnotations::read_only());
 
-        registry.insert(format!("tool_{}", i), tool);
+        registry.insert(format!("tool_{i}"), tool);
     }
 
     registry
@@ -239,7 +238,7 @@ fn bench_string_allocation(c: &mut Criterion) {
         let mut i = 0u64;
         b.iter(|| {
             i += 1;
-            black_box(format!("msg_{}", i))
+            black_box(format!("msg_{i}"))
         });
     });
 
@@ -248,8 +247,7 @@ fn bench_string_allocation(c: &mut Criterion) {
         b.iter(|| {
             i += 1;
             black_box(format!(
-                "This is a longer message with more content: {} and some padding to make it realistic",
-                i
+                "This is a longer message with more content: {i} and some padding to make it realistic"
             ))
         });
     });
@@ -259,7 +257,7 @@ fn bench_string_allocation(c: &mut Criterion) {
         b.iter(|| {
             let mut s = String::with_capacity(100);
             for i in 0..10 {
-                s.push_str(&format!("part_{}", i));
+                s.push_str(&format!("part_{i}"));
             }
             black_box(s)
         });
@@ -267,7 +265,7 @@ fn bench_string_allocation(c: &mut Criterion) {
 
     group.bench_function("concat_collect", |b| {
         b.iter(|| {
-            let s: String = (0..10).map(|i| format!("part_{}", i)).collect();
+            let s: String = (0..10).map(|i| format!("part_{i}")).collect();
             black_box(s)
         });
     });

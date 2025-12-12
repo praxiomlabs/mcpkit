@@ -68,19 +68,19 @@ pub enum TaskStatus {
 impl TaskStatus {
     /// Check if the task is in a terminal state.
     #[must_use]
-    pub fn is_terminal(&self) -> bool {
+    pub const fn is_terminal(&self) -> bool {
         matches!(self, Self::Completed | Self::Failed | Self::Cancelled)
     }
 
     /// Check if the task is actively running.
     #[must_use]
-    pub fn is_running(&self) -> bool {
+    pub const fn is_running(&self) -> bool {
         matches!(self, Self::Running)
     }
 
     /// Check if the task is pending.
     #[must_use]
-    pub fn is_pending(&self) -> bool {
+    pub const fn is_pending(&self) -> bool {
         matches!(self, Self::Pending)
     }
 }
@@ -113,7 +113,7 @@ pub struct TaskProgress {
 impl TaskProgress {
     /// Create new progress information.
     #[must_use]
-    pub fn new(current: u64) -> Self {
+    pub const fn new(current: u64) -> Self {
         Self {
             current,
             total: None,
@@ -123,7 +123,7 @@ impl TaskProgress {
 
     /// Set the total progress value.
     #[must_use]
-    pub fn total(mut self, total: u64) -> Self {
+    pub const fn total(mut self, total: u64) -> Self {
         self.total = Some(total);
         self
     }
@@ -308,7 +308,7 @@ impl From<&Task> for TaskSummary {
             status: task.status,
             tool: task.tool.clone(),
             description: task.description.clone(),
-            progress: task.progress.as_ref().and_then(|p| p.percentage()),
+            progress: task.progress.as_ref().and_then(TaskProgress::percentage),
         }
     }
 }
@@ -369,7 +369,7 @@ pub struct TaskStatusNotification {
 impl TaskStatusNotification {
     /// Create a running notification.
     #[must_use]
-    pub fn running(id: TaskId) -> Self {
+    pub const fn running(id: TaskId) -> Self {
         Self {
             id,
             status: TaskStatus::Running,
@@ -381,7 +381,7 @@ impl TaskStatusNotification {
 
     /// Create a progress notification.
     #[must_use]
-    pub fn progress(id: TaskId, progress: TaskProgress) -> Self {
+    pub const fn progress(id: TaskId, progress: TaskProgress) -> Self {
         Self {
             id,
             status: TaskStatus::Running,
@@ -393,7 +393,7 @@ impl TaskStatusNotification {
 
     /// Create a completed notification.
     #[must_use]
-    pub fn completed(id: TaskId, result: Value) -> Self {
+    pub const fn completed(id: TaskId, result: Value) -> Self {
         Self {
             id,
             status: TaskStatus::Completed,
@@ -405,7 +405,7 @@ impl TaskStatusNotification {
 
     /// Create a failed notification.
     #[must_use]
-    pub fn failed(id: TaskId, error: TaskError) -> Self {
+    pub const fn failed(id: TaskId, error: TaskError) -> Self {
         Self {
             id,
             status: TaskStatus::Failed,
@@ -417,7 +417,7 @@ impl TaskStatusNotification {
 
     /// Create a cancelled notification.
     #[must_use]
-    pub fn cancelled(id: TaskId) -> Self {
+    pub const fn cancelled(id: TaskId) -> Self {
         Self {
             id,
             status: TaskStatus::Cancelled,
@@ -456,7 +456,10 @@ mod tests {
     fn test_task_failure() {
         let mut task = Task::create();
         task.start();
-        task.fail(TaskError::new(-1, "Something went wrong").data(serde_json::json!({"details": "error"})));
+        task.fail(
+            TaskError::new(-1, "Something went wrong")
+                .data(serde_json::json!({"details": "error"})),
+        );
 
         assert_eq!(task.status, TaskStatus::Failed);
         assert!(task.status.is_terminal());
@@ -475,7 +478,9 @@ mod tests {
 
     #[test]
     fn test_task_summary() {
-        let mut task = Task::create().tool("process").description("Processing files");
+        let mut task = Task::create()
+            .tool("process")
+            .description("Processing files");
         task.start();
         task.update_progress(TaskProgress::new(25).total(100));
 
@@ -510,16 +515,12 @@ mod tests {
         let running = TaskStatusNotification::running(id.clone());
         assert_eq!(running.status, TaskStatus::Running);
 
-        let progress = TaskStatusNotification::progress(
-            id.clone(),
-            TaskProgress::new(50).total(100),
-        );
+        let progress =
+            TaskStatusNotification::progress(id.clone(), TaskProgress::new(50).total(100));
         assert!(progress.progress.is_some());
 
-        let completed = TaskStatusNotification::completed(
-            id.clone(),
-            serde_json::json!({"data": "result"}),
-        );
+        let completed =
+            TaskStatusNotification::completed(id, serde_json::json!({"data": "result"}));
         assert_eq!(completed.status, TaskStatus::Completed);
         assert!(completed.result.is_some());
     }

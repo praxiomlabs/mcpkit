@@ -110,34 +110,38 @@ impl ToolMethod {
         let tool_name = &self.tool_name;
 
         // Generate parameter extraction
-        let param_extractions: Vec<_> = self.params.iter().map(|param| {
-            let name = &param.name;
-            let name_str = name.to_string();
-            let ty = &param.ty;
+        let param_extractions: Vec<_> = self
+            .params
+            .iter()
+            .map(|param| {
+                let name = &param.name;
+                let name_str = name.to_string();
+                let ty = &param.ty;
 
-            if param.is_optional {
-                quote! {
-                    let #name: #ty = args.get(#name_str)
-                        .and_then(|v| ::serde_json::from_value(v.clone()).ok());
+                if param.is_optional {
+                    quote! {
+                        let #name: #ty = args.get(#name_str)
+                            .and_then(|v| ::serde_json::from_value(v.clone()).ok());
+                    }
+                } else {
+                    // Use a different variable name for the Value to avoid type conflict
+                    let value_var = quote::format_ident!("__{}_value", name);
+                    quote! {
+                        let #value_var = args.get(#name_str)
+                            .ok_or_else(|| ::mcpkit_core::error::McpError::invalid_params(
+                                #tool_name,
+                                format!("missing required parameter: {}", #name_str),
+                            ))?
+                            .clone();
+                        let #name: #ty = ::serde_json::from_value(#value_var)
+                            .map_err(|e| ::mcpkit_core::error::McpError::invalid_params(
+                                #tool_name,
+                                format!("invalid parameter '{}': {}", #name_str, e),
+                            ))?;
+                    }
                 }
-            } else {
-                // Use a different variable name for the Value to avoid type conflict
-                let value_var = quote::format_ident!("__{}_value", name);
-                quote! {
-                    let #value_var = args.get(#name_str)
-                        .ok_or_else(|| ::mcpkit_core::error::McpError::invalid_params(
-                            #tool_name,
-                            format!("missing required parameter: {}", #name_str),
-                        ))?
-                        .clone();
-                    let #name: #ty = ::serde_json::from_value(#value_var)
-                        .map_err(|e| ::mcpkit_core::error::McpError::invalid_params(
-                            #tool_name,
-                            format!("invalid parameter '{}': {}", #name_str, e),
-                        ))?;
-                }
-            }
-        }).collect();
+            })
+            .collect();
 
         let param_names: Vec<_> = self.params.iter().map(|p| &p.name).collect();
 
@@ -164,61 +168,60 @@ impl ToolMethod {
 
 /// Convert a Rust type to a JSON Schema representation.
 fn type_to_json_schema(ty: &Type) -> TokenStream {
-    match ty {
-        Type::Path(path) => {
-            let path_str = quote!(#path).to_string().replace(' ', "");
+    if let Type::Path(path) = ty {
+        let path_str = quote!(#path).to_string().replace(' ', "");
 
-            // Handle common types
-            match path_str.as_str() {
-                "String" | "&str" | "str" => quote!(::serde_json::json!({"type": "string"})),
-                "i8" | "i16" | "i32" | "i64" | "i128" | "isize" | "u8" | "u16" | "u32" | "u64"
-                | "u128" | "usize" => {
-                    quote!(::serde_json::json!({"type": "integer"}))
-                }
-                "f32" | "f64" => quote!(::serde_json::json!({"type": "number"})),
-                "bool" => quote!(::serde_json::json!({"type": "boolean"})),
-                _ if path_str.starts_with("Option<") => {
-                    // Extract inner type and make it nullable
-                    if let Some(segment) = path.path.segments.last() {
-                        if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                            if let Some(syn::GenericArgument::Type(inner)) = args.args.first() {
-                                let inner_schema = type_to_json_schema(inner);
-                                return quote! {
-                                    {
-                                        let mut schema = #inner_schema;
-                                        // Option types are nullable
-                                        schema
-                                    }
-                                };
-                            }
+        // Handle common types
+        match path_str.as_str() {
+            "String" | "&str" | "str" => quote!(::serde_json::json!({"type": "string"})),
+            "i8" | "i16" | "i32" | "i64" | "i128" | "isize" | "u8" | "u16" | "u32" | "u64"
+            | "u128" | "usize" => {
+                quote!(::serde_json::json!({"type": "integer"}))
+            }
+            "f32" | "f64" => quote!(::serde_json::json!({"type": "number"})),
+            "bool" => quote!(::serde_json::json!({"type": "boolean"})),
+            _ if path_str.starts_with("Option<") => {
+                // Extract inner type and make it nullable
+                if let Some(segment) = path.path.segments.last() {
+                    if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                        if let Some(syn::GenericArgument::Type(inner)) = args.args.first() {
+                            let inner_schema = type_to_json_schema(inner);
+                            return quote! {
+                                {
+                                    let mut schema = #inner_schema;
+                                    // Option types are nullable
+                                    schema
+                                }
+                            };
                         }
                     }
-                    quote!(::serde_json::json!({}))
                 }
-                _ if path_str.starts_with("Vec<") => {
-                    // Handle Vec<T>
-                    if let Some(segment) = path.path.segments.last() {
-                        if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                            if let Some(syn::GenericArgument::Type(inner)) = args.args.first() {
-                                let inner_schema = type_to_json_schema(inner);
-                                return quote! {
-                                    ::serde_json::json!({
-                                        "type": "array",
-                                        "items": #inner_schema
-                                    })
-                                };
-                            }
+                quote!(::serde_json::json!({}))
+            }
+            _ if path_str.starts_with("Vec<") => {
+                // Handle Vec<T>
+                if let Some(segment) = path.path.segments.last() {
+                    if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                        if let Some(syn::GenericArgument::Type(inner)) = args.args.first() {
+                            let inner_schema = type_to_json_schema(inner);
+                            return quote! {
+                                ::serde_json::json!({
+                                    "type": "array",
+                                    "items": #inner_schema
+                                })
+                            };
                         }
                     }
-                    quote!(::serde_json::json!({"type": "array"}))
                 }
-                _ => {
-                    // Default to object for unknown types
-                    quote!(::serde_json::json!({"type": "object"}))
-                }
+                quote!(::serde_json::json!({"type": "array"}))
+            }
+            _ => {
+                // Default to object for unknown types
+                quote!(::serde_json::json!({"type": "object"}))
             }
         }
-        _ => quote!(::serde_json::json!({})),
+    } else {
+        quote!(::serde_json::json!({}))
     }
 }
 

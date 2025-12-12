@@ -34,10 +34,7 @@ impl Content {
 
     /// Create text content with annotations.
     #[must_use]
-    pub fn text_with_annotations(
-        text: impl Into<String>,
-        annotations: ContentAnnotations,
-    ) -> Self {
+    pub fn text_with_annotations(text: impl Into<String>, annotations: ContentAnnotations) -> Self {
         Self::Text(TextContent {
             text: text.into(),
             annotations: Some(annotations),
@@ -78,25 +75,25 @@ impl Content {
 
     /// Check if this is text content.
     #[must_use]
-    pub fn is_text(&self) -> bool {
+    pub const fn is_text(&self) -> bool {
         matches!(self, Self::Text(_))
     }
 
     /// Check if this is image content.
     #[must_use]
-    pub fn is_image(&self) -> bool {
+    pub const fn is_image(&self) -> bool {
         matches!(self, Self::Image(_))
     }
 
     /// Check if this is audio content.
     #[must_use]
-    pub fn is_audio(&self) -> bool {
+    pub const fn is_audio(&self) -> bool {
         matches!(self, Self::Audio(_))
     }
 
     /// Check if this is a resource reference.
     #[must_use]
-    pub fn is_resource(&self) -> bool {
+    pub const fn is_resource(&self) -> bool {
         matches!(self, Self::Resource(_))
     }
 

@@ -53,9 +53,9 @@ async fn main() -> Result<(), McpError> {
     println!("Has tools: {}", caps.has_tools());
 
     // Set up owned data for creating contexts
+    use mcpkit::server::NoOpPeer;
     use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
     use mcpkit_core::protocol::RequestId;
-    use mcpkit::server::NoOpPeer;
 
     let request_id = RequestId::Number(1);
     let client_caps = ClientCapabilities::default();
@@ -65,7 +65,7 @@ async fn main() -> Result<(), McpError> {
     // Create context using owned data and references
     let ctx = Context::new(
         &request_id,
-        None,  // No progress token
+        None, // No progress token
         &client_caps,
         &server_caps,
         &peer,
@@ -75,7 +75,11 @@ async fn main() -> Result<(), McpError> {
     println!();
     println!("Available tools:");
     for tool in &tools {
-        println!("  - {} : {}", tool.name, tool.description.as_deref().unwrap_or(""));
+        println!(
+            "  - {} : {}",
+            tool.name,
+            tool.description.as_deref().unwrap_or("")
+        );
     }
 
     // Call a tool
@@ -99,7 +103,8 @@ async fn main() -> Result<(), McpError> {
     println!();
     println!("Calling multiply(4, 5)...");
     let args = serde_json::json!({"a": 4.0, "b": 5.0});
-    let result = <Calculator as ToolHandler>::call_tool(&calculator, "multiply", args, &ctx).await?;
+    let result =
+        <Calculator as ToolHandler>::call_tool(&calculator, "multiply", args, &ctx).await?;
     match result {
         ToolOutput::Success(r) => {
             for content in &r.content {
@@ -120,9 +125,9 @@ async fn main() -> Result<(), McpError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mcpkit::server::{Context, NoOpPeer};
     use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
     use mcpkit_core::protocol::RequestId;
-    use mcpkit::server::{NoOpPeer, Context};
 
     // Helper struct to hold owned data for tests
     struct TestContext {
@@ -170,7 +175,9 @@ mod tests {
     async fn test_list_tools() {
         let test_ctx = TestContext::new();
         let ctx = test_ctx.as_context();
-        let tools = <Calculator as ToolHandler>::list_tools(&Calculator, &ctx).await.unwrap();
+        let tools = <Calculator as ToolHandler>::list_tools(&Calculator, &ctx)
+            .await
+            .unwrap();
         assert_eq!(tools.len(), 2);
         assert_eq!(tools[0].name, "add");
         assert_eq!(tools[1].name, "multiply");
@@ -226,7 +233,8 @@ mod tests {
         let test_ctx = TestContext::new();
         let ctx = test_ctx.as_context();
         let args = serde_json::json!({});
-        let result = <Calculator as ToolHandler>::call_tool(&Calculator, "unknown", args, &ctx).await;
+        let result =
+            <Calculator as ToolHandler>::call_tool(&Calculator, "unknown", args, &ctx).await;
         assert!(result.is_err());
     }
 }

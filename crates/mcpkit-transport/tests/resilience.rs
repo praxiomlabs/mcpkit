@@ -7,10 +7,10 @@
 //! - Resource exhaustion scenarios
 //! - Graceful degradation
 
+use mcpkit_core::protocol::{Message, Notification, Request, RequestId};
 use mcpkit_transport::memory::MemoryTransport;
 use mcpkit_transport::pool::{Pool, PoolConfig};
 use mcpkit_transport::traits::Transport;
-use mcpkit_core::protocol::{Message, Notification, Request, RequestId};
 use serde_json::json;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
@@ -34,7 +34,11 @@ async fn test_graceful_close_and_reconnect() {
     assert!(!client.is_connected());
 
     // Send should fail gracefully after close
-    let msg = Message::Request(Request::with_params("test", RequestId::Number(1), json!({})));
+    let msg = Message::Request(Request::with_params(
+        "test",
+        RequestId::Number(1),
+        json!({}),
+    ));
     let result = client.send(msg).await;
     // After closing, send may succeed (if channel still open) or fail
     // The important thing is it doesn't panic
@@ -132,7 +136,11 @@ async fn test_concurrent_sends() {
     client.close().await.unwrap();
     let _ = receiver.await;
 
-    assert_eq!(recv_count.load(Ordering::Relaxed), 100, "Should receive all 100 messages");
+    assert_eq!(
+        recv_count.load(Ordering::Relaxed),
+        100,
+        "Should receive all 100 messages"
+    );
 }
 
 #[tokio::test]
@@ -177,7 +185,10 @@ async fn test_concurrent_send_and_receive() {
     sender.await.unwrap();
     let received = receiver.await.unwrap();
 
-    assert_eq!(received, messages_to_send, "All messages should be received");
+    assert_eq!(
+        received, messages_to_send,
+        "All messages should be received"
+    );
 }
 
 // =============================================================================
@@ -222,16 +233,19 @@ async fn test_partial_close_behavior() {
     client.close().await.unwrap();
 
     // We should have received the messages
-    assert_eq!(received, 5, "Should receive all 5 pending messages (got {})", received);
+    assert_eq!(
+        received, 5,
+        "Should receive all 5 pending messages (got {received})"
+    );
 
     // After close, recv should eventually return None or error
     let result = timeout(Duration::from_millis(100), server.recv()).await;
     // This should either timeout, return None, or return error
     match result {
-        Ok(Ok(Some(_))) => {}, // Unexpected but not a failure - buffer might have more
-        Ok(Ok(None)) => {},    // Expected - channel closed
-        Ok(Err(_)) => {},      // Expected - error on closed channel
-        Err(_) => {},          // Expected - timeout
+        Ok(Ok(Some(_))) => {} // Unexpected but not a failure - buffer might have more
+        Ok(Ok(None)) => {}    // Expected - channel closed
+        Ok(Err(_)) => {}      // Expected - error on closed channel
+        Err(_) => {}          // Expected - timeout
     }
 }
 
@@ -370,7 +384,10 @@ async fn test_message_counters_accurate() {
 
     // Receive all messages
     let mut recv_count = 0;
-    while let Ok(Some(_)) = timeout(Duration::from_millis(100), server.recv()).await.unwrap_or(Ok(None)) {
+    while let Ok(Some(_)) = timeout(Duration::from_millis(100), server.recv())
+        .await
+        .unwrap_or(Ok(None))
+    {
         recv_count += 1;
     }
 
@@ -443,18 +460,14 @@ async fn test_error_messages_are_descriptive() {
     let err = client.send(msg).await.unwrap_err();
 
     // Error should have meaningful message
-    let err_msg = format!("{}", err);
-    assert!(
-        !err_msg.is_empty(),
-        "Error message should not be empty"
-    );
+    let err_msg = format!("{err}");
+    assert!(!err_msg.is_empty(), "Error message should not be empty");
 
     // Debug representation should also be meaningful
-    let debug_msg = format!("{:?}", err);
+    let debug_msg = format!("{err:?}");
     assert!(
         debug_msg.len() > 10,
-        "Debug message should have details: {}",
-        debug_msg
+        "Debug message should have details: {debug_msg}"
     );
 }
 
@@ -473,7 +486,9 @@ async fn test_operations_on_closed_transport() {
     assert!(!client.is_connected());
 
     // Send should fail but not panic
-    let send_result = client.send(Message::Notification(Notification::new("test"))).await;
+    let send_result = client
+        .send(Message::Notification(Notification::new("test")))
+        .await;
     assert!(send_result.is_err());
 
     // Recv should fail or return None, not panic
@@ -563,7 +578,7 @@ async fn test_message_ordering_preserved() {
                 let seq = params["seq"].as_i64().unwrap();
                 assert_eq!(seq, expected, "Messages should be in order");
             }
-            other => panic!("Expected notification, got {:?}", other),
+            other => panic!("Expected notification, got {other:?}"),
         }
     }
 }

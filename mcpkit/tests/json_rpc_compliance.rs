@@ -94,8 +94,7 @@ fn test_notification_serialization() {
 
 #[test]
 fn test_notification_with_params() {
-    let notification =
-        Notification::with_params("notifications/progress", json!({"progress": 50}));
+    let notification = Notification::with_params("notifications/progress", json!({"progress": 50}));
 
     let json = serde_json::to_value(&notification).unwrap();
 
@@ -194,7 +193,7 @@ fn test_null_id_handling() {
     });
 
     // Should be parsed as a notification (no valid ID)
-    let result: Result<Request, _> = serde_json::from_value(json.clone());
+    let result: Result<Request, _> = serde_json::from_value(json);
     // The behavior depends on implementation - either parse as null ID or fail
     // For MCP, we typically want numeric or string IDs
     let _ = result;

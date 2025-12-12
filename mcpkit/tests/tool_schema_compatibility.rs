@@ -6,8 +6,8 @@
 //! The tests ensure:
 //! 1. Tool definitions serialize to the correct JSON format
 //! 2. Field names use correct camelCase (inputSchema, isError, etc.)
-//! 3. CallToolResult format matches the specification
-//! 4. ListToolsResult format is compatible
+//! 3. `CallToolResult` format matches the specification
+//! 4. `ListToolsResult` format is compatible
 //! 5. Tool annotations serialize correctly
 
 use mcpkit::types::tool::{
@@ -427,10 +427,7 @@ fn test_tool_deserialization_from_rmcp_format() {
     let tool: Tool = serde_json::from_value(rmcp_tool_json).unwrap();
 
     assert_eq!(tool.name, "calculate");
-    assert_eq!(
-        tool.description.as_deref(),
-        Some("Perform a calculation")
-    );
+    assert_eq!(tool.description.as_deref(), Some("Perform a calculation"));
     assert_eq!(tool.input_schema["type"], "object");
 }
 
@@ -575,14 +572,19 @@ fn test_tools_list_response_matches_mcp_spec() {
 #[test]
 fn test_tools_call_response_matches_mcp_spec() {
     // Create a tools/call response as per MCP spec
-    let result = CallToolResult::text("Current weather in New York:\nTemperature: 72°F\nConditions: Partly cloudy");
+    let result = CallToolResult::text(
+        "Current weather in New York:\nTemperature: 72°F\nConditions: Partly cloudy",
+    );
 
     let json = serde_json::to_value(&result).unwrap();
 
     // Verify MCP-compliant structure
     assert!(json["content"].is_array());
     assert_eq!(json["content"][0]["type"], "text");
-    assert!(json["content"][0]["text"].as_str().unwrap().contains("72°F"));
+    assert!(json["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .contains("72°F"));
 }
 
 // =============================================================================
@@ -599,7 +601,10 @@ fn test_empty_input_schema() {
     let json = serde_json::to_value(&tool).unwrap();
 
     assert_eq!(json["inputSchema"]["type"], "object");
-    assert!(json["inputSchema"]["properties"].as_object().unwrap().is_empty());
+    assert!(json["inputSchema"]["properties"]
+        .as_object()
+        .unwrap()
+        .is_empty());
 }
 
 #[test]

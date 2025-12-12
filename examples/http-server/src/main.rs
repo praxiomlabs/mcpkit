@@ -35,15 +35,12 @@ use mcpkit_core::{
     capability::{ClientCapabilities, ServerCapabilities, ServerInfo},
     error::JsonRpcError,
     protocol::{Message, Request, Response as JsonRpcResponse},
-    types::{CallToolResult, GetPromptResult, Prompt, Resource, ResourceContents, Tool, ToolOutput},
+    types::{
+        CallToolResult, GetPromptResult, Prompt, Resource, ResourceContents, Tool, ToolOutput,
+    },
 };
 use serde_json::{json, Value};
-use std::{
-    collections::HashMap,
-    convert::Infallible,
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::HashMap, convert::Infallible, sync::Arc, time::Duration};
 use tokio::sync::{broadcast, RwLock};
 use tracing::{info, warn};
 
@@ -159,8 +156,7 @@ fn get_tools() -> Vec<Tool> {
         Tool::new("echo")
             .description("Echo back the input message")
             .with_string_param("message", "Message to echo", true),
-        Tool::new("get_time")
-            .description("Get the current server time"),
+        Tool::new("get_time").description("Get the current server time"),
     ]
 }
 
@@ -259,7 +255,10 @@ fn read_resource(uri: &str) -> Result<ResourceContents, String> {
 }
 
 /// Get a prompt.
-fn get_prompt(name: &str, args: Option<&serde_json::Map<String, Value>>) -> Result<GetPromptResult, String> {
+fn get_prompt(
+    name: &str,
+    args: Option<&serde_json::Map<String, Value>>,
+) -> Result<GetPromptResult, String> {
     match name {
         "calculator" => {
             let operation = args
@@ -287,11 +286,7 @@ fn get_prompt(name: &str, args: Option<&serde_json::Map<String, Value>>) -> Resu
 }
 
 /// Handle incoming JSON-RPC request.
-async fn handle_request(
-    state: &AppState,
-    session_id: &str,
-    request: &Request,
-) -> JsonRpcResponse {
+async fn handle_request(state: &AppState, session_id: &str, request: &Request) -> JsonRpcResponse {
     let method: &str = &request.method;
     let params = request.params.clone().unwrap_or(Value::Null);
 
@@ -524,10 +519,7 @@ async fn handle_mcp_post(
 }
 
 /// Handle GET requests with SSE streaming.
-async fn handle_mcp_sse(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> Response {
+async fn handle_mcp_sse(State(state): State<AppState>, headers: HeaderMap) -> Response {
     // Check Accept header
     let accept = headers
         .get(axum::http::header::ACCEPT)
@@ -590,10 +582,7 @@ async fn handle_mcp_sse(
 }
 
 /// Handle DELETE requests to close sessions.
-async fn handle_mcp_delete(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> Response {
+async fn handle_mcp_delete(State(state): State<AppState>, headers: HeaderMap) -> Response {
     let session_id = match headers
         .get(MCP_SESSION_ID_HEADER)
         .and_then(|v| v.to_str().ok())

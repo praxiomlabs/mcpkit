@@ -67,9 +67,7 @@
 //! assert!(server.capabilities().has_tools());
 //! ```
 
-use crate::handler::{
-    PromptHandler, ResourceHandler, ServerHandler, TaskHandler, ToolHandler,
-};
+use crate::handler::{PromptHandler, ResourceHandler, ServerHandler, TaskHandler, ToolHandler};
 use mcpkit_core::capability::ServerCapabilities;
 
 /// Marker type indicating no handler is registered for a capability.
@@ -103,7 +101,9 @@ pub struct ServerBuilder<H, Tools, Resources, Prompts, Tasks> {
 }
 
 // Initial builder with no handlers registered
-impl<H: ServerHandler> ServerBuilder<H, NotRegistered, NotRegistered, NotRegistered, NotRegistered> {
+impl<H: ServerHandler>
+    ServerBuilder<H, NotRegistered, NotRegistered, NotRegistered, NotRegistered>
+{
     /// Create a new server builder with the given base handler.
     ///
     /// The base handler must implement `ServerHandler` and provides
@@ -139,7 +139,7 @@ where
 
     /// Get a reference to the current capabilities.
     #[must_use]
-    pub fn get_capabilities(&self) -> &ServerCapabilities {
+    pub const fn get_capabilities(&self) -> &ServerCapabilities {
         &self.capabilities
     }
 }
@@ -154,7 +154,10 @@ where
     /// This method is only available when no tool handler has been registered yet.
     /// Attempting to register tools twice will result in a compile error.
     #[must_use]
-    pub fn with_tools<TH: ToolHandler>(self, tools: TH) -> ServerBuilder<H, Registered<TH>, R, P, K> {
+    pub fn with_tools<TH: ToolHandler>(
+        self,
+        tools: TH,
+    ) -> ServerBuilder<H, Registered<TH>, R, P, K> {
         ServerBuilder {
             handler: self.handler,
             tools: Registered(tools),
@@ -175,7 +178,10 @@ where
     ///
     /// This method is only available when no resource handler has been registered yet.
     #[must_use]
-    pub fn with_resources<RH: ResourceHandler>(self, resources: RH) -> ServerBuilder<H, T, Registered<RH>, P, K> {
+    pub fn with_resources<RH: ResourceHandler>(
+        self,
+        resources: RH,
+    ) -> ServerBuilder<H, T, Registered<RH>, P, K> {
         ServerBuilder {
             handler: self.handler,
             tools: self.tools,
@@ -196,7 +202,10 @@ where
     ///
     /// This method is only available when no prompt handler has been registered yet.
     #[must_use]
-    pub fn with_prompts<PH: PromptHandler>(self, prompts: PH) -> ServerBuilder<H, T, R, Registered<PH>, K> {
+    pub fn with_prompts<PH: PromptHandler>(
+        self,
+        prompts: PH,
+    ) -> ServerBuilder<H, T, R, Registered<PH>, K> {
         ServerBuilder {
             handler: self.handler,
             tools: self.tools,
@@ -220,7 +229,10 @@ where
     ///
     /// This method is only available when no task handler has been registered yet.
     #[must_use]
-    pub fn with_tasks<KH: TaskHandler>(self, tasks: KH) -> ServerBuilder<H, T, R, P, Registered<KH>> {
+    pub fn with_tasks<KH: TaskHandler>(
+        self,
+        tasks: KH,
+    ) -> ServerBuilder<H, T, R, P, Registered<KH>> {
         ServerBuilder {
             handler: self.handler,
             tools: self.tools,
@@ -281,13 +293,13 @@ where
 {
     /// Get the server's capabilities.
     #[must_use]
-    pub fn capabilities(&self) -> &ServerCapabilities {
+    pub const fn capabilities(&self) -> &ServerCapabilities {
         &self.capabilities
     }
 
     /// Get a reference to the base handler.
     #[must_use]
-    pub fn handler(&self) -> &H {
+    pub const fn handler(&self) -> &H {
         &self.handler
     }
 
@@ -306,7 +318,7 @@ where
 {
     /// Get a reference to the tool handler.
     #[must_use]
-    pub fn tool_handler(&self) -> &TH {
+    pub const fn tool_handler(&self) -> &TH {
         &self.tools.0
     }
 }
@@ -319,7 +331,7 @@ where
 {
     /// Get a reference to the resource handler.
     #[must_use]
-    pub fn resource_handler(&self) -> &RH {
+    pub const fn resource_handler(&self) -> &RH {
         &self.resources.0
     }
 }
@@ -332,7 +344,7 @@ where
 {
     /// Get a reference to the prompt handler.
     #[must_use]
-    pub fn prompt_handler(&self) -> &PH {
+    pub const fn prompt_handler(&self) -> &PH {
         &self.prompts.0
     }
 }
@@ -345,13 +357,14 @@ where
 {
     /// Get a reference to the task handler.
     #[must_use]
-    pub fn task_handler(&self) -> &KH {
+    pub const fn task_handler(&self) -> &KH {
         &self.tasks.0
     }
 }
 
 /// Type alias for a fully-configured server with all handlers.
-pub type FullServer<H, TH, RH, PH, KH> = Server<H, Registered<TH>, Registered<RH>, Registered<PH>, Registered<KH>>;
+pub type FullServer<H, TH, RH, PH, KH> =
+    Server<H, Registered<TH>, Registered<RH>, Registered<PH>, Registered<KH>>;
 
 /// Type alias for a minimal server with no optional handlers.
 pub type MinimalServer<H> = Server<H, NotRegistered, NotRegistered, NotRegistered, NotRegistered>;
@@ -359,9 +372,9 @@ pub type MinimalServer<H> = Server<H, NotRegistered, NotRegistered, NotRegistere
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mcpkit_core::capability::ServerInfo;
-    use crate::handler::ToolHandler;
     use crate::context::Context;
+    use crate::handler::ToolHandler;
+    use mcpkit_core::capability::ServerInfo;
     use mcpkit_core::error::McpError;
     use mcpkit_core::types::{Tool, ToolOutput};
     use serde_json::Value;
@@ -385,7 +398,12 @@ mod tests {
             Ok(vec![])
         }
 
-        async fn call_tool(&self, _name: &str, _args: Value, _ctx: &Context<'_>) -> Result<ToolOutput, McpError> {
+        async fn call_tool(
+            &self,
+            _name: &str,
+            _args: Value,
+            _ctx: &Context<'_>,
+        ) -> Result<ToolOutput, McpError> {
             Ok(ToolOutput::text("test"))
         }
     }
@@ -427,10 +445,15 @@ mod tests {
             .build();
 
         // Different order, same result
-        let _server2: Server<TestHandler, Registered<TestToolHandler>, NotRegistered, NotRegistered, NotRegistered> =
-            ServerBuilder::new(TestHandler)
-                .with_tools(TestToolHandler)
-                .build();
+        let _server2: Server<
+            TestHandler,
+            Registered<TestToolHandler>,
+            NotRegistered,
+            NotRegistered,
+            NotRegistered,
+        > = ServerBuilder::new(TestHandler)
+            .with_tools(TestToolHandler)
+            .build();
 
         assert!(server1.capabilities().has_tools());
     }

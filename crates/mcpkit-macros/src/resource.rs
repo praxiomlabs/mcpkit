@@ -28,9 +28,7 @@ pub fn expand_resource(attr: TokenStream, item: TokenStream) -> Result<TokenStre
 
     // Extract info
     let uri_pattern = &attrs.uri_pattern;
-    let resource_name = attrs
-        .name
-        .unwrap_or_else(|| method.sig.ident.to_string());
+    let resource_name = attrs.name.unwrap_or_else(|| method.sig.ident.to_string());
     let description = attrs.description.unwrap_or_default();
     let mime_type = attrs.mime_type.unwrap_or_else(|| "text/plain".to_string());
 

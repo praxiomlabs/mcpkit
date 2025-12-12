@@ -279,7 +279,10 @@ fn test_negotiate_version_detailed_accepted() {
 #[test]
 fn test_negotiate_version_detailed_counter_offer() {
     let result = negotiate_version_detailed("1.0.0");
-    assert!(matches!(result, VersionNegotiationResult::CounterOffer { .. }));
+    assert!(matches!(
+        result,
+        VersionNegotiationResult::CounterOffer { .. }
+    ));
     assert!(!result.is_exact_match());
     assert_eq!(result.version(), PROTOCOL_VERSION);
 

@@ -119,7 +119,12 @@ impl ClientBuilder {
     pub async fn build<T: Transport + 'static>(self, transport: T) -> Result<Client<T>, McpError> {
         let client_info = ClientInfo::new(&self.name, &self.version);
         let init_result = initialize(&transport, &client_info, &self.capabilities).await?;
-        Ok(Client::new(transport, init_result, client_info, self.capabilities))
+        Ok(Client::new(
+            transport,
+            init_result,
+            client_info,
+            self.capabilities,
+        ))
     }
 
     /// Build and connect the client with a custom handler.
@@ -129,14 +134,23 @@ impl ClientBuilder {
     /// # Errors
     ///
     /// Returns an error if the handshake fails or the transport encounters an error.
-    pub async fn build_with_handler<T: Transport + 'static, H: crate::handler::ClientHandler + 'static>(
+    pub async fn build_with_handler<
+        T: Transport + 'static,
+        H: crate::handler::ClientHandler + 'static,
+    >(
         self,
         transport: T,
         handler: H,
     ) -> Result<Client<T, H>, McpError> {
         let client_info = ClientInfo::new(&self.name, &self.version);
         let init_result = initialize(&transport, &client_info, &self.capabilities).await?;
-        Ok(Client::with_handler(transport, init_result, client_info, self.capabilities, handler))
+        Ok(Client::with_handler(
+            transport,
+            init_result,
+            client_info,
+            self.capabilities,
+            handler,
+        ))
     }
 }
 

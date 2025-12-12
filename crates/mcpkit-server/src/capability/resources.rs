@@ -16,7 +16,8 @@ pub type BoxedResourceFn = Box<
     dyn for<'a> Fn(
             &'a str,
             &'a Context<'a>,
-        ) -> Pin<Box<dyn Future<Output = Result<ResourceContents, McpError>> + Send + 'a>>
+        )
+            -> Pin<Box<dyn Future<Output = Result<ResourceContents, McpError>> + Send + 'a>>
         + Send
         + Sync,
 >;
@@ -56,6 +57,7 @@ impl Default for ResourceService {
 
 impl ResourceService {
     /// Create a new empty resource service.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             resources: HashMap::new(),
@@ -98,16 +100,19 @@ impl ResourceService {
     }
 
     /// Get a static resource by URI.
+    #[must_use]
     pub fn get(&self, uri: &str) -> Option<&RegisteredResource> {
         self.resources.get(uri)
     }
 
     /// List all static resources.
+    #[must_use]
     pub fn list(&self) -> Vec<&Resource> {
         self.resources.values().map(|r| &r.resource).collect()
     }
 
     /// List all resource templates.
+    #[must_use]
     pub fn list_templates(&self) -> Vec<&ResourceTemplate> {
         self.templates.values().map(|r| &r.template).collect()
     }
@@ -150,16 +155,19 @@ impl ResourceService {
     }
 
     /// Get the number of registered resources.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.resources.len()
     }
 
     /// Get the number of registered templates.
+    #[must_use]
     pub fn template_count(&self) -> usize {
         self.templates.len()
     }
 
     /// Check if the service has no resources.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.resources.is_empty() && self.templates.is_empty()
     }
@@ -211,6 +219,7 @@ impl ResourceBuilder {
     }
 
     /// Build the resource.
+    #[must_use]
     pub fn build(self) -> Resource {
         Resource {
             uri: self.uri,
@@ -255,6 +264,7 @@ impl ResourceTemplateBuilder {
     }
 
     /// Build the template.
+    #[must_use]
     pub fn build(self) -> ResourceTemplate {
         ResourceTemplate {
             uri_template: self.uri_template,
@@ -285,13 +295,10 @@ mod tests {
 
     #[test]
     fn test_template_builder() {
-        let template = ResourceTemplateBuilder::new(
-            "myserver://data/{id}",
-            "Data Item",
-        )
-        .description("Access data by ID")
-        .mime_type("application/json")
-        .build();
+        let template = ResourceTemplateBuilder::new("myserver://data/{id}", "Data Item")
+            .description("Access data by ID")
+            .mime_type("application/json")
+            .build();
 
         assert_eq!(template.uri_template, "myserver://data/{id}");
         assert_eq!(template.name, "Data Item");

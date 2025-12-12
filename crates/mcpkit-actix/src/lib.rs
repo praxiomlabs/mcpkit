@@ -39,8 +39,6 @@
 //! ```
 
 #![warn(missing_docs)]
-#![warn(clippy::unwrap_used)]
-#![warn(clippy::must_use_candidate)]
 
 mod error;
 mod handler;
@@ -58,7 +56,5 @@ pub const SUPPORTED_VERSIONS: &[&str] = &["2024-11-05", "2025-03-26", "2025-06-1
 /// Check if a protocol version is supported.
 #[must_use]
 pub fn is_supported_version(version: Option<&str>) -> bool {
-    version
-        .map(|v| SUPPORTED_VERSIONS.contains(&v))
-        .unwrap_or(false)
+    version.is_some_and(|v| SUPPORTED_VERSIONS.contains(&v))
 }

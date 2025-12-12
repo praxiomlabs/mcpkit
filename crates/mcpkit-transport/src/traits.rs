@@ -82,7 +82,7 @@ impl TransportMetadata {
 
     /// Set bidirectional flag.
     #[must_use]
-    pub fn bidirectional(mut self, bidirectional: bool) -> Self {
+    pub const fn bidirectional(mut self, bidirectional: bool) -> Self {
         self.bidirectional = bidirectional;
         self
     }

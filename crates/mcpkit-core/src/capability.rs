@@ -47,7 +47,7 @@ impl ServerCapabilities {
 
     /// Enable tool support with change notifications.
     #[must_use]
-    pub fn with_tools_and_changes(mut self) -> Self {
+    pub const fn with_tools_and_changes(mut self) -> Self {
         self.tools = Some(ToolCapability {
             list_changed: Some(true),
         });
@@ -63,7 +63,7 @@ impl ServerCapabilities {
 
     /// Enable resource support with subscriptions.
     #[must_use]
-    pub fn with_resources_and_subscriptions(mut self) -> Self {
+    pub const fn with_resources_and_subscriptions(mut self) -> Self {
         self.resources = Some(ResourceCapability {
             subscribe: Some(true),
             list_changed: Some(true),
@@ -87,45 +87,45 @@ impl ServerCapabilities {
 
     /// Enable logging support.
     #[must_use]
-    pub fn with_logging(mut self) -> Self {
+    pub const fn with_logging(mut self) -> Self {
         self.logging = Some(LoggingCapability {});
         self
     }
 
     /// Enable completion support.
     #[must_use]
-    pub fn with_completions(mut self) -> Self {
+    pub const fn with_completions(mut self) -> Self {
         self.completions = Some(CompletionCapability {});
         self
     }
 
     /// Check if tools are supported.
     #[must_use]
-    pub fn has_tools(&self) -> bool {
+    pub const fn has_tools(&self) -> bool {
         self.tools.is_some()
     }
 
     /// Check if resources are supported.
     #[must_use]
-    pub fn has_resources(&self) -> bool {
+    pub const fn has_resources(&self) -> bool {
         self.resources.is_some()
     }
 
     /// Check if prompts are supported.
     #[must_use]
-    pub fn has_prompts(&self) -> bool {
+    pub const fn has_prompts(&self) -> bool {
         self.prompts.is_some()
     }
 
     /// Check if tasks are supported.
     #[must_use]
-    pub fn has_tasks(&self) -> bool {
+    pub const fn has_tasks(&self) -> bool {
         self.tasks.is_some()
     }
 
     /// Check if completions are supported.
     #[must_use]
-    pub fn has_completions(&self) -> bool {
+    pub const fn has_completions(&self) -> bool {
         self.completions.is_some()
     }
 
@@ -172,7 +172,7 @@ impl ClientCapabilities {
 
     /// Enable roots support with change notifications.
     #[must_use]
-    pub fn with_roots_and_changes(mut self) -> Self {
+    pub const fn with_roots_and_changes(mut self) -> Self {
         self.roots = Some(RootsCapability {
             list_changed: Some(true),
         });
@@ -181,33 +181,33 @@ impl ClientCapabilities {
 
     /// Enable sampling support.
     #[must_use]
-    pub fn with_sampling(mut self) -> Self {
+    pub const fn with_sampling(mut self) -> Self {
         self.sampling = Some(SamplingCapability {});
         self
     }
 
     /// Enable elicitation support.
     #[must_use]
-    pub fn with_elicitation(mut self) -> Self {
+    pub const fn with_elicitation(mut self) -> Self {
         self.elicitation = Some(ElicitationCapability {});
         self
     }
 
     /// Check if roots are supported.
     #[must_use]
-    pub fn has_roots(&self) -> bool {
+    pub const fn has_roots(&self) -> bool {
         self.roots.is_some()
     }
 
     /// Check if sampling is supported.
     #[must_use]
-    pub fn has_sampling(&self) -> bool {
+    pub const fn has_sampling(&self) -> bool {
         self.sampling.is_some()
     }
 
     /// Check if elicitation is supported.
     #[must_use]
-    pub fn has_elicitation(&self) -> bool {
+    pub const fn has_elicitation(&self) -> bool {
         self.elicitation.is_some()
     }
 }
@@ -512,7 +512,7 @@ impl VersionNegotiationResult {
 
     /// Check if the negotiation was an exact match.
     #[must_use]
-    pub fn is_exact_match(&self) -> bool {
+    pub const fn is_exact_match(&self) -> bool {
         matches!(self, Self::Accepted(_))
     }
 }
@@ -612,8 +612,8 @@ mod tests {
     fn test_initialize_result() {
         let server = ServerInfo::new("test-server", "1.0.0");
         let caps = ServerCapabilities::new().with_tools();
-        let result = InitializeResult::new(server, caps)
-            .instructions("Use this server to do things");
+        let result =
+            InitializeResult::new(server, caps).instructions("Use this server to do things");
 
         assert_eq!(result.protocol_version, PROTOCOL_VERSION);
         assert!(result.instructions.is_some());

@@ -128,7 +128,7 @@ fn test_request_id_special_chars() {
     let id = RequestId::String(r#"test\"with'special/chars"#.to_string());
     let json = serde_json::to_string(&id).unwrap();
     let parsed: RequestId = serde_json::from_str(&json).unwrap();
-    assert_eq!(parsed.clone(), id);
+    assert_eq!(parsed, id);
 }
 
 // =============================================================================
@@ -206,7 +206,7 @@ fn test_large_params_object() {
     let mut params = serde_json::Map::new();
     for i in 0..1000 {
         params.insert(
-            format!("key_{}", i),
+            format!("key_{i}"),
             json!({
                 "value": i,
                 "description": format!("This is item number {}", i),
@@ -236,7 +236,7 @@ fn test_deeply_nested_json() {
     }
 
     let deep_value = create_nested(50);
-    let request = Request::with_params("test", RequestId::Number(1), deep_value.clone());
+    let request = Request::with_params("test", RequestId::Number(1), deep_value);
 
     let json = serde_json::to_string(&request).unwrap();
     let parsed: Request = serde_json::from_str(&json).unwrap();
@@ -246,7 +246,11 @@ fn test_deeply_nested_json() {
 #[test]
 fn test_large_array_in_params() {
     let large_array: Vec<i32> = (0..10000).collect();
-    let request = Request::with_params("test", RequestId::Number(1), json!({ "items": large_array }));
+    let request = Request::with_params(
+        "test",
+        RequestId::Number(1),
+        json!({ "items": large_array }),
+    );
 
     let json = serde_json::to_string(&request).unwrap();
     let parsed: Request = serde_json::from_str(&json).unwrap();
@@ -331,7 +335,7 @@ fn test_transport_error_kind_display() {
     ];
 
     for kind in kinds {
-        let display = format!("{}", kind);
+        let display = format!("{kind}");
         assert!(!display.is_empty());
     }
 }

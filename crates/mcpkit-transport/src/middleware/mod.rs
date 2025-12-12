@@ -35,10 +35,10 @@ mod timeout;
 pub use logging::LoggingLayer;
 pub use metrics::MetricsLayer;
 pub use rate_limit::{
-    RateLimitLayer, RateLimitConfig, RateLimitAlgorithm, RateLimitAction,
-    RateLimiter, RateLimitedTransport, RateLimitStats,
+    RateLimitAction, RateLimitAlgorithm, RateLimitConfig, RateLimitLayer, RateLimitStats,
+    RateLimitedTransport, RateLimiter,
 };
-pub use retry::{RetryLayer, RetryPolicy, ExponentialBackoff};
+pub use retry::{ExponentialBackoff, RetryLayer, RetryPolicy};
 pub use timeout::TimeoutLayer;
 
 use crate::traits::Transport;
@@ -68,7 +68,7 @@ pub struct LayerStack<T> {
 
 impl<T: Transport> LayerStack<T> {
     /// Create a new layer stack with the given transport.
-    pub fn new(transport: T) -> Self {
+    pub const fn new(transport: T) -> Self {
         Self { inner: transport }
     }
 
@@ -90,7 +90,7 @@ impl<T: Transport> LayerStack<T> {
     }
 
     /// Get a reference to the inner transport.
-    pub fn inner(&self) -> &T {
+    pub const fn inner(&self) -> &T {
         &self.inner
     }
 }
@@ -115,7 +115,7 @@ mod tests {
 
     #[test]
     fn test_identity_layer() {
-        // IdentityLayer should be a no-op
-        let _layer = IdentityLayer;
+        // IdentityLayer should be a no-op - verify it can be constructed
+        let _ = IdentityLayer;
     }
 }

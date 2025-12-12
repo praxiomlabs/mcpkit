@@ -28,8 +28,14 @@ async fn test_tool_service_basic() {
         .build();
 
     service.register(tool, |args, _ctx| async move {
-        let a = args.get("a").and_then(|v| v.as_f64()).unwrap_or(0.0);
-        let b = args.get("b").and_then(|v| v.as_f64()).unwrap_or(0.0);
+        let a = args
+            .get("a")
+            .and_then(serde_json::Value::as_f64)
+            .unwrap_or(0.0);
+        let b = args
+            .get("b")
+            .and_then(serde_json::Value::as_f64)
+            .unwrap_or(0.0);
         Ok(ToolOutput::text((a + b).to_string()))
     });
 
@@ -51,8 +57,14 @@ async fn test_tool_call() {
         .build();
 
     service.register(tool, |args, _ctx| async move {
-        let a = args.get("a").and_then(|v| v.as_f64()).unwrap_or(0.0);
-        let b = args.get("b").and_then(|v| v.as_f64()).unwrap_or(0.0);
+        let a = args
+            .get("a")
+            .and_then(serde_json::Value::as_f64)
+            .unwrap_or(0.0);
+        let b = args
+            .get("b")
+            .and_then(serde_json::Value::as_f64)
+            .unwrap_or(0.0);
         Ok(ToolOutput::text((a * b).to_string()))
     });
 
@@ -79,7 +91,9 @@ async fn test_tool_not_found() {
     let (req_id, client_caps, server_caps, peer) = make_test_context();
     let ctx = Context::new(&req_id, None, &client_caps, &server_caps, &peer);
 
-    let result = service.call("nonexistent", serde_json::json!({}), &ctx).await;
+    let result = service
+        .call("nonexistent", serde_json::json!({}), &ctx)
+        .await;
     assert!(result.is_err());
 }
 
@@ -92,11 +106,8 @@ async fn test_tool_handler_trait() {
         .build();
 
     service.register(tool, |args, _ctx| async move {
-        let name = args
-            .get("name")
-            .and_then(|v| v.as_str())
-            .unwrap_or("World");
-        Ok(ToolOutput::text(format!("Hello, {}!", name)))
+        let name = args.get("name").and_then(|v| v.as_str()).unwrap_or("World");
+        Ok(ToolOutput::text(format!("Hello, {name}!")))
     });
 
     let (req_id, client_caps, server_caps, peer) = make_test_context();
@@ -119,7 +130,7 @@ async fn test_multiple_tools() {
     // Register multiple tools
     for op in ["add", "sub", "mul", "div"] {
         let tool = ToolBuilder::new(op)
-            .description(format!("{} operation", op))
+            .description(format!("{op} operation"))
             .build();
 
         service.register(tool, |args, _ctx| async move {

@@ -76,6 +76,7 @@ impl SessionManager {
     }
 
     /// Create a new session and return its ID and receiver.
+    #[must_use]
     pub fn create_session(&self) -> (String, broadcast::Receiver<String>) {
         let id = uuid::Uuid::new_v4().to_string();
         let (tx, rx) = broadcast::channel(100);
@@ -84,6 +85,7 @@ impl SessionManager {
     }
 
     /// Get a receiver for an existing session.
+    #[must_use]
     pub fn get_receiver(&self, id: &str) -> Option<broadcast::Receiver<String>> {
         self.sessions.get(id).map(|tx| tx.subscribe())
     }
@@ -91,6 +93,7 @@ impl SessionManager {
     /// Send a message to a specific session.
     ///
     /// Returns `true` if the message was sent, `false` if the session doesn't exist.
+    #[must_use]
     pub fn send_to_session(&self, id: &str, message: String) -> bool {
         if let Some(tx) = self.sessions.get(id) {
             // Ignore send errors (no receivers)
@@ -103,7 +106,7 @@ impl SessionManager {
 
     /// Broadcast a message to all sessions.
     pub fn broadcast(&self, message: String) {
-        for entry in self.sessions.iter() {
+        for entry in &self.sessions {
             let _ = entry.value().send(message.clone());
         }
     }
@@ -145,6 +148,7 @@ impl SessionStore {
     }
 
     /// Create a new session and return its ID.
+    #[must_use]
     pub fn create(&self) -> String {
         let id = uuid::Uuid::new_v4().to_string();
         self.sessions.insert(id.clone(), Session::new(id.clone()));
@@ -181,6 +185,7 @@ impl SessionStore {
     }
 
     /// Remove a session.
+    #[must_use]
     pub fn remove(&self, id: &str) -> Option<Session> {
         self.sessions.remove(id).map(|(_, s)| s)
     }
@@ -221,7 +226,9 @@ mod tests {
         assert!(!session.is_expired(Duration::from_secs(60)));
 
         // Simulate old session by setting last_active in the past
-        session.last_active = Instant::now() - Duration::from_secs(120);
+        session.last_active = Instant::now()
+            .checked_sub(Duration::from_secs(120))
+            .unwrap();
         assert!(session.is_expired(Duration::from_secs(60)));
     }
 
@@ -233,7 +240,7 @@ mod tests {
         assert!(store.get(&id).is_some());
         store.touch(&id);
 
-        store.remove(&id);
+        let _ = store.remove(&id);
         assert!(store.get(&id).is_none());
     }
 

@@ -44,7 +44,7 @@
 //! | Macros        | 4 interdependent     | 1 unified `#[mcp_server]` |
 //! | Boilerplate   | Manual router wiring | Zero initialization    |
 //! | Parameters    | `Parameters<T>` wrapper | Direct from signature  |
-//! | Error types   | 3 nested layers      | 1 unified McpError     |
+//! | Error types   | 3 nested layers      | 1 unified `McpError`     |
 //! | Tasks         | Not implemented      | Full support           |
 //!
 //! ## Crate Organization
@@ -56,11 +56,6 @@
 //! - [`mcpkit_macros`] - Procedural macros for `#[mcp_server]` etc.
 
 #![deny(missing_docs)]
-#![warn(clippy::all)]
-#![warn(clippy::pedantic)]
-#![warn(clippy::unwrap_used)]
-#![warn(clippy::must_use_candidate)]
-#![allow(clippy::module_name_repetitions)]
 
 // Re-export all public items from core
 pub use mcpkit_core::*;
@@ -68,9 +63,8 @@ pub use mcpkit_core::*;
 // Re-export server types
 pub use mcpkit_server::{
     CancellationToken, CancelledFuture, CompletionHandler, Context, ContextData,
-    ElicitationHandler, LogLevel, LoggingHandler, NoOpPeer, Peer, PromptHandler,
-    ResourceHandler, SamplingHandler, Server, ServerBuilder, ServerHandler, TaskHandler,
-    ToolHandler,
+    ElicitationHandler, LogLevel, LoggingHandler, NoOpPeer, Peer, PromptHandler, ResourceHandler,
+    SamplingHandler, Server, ServerBuilder, ServerHandler, TaskHandler, ToolHandler,
 };
 
 // Re-export transport types

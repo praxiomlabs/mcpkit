@@ -6,12 +6,10 @@
 use mcpkit_core::capability::{ServerCapabilities, ServerInfo};
 use mcpkit_core::error::McpError;
 use mcpkit_core::types::{
-    Content, GetPromptResult, Prompt, PromptMessage, Resource, ResourceContents,
-    Tool, ToolAnnotations, ToolOutput,
+    Content, GetPromptResult, Prompt, PromptMessage, Resource, ResourceContents, Tool,
+    ToolAnnotations, ToolOutput,
 };
-use mcpkit_server::{
-    Context, PromptHandler, ResourceHandler, ServerHandler, ToolHandler,
-};
+use mcpkit_server::{Context, PromptHandler, ResourceHandler, ServerHandler, ToolHandler};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::future::Future;
@@ -66,12 +64,14 @@ impl MockTool {
     }
 
     /// Set the input schema.
+    #[must_use]
     pub fn input_schema(mut self, schema: Value) -> Self {
         self.input_schema = schema;
         self
     }
 
     /// Set annotations.
+    #[must_use]
     pub fn annotations(mut self, annotations: ToolAnnotations) -> Self {
         self.annotations = Some(annotations);
         self
@@ -84,6 +84,7 @@ impl MockTool {
     }
 
     /// Set the tool to return a JSON response.
+    #[must_use]
     pub fn returns_json(mut self, json: Value) -> Self {
         self.response = MockResponse::Json(json);
         self
@@ -105,6 +106,7 @@ impl MockTool {
     }
 
     /// Convert to a Tool definition.
+    #[must_use]
     pub fn to_tool(&self) -> Tool {
         Tool {
             name: self.name.clone(),
@@ -170,6 +172,7 @@ impl MockResource {
     }
 
     /// Convert to a Resource definition.
+    #[must_use]
     pub fn to_resource(&self) -> Resource {
         Resource {
             uri: self.uri.clone(),
@@ -182,6 +185,7 @@ impl MockResource {
     }
 
     /// Get the resource contents.
+    #[must_use]
     pub fn to_contents(&self) -> ResourceContents {
         ResourceContents {
             uri: self.uri.clone(),
@@ -225,6 +229,7 @@ impl MockPrompt {
     }
 
     /// Convert to a Prompt definition.
+    #[must_use]
     pub fn to_prompt(&self) -> Prompt {
         Prompt {
             name: self.name.clone(),
@@ -251,6 +256,7 @@ impl Default for MockServerBuilder {
 
 impl MockServerBuilder {
     /// Create a new builder.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             name: "mock-server".to_string(),
@@ -274,6 +280,7 @@ impl MockServerBuilder {
     }
 
     /// Add a mock tool.
+    #[must_use]
     pub fn tool(mut self, tool: MockTool) -> Self {
         self.tools.push(tool);
         self
@@ -286,18 +293,21 @@ impl MockServerBuilder {
     }
 
     /// Add a mock resource.
+    #[must_use]
     pub fn resource(mut self, resource: MockResource) -> Self {
         self.resources.push(resource);
         self
     }
 
     /// Add a mock prompt.
+    #[must_use]
     pub fn prompt(mut self, prompt: MockPrompt) -> Self {
         self.prompts.push(prompt);
         self
     }
 
     /// Build the mock server.
+    #[must_use]
     pub fn build(self) -> MockServer {
         let tools: HashMap<String, MockTool> = self
             .tools
@@ -330,7 +340,7 @@ impl MockServerBuilder {
 /// A mock MCP server for testing.
 ///
 /// The mock server implements all handler traits and can be used
-/// with MemoryTransport for testing.
+/// with `MemoryTransport` for testing.
 pub struct MockServer {
     name: String,
     version: String,
@@ -341,21 +351,25 @@ pub struct MockServer {
 
 impl MockServer {
     /// Create a new builder.
+    #[must_use]
     pub fn builder() -> MockServerBuilder {
         MockServerBuilder::new()
     }
 
     /// Create a simple mock server.
+    #[must_use]
     pub fn new() -> MockServerBuilder {
         MockServerBuilder::new()
     }
 
     /// Get the server name.
+    #[must_use]
     pub fn name(&self) -> &str {
         &self.name
     }
 
     /// Get the server version.
+    #[must_use]
     pub fn version(&self) -> &str {
         &self.version
     }
@@ -499,8 +513,14 @@ mod tests {
     #[test]
     fn test_mock_tool_dynamic() {
         let tool = MockTool::new("add").handler(|args| {
-            let a = args.get("a").and_then(|v| v.as_f64()).unwrap_or(0.0);
-            let b = args.get("b").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let a = args
+                .get("a")
+                .and_then(serde_json::Value::as_f64)
+                .unwrap_or(0.0);
+            let b = args
+                .get("b")
+                .and_then(serde_json::Value::as_f64)
+                .unwrap_or(0.0);
             Ok(ToolOutput::text(format!("{}", a + b)))
         });
 
@@ -521,9 +541,7 @@ mod tests {
             .name("test-server")
             .version("2.0.0")
             .tool(MockTool::new("test").returns_text("ok"))
-            .resource(
-                MockResource::new("test://resource", "Test Resource").content("Test content"),
-            )
+            .resource(MockResource::new("test://resource", "Test Resource").content("Test content"))
             .build();
 
         assert_eq!(server.name(), "test-server");

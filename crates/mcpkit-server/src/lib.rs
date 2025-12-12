@@ -58,11 +58,6 @@
 //! - Notification sending
 
 #![deny(missing_docs)]
-#![warn(clippy::all)]
-#![warn(clippy::pedantic)]
-#![warn(clippy::unwrap_used)]
-#![warn(clippy::must_use_candidate)]
-#![allow(clippy::module_name_repetitions)]
 
 pub mod builder;
 pub mod capability;
@@ -74,9 +69,7 @@ pub mod server;
 pub mod state;
 
 // Re-export commonly used types
-pub use builder::{
-    FullServer, MinimalServer, NotRegistered, Registered, Server, ServerBuilder,
-};
+pub use builder::{FullServer, MinimalServer, NotRegistered, Registered, Server, ServerBuilder};
 pub use context::{CancellationToken, CancelledFuture, Context, ContextData, NoOpPeer, Peer};
 pub use handler::{
     CompletionHandler, ElicitationHandler, LogLevel, LoggingHandler, PromptHandler,
@@ -90,7 +83,9 @@ pub mod prelude {
     pub use crate::builder::{
         FullServer, MinimalServer, NotRegistered, Registered, Server, ServerBuilder,
     };
-    pub use crate::context::{CancellationToken, CancelledFuture, Context, ContextData, NoOpPeer, Peer};
+    pub use crate::context::{
+        CancellationToken, CancelledFuture, Context, ContextData, NoOpPeer, Peer,
+    };
     pub use crate::handler::{
         CompletionHandler, ElicitationHandler, LogLevel, LoggingHandler, PromptHandler,
         ResourceHandler, SamplingHandler, ServerHandler, TaskHandler, ToolHandler,

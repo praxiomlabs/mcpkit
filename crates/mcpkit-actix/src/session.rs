@@ -81,6 +81,7 @@ impl SessionManager {
     }
 
     /// Get a session by ID, updating its last accessed time.
+    #[must_use]
     pub fn get(&self, id: &str) -> Option<Session> {
         self.sessions.get_mut(id).map(|mut session| {
             session.last_accessed = Instant::now();
@@ -150,6 +151,7 @@ impl SessionStore {
     }
 
     /// Create a new SSE session.
+    #[must_use]
     pub fn create_session(&self) -> (String, broadcast::Receiver<String>) {
         let id = Uuid::new_v4().to_string();
         let (tx, rx) = broadcast::channel(self.capacity);
@@ -158,6 +160,7 @@ impl SessionStore {
     }
 
     /// Get a receiver for an existing session.
+    #[must_use]
     pub fn get_receiver(&self, id: &str) -> Option<broadcast::Receiver<String>> {
         self.senders.get(id).map(|tx| tx.subscribe())
     }
@@ -219,7 +222,9 @@ mod tests {
     fn test_session_expiry() {
         let mut session = Session::new();
         // Simulate old access time
-        session.last_accessed = Instant::now() - Duration::from_secs(120);
+        session.last_accessed = Instant::now()
+            .checked_sub(Duration::from_secs(120))
+            .unwrap();
         assert!(session.is_expired(Duration::from_secs(60)));
     }
 

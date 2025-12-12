@@ -48,7 +48,7 @@ pub enum RequestId {
 impl RequestId {
     /// Create a new numeric request ID.
     #[must_use]
-    pub fn number(id: u64) -> Self {
+    pub const fn number(id: u64) -> Self {
         Self::Number(id)
     }
 
@@ -187,13 +187,13 @@ impl Response {
 
     /// Check if this response indicates success.
     #[must_use]
-    pub fn is_success(&self) -> bool {
+    pub const fn is_success(&self) -> bool {
         self.result.is_some() && self.error.is_none()
     }
 
     /// Check if this response indicates an error.
     #[must_use]
-    pub fn is_error(&self) -> bool {
+    pub const fn is_error(&self) -> bool {
         self.error.is_some()
     }
 
@@ -241,10 +241,7 @@ impl Notification {
 
     /// Create a new notification with parameters.
     #[must_use]
-    pub fn with_params(
-        method: impl Into<Cow<'static, str>>,
-        params: serde_json::Value,
-    ) -> Self {
+    pub fn with_params(method: impl Into<Cow<'static, str>>, params: serde_json::Value) -> Self {
         Self {
             jsonrpc: Cow::Borrowed(JSONRPC_VERSION),
             method: method.into(),
@@ -294,7 +291,7 @@ impl Message {
 
     /// Get the request ID if this is a request or response.
     #[must_use]
-    pub fn id(&self) -> Option<&RequestId> {
+    pub const fn id(&self) -> Option<&RequestId> {
         match self {
             Self::Request(r) => Some(&r.id),
             Self::Response(r) => Some(&r.id),
@@ -304,25 +301,25 @@ impl Message {
 
     /// Check if this is a request.
     #[must_use]
-    pub fn is_request(&self) -> bool {
+    pub const fn is_request(&self) -> bool {
         matches!(self, Self::Request(_))
     }
 
     /// Check if this is a response.
     #[must_use]
-    pub fn is_response(&self) -> bool {
+    pub const fn is_response(&self) -> bool {
         matches!(self, Self::Response(_))
     }
 
     /// Check if this is a notification.
     #[must_use]
-    pub fn is_notification(&self) -> bool {
+    pub const fn is_notification(&self) -> bool {
         matches!(self, Self::Notification(_))
     }
 
     /// Try to get this as a request.
     #[must_use]
-    pub fn as_request(&self) -> Option<&Request> {
+    pub const fn as_request(&self) -> Option<&Request> {
         match self {
             Self::Request(r) => Some(r),
             _ => None,
@@ -331,7 +328,7 @@ impl Message {
 
     /// Try to get this as a response.
     #[must_use]
-    pub fn as_response(&self) -> Option<&Response> {
+    pub const fn as_response(&self) -> Option<&Response> {
         match self {
             Self::Response(r) => Some(r),
             _ => None,
@@ -340,7 +337,7 @@ impl Message {
 
     /// Try to get this as a notification.
     #[must_use]
-    pub fn as_notification(&self) -> Option<&Notification> {
+    pub const fn as_notification(&self) -> Option<&Notification> {
         match self {
             Self::Notification(n) => Some(n),
             _ => None,

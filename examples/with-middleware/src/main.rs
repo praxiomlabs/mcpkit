@@ -28,7 +28,8 @@ use mcpkit_core::{
 };
 use mcpkit_transport::{
     middleware::{ExponentialBackoff, LayerStack, LoggingLayer, RetryLayer, TimeoutLayer},
-    stdio::StdioTransport, Transport,
+    stdio::StdioTransport,
+    Transport,
 };
 use serde_json::{json, Value};
 use std::time::Duration;

@@ -66,8 +66,8 @@ where
     debug!(session_id = %session_id, "Processing MCP request");
 
     // Parse message
-    let msg: Message = serde_json::from_str(&body)
-        .map_err(|e| ExtensionError::InvalidMessage(e.to_string()))?;
+    let msg: Message =
+        serde_json::from_str(&body).map_err(|e| ExtensionError::InvalidMessage(e.to_string()))?;
 
     // Process message
     match msg {
@@ -138,7 +138,7 @@ where
             // For other methods, return method not found
             Response::error(
                 request.id.clone(),
-                JsonRpcError::method_not_found(format!("Method '{}' not found", method)),
+                JsonRpcError::method_not_found(format!("Method '{method}' not found")),
             )
         }
     }
@@ -157,10 +157,7 @@ where
 ///
 /// - `connected`: Sent when the connection is established, includes session ID.
 /// - `message`: MCP notification messages.
-pub async fn handle_sse<H>(
-    req: HttpRequest,
-    config: web::Data<McpConfig<H>>,
-) -> HttpResponse
+pub async fn handle_sse<H>(req: HttpRequest, config: web::Data<McpConfig<H>>) -> HttpResponse
 where
     H: HasServerInfo + Send + Sync + 'static,
 {
@@ -170,24 +167,21 @@ where
         .and_then(|v| v.to_str().ok())
         .map(String::from);
 
-    let (id, rx) = match session_id {
-        Some(id) => {
-            // Try to reconnect to existing session
-            if let Some(rx) = config.sse_sessions.get_receiver(&id) {
-                info!(session_id = %id, "Reconnected to SSE session");
-                (id, rx)
-            } else {
-                // Session not found, create new
-                let (new_id, rx) = config.sse_sessions.create_session();
-                info!(session_id = %new_id, "Created new SSE session (requested not found)");
-                (new_id, rx)
-            }
-        }
-        None => {
-            let (id, rx) = config.sse_sessions.create_session();
-            info!(session_id = %id, "Created new SSE session");
+    let (id, rx) = if let Some(id) = session_id {
+        // Try to reconnect to existing session
+        if let Some(rx) = config.sse_sessions.get_receiver(&id) {
+            info!(session_id = %id, "Reconnected to SSE session");
             (id, rx)
+        } else {
+            // Session not found, create new
+            let (new_id, rx) = config.sse_sessions.create_session();
+            info!(session_id = %new_id, "Created new SSE session (requested not found)");
+            (new_id, rx)
         }
+    } else {
+        let (id, rx) = config.sse_sessions.create_session();
+        info!(session_id = %id, "Created new SSE session");
+        (id, rx)
     };
 
     // Create the SSE stream
@@ -205,7 +199,7 @@ fn create_sse_stream(
     rx: tokio::sync::broadcast::Receiver<String>,
 ) -> impl futures::Stream<Item = Result<web::Bytes, actix_web::error::Error>> {
     // First, send the connected event
-    let connected_event = format!("event: connected\ndata: {}\n\n", session_id);
+    let connected_event = format!("event: connected\ndata: {session_id}\n\n");
 
     // Create a stream that first yields the connected event, then messages
     let connected = stream::once(async move { Ok(web::Bytes::from(connected_event)) });
@@ -215,7 +209,7 @@ fn create_sse_stream(
         loop {
             match rx.recv().await {
                 Ok(msg) => {
-                    let event = format!("event: message\ndata: {}\n\n", msg);
+                    let event = format!("event: message\ndata: {msg}\n\n");
                     return Some((
                         Ok::<_, actix_web::error::Error>(web::Bytes::from(event)),
                         rx,
@@ -223,7 +217,7 @@ fn create_sse_stream(
                 }
                 Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
                     warn!(skipped = n, "SSE client lagged, skipped messages");
-                    continue;
+                    // Loop continues naturally
                 }
                 Err(tokio::sync::broadcast::error::RecvError::Closed) => {
                     debug!("SSE channel closed");

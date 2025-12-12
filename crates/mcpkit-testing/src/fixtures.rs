@@ -12,6 +12,7 @@ use mcpkit_core::types::{Prompt, PromptArgument, Resource, Tool, ToolAnnotations
 /// - `add`: Adds two numbers
 /// - `multiply`: Multiplies two numbers
 /// - `fail`: Always returns an error
+#[must_use]
 pub fn sample_tools() -> Vec<MockTool> {
     vec![
         MockTool::new("echo")
@@ -42,8 +43,14 @@ pub fn sample_tools() -> Vec<MockTool> {
             }))
             .annotations(ToolAnnotations::read_only())
             .handler(|args| {
-                let a = args.get("a").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                let b = args.get("b").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let a = args
+                    .get("a")
+                    .and_then(serde_json::Value::as_f64)
+                    .unwrap_or(0.0);
+                let b = args
+                    .get("b")
+                    .and_then(serde_json::Value::as_f64)
+                    .unwrap_or(0.0);
                 Ok(ToolOutput::text(format!("{}", a + b)))
             }),
         MockTool::new("multiply")
@@ -58,8 +65,14 @@ pub fn sample_tools() -> Vec<MockTool> {
             }))
             .annotations(ToolAnnotations::read_only())
             .handler(|args| {
-                let a = args.get("a").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                let b = args.get("b").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let a = args
+                    .get("a")
+                    .and_then(serde_json::Value::as_f64)
+                    .unwrap_or(0.0);
+                let b = args
+                    .get("b")
+                    .and_then(serde_json::Value::as_f64)
+                    .unwrap_or(0.0);
                 Ok(ToolOutput::text(format!("{}", a * b)))
             }),
         MockTool::new("fail")
@@ -74,6 +87,7 @@ pub fn sample_tools() -> Vec<MockTool> {
 /// - `test://readme`: A sample README file
 /// - `test://config`: A sample configuration file
 /// - `test://data`: Sample JSON data
+#[must_use]
 pub fn sample_resources() -> Vec<MockResource> {
     vec![
         MockResource::new("test://readme", "README")
@@ -96,6 +110,7 @@ pub fn sample_resources() -> Vec<MockResource> {
 /// Returns prompts:
 /// - `summarize`: A prompt for summarizing text
 /// - `translate`: A prompt for translation
+#[must_use]
 pub fn sample_prompts() -> Vec<MockPrompt> {
     vec![
         MockPrompt::new("summarize")
@@ -108,26 +123,26 @@ pub fn sample_prompts() -> Vec<MockPrompt> {
 }
 
 /// Create a standard tool definition for testing.
+#[must_use]
 pub fn tool_definition(name: &str, description: &str) -> Tool {
     Tool::new(name).description(description)
 }
 
 /// Create a standard resource definition for testing.
+#[must_use]
 pub fn resource_definition(uri: &str, name: &str) -> Resource {
     Resource::new(uri, name)
 }
 
 /// Create a standard prompt definition for testing.
+#[must_use]
 pub fn prompt_definition(name: &str) -> Prompt {
     Prompt::new(name)
 }
 
 /// Create a prompt with arguments.
-pub fn prompt_with_args(
-    name: &str,
-    description: &str,
-    args: Vec<(&str, &str, bool)>,
-) -> Prompt {
+#[must_use]
+pub fn prompt_with_args(name: &str, description: &str, args: Vec<(&str, &str, bool)>) -> Prompt {
     let mut prompt = Prompt::new(name).description(description);
     for (arg_name, arg_desc, required) in args {
         let arg = if required {
@@ -143,6 +158,7 @@ pub fn prompt_with_args(
 /// Create the calculator tool set.
 ///
 /// This is a common fixture for testing arithmetic operations.
+#[must_use]
 pub fn calculator_tools() -> Vec<MockTool> {
     vec![
         MockTool::new("add")
@@ -156,29 +172,53 @@ pub fn calculator_tools() -> Vec<MockTool> {
                 "required": ["a", "b"]
             }))
             .handler(|args| {
-                let a = args.get("a").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                let b = args.get("b").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let a = args
+                    .get("a")
+                    .and_then(serde_json::Value::as_f64)
+                    .unwrap_or(0.0);
+                let b = args
+                    .get("b")
+                    .and_then(serde_json::Value::as_f64)
+                    .unwrap_or(0.0);
                 Ok(ToolOutput::text(format!("{}", a + b)))
             }),
         MockTool::new("subtract")
             .description("Subtract two numbers")
             .handler(|args| {
-                let a = args.get("a").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                let b = args.get("b").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let a = args
+                    .get("a")
+                    .and_then(serde_json::Value::as_f64)
+                    .unwrap_or(0.0);
+                let b = args
+                    .get("b")
+                    .and_then(serde_json::Value::as_f64)
+                    .unwrap_or(0.0);
                 Ok(ToolOutput::text(format!("{}", a - b)))
             }),
         MockTool::new("multiply")
             .description("Multiply two numbers")
             .handler(|args| {
-                let a = args.get("a").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                let b = args.get("b").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let a = args
+                    .get("a")
+                    .and_then(serde_json::Value::as_f64)
+                    .unwrap_or(0.0);
+                let b = args
+                    .get("b")
+                    .and_then(serde_json::Value::as_f64)
+                    .unwrap_or(0.0);
                 Ok(ToolOutput::text(format!("{}", a * b)))
             }),
         MockTool::new("divide")
             .description("Divide two numbers")
             .handler(|args| {
-                let a = args.get("a").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                let b = args.get("b").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let a = args
+                    .get("a")
+                    .and_then(serde_json::Value::as_f64)
+                    .unwrap_or(0.0);
+                let b = args
+                    .get("b")
+                    .and_then(serde_json::Value::as_f64)
+                    .unwrap_or(0.0);
                 if b == 0.0 {
                     Ok(ToolOutput::error("Cannot divide by zero"))
                 } else {
@@ -191,6 +231,7 @@ pub fn calculator_tools() -> Vec<MockTool> {
 /// Create a file system resource set.
 ///
 /// This is a common fixture for testing file operations.
+#[must_use]
 pub fn filesystem_resources() -> Vec<MockResource> {
     vec![
         MockResource::new("file:///project/src/main.rs", "main.rs")

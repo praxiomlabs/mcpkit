@@ -197,42 +197,30 @@ fn bench_message_sizes(c: &mut Criterion) {
         ),
     ];
 
-    for (name, params) in sizes.iter() {
+    for (name, params) in &sizes {
         let msg = Message::with_params(1, "test", params.clone());
         let json_size = serde_json::to_string(&msg).unwrap().len();
 
         group.throughput(Throughput::Bytes(json_size as u64));
 
-        group.bench_with_input(
-            BenchmarkId::new("serialize", name),
-            &msg,
-            |b, msg| {
-                b.iter(|| black_box(serde_json::to_string(msg).unwrap()));
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("serialize", name), &msg, |b, msg| {
+            b.iter(|| black_box(serde_json::to_string(msg).unwrap()));
+        });
 
         let json = serde_json::to_string(&msg).unwrap();
-        group.bench_with_input(
-            BenchmarkId::new("deserialize", name),
-            &json,
-            |b, json| {
-                b.iter(|| {
-                    black_box(serde_json::from_str::<Message>(json).unwrap());
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("deserialize", name), &json, |b, json| {
+            b.iter(|| {
+                black_box(serde_json::from_str::<Message>(json).unwrap());
+            });
+        });
 
-        group.bench_with_input(
-            BenchmarkId::new("roundtrip", name),
-            &msg,
-            |b, msg| {
-                b.to_async(&rt).iter(|| async {
-                    let transport = MemoryTransport::new();
-                    transport.send(msg).await;
-                    black_box(transport.recv().await)
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("roundtrip", name), &msg, |b, msg| {
+            b.to_async(&rt).iter(|| async {
+                let transport = MemoryTransport::new();
+                transport.send(msg).await;
+                black_box(transport.recv().await)
+            });
+        });
     }
 
     group.finish();

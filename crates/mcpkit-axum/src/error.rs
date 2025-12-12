@@ -40,7 +40,7 @@ pub enum ExtensionError {
 impl ExtensionError {
     /// Get the HTTP status code for this error.
     #[must_use]
-    pub fn status_code(&self) -> StatusCode {
+    pub const fn status_code(&self) -> StatusCode {
         match self {
             Self::UnsupportedVersion(_) => StatusCode::BAD_REQUEST,
             Self::SessionNotFound(_) => StatusCode::NOT_FOUND,

@@ -264,9 +264,8 @@ pub fn parse_request(request: &Request) -> Result<ParsedRequest, McpError> {
 
     match method {
         methods::INITIALIZE => {
-            let params = params.ok_or_else(|| {
-                McpError::invalid_params(method, "missing params")
-            })?;
+            let params =
+                params.ok_or_else(|| McpError::invalid_params(method, "missing params"))?;
 
             Ok(ParsedRequest::Initialize(InitializeParams {
                 protocol_version: params
@@ -291,7 +290,7 @@ pub fn parse_request(request: &Request) -> Result<ParsedRequest, McpError> {
                 capabilities: params
                     .get("capabilities")
                     .cloned()
-                    .unwrap_or(Value::Object(serde_json::Map::new())),
+                    .unwrap_or_else(|| Value::Object(serde_json::Map::new())),
             }))
         }
 
@@ -300,9 +299,8 @@ pub fn parse_request(request: &Request) -> Result<ParsedRequest, McpError> {
         methods::TOOLS_LIST => Ok(ParsedRequest::ToolsList(parse_list_params(params))),
 
         methods::TOOLS_CALL => {
-            let params = params.ok_or_else(|| {
-                McpError::invalid_params(method, "missing params")
-            })?;
+            let params =
+                params.ok_or_else(|| McpError::invalid_params(method, "missing params"))?;
 
             let name = params
                 .get("name")
@@ -313,7 +311,7 @@ pub fn parse_request(request: &Request) -> Result<ParsedRequest, McpError> {
             let arguments = params
                 .get("arguments")
                 .cloned()
-                .unwrap_or(Value::Object(serde_json::Map::new()));
+                .unwrap_or_else(|| Value::Object(serde_json::Map::new()));
 
             Ok(ParsedRequest::ToolsCall(ToolCallParams { name, arguments }))
         }
@@ -321,9 +319,8 @@ pub fn parse_request(request: &Request) -> Result<ParsedRequest, McpError> {
         methods::RESOURCES_LIST => Ok(ParsedRequest::ResourcesList(parse_list_params(params))),
 
         methods::RESOURCES_READ => {
-            let params = params.ok_or_else(|| {
-                McpError::invalid_params(method, "missing params")
-            })?;
+            let params =
+                params.ok_or_else(|| McpError::invalid_params(method, "missing params"))?;
 
             let uri = params
                 .get("uri")
@@ -334,14 +331,13 @@ pub fn parse_request(request: &Request) -> Result<ParsedRequest, McpError> {
             Ok(ParsedRequest::ResourcesRead(ResourceReadParams { uri }))
         }
 
-        methods::RESOURCES_TEMPLATES_LIST => {
-            Ok(ParsedRequest::ResourcesTemplatesList(parse_list_params(params)))
-        }
+        methods::RESOURCES_TEMPLATES_LIST => Ok(ParsedRequest::ResourcesTemplatesList(
+            parse_list_params(params),
+        )),
 
         methods::RESOURCES_SUBSCRIBE => {
-            let params = params.ok_or_else(|| {
-                McpError::invalid_params(method, "missing params")
-            })?;
+            let params =
+                params.ok_or_else(|| McpError::invalid_params(method, "missing params"))?;
 
             let uri = params
                 .get("uri")
@@ -349,13 +345,14 @@ pub fn parse_request(request: &Request) -> Result<ParsedRequest, McpError> {
                 .ok_or_else(|| McpError::invalid_params(method, "missing uri"))?
                 .to_string();
 
-            Ok(ParsedRequest::ResourcesSubscribe(ResourceSubscribeParams { uri }))
+            Ok(ParsedRequest::ResourcesSubscribe(ResourceSubscribeParams {
+                uri,
+            }))
         }
 
         methods::RESOURCES_UNSUBSCRIBE => {
-            let params = params.ok_or_else(|| {
-                McpError::invalid_params(method, "missing params")
-            })?;
+            let params =
+                params.ok_or_else(|| McpError::invalid_params(method, "missing params"))?;
 
             let uri = params
                 .get("uri")
@@ -363,15 +360,16 @@ pub fn parse_request(request: &Request) -> Result<ParsedRequest, McpError> {
                 .ok_or_else(|| McpError::invalid_params(method, "missing uri"))?
                 .to_string();
 
-            Ok(ParsedRequest::ResourcesUnsubscribe(ResourceUnsubscribeParams { uri }))
+            Ok(ParsedRequest::ResourcesUnsubscribe(
+                ResourceUnsubscribeParams { uri },
+            ))
         }
 
         methods::PROMPTS_LIST => Ok(ParsedRequest::PromptsList(parse_list_params(params))),
 
         methods::PROMPTS_GET => {
-            let params = params.ok_or_else(|| {
-                McpError::invalid_params(method, "missing params")
-            })?;
+            let params =
+                params.ok_or_else(|| McpError::invalid_params(method, "missing params"))?;
 
             let name = params
                 .get("name")
@@ -381,54 +379,48 @@ pub fn parse_request(request: &Request) -> Result<ParsedRequest, McpError> {
 
             let arguments = params.get("arguments").cloned();
 
-            Ok(ParsedRequest::PromptsGet(PromptGetParams { name, arguments }))
+            Ok(ParsedRequest::PromptsGet(PromptGetParams {
+                name,
+                arguments,
+            }))
         }
 
         methods::TASKS_LIST => Ok(ParsedRequest::TasksList(parse_list_params(params))),
 
         methods::TASKS_GET => {
-            let params = params.ok_or_else(|| {
-                McpError::invalid_params(method, "missing params")
-            })?;
+            let params =
+                params.ok_or_else(|| McpError::invalid_params(method, "missing params"))?;
 
             let task_id = params
                 .get("taskId")
                 .and_then(|v| v.as_str())
-                .ok_or_else(|| {
-                    McpError::invalid_params(method, "missing taskId")
-                })?
+                .ok_or_else(|| McpError::invalid_params(method, "missing taskId"))?
                 .to_string();
 
             Ok(ParsedRequest::TasksGet(TaskGetParams { task_id }))
         }
 
         methods::TASKS_CANCEL => {
-            let params = params.ok_or_else(|| {
-                McpError::invalid_params(method, "missing params")
-            })?;
+            let params =
+                params.ok_or_else(|| McpError::invalid_params(method, "missing params"))?;
 
             let task_id = params
                 .get("taskId")
                 .and_then(|v| v.as_str())
-                .ok_or_else(|| {
-                    McpError::invalid_params(method, "missing taskId")
-                })?
+                .ok_or_else(|| McpError::invalid_params(method, "missing taskId"))?
                 .to_string();
 
             Ok(ParsedRequest::TasksCancel(TaskCancelParams { task_id }))
         }
 
         methods::SAMPLING_CREATE_MESSAGE => {
-            let params = params.ok_or_else(|| {
-                McpError::invalid_params(method, "missing params")
-            })?;
+            let params =
+                params.ok_or_else(|| McpError::invalid_params(method, "missing params"))?;
 
             let messages = params
                 .get("messages")
                 .and_then(|v| v.as_array())
-                .ok_or_else(|| {
-                    McpError::invalid_params(method, "missing messages")
-                })?
+                .ok_or_else(|| McpError::invalid_params(method, "missing messages"))?
                 .clone();
 
             Ok(ParsedRequest::SamplingCreateMessage(SamplingParams {
@@ -438,18 +430,20 @@ pub fn parse_request(request: &Request) -> Result<ParsedRequest, McpError> {
                     .get("systemPrompt")
                     .and_then(|v| v.as_str())
                     .map(String::from),
-                max_tokens: params.get("maxTokens").and_then(|v| v.as_u64()).map(|v| v as u32),
+                max_tokens: params
+                    .get("maxTokens")
+                    .and_then(serde_json::Value::as_u64)
+                    .map(|v| v as u32),
             }))
         }
 
         methods::COMPLETION_COMPLETE => {
-            let params = params.ok_or_else(|| {
-                McpError::invalid_params(method, "missing params")
-            })?;
+            let params =
+                params.ok_or_else(|| McpError::invalid_params(method, "missing params"))?;
 
-            let ref_obj = params.get("ref").ok_or_else(|| {
-                McpError::invalid_params(method, "missing ref")
-            })?;
+            let ref_obj = params
+                .get("ref")
+                .ok_or_else(|| McpError::invalid_params(method, "missing ref"))?;
 
             Ok(ParsedRequest::CompletionComplete(CompletionParams {
                 ref_type: ref_obj
@@ -464,23 +458,28 @@ pub fn parse_request(request: &Request) -> Result<ParsedRequest, McpError> {
                     .unwrap_or("")
                     .to_string(),
                 argument: params.get("argument").map(|arg| CompletionArgument {
-                    name: arg.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                    value: arg.get("value").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                    name: arg
+                        .get("name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    value: arg
+                        .get("value")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
                 }),
             }))
         }
 
         methods::LOGGING_SET_LEVEL => {
-            let params = params.ok_or_else(|| {
-                McpError::invalid_params(method, "missing params")
-            })?;
+            let params =
+                params.ok_or_else(|| McpError::invalid_params(method, "missing params"))?;
 
             let level = params
                 .get("level")
                 .and_then(|v| v.as_str())
-                .ok_or_else(|| {
-                    McpError::invalid_params(method, "missing level")
-                })?
+                .ok_or_else(|| McpError::invalid_params(method, "missing level"))?
                 .to_string();
 
             Ok(ParsedRequest::LoggingSetLevel(LogLevelParams { level }))

@@ -18,7 +18,8 @@ pub type BoxedToolFn = Box<
     dyn for<'a> Fn(
             Value,
             &'a Context<'a>,
-        ) -> Pin<Box<dyn Future<Output = Result<ToolOutput, McpError>> + Send + 'a>>
+        )
+            -> Pin<Box<dyn Future<Output = Result<ToolOutput, McpError>> + Send + 'a>>
         + Send
         + Sync,
 >;
@@ -47,6 +48,7 @@ impl Default for ToolService {
 
 impl ToolService {
     /// Create a new empty tool service.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             tools: HashMap::new(),
@@ -73,7 +75,11 @@ impl ToolService {
     /// Register a tool with an Arc'd handler (for shared state).
     pub fn register_arc<H>(&mut self, tool: Tool, handler: Arc<H>)
     where
-        H: for<'a> Fn(Value, &'a Context<'a>) -> Pin<Box<dyn Future<Output = Result<ToolOutput, McpError>> + Send + 'a>>
+        H: for<'a> Fn(
+                Value,
+                &'a Context<'a>,
+            )
+                -> Pin<Box<dyn Future<Output = Result<ToolOutput, McpError>> + Send + 'a>>
             + Send
             + Sync
             + 'static,
@@ -90,26 +96,31 @@ impl ToolService {
     }
 
     /// Get a tool by name.
+    #[must_use]
     pub fn get(&self, name: &str) -> Option<&RegisteredTool> {
         self.tools.get(name)
     }
 
     /// Check if a tool exists.
+    #[must_use]
     pub fn contains(&self, name: &str) -> bool {
         self.tools.contains_key(name)
     }
 
     /// Get all registered tools.
+    #[must_use]
     pub fn list(&self) -> Vec<&Tool> {
         self.tools.values().map(|r| &r.tool).collect()
     }
 
     /// Get the number of registered tools.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.tools.len()
     }
 
     /// Check if the service has no tools.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.tools.is_empty()
     }
@@ -171,12 +182,14 @@ impl ToolBuilder {
     }
 
     /// Set the input schema.
+    #[must_use]
     pub fn input_schema(mut self, schema: Value) -> Self {
         self.input_schema = schema;
         self
     }
 
     /// Build the tool.
+    #[must_use]
     pub fn build(self) -> Tool {
         Tool {
             name: self.name,
@@ -190,7 +203,7 @@ impl ToolBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::context::{NoOpPeer, Context};
+    use crate::context::{Context, NoOpPeer};
     use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
     use mcpkit_core::protocol::RequestId;
     use mcpkit_core::types::tool::CallToolResult;

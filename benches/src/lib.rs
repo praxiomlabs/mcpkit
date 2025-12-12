@@ -46,7 +46,7 @@
 //! - `tool_lookup`: Tool registry operations
 //! - `arg_parsing`: JSON argument extraction
 //! - `tool_call`: Direct tool execution
-//! - `result_creation`: ToolOutput construction
+//! - `result_creation`: `ToolOutput` construction
 //! - `full_invocation`: End-to-end tool calls
 //!
 //! ### Transport (`benches/transport.rs`)

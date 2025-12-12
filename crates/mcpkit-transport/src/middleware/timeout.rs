@@ -20,7 +20,7 @@ pub struct TimeoutLayer {
 impl TimeoutLayer {
     /// Create a new timeout layer with equal timeouts for send and receive.
     #[must_use]
-    pub fn new(timeout: Duration) -> Self {
+    pub const fn new(timeout: Duration) -> Self {
         Self {
             send_timeout: Some(timeout),
             recv_timeout: Some(timeout),
@@ -29,7 +29,7 @@ impl TimeoutLayer {
 
     /// Create a timeout layer with separate send and receive timeouts.
     #[must_use]
-    pub fn with_timeouts(send: Duration, recv: Duration) -> Self {
+    pub const fn with_timeouts(send: Duration, recv: Duration) -> Self {
         Self {
             send_timeout: Some(send),
             recv_timeout: Some(recv),
@@ -38,28 +38,28 @@ impl TimeoutLayer {
 
     /// Set the send timeout.
     #[must_use]
-    pub fn send_timeout(mut self, timeout: Duration) -> Self {
+    pub const fn send_timeout(mut self, timeout: Duration) -> Self {
         self.send_timeout = Some(timeout);
         self
     }
 
     /// Set the receive timeout.
     #[must_use]
-    pub fn recv_timeout(mut self, timeout: Duration) -> Self {
+    pub const fn recv_timeout(mut self, timeout: Duration) -> Self {
         self.recv_timeout = Some(timeout);
         self
     }
 
     /// Disable the send timeout.
     #[must_use]
-    pub fn no_send_timeout(mut self) -> Self {
+    pub const fn no_send_timeout(mut self) -> Self {
         self.send_timeout = None;
         self
     }
 
     /// Disable the receive timeout.
     #[must_use]
-    pub fn no_recv_timeout(mut self) -> Self {
+    pub const fn no_recv_timeout(mut self) -> Self {
         self.recv_timeout = None;
         self
     }
@@ -98,12 +98,12 @@ pub struct TimeoutTransport<T> {
 
 impl<T: Transport> TimeoutTransport<T> {
     /// Get the configured send timeout.
-    pub fn send_timeout(&self) -> Option<Duration> {
+    pub const fn send_timeout(&self) -> Option<Duration> {
         self.send_timeout
     }
 
     /// Get the configured receive timeout.
-    pub fn recv_timeout(&self) -> Option<Duration> {
+    pub const fn recv_timeout(&self) -> Option<Duration> {
         self.recv_timeout
     }
 }
@@ -116,30 +116,28 @@ where
 
     async fn send(&self, msg: Message) -> Result<(), Self::Error> {
         match self.send_timeout {
-            Some(timeout) => {
-                match crate::runtime::timeout(timeout, self.inner.send(msg)).await {
-                    Ok(result) => result,
-                    Err(_) => Err(TransportError::Timeout {
-                        operation: "send".to_string(),
-                        duration: timeout,
-                    }.into()),
+            Some(timeout) => match crate::runtime::timeout(timeout, self.inner.send(msg)).await {
+                Ok(result) => result,
+                Err(_) => Err(TransportError::Timeout {
+                    operation: "send".to_string(),
+                    duration: timeout,
                 }
-            }
+                .into()),
+            },
             None => self.inner.send(msg).await,
         }
     }
 
     async fn recv(&self) -> Result<Option<Message>, Self::Error> {
         match self.recv_timeout {
-            Some(timeout) => {
-                match crate::runtime::timeout(timeout, self.inner.recv()).await {
-                    Ok(result) => result,
-                    Err(_) => Err(TransportError::Timeout {
-                        operation: "recv".to_string(),
-                        duration: timeout,
-                    }.into()),
+            Some(timeout) => match crate::runtime::timeout(timeout, self.inner.recv()).await {
+                Ok(result) => result,
+                Err(_) => Err(TransportError::Timeout {
+                    operation: "recv".to_string(),
+                    duration: timeout,
                 }
-            }
+                .into()),
+            },
             None => self.inner.recv().await,
         }
     }
@@ -181,9 +179,7 @@ mod tests {
 
     #[test]
     fn test_timeout_layer_disable() {
-        let layer = TimeoutLayer::default()
-            .no_send_timeout()
-            .no_recv_timeout();
+        let layer = TimeoutLayer::default().no_send_timeout().no_recv_timeout();
 
         assert!(layer.send_timeout.is_none());
         assert!(layer.recv_timeout.is_none());

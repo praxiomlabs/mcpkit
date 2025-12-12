@@ -65,7 +65,8 @@ impl ServerMetrics {
 
         // Update global counters
         self.total_requests.fetch_add(1, Ordering::Relaxed);
-        self.total_latency_us.fetch_add(latency_us, Ordering::Relaxed);
+        self.total_latency_us
+            .fetch_add(latency_us, Ordering::Relaxed);
 
         if success {
             self.successful_requests.fetch_add(1, Ordering::Relaxed);
@@ -95,9 +96,18 @@ impl ServerMetrics {
     /// Get a snapshot of current metrics.
     #[must_use]
     pub fn snapshot(&self) -> MetricsSnapshot {
-        let method_counts = self.method_counts.read().unwrap_or_else(|e| e.into_inner());
-        let method_errors = self.method_errors.read().unwrap_or_else(|e| e.into_inner());
-        let method_latency = self.method_latency_us.read().unwrap_or_else(|e| e.into_inner());
+        let method_counts = self
+            .method_counts
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let method_errors = self
+            .method_errors
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let method_latency = self
+            .method_latency_us
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         let per_method: HashMap<String, MethodStats> = method_counts
             .iter()
@@ -105,12 +115,10 @@ impl ServerMetrics {
                 let requests = count.load(Ordering::Relaxed);
                 let errors = method_errors
                     .get(method)
-                    .map(|c| c.load(Ordering::Relaxed))
-                    .unwrap_or(0);
+                    .map_or(0, |c| c.load(Ordering::Relaxed));
                 let latency_us = method_latency
                     .get(method)
-                    .map(|c| c.load(Ordering::Relaxed))
-                    .unwrap_or(0);
+                    .map_or(0, |c| c.load(Ordering::Relaxed));
 
                 (
                     method.clone(),
@@ -161,11 +169,7 @@ impl ServerMetrics {
         }
     }
 
-    fn increment_method_counter(
-        &self,
-        map: &RwLock<HashMap<String, AtomicU64>>,
-        method: &str,
-    ) {
+    fn increment_method_counter(&self, map: &RwLock<HashMap<String, AtomicU64>>, method: &str) {
         // Try to increment existing counter
         if let Ok(counts) = map.read() {
             if let Some(counter) = counts.get(method) {
@@ -251,7 +255,11 @@ impl MetricsSnapshot {
     /// Get methods with highest error rates.
     #[must_use]
     pub fn most_errors(&self, limit: usize) -> Vec<(&String, &MethodStats)> {
-        let mut methods: Vec<_> = self.per_method.iter().filter(|(_, s)| s.errors > 0).collect();
+        let mut methods: Vec<_> = self
+            .per_method
+            .iter()
+            .filter(|(_, s)| s.errors > 0)
+            .collect();
         methods.sort_by(|a, b| b.1.error_rate().partial_cmp(&a.1.error_rate()).unwrap());
         methods.into_iter().take(limit).collect()
     }

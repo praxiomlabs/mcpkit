@@ -98,7 +98,10 @@ pub trait ToolHandler: Send + Sync {
     /// List all available tools.
     ///
     /// This is called when the client requests the tool list.
-    fn list_tools(&self, ctx: &Context<'_>) -> impl Future<Output = Result<Vec<Tool>, McpError>> + Send;
+    fn list_tools(
+        &self,
+        ctx: &Context<'_>,
+    ) -> impl Future<Output = Result<Vec<Tool>, McpError>> + Send;
 
     /// Call a tool with the given arguments.
     ///
@@ -185,7 +188,10 @@ pub trait PromptHandler: Send + Sync {
 /// tracked, monitored, and cancelled.
 pub trait TaskHandler: Send + Sync {
     /// List all tasks, optionally filtered by status.
-    fn list_tasks(&self, ctx: &Context<'_>) -> impl Future<Output = Result<Vec<Task>, McpError>> + Send;
+    fn list_tasks(
+        &self,
+        ctx: &Context<'_>,
+    ) -> impl Future<Output = Result<Vec<Task>, McpError>> + Send;
 
     /// Get the current state of a task.
     fn get_task(
@@ -233,11 +239,12 @@ pub trait LoggingHandler: Send + Sync {
 }
 
 /// Log levels for MCP logging.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub enum LogLevel {
     /// Debug level - most verbose.
     Debug,
     /// Info level.
+    #[default]
     Info,
     /// Notice level.
     Notice,
@@ -251,12 +258,6 @@ pub enum LogLevel {
     Alert,
     /// Emergency level - most severe.
     Emergency,
-}
-
-impl Default for LogLevel {
-    fn default() -> Self {
-        Self::Info
-    }
 }
 
 impl std::fmt::Display for LogLevel {

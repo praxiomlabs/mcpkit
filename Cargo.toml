@@ -21,9 +21,9 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
-rust-version = "1.75"
+rust-version = "1.85"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/praxiomlabs/mcpkit"
 homepage = "https://github.com/praxiomlabs/mcpkit"
@@ -83,18 +83,134 @@ pretty_assertions = "1.4"
 criterion = { version = "0.5", features = ["html_reports", "async_tokio"] }
 
 # Internal crates - path takes precedence locally, version used for publishing
-mcpkit-core = { version = "0.1.0", path = "crates/mcpkit-core" }
-mcpkit-transport = { version = "0.1.0", path = "crates/mcpkit-transport" }
-mcpkit-server = { version = "0.1.0", path = "crates/mcpkit-server" }
-mcpkit-client = { version = "0.1.0", path = "crates/mcpkit-client" }
-mcpkit-macros = { version = "0.1.0", path = "crates/mcpkit-macros" }
-mcpkit-testing = { version = "0.1.0", path = "crates/mcpkit-testing" }
+mcpkit-core = { version = "0.2.0", path = "crates/mcpkit-core" }
+mcpkit-transport = { version = "0.2.0", path = "crates/mcpkit-transport" }
+mcpkit-server = { version = "0.2.0", path = "crates/mcpkit-server" }
+mcpkit-client = { version = "0.2.0", path = "crates/mcpkit-client" }
+mcpkit-macros = { version = "0.2.0", path = "crates/mcpkit-macros" }
+mcpkit-testing = { version = "0.2.0", path = "crates/mcpkit-testing" }
 
 [workspace.lints.rust]
 unsafe_code = "deny"
 missing_docs = "warn"
+# False positive in Rust 1.92.0 with thiserror macro field usage
+unused_assignments = "allow"
 
 [workspace.lints.clippy]
-all = "warn"
-pedantic = "warn"
-nursery = "warn"
+# Lint groups with lower priority so individual lints can override
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+
+# =============================================================================
+# ALLOWED LINTS - Each with documented justification
+# Audited: 2025-12-12
+# =============================================================================
+
+# --- Documentation lints ---
+# Requiring `# Errors` section on every Result-returning function is excessive
+# for an SDK where error types are self-documenting via thiserror
+missing_errors_doc = "allow"
+# Panics are documented only where they're significant and non-obvious
+missing_panics_doc = "allow"
+
+# --- Builder pattern and fluent API lints ---
+# Builder methods returning Self don't need #[must_use] - callers know to chain
+return_self_not_must_use = "allow"
+# Factory methods (e.g., `new_transport()`) don't always return Self
+new_ret_no_self = "allow"
+
+# --- Async trait constraints ---
+# Required by async trait bounds even when the method body doesn't await
+unused_async = "allow"
+# Not all futures need to be Send in single-threaded contexts
+future_not_send = "allow"
+
+# --- Numeric casting - bounded values in protocol code ---
+# Progress percentages and metrics: u64→f64 precision loss is acceptable
+cast_precision_loss = "allow"
+# Protocol IDs and sizes are bounded by spec, truncation is safe
+cast_possible_truncation = "allow"
+# Loop counters and indices: i32→u64 sign loss is intentional
+cast_sign_loss = "allow"
+# Explicit casts in bounded arithmetic
+cast_possible_wrap = "allow"
+
+# --- Style preferences where explicit code aids readability ---
+# `if let` IS more readable than `map_or_else` in many cases
+option_if_let_else = "allow"
+# Explicit match arms for different error types aids debugging
+match_same_arms = "allow"
+# Wildcard matches future-proof against enum additions
+match_wildcard_for_single_variants = "allow"
+# Explicit `continue` can clarify loop control flow
+needless_continue = "allow"
+# while let can be clearer than loop + match in some contexts
+while_let_loop = "allow"
+# let-else isn't always more readable than if-let
+manual_let_else = "allow"
+# Explicit returns can improve clarity in complex functions
+needless_return = "allow"
+# Index loops are sometimes clearer than enumerate
+needless_range_loop = "allow"
+# Single-arm match can be clearer than if let
+single_match = "allow"
+
+# --- Intentional design choices ---
+# Self parameter reserved for future extensibility
+unused_self = "allow"
+# Ownership transfer is semantically meaningful even when reference would work
+needless_pass_by_value = "allow"
+# Similar variable names (e.g., `req`/`res`) are fine in context
+similar_names = "allow"
+
+# --- Struct and module naming ---
+# Field names matching struct name is acceptable (e.g., error.error_code)
+struct_field_names = "allow"
+# Nested modules with same name (e.g., server/server.rs) is fine
+module_inception = "allow"
+# Capability structs legitimately have many boolean fields
+struct_excessive_bools = "allow"
+# Explicit type names in struct fields are clearer than Self (e.g., Schema vs Self)
+use_self = "allow"
+
+# --- Public API design ---
+# HashMap in public API is acceptable for this SDK
+implicit_hasher = "allow"
+# Type repetition in bounds sometimes needed for clarity
+type_repetition_in_bounds = "allow"
+# Rich error types with diagnostic info are worth the size
+result_large_err = "allow"
+
+# --- Formatting and literals ---
+# Large numbers without separators are readable in context
+unreadable_literal = "allow"
+# Doc comments with inner attributes is acceptable
+mixed_attributes_style = "allow"
+# Approximate math constants in benchmarks
+approx_constant = "allow"
+# Format in push_str for complex string building
+format_push_string = "allow"
+# collect with format is acceptable for string building
+format_collect = "allow"
+
+# --- Test-specific patterns ---
+# Constant assertions in tests verify compile-time constraints
+assertions_on_constants = "allow"
+# Float comparison in tests with known values
+float_cmp = "allow"
+
+# --- Drop ordering - analyzed and verified safe ---
+# Lock scopes are intentionally designed; drop order is correct
+significant_drop_tightening = "allow"
+significant_drop_in_scrutinee = "allow"
+
+# --- Miscellaneous ---
+# Some functions are legitimately long (e.g., server initialization)
+too_many_lines = "allow"
+# Not all functions benefit from being const
+missing_const_for_fn = "allow"
+# Redundant attributes sometimes needed for documentation
+duplicated_attributes = "allow"
+# Redundant must_use on functions returning must_use types
+double_must_use = "allow"

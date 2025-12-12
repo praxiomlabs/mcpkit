@@ -63,6 +63,7 @@ pub struct ServerState {
 
 impl ServerState {
     /// Create a new server state.
+    #[must_use]
     pub fn new(server_caps: ServerCapabilities) -> Self {
         Self {
             client_caps: RwLock::new(ClientCapabilities::default()),
@@ -152,7 +153,7 @@ pub struct TransportPeer<T: Transport> {
 
 impl<T: Transport> TransportPeer<T> {
     /// Create a new transport peer.
-    pub fn new(transport: Arc<T>) -> Self {
+    pub const fn new(transport: Arc<T>) -> Self {
         Self { transport }
     }
 }
@@ -171,7 +172,7 @@ where
             transport
                 .send(Message::Notification(notification))
                 .await
-                .map_err(|e| e.into())
+                .map_err(std::convert::Into::into)
         })
     }
 }
@@ -217,7 +218,7 @@ where
     Tr::Error: Into<McpError>,
 {
     /// Get the server state.
-    pub fn state(&self) -> &Arc<ServerState> {
+    pub const fn state(&self) -> &Arc<ServerState> {
         &self.state
     }
 
@@ -285,7 +286,7 @@ where
         self.transport
             .send(Message::Response(response_msg))
             .await
-            .map_err(|e| e.into())
+            .map_err(std::convert::Into::into)
     }
 
     /// Handle the initialize request.
@@ -294,18 +295,16 @@ where
     /// 1. Client sends its preferred protocol version
     /// 2. Server responds with the same version if supported, or its preferred version
     /// 3. Client must support the returned version or disconnect
-    async fn handle_initialize(
-        &self,
-        request: &Request,
-    ) -> Result<serde_json::Value, McpError> {
+    async fn handle_initialize(&self, request: &Request) -> Result<serde_json::Value, McpError> {
         if self.state.is_initialized() {
             return Err(McpError::invalid_request("Already initialized"));
         }
 
         // Parse initialize params
-        let params = request.params.as_ref().ok_or_else(|| {
-            McpError::invalid_params("initialize", "missing params")
-        })?;
+        let params = request
+            .params
+            .as_ref()
+            .ok_or_else(|| McpError::invalid_params("initialize", "missing params"))?;
 
         // Extract and negotiate protocol version
         let requested_version = params
@@ -316,22 +315,23 @@ where
         let negotiated_version = negotiate_version(requested_version);
 
         // Log version negotiation details for debugging
-        if requested_version != negotiated_version {
+        if requested_version == negotiated_version {
+            tracing::debug!(
+                version = %negotiated_version,
+                "Protocol version negotiated successfully"
+            );
+        } else {
             tracing::info!(
                 requested = %requested_version,
                 negotiated = %negotiated_version,
                 supported = ?SUPPORTED_PROTOCOL_VERSIONS,
                 "Protocol version negotiation: client requested unsupported version"
             );
-        } else {
-            tracing::debug!(
-                version = %negotiated_version,
-                "Protocol version negotiated successfully"
-            );
         }
 
         // Store the negotiated version
-        self.state.set_protocol_version(negotiated_version.to_string());
+        self.state
+            .set_protocol_version(negotiated_version.to_string());
 
         // Extract client info and capabilities
         if let Some(caps) = params.get("capabilities") {
@@ -428,7 +428,11 @@ where
     }
 
     /// Create a new server runtime with custom configuration.
-    pub fn with_config(server: Server<H, T, R, P, K>, transport: Tr, config: RuntimeConfig) -> Self {
+    pub fn with_config(
+        server: Server<H, T, R, P, K>,
+        transport: Tr,
+        config: RuntimeConfig,
+    ) -> Self {
         let caps = server.capabilities().clone();
         Self {
             server,
@@ -499,7 +503,7 @@ async fn route_tools<TH: ToolHandler + Send + Sync>(
             Some(result.map(|tools| serde_json::json!({ "tools": tools })))
         }
         "tools/call" => {
-            let result = (|| async {
+            let result = async {
                 let params = params.ok_or_else(|| {
                     McpError::invalid_params("tools/call", "missing params")
                 })?;
@@ -508,7 +512,7 @@ async fn route_tools<TH: ToolHandler + Send + Sync>(
                     .ok_or_else(|| McpError::invalid_params("tools/call", "missing tool name"))?;
                 let args = params.get("arguments")
                     .cloned()
-                    .unwrap_or(serde_json::json!({}));
+                    .unwrap_or_else(|| serde_json::json!({}));
 
                 tracing::info!(tool = %name, "Calling tool");
                 let start = std::time::Instant::now();
@@ -522,8 +526,8 @@ async fn route_tools<TH: ToolHandler + Send + Sync>(
 
                 let output = output?;
                 let result: CallToolResult = output.into();
-                Ok(serde_json::to_value(result).unwrap_or(serde_json::json!({})))
-            })().await;
+                Ok(serde_json::to_value(result).unwrap_or_else(|_| serde_json::json!({})))
+            }.await;
             Some(result)
         }
         _ => None,
@@ -547,7 +551,7 @@ async fn route_resources<RH: ResourceHandler + Send + Sync>(
             Some(result.map(|resources| serde_json::json!({ "resources": resources })))
         }
         "resources/read" => {
-            let result = (|| async {
+            let result = async {
                 let params = params.ok_or_else(|| {
                     McpError::invalid_params("resources/read", "missing params")
                 })?;
@@ -567,7 +571,7 @@ async fn route_resources<RH: ResourceHandler + Send + Sync>(
 
                 let contents = contents?;
                 Ok(serde_json::json!({ "contents": contents }))
-            })().await;
+            }.await;
             Some(result)
         }
         _ => None,
@@ -591,7 +595,7 @@ async fn route_prompts<PH: PromptHandler + Send + Sync>(
             Some(result.map(|prompts| serde_json::json!({ "prompts": prompts })))
         }
         "prompts/get" => {
-            let result = (|| async {
+            let result = async {
                 let params = params.ok_or_else(|| {
                     McpError::invalid_params("prompts/get", "missing params")
                 })?;
@@ -613,8 +617,8 @@ async fn route_prompts<PH: PromptHandler + Send + Sync>(
                 }
 
                 let result = prompt_result?;
-                Ok(serde_json::to_value(result).unwrap_or(serde_json::json!({})))
-            })().await;
+                Ok(serde_json::to_value(result).unwrap_or_else(|_| serde_json::json!({})))
+            }.await;
             Some(result)
         }
         _ => None,
@@ -916,7 +920,10 @@ mod tests {
         });
         let token = extract_progress_token(Some(&params));
         assert!(token.is_some());
-        assert_eq!(token.unwrap(), ProgressToken::String("my-token-123".to_string()));
+        assert_eq!(
+            token.unwrap(),
+            ProgressToken::String("my-token-123".to_string())
+        );
     }
 
     #[test]

@@ -53,7 +53,10 @@ use std::sync::Arc;
 /// to send notifications without knowing the underlying transport.
 pub trait Peer: Send + Sync {
     /// Send a notification to the peer.
-    fn notify(&self, notification: Notification) -> Pin<Box<dyn Future<Output = Result<(), McpError>> + Send + '_>>;
+    fn notify(
+        &self,
+        notification: Notification,
+    ) -> Pin<Box<dyn Future<Output = Result<(), McpError>> + Send + '_>>;
 }
 
 /// A cancellation token for tracking request cancellation.
@@ -92,6 +95,7 @@ impl CancellationToken {
     /// Note: In a production implementation, this would integrate with the
     /// runtime's notification system. This simple implementation polls
     /// the atomic flag.
+    #[must_use]
     pub fn cancelled(&self) -> CancelledFuture {
         CancelledFuture {
             cancelled: self.cancelled.clone(),
@@ -113,7 +117,10 @@ pub struct CancelledFuture {
 impl Future for CancelledFuture {
     type Output = ();
 
-    fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
+    fn poll(
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
         if self.cancelled.load(Ordering::SeqCst) {
             std::task::Poll::Ready(())
         } else {
@@ -202,7 +209,7 @@ impl<'a> Context<'a> {
 
     /// Get the cancellation token for this context.
     #[must_use]
-    pub fn cancellation_token(&self) -> &CancellationToken {
+    pub const fn cancellation_token(&self) -> &CancellationToken {
         &self.cancel
     }
 
@@ -216,7 +223,11 @@ impl<'a> Context<'a> {
     /// # Errors
     ///
     /// Returns an error if the notification could not be sent.
-    pub async fn notify(&self, method: &str, params: Option<serde_json::Value>) -> Result<(), McpError> {
+    pub async fn notify(
+        &self,
+        method: &str,
+        params: Option<serde_json::Value>,
+    ) -> Result<(), McpError> {
         let notification = if let Some(p) = params {
             Notification::with_params(method.to_string(), p)
         } else {
@@ -280,7 +291,10 @@ impl std::fmt::Debug for Context<'_> {
 pub struct NoOpPeer;
 
 impl Peer for NoOpPeer {
-    fn notify(&self, _notification: Notification) -> Pin<Box<dyn Future<Output = Result<(), McpError>> + Send + '_>> {
+    fn notify(
+        &self,
+        _notification: Notification,
+    ) -> Pin<Box<dyn Future<Output = Result<(), McpError>> + Send + '_>> {
         Box::pin(async { Ok(()) })
     }
 }
@@ -303,7 +317,7 @@ pub struct ContextData {
 impl ContextData {
     /// Create a new context data struct.
     #[must_use]
-    pub fn new(
+    pub const fn new(
         request_id: RequestId,
         client_caps: ClientCapabilities,
         server_caps: ServerCapabilities,
@@ -355,13 +369,7 @@ mod tests {
         let server_caps = ServerCapabilities::default();
         let peer = NoOpPeer;
 
-        let ctx = Context::new(
-            &request_id,
-            None,
-            &client_caps,
-            &server_caps,
-            &peer,
-        );
+        let ctx = Context::new(&request_id, None, &client_caps, &server_caps, &peer);
 
         assert!(!ctx.is_cancelled());
         assert!(ctx.progress_token.is_none());

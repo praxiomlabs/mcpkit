@@ -121,7 +121,7 @@ pub struct MetricsLayer {
 impl MetricsLayer {
     /// Create a new metrics layer with the provided metrics handle.
     #[must_use]
-    pub fn new(metrics: MetricsHandle) -> Self {
+    pub const fn new(metrics: MetricsHandle) -> Self {
         Self { metrics }
     }
 
@@ -129,12 +129,15 @@ impl MetricsLayer {
     #[must_use]
     pub fn new_with_handle() -> (Self, MetricsHandle) {
         let metrics = Arc::new(Metrics::new());
-        let layer = Self { metrics: Arc::clone(&metrics) };
+        let layer = Self {
+            metrics: Arc::clone(&metrics),
+        };
         (layer, metrics)
     }
 
     /// Get a reference to the metrics handle.
-    pub fn handle(&self) -> &MetricsHandle {
+    #[must_use]
+    pub const fn handle(&self) -> &MetricsHandle {
         &self.metrics
     }
 }
@@ -164,7 +167,7 @@ pub struct MetricsTransport<T> {
 
 impl<T> MetricsTransport<T> {
     /// Get a reference to the metrics.
-    pub fn metrics(&self) -> &MetricsHandle {
+    pub const fn metrics(&self) -> &MetricsHandle {
         &self.metrics
     }
 }
@@ -195,7 +198,9 @@ impl<T: Transport> Transport for MetricsTransport<T> {
     async fn recv(&self) -> Result<Option<Message>, Self::Error> {
         match self.inner.recv().await {
             Ok(Some(msg)) => {
-                self.metrics.messages_received.fetch_add(1, Ordering::Relaxed);
+                self.metrics
+                    .messages_received
+                    .fetch_add(1, Ordering::Relaxed);
                 // Estimate bytes
                 if let Ok(json) = serde_json::to_string(&msg) {
                     self.metrics

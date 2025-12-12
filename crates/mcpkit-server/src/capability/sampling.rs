@@ -7,8 +7,8 @@ use crate::context::Context;
 use mcpkit_core::error::McpError;
 use mcpkit_core::types::content::Role;
 use mcpkit_core::types::sampling::{
-    CreateMessageRequest, CreateMessageResult, IncludeContext, ModelPreferences,
-    SamplingMessage, StopReason,
+    CreateMessageRequest, CreateMessageResult, IncludeContext, ModelPreferences, SamplingMessage,
+    StopReason,
 };
 use std::future::Future;
 use std::pin::Pin;
@@ -18,8 +18,9 @@ pub type BoxedSamplingFn = Box<
     dyn for<'a> Fn(
             CreateMessageRequest,
             &'a Context<'a>,
-        ) -> Pin<Box<dyn Future<Output = Result<CreateMessageResult, McpError>> + Send + 'a>>
-        + Send
+        ) -> Pin<
+            Box<dyn Future<Output = Result<CreateMessageResult, McpError>> + Send + 'a>,
+        > + Send
         + Sync,
 >;
 
@@ -38,6 +39,7 @@ impl Default for SamplingService {
 
 impl SamplingService {
     /// Create a new sampling service without a handler.
+    #[must_use]
     pub fn new() -> Self {
         Self { handler: None }
     }
@@ -53,6 +55,7 @@ impl SamplingService {
     }
 
     /// Check if sampling is supported.
+    #[must_use]
     pub fn is_supported(&self) -> bool {
         self.handler.is_some()
     }
@@ -63,9 +66,10 @@ impl SamplingService {
         request: CreateMessageRequest,
         ctx: &Context<'_>,
     ) -> Result<CreateMessageResult, McpError> {
-        let handler = self.handler.as_ref().ok_or_else(|| {
-            McpError::invalid_request("Sampling not supported")
-        })?;
+        let handler = self
+            .handler
+            .as_ref()
+            .ok_or_else(|| McpError::invalid_request("Sampling not supported"))?;
 
         (handler)(request, ctx).await
     }
@@ -90,7 +94,8 @@ impl Default for SamplingRequestBuilder {
 
 impl SamplingRequestBuilder {
     /// Create a new request builder.
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             messages: Vec::new(),
             model_preferences: None,
@@ -110,24 +115,28 @@ impl SamplingRequestBuilder {
 
     /// Add an assistant message.
     pub fn assistant(mut self, content: impl Into<String>) -> Self {
-        self.messages.push(SamplingMessage::assistant(content.into()));
+        self.messages
+            .push(SamplingMessage::assistant(content.into()));
         self
     }
 
     /// Add a message.
+    #[must_use]
     pub fn message(mut self, msg: SamplingMessage) -> Self {
         self.messages.push(msg);
         self
     }
 
     /// Set model preferences.
+    #[must_use]
     pub fn model_preferences(mut self, prefs: ModelPreferences) -> Self {
         self.model_preferences = Some(prefs);
         self
     }
 
     /// Set context inclusion.
-    pub fn include_context(mut self, context: IncludeContext) -> Self {
+    #[must_use]
+    pub const fn include_context(mut self, context: IncludeContext) -> Self {
         self.include_context = Some(context);
         self
     }
@@ -139,13 +148,15 @@ impl SamplingRequestBuilder {
     }
 
     /// Set the maximum tokens.
-    pub fn max_tokens(mut self, tokens: u32) -> Self {
+    #[must_use]
+    pub const fn max_tokens(mut self, tokens: u32) -> Self {
         self.max_tokens = Some(tokens);
         self
     }
 
     /// Set the temperature.
-    pub fn temperature(mut self, temp: f64) -> Self {
+    #[must_use]
+    pub const fn temperature(mut self, temp: f64) -> Self {
         self.temperature = Some(temp);
         self
     }
@@ -157,6 +168,7 @@ impl SamplingRequestBuilder {
     }
 
     /// Build the request.
+    #[must_use]
     pub fn build(self) -> CreateMessageRequest {
         CreateMessageRequest {
             messages: self.messages,
@@ -201,24 +213,28 @@ impl SamplingResultBuilder {
     }
 
     /// Set the stop reason.
-    pub fn stop_reason(mut self, reason: StopReason) -> Self {
+    #[must_use]
+    pub const fn stop_reason(mut self, reason: StopReason) -> Self {
         self.stop_reason = Some(reason);
         self
     }
 
     /// Mark as stopped due to end turn.
-    pub fn end_turn(mut self) -> Self {
+    #[must_use]
+    pub const fn end_turn(mut self) -> Self {
         self.stop_reason = Some(StopReason::EndTurn);
         self
     }
 
     /// Mark as stopped due to max tokens.
-    pub fn max_tokens_reached(mut self) -> Self {
+    #[must_use]
+    pub const fn max_tokens_reached(mut self) -> Self {
         self.stop_reason = Some(StopReason::MaxTokens);
         self
     }
 
     /// Build the result.
+    #[must_use]
     pub fn build(self) -> CreateMessageResult {
         CreateMessageResult {
             role: self.role,

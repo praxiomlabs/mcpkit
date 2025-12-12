@@ -112,8 +112,9 @@ impl Tool {
     ) -> Self {
         let name = name.into();
         self.ensure_properties();
-        let props = self.input_schema.get_mut("properties")
-            .expect("input_schema missing 'properties' - use Tool::new() or ensure schema has properties");
+        let props = self.input_schema.get_mut("properties").expect(
+            "input_schema missing 'properties' - use Tool::new() or ensure schema has properties",
+        );
         props[&name] = serde_json::json!({
             "type": "string",
             "description": description.into()
@@ -138,8 +139,9 @@ impl Tool {
     ) -> Self {
         let name = name.into();
         self.ensure_properties();
-        let props = self.input_schema.get_mut("properties")
-            .expect("input_schema missing 'properties' - use Tool::new() or ensure schema has properties");
+        let props = self.input_schema.get_mut("properties").expect(
+            "input_schema missing 'properties' - use Tool::new() or ensure schema has properties",
+        );
         props[&name] = serde_json::json!({
             "type": "number",
             "description": description.into()
@@ -164,8 +166,9 @@ impl Tool {
     ) -> Self {
         let name = name.into();
         self.ensure_properties();
-        let props = self.input_schema.get_mut("properties")
-            .expect("input_schema missing 'properties' - use Tool::new() or ensure schema has properties");
+        let props = self.input_schema.get_mut("properties").expect(
+            "input_schema missing 'properties' - use Tool::new() or ensure schema has properties",
+        );
         props[&name] = serde_json::json!({
             "type": "boolean",
             "description": description.into()
@@ -176,7 +179,7 @@ impl Tool {
         self
     }
 
-    /// Ensure the input_schema has a "properties" object.
+    /// Ensure the `input_schema` has a "properties" object.
     fn ensure_properties(&mut self) {
         if self.input_schema.get("properties").is_none() {
             self.input_schema["properties"] = serde_json::json!({});
@@ -249,28 +252,28 @@ impl ToolAnnotations {
 
     /// Mark this tool as read-only.
     #[must_use]
-    pub fn with_read_only(mut self, read_only: bool) -> Self {
+    pub const fn with_read_only(mut self, read_only: bool) -> Self {
         self.read_only_hint = Some(read_only);
         self
     }
 
     /// Mark this tool as destructive.
     #[must_use]
-    pub fn with_destructive(mut self, destructive: bool) -> Self {
+    pub const fn with_destructive(mut self, destructive: bool) -> Self {
         self.destructive_hint = Some(destructive);
         self
     }
 
     /// Mark this tool as idempotent.
     #[must_use]
-    pub fn with_idempotent(mut self, idempotent: bool) -> Self {
+    pub const fn with_idempotent(mut self, idempotent: bool) -> Self {
         self.idempotent_hint = Some(idempotent);
         self
     }
 }
 
 /// The result of calling a tool.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CallToolResult {
     /// The content returned by the tool.
     pub content: Vec<Content>,
@@ -291,7 +294,7 @@ impl CallToolResult {
 
     /// Create a successful result with multiple content items.
     #[must_use]
-    pub fn content(content: Vec<Content>) -> Self {
+    pub const fn content(content: Vec<Content>) -> Self {
         Self {
             content,
             is_error: None,
@@ -311,15 +314,6 @@ impl CallToolResult {
     #[must_use]
     pub fn is_error(&self) -> bool {
         self.is_error.unwrap_or(false)
-    }
-}
-
-impl Default for CallToolResult {
-    fn default() -> Self {
-        Self {
-            content: Vec::new(),
-            is_error: None,
-        }
     }
 }
 
@@ -349,7 +343,7 @@ impl ToolOutput {
 
     /// Create a result with multiple content items.
     #[must_use]
-    pub fn content(content: Vec<Content>) -> Self {
+    pub const fn content(content: Vec<Content>) -> Self {
         Self::Success(CallToolResult::content(content))
     }
 
@@ -397,7 +391,7 @@ impl From<ToolOutput> for CallToolResult {
                 if let Some(sug) = suggestion {
                     text = format!("{text}\n\nSuggestion: {sug}");
                 }
-                CallToolResult::error(text)
+                Self::error(text)
             }
         }
     }

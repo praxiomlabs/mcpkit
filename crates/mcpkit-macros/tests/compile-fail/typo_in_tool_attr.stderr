@@ -1,13 +1,5 @@
 error: Multiple errors: (Unknown field: `descripion`. Did you mean `description`?, Missing field `description`)
- --> tests/compile-fail/typo_in_tool_attr.rs:9:6
-  |
-9 |     #[tool(descripion = "test")]  // Typo: "descripion" instead of "description"
-  |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-warning: unused import: `tool`
- --> tests/compile-fail/typo_in_tool_attr.rs:3:33
-  |
-3 | use mcpkit_macros::{mcp_server, tool};
-  |                                 ^^^^
-  |
-  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+  --> tests/compile-fail/typo_in_tool_attr.rs:10:6
+   |
+10 |     #[tool(descripion = "test")]  // Typo: "descripion" instead of "description"
+   |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^

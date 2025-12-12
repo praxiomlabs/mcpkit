@@ -185,7 +185,10 @@ impl DatabaseServer {
     }
 
     /// Get the schema for a specific table.
-    #[tool(description = "Get detailed schema information for a table", read_only = true)]
+    #[tool(
+        description = "Get detailed schema information for a table",
+        read_only = true
+    )]
     async fn describe_table(&self, table_name: String) -> Result<ToolOutput, McpError> {
         let tables = self.db.tables.read().await;
 
@@ -219,7 +222,10 @@ impl DatabaseServer {
     ) -> Result<ToolOutput, McpError> {
         // Validate table exists
         let tables = self.db.tables.read().await;
-        if !tables.iter().any(|t| t.name.eq_ignore_ascii_case(&table_name)) {
+        if !tables
+            .iter()
+            .any(|t| t.name.eq_ignore_ascii_case(&table_name))
+        {
             return Err(McpError::invalid_params(
                 "insert_record",
                 format!("Table '{}' not found", table_name),
@@ -307,7 +313,10 @@ impl DatabaseServer {
 
         // Validate table exists
         let tables = self.db.tables.read().await;
-        if !tables.iter().any(|t| t.name.eq_ignore_ascii_case(table_name)) {
+        if !tables
+            .iter()
+            .any(|t| t.name.eq_ignore_ascii_case(table_name))
+        {
             return Err(McpError::resource_not_found(uri));
         }
         drop(tables);
@@ -362,11 +371,7 @@ impl DatabaseServer {
 
     /// Help design a database schema.
     #[prompt(description = "Design a database schema for a given use case")]
-    async fn design_schema(
-        &self,
-        use_case: String,
-        entities: Option<String>,
-    ) -> GetPromptResult {
+    async fn design_schema(&self, use_case: String, entities: Option<String>) -> GetPromptResult {
         let entities_text = entities
             .map(|e| format!("\n\nEntities to include: {}", e))
             .unwrap_or_default();
@@ -391,7 +396,11 @@ impl DatabaseServer {
 
     /// Optimize a slow query.
     #[prompt(description = "Analyze and optimize a slow SQL query")]
-    async fn optimize_query(&self, slow_query: String, execution_time: Option<String>) -> GetPromptResult {
+    async fn optimize_query(
+        &self,
+        slow_query: String,
+        execution_time: Option<String>,
+    ) -> GetPromptResult {
         let time_info = execution_time
             .map(|t| format!(" (current execution time: {})", t))
             .unwrap_or_default();

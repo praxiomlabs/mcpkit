@@ -25,8 +25,7 @@ use mcpkit_core::{
     error::JsonRpcError,
     protocol::{Message, Request, Response as JsonRpcResponse},
     types::{
-        CallToolResult, GetPromptResult, Prompt, Resource,
-        ResourceContents, Tool, ToolOutput,
+        CallToolResult, GetPromptResult, Prompt, Resource, ResourceContents, Tool, ToolOutput,
     },
 };
 use serde_json::{json, Value};
@@ -501,10 +500,7 @@ async fn handle_connection(stream: TcpStream, addr: SocketAddr, state: Arc<Serve
                             },
                         });
 
-                        if let Err(e) = tx
-                            .send(WsMessage::Text(error_response.to_string()))
-                            .await
-                        {
+                        if let Err(e) = tx.send(WsMessage::Text(error_response.to_string())).await {
                             error!(addr = %addr, error = %e, "Failed to send error response");
                             break;
                         }
@@ -516,9 +512,7 @@ async fn handle_connection(stream: TcpStream, addr: SocketAddr, state: Arc<Serve
                 let response = match mcp_msg {
                     Message::Request(ref request) => {
                         // Update request count
-                        if let Some(conn_state) =
-                            state.connections.write().await.get_mut(&addr)
-                        {
+                        if let Some(conn_state) = state.connections.write().await.get_mut(&addr) {
                             conn_state.request_count += 1;
                             if request.method == "initialize" {
                                 conn_state.initialized = true;
@@ -595,7 +589,9 @@ async fn main() {
     println!("  websocat ws://{addr}");
     println!();
     println!("Then send:");
-    println!(r#"  {{"jsonrpc":"2.0","id":1,"method":"initialize","params":{{"protocolVersion":"{MCP_PROTOCOL_VERSION}","clientInfo":{{"name":"websocat","version":"1.0"}}}}}}"#);
+    println!(
+        r#"  {{"jsonrpc":"2.0","id":1,"method":"initialize","params":{{"protocolVersion":"{MCP_PROTOCOL_VERSION}","clientInfo":{{"name":"websocat","version":"1.0"}}}}}}"#
+    );
     println!();
 
     // Accept connections

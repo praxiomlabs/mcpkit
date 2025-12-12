@@ -269,7 +269,7 @@ impl Schema {
     /// Convert this schema to a JSON value.
     #[must_use]
     pub fn to_value(&self) -> Value {
-        serde_json::to_value(self).unwrap_or(Value::Object(serde_json::Map::new()))
+        serde_json::to_value(self).unwrap_or_else(|_| Value::Object(serde_json::Map::new()))
     }
 }
 
@@ -399,14 +399,14 @@ impl SchemaBuilder {
 
     /// Set minimum string length.
     #[must_use]
-    pub fn min_length(mut self, min: u64) -> Self {
+    pub const fn min_length(mut self, min: u64) -> Self {
         self.schema.min_length = Some(min);
         self
     }
 
     /// Set maximum string length.
     #[must_use]
-    pub fn max_length(mut self, max: u64) -> Self {
+    pub const fn max_length(mut self, max: u64) -> Self {
         self.schema.max_length = Some(max);
         self
     }
@@ -466,28 +466,28 @@ impl SchemaBuilder {
 
     /// Set schema for array items.
     #[must_use]
-    pub fn items(mut self, items: SchemaBuilder) -> Self {
+    pub fn items(mut self, items: Self) -> Self {
         self.schema.items = Some(Box::new(items.schema));
         self
     }
 
     /// Set minimum number of items.
     #[must_use]
-    pub fn min_items(mut self, min: u64) -> Self {
+    pub const fn min_items(mut self, min: u64) -> Self {
         self.schema.min_items = Some(min);
         self
     }
 
     /// Set maximum number of items.
     #[must_use]
-    pub fn max_items(mut self, max: u64) -> Self {
+    pub const fn max_items(mut self, max: u64) -> Self {
         self.schema.max_items = Some(max);
         self
     }
 
     /// Require unique items.
     #[must_use]
-    pub fn unique_items(mut self, unique: bool) -> Self {
+    pub const fn unique_items(mut self, unique: bool) -> Self {
         self.schema.unique_items = Some(unique);
         self
     }
@@ -496,7 +496,7 @@ impl SchemaBuilder {
 
     /// Add a property to the schema.
     #[must_use]
-    pub fn property(mut self, name: impl Into<String>, schema: SchemaBuilder) -> Self {
+    pub fn property(mut self, name: impl Into<String>, schema: Self) -> Self {
         let properties = self.schema.properties.get_or_insert_with(HashMap::new);
         properties.insert(name.into(), schema.schema);
         self
@@ -522,7 +522,7 @@ impl SchemaBuilder {
 
     /// Set schema for additional properties.
     #[must_use]
-    pub fn additional_properties_schema(mut self, schema: SchemaBuilder) -> Self {
+    pub fn additional_properties_schema(mut self, schema: Self) -> Self {
         self.schema.additional_properties =
             Some(AdditionalProperties::Schema(Box::new(schema.schema)));
         self
@@ -530,14 +530,14 @@ impl SchemaBuilder {
 
     /// Set minimum number of properties.
     #[must_use]
-    pub fn min_properties(mut self, min: u64) -> Self {
+    pub const fn min_properties(mut self, min: u64) -> Self {
         self.schema.min_properties = Some(min);
         self
     }
 
     /// Set maximum number of properties.
     #[must_use]
-    pub fn max_properties(mut self, max: u64) -> Self {
+    pub const fn max_properties(mut self, max: u64) -> Self {
         self.schema.max_properties = Some(max);
         self
     }
@@ -548,7 +548,7 @@ impl SchemaBuilder {
     #[must_use]
     pub fn all_of<I>(mut self, schemas: I) -> Self
     where
-        I: IntoIterator<Item = SchemaBuilder>,
+        I: IntoIterator<Item = Self>,
     {
         self.schema.all_of = Some(schemas.into_iter().map(|b| b.schema).collect());
         self
@@ -558,7 +558,7 @@ impl SchemaBuilder {
     #[must_use]
     pub fn any_of<I>(mut self, schemas: I) -> Self
     where
-        I: IntoIterator<Item = SchemaBuilder>,
+        I: IntoIterator<Item = Self>,
     {
         self.schema.any_of = Some(schemas.into_iter().map(|b| b.schema).collect());
         self
@@ -568,7 +568,7 @@ impl SchemaBuilder {
     #[must_use]
     pub fn one_of<I>(mut self, schemas: I) -> Self
     where
-        I: IntoIterator<Item = SchemaBuilder>,
+        I: IntoIterator<Item = Self>,
     {
         self.schema.one_of = Some(schemas.into_iter().map(|b| b.schema).collect());
         self
@@ -576,7 +576,7 @@ impl SchemaBuilder {
 
     /// Require the given schema to not match.
     #[must_use]
-    pub fn not(mut self, schema: SchemaBuilder) -> Self {
+    pub fn not(mut self, schema: Self) -> Self {
         self.schema.not = Some(Box::new(schema.schema));
         self
     }
@@ -645,10 +645,7 @@ mod tests {
 
     #[test]
     fn test_number_schema() {
-        let schema = SchemaBuilder::number()
-            .minimum(0)
-            .maximum(100)
-            .build();
+        let schema = SchemaBuilder::number().minimum(0).maximum(100).build();
 
         assert_eq!(schema.schema_type, Some(SchemaType::Number));
         assert_eq!(schema.minimum, Some(0.0));
@@ -700,10 +697,7 @@ mod tests {
     #[test]
     fn test_composition() {
         let schema = SchemaBuilder::new()
-            .one_of([
-                SchemaBuilder::string(),
-                SchemaBuilder::integer(),
-            ])
+            .one_of([SchemaBuilder::string(), SchemaBuilder::integer()])
             .build();
 
         assert!(schema.one_of.is_some());

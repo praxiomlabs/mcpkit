@@ -114,6 +114,7 @@ impl Default for ServerDiscovery {
 
 impl ServerDiscovery {
     /// Create a new server discovery instance.
+    #[must_use]
     pub fn new() -> Self {
         let mut config_paths = Vec::new();
 
@@ -138,6 +139,7 @@ impl ServerDiscovery {
     }
 
     /// Register a server manually.
+    #[must_use]
     pub fn register(mut self, server: DiscoveredServer) -> Self {
         self.servers.insert(server.name.clone(), server);
         self
@@ -150,7 +152,7 @@ impl ServerDiscovery {
     /// Returns an error if reading configuration files fails.
     pub fn discover(&mut self) -> Result<(), DiscoveryError> {
         // Clone paths to avoid borrow conflict
-        let paths: Vec<_> = self.config_paths.iter().cloned().collect();
+        let paths: Vec<_> = self.config_paths.clone();
 
         // Load from config files
         for path in paths {
@@ -168,11 +170,13 @@ impl ServerDiscovery {
     }
 
     /// Get a server by name.
+    #[must_use]
     pub fn get(&self, name: &str) -> Option<&DiscoveredServer> {
         self.servers.get(name)
     }
 
     /// Check if a server is registered.
+    #[must_use]
     pub fn contains(&self, name: &str) -> bool {
         self.servers.contains_key(name)
     }
@@ -279,8 +283,8 @@ mod tests {
 
     #[test]
     fn test_server_discovery_register() {
-        let discovery = ServerDiscovery::new()
-            .register(DiscoveredServer::stdio("test", "test-bin"));
+        let discovery =
+            ServerDiscovery::new().register(DiscoveredServer::stdio("test", "test-bin"));
 
         assert!(discovery.contains("test"));
         assert!(!discovery.contains("unknown"));

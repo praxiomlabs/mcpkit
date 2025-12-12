@@ -53,11 +53,6 @@
 //! included by default.
 
 #![deny(missing_docs)]
-#![warn(clippy::all)]
-#![warn(clippy::pedantic)]
-#![warn(clippy::unwrap_used)]
-#![warn(clippy::must_use_candidate)]
-#![allow(clippy::module_name_repetitions)]
 
 pub mod auth;
 pub mod capability;
@@ -98,25 +93,34 @@ pub mod prelude {
     pub use crate::schema::{Schema, SchemaBuilder, SchemaType};
     pub use crate::state::{Closing, Connected, Connection, Disconnected, Initializing, Ready};
     pub use crate::types::{
+        // Tool types
+        CallToolResult,
         // Content types
         Content,
         ContentAnnotations,
-        Role,
-        // Tool types
-        CallToolResult,
-        Tool,
-        ToolAnnotations,
-        ToolOutput,
-        // Resource types
-        Resource,
-        ResourceContents,
-        ResourceTemplate,
+        // Sampling types
+        CreateMessageRequest,
+        CreateMessageResult,
+        // Elicitation types
+        ElicitAction,
+        ElicitRequest,
+        ElicitResult,
+        ElicitationSchema,
         // Prompt types
         GetPromptResult,
+        ModelPreferences,
         Prompt,
         PromptArgument,
         PromptMessage,
         PromptOutput,
+        PropertySchema,
+        // Resource types
+        Resource,
+        ResourceContents,
+        ResourceTemplate,
+        Role,
+        SamplingMessage,
+        StopReason,
         // Task types
         Task,
         TaskError,
@@ -124,18 +128,9 @@ pub mod prelude {
         TaskProgress,
         TaskStatus,
         TaskSummary,
-        // Sampling types
-        CreateMessageRequest,
-        CreateMessageResult,
-        ModelPreferences,
-        SamplingMessage,
-        StopReason,
-        // Elicitation types
-        ElicitAction,
-        ElicitRequest,
-        ElicitResult,
-        ElicitationSchema,
-        PropertySchema,
+        Tool,
+        ToolAnnotations,
+        ToolOutput,
     };
 }
 

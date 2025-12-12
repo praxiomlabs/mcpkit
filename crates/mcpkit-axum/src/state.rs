@@ -36,11 +36,7 @@ impl<H> McpState<H> {
     }
 
     /// Create new MCP state with custom session configuration.
-    pub fn with_sessions(
-        handler: H,
-        sessions: SessionStore,
-        sse_sessions: SessionManager,
-    ) -> Self
+    pub fn with_sessions(handler: H, sessions: SessionStore, sse_sessions: SessionManager) -> Self
     where
         H: HasServerInfo,
     {

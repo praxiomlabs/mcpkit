@@ -111,7 +111,7 @@ impl HttpTransportConfig {
 
     /// Set the maximum message size.
     #[must_use]
-    pub fn with_max_message_size(mut self, size: usize) -> Self {
+    pub const fn with_max_message_size(mut self, size: usize) -> Self {
         self.max_message_size = size;
         self
     }
@@ -125,28 +125,28 @@ impl HttpTransportConfig {
 
     /// Set the connection timeout.
     #[must_use]
-    pub fn with_connect_timeout(mut self, timeout: Duration) -> Self {
+    pub const fn with_connect_timeout(mut self, timeout: Duration) -> Self {
         self.connect_timeout = timeout;
         self
     }
 
     /// Set the request timeout.
     #[must_use]
-    pub fn with_request_timeout(mut self, timeout: Duration) -> Self {
+    pub const fn with_request_timeout(mut self, timeout: Duration) -> Self {
         self.request_timeout = timeout;
         self
     }
 
     /// Disable automatic reconnection.
     #[must_use]
-    pub fn without_auto_reconnect(mut self) -> Self {
+    pub const fn without_auto_reconnect(mut self) -> Self {
         self.auto_reconnect = false;
         self
     }
 
     /// Set maximum reconnection attempts.
     #[must_use]
-    pub fn with_max_reconnect_attempts(mut self, attempts: u32) -> Self {
+    pub const fn with_max_reconnect_attempts(mut self, attempts: u32) -> Self {
         self.max_reconnect_attempts = attempts;
         self
     }
@@ -292,20 +292,18 @@ impl HttpTransport {
         let mut headers = HeaderMap::new();
 
         // Required headers per MCP spec
-        headers.insert(
-            CONTENT_TYPE,
-            HeaderValue::from_static("application/json"),
-        );
+        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
         headers.insert(
             ACCEPT,
             HeaderValue::from_static("application/json, text/event-stream"),
         );
         headers.insert(
             MCP_PROTOCOL_VERSION_HEADER,
-            HeaderValue::from_str(&self.config.protocol_version)
-                .map_err(|e| TransportError::Connection {
+            HeaderValue::from_str(&self.config.protocol_version).map_err(|e| {
+                TransportError::Connection {
                     message: format!("Invalid protocol version header: {e}"),
-                })?,
+                }
+            })?,
         );
 
         // Session ID if available
@@ -321,10 +319,11 @@ impl HttpTransport {
         // Custom headers
         for (name, value) in &self.config.headers {
             headers.insert(
-                reqwest::header::HeaderName::from_bytes(name.as_bytes())
-                    .map_err(|e| TransportError::Connection {
+                reqwest::header::HeaderName::from_bytes(name.as_bytes()).map_err(|e| {
+                    TransportError::Connection {
                         message: format!("Invalid header name '{name}': {e}"),
-                    })?,
+                    }
+                })?,
                 HeaderValue::from_str(value).map_err(|e| TransportError::Connection {
                     message: format!("Invalid header value for '{name}': {e}"),
                 })?,
@@ -424,9 +423,12 @@ impl HttpTransport {
     /// Process a direct JSON response.
     #[cfg(feature = "http")]
     async fn process_json_response(&self, response: Response) -> Result<(), TransportError> {
-        let body = response.text().await.map_err(|e| TransportError::Connection {
-            message: format!("Failed to read response body: {e}"),
-        })?;
+        let body = response
+            .text()
+            .await
+            .map_err(|e| TransportError::Connection {
+                message: format!("Failed to read response body: {e}"),
+            })?;
 
         if body.is_empty() {
             return Ok(());
@@ -440,9 +442,10 @@ impl HttpTransport {
             });
         }
 
-        let msg: Message = serde_json::from_str(&body).map_err(|e| TransportError::Serialization {
-            message: format!("Failed to parse response: {e}"),
-        })?;
+        let msg: Message =
+            serde_json::from_str(&body).map_err(|e| TransportError::Serialization {
+                message: format!("Failed to parse response: {e}"),
+            })?;
 
         self.state.lock().await.message_queue.push_back(msg);
         self.messages_received.fetch_add(1, Ordering::Relaxed);
@@ -528,7 +531,7 @@ impl HttpTransport {
         Ok(())
     }
 
-    /// Stub for send_post when http feature is disabled.
+    /// Stub for `send_post` when http feature is disabled.
     #[cfg(not(feature = "http"))]
     async fn send_post(&self, _msg: &Message) -> Result<(), TransportError> {
         Err(TransportError::Connection {
@@ -653,13 +656,13 @@ impl HttpTransportListener {
 
     /// Set the session timeout.
     #[must_use]
-    pub fn with_session_timeout(mut self, timeout: Duration) -> Self {
+    pub const fn with_session_timeout(mut self, timeout: Duration) -> Self {
         self.session_timeout = timeout;
         self
     }
 
     /// Get the session timeout.
-    pub fn session_timeout(&self) -> Duration {
+    pub const fn session_timeout(&self) -> Duration {
         self.session_timeout
     }
 
@@ -694,7 +697,7 @@ impl HttpTransportListener {
 
     /// Set the maximum message size.
     #[must_use]
-    pub fn with_max_message_size(mut self, size: usize) -> Self {
+    pub const fn with_max_message_size(mut self, size: usize) -> Self {
         self.max_message_size = size;
         self
     }
@@ -715,7 +718,7 @@ impl HttpTransportListener {
     }
 
     /// Get the maximum message size.
-    pub fn max_message_size(&self) -> usize {
+    pub const fn max_message_size(&self) -> usize {
         self.max_message_size
     }
 
@@ -752,7 +755,10 @@ impl HttpTransportListener {
     /// let router = HttpTransportListener::create_router_with_config(config);
     /// ```
     pub fn create_router_with_config(config: HttpServerConfig) -> axum::Router {
-        use axum::{routing::{delete, get, post}, Router};
+        use axum::{
+            routing::{delete, get, post},
+            Router,
+        };
         use std::sync::Arc;
 
         Router::new()
@@ -772,11 +778,12 @@ impl HttpTransportListener {
         let (shutdown_tx, mut shutdown_rx) = tokio::sync::broadcast::channel::<()>(1);
         *self.shutdown_tx.lock().await = Some(shutdown_tx);
 
-        let listener = TcpListener::bind(&self.bind_addr)
-            .await
-            .map_err(|e| TransportError::Connection {
-                message: format!("Failed to bind to {}: {}", self.bind_addr, e),
-            })?;
+        let listener =
+            TcpListener::bind(&self.bind_addr)
+                .await
+                .map_err(|e| TransportError::Connection {
+                    message: format!("Failed to bind to {}: {}", self.bind_addr, e),
+                })?;
 
         self.running.store(true, Ordering::Release);
         tracing::info!(addr = %self.bind_addr, "HTTP server started");
@@ -844,7 +851,7 @@ pub struct HttpServerConfig {
 impl HttpServerConfig {
     /// Create a new server configuration.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             allowed_origins: Vec::new(),
             max_message_size: DEFAULT_MAX_MESSAGE_SIZE,
@@ -871,7 +878,7 @@ impl HttpServerConfig {
 
     /// Set maximum message size.
     #[must_use]
-    pub fn with_max_message_size(mut self, size: usize) -> Self {
+    pub const fn with_max_message_size(mut self, size: usize) -> Self {
         self.max_message_size = size;
         self
     }
@@ -970,8 +977,10 @@ async fn handle_mcp_post_with_state(
     let session_id = headers
         .get(MCP_SESSION_ID_HEADER)
         .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        .map_or_else(
+            || uuid::Uuid::new_v4().to_string(),
+            std::string::ToString::to_string,
+        );
 
     // For now, just echo back as JSON
     // In a full implementation, this would route to the MCP handler
@@ -1030,8 +1039,7 @@ async fn handle_mcp_sse_with_state(
 
     // Create SSE stream
     // In a full implementation, this would pull from the session's outbound queue
-    let stream =
-        stream::once(async { Ok::<_, Infallible>(Event::default().data("connected")) });
+    let stream = stream::once(async { Ok::<_, Infallible>(Event::default().data("connected")) });
 
     Sse::new(stream)
         .keep_alive(KeepAlive::default())
@@ -1088,14 +1096,14 @@ impl HttpTransportBuilder {
 
     /// Set the connection timeout.
     #[must_use]
-    pub fn connect_timeout(mut self, timeout: Duration) -> Self {
+    pub const fn connect_timeout(mut self, timeout: Duration) -> Self {
         self.config.connect_timeout = timeout;
         self
     }
 
     /// Set the request timeout.
     #[must_use]
-    pub fn request_timeout(mut self, timeout: Duration) -> Self {
+    pub const fn request_timeout(mut self, timeout: Duration) -> Self {
         self.config.request_timeout = timeout;
         self
     }
@@ -1109,7 +1117,7 @@ impl HttpTransportBuilder {
 
     /// Disable automatic reconnection.
     #[must_use]
-    pub fn no_auto_reconnect(mut self) -> Self {
+    pub const fn no_auto_reconnect(mut self) -> Self {
         self.config.auto_reconnect = false;
         self
     }
@@ -1163,8 +1171,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_transport_metadata() {
-        let transport = HttpTransport::new(HttpTransportConfig::new("http://localhost:8080"))
-            .unwrap();
+        let transport =
+            HttpTransport::new(HttpTransportConfig::new("http://localhost:8080")).unwrap();
         let metadata = transport.metadata();
 
         assert_eq!(metadata.transport_type, "http");
@@ -1176,8 +1184,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_session_id_management() {
-        let transport = HttpTransport::new(HttpTransportConfig::new("http://localhost:8080"))
-            .unwrap();
+        let transport =
+            HttpTransport::new(HttpTransportConfig::new("http://localhost:8080")).unwrap();
 
         assert!(transport.session_id().await.is_none());
 

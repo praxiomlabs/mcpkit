@@ -18,7 +18,8 @@ pub type BoxedCompletionFn = Box<
     dyn for<'a> Fn(
             &'a str,
             &'a Context<'a>,
-        ) -> Pin<Box<dyn Future<Output = Result<Vec<String>, McpError>> + Send + 'a>>
+        )
+            -> Pin<Box<dyn Future<Output = Result<Vec<String>, McpError>> + Send + 'a>>
         + Send
         + Sync,
 >;
@@ -39,7 +40,7 @@ pub struct RegisteredCompletion {
 ///
 /// This provides argument completion for prompts and resources.
 pub struct CompletionService {
-    /// Completions keyed by (ref_type, ref_value, arg_name).
+    /// Completions keyed by (`ref_type`, `ref_value`, `arg_name`).
     completions: HashMap<(String, String, String), RegisteredCompletion>,
 }
 
@@ -51,6 +52,7 @@ impl Default for CompletionService {
 
 impl CompletionService {
     /// Create a new completion service.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             completions: HashMap::new(),
@@ -150,13 +152,13 @@ impl CompletionService {
     }
 
     /// Check if a completion provider exists.
-    pub fn has_completion(
-        &self,
-        ref_type: &str,
-        ref_value: &str,
-        arg_name: &str,
-    ) -> bool {
-        let key = (ref_type.to_string(), ref_value.to_string(), arg_name.to_string());
+    #[must_use]
+    pub fn has_completion(&self, ref_type: &str, ref_value: &str, arg_name: &str) -> bool {
+        let key = (
+            ref_type.to_string(),
+            ref_value.to_string(),
+            arg_name.to_string(),
+        );
         self.completions.contains_key(&key)
     }
 }
@@ -175,7 +177,7 @@ impl CompletionHandler for CompletionService {
             },
         };
 
-        let result = CompletionService::complete(self, &request, ctx).await?;
+        let result = Self::complete(self, &request, ctx).await?;
         Ok(result.completion.values)
     }
 
@@ -194,7 +196,7 @@ impl CompletionHandler for CompletionService {
             },
         };
 
-        let result = CompletionService::complete(self, &request, ctx).await?;
+        let result = Self::complete(self, &request, ctx).await?;
         Ok(result.completion.values)
     }
 }
@@ -232,6 +234,7 @@ impl CompleteRequestBuilder {
     }
 
     /// Build the request.
+    #[must_use]
     pub fn build(self) -> CompleteRequest {
         CompleteRequest {
             ref_: self.ref_,
@@ -248,6 +251,7 @@ pub struct CompletionFilter;
 
 impl CompletionFilter {
     /// Filter completions by prefix match.
+    #[must_use]
     pub fn by_prefix(values: &[String], prefix: &str) -> Vec<String> {
         let prefix_lower = prefix.to_lowercase();
         values
@@ -258,6 +262,7 @@ impl CompletionFilter {
     }
 
     /// Filter completions by substring match.
+    #[must_use]
     pub fn by_substring(values: &[String], substring: &str) -> Vec<String> {
         let sub_lower = substring.to_lowercase();
         values
@@ -268,6 +273,7 @@ impl CompletionFilter {
     }
 
     /// Filter and limit completions.
+    #[must_use]
     pub fn limit(values: Vec<String>, max: usize) -> Vec<String> {
         values.into_iter().take(max).collect()
     }
@@ -276,7 +282,7 @@ impl CompletionFilter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::context::{NoOpPeer, Context};
+    use crate::context::{Context, NoOpPeer};
     use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
     use mcpkit_core::protocol::RequestId;
 
@@ -315,7 +321,7 @@ mod tests {
         let filtered = CompletionFilter::by_substring(&values, "script");
         assert_eq!(filtered, vec!["javascript", "typescript"]);
 
-        let limited = CompletionFilter::limit(values.clone(), 2);
+        let limited = CompletionFilter::limit(values, 2);
         assert_eq!(limited.len(), 2);
     }
 

@@ -35,7 +35,8 @@ impl CompletionRef {
     }
 
     /// Get the reference type as a string.
-    pub fn ref_type(&self) -> &'static str {
+    #[must_use]
+    pub const fn ref_type(&self) -> &'static str {
         match self {
             Self::Prompt { .. } => "ref/prompt",
             Self::Resource { .. } => "ref/resource",
@@ -43,6 +44,7 @@ impl CompletionRef {
     }
 
     /// Get the reference value (name or URI).
+    #[must_use]
     pub fn value(&self) -> &str {
         match self {
             Self::Prompt { name } => name,

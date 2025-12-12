@@ -31,8 +31,7 @@ impl ElicitRequest {
     pub fn text(message: impl Into<String>, field_name: impl Into<String>) -> Self {
         Self::new(
             message,
-            ElicitationSchema::object()
-                .property(field_name, PropertySchema::string()),
+            ElicitationSchema::object().property(field_name, PropertySchema::string()),
         )
     }
 
@@ -41,8 +40,7 @@ impl ElicitRequest {
     pub fn confirm(message: impl Into<String>) -> Self {
         Self::new(
             message,
-            ElicitationSchema::object()
-                .property("confirmed", PropertySchema::boolean()),
+            ElicitationSchema::object().property("confirmed", PropertySchema::boolean()),
         )
     }
 
@@ -55,8 +53,7 @@ impl ElicitRequest {
     ) -> Self {
         Self::new(
             message,
-            ElicitationSchema::object()
-                .property(field_name, PropertySchema::enum_values(options)),
+            ElicitationSchema::object().property(field_name, PropertySchema::enum_values(options)),
         )
     }
 }
@@ -89,7 +86,8 @@ impl ElicitationSchema {
     #[must_use]
     pub fn property(mut self, name: impl Into<String>, schema: PropertySchema) -> Self {
         let name = name.into();
-        self.properties.insert(name, serde_json::to_value(schema).unwrap_or_default());
+        self.properties
+            .insert(name, serde_json::to_value(schema).unwrap_or_default());
         self
     }
 
@@ -97,7 +95,10 @@ impl ElicitationSchema {
     #[must_use]
     pub fn required_property(mut self, name: impl Into<String>, schema: PropertySchema) -> Self {
         let name = name.into();
-        self.properties.insert(name.clone(), serde_json::to_value(schema).unwrap_or_default());
+        self.properties.insert(
+            name.clone(),
+            serde_json::to_value(schema).unwrap_or_default(),
+        );
         self.required.get_or_insert_with(Vec::new).push(name);
         self
     }
@@ -238,28 +239,28 @@ impl PropertySchema {
 
     /// Set the minimum value.
     #[must_use]
-    pub fn min(mut self, min: f64) -> Self {
+    pub const fn min(mut self, min: f64) -> Self {
         self.minimum = Some(min);
         self
     }
 
     /// Set the maximum value.
     #[must_use]
-    pub fn max(mut self, max: f64) -> Self {
+    pub const fn max(mut self, max: f64) -> Self {
         self.maximum = Some(max);
         self
     }
 
     /// Set the minimum string length.
     #[must_use]
-    pub fn min_length(mut self, len: u32) -> Self {
+    pub const fn min_length(mut self, len: u32) -> Self {
         self.min_length = Some(len);
         self
     }
 
     /// Set the maximum string length.
     #[must_use]
-    pub fn max_length(mut self, len: u32) -> Self {
+    pub const fn max_length(mut self, len: u32) -> Self {
         self.max_length = Some(len);
         self
     }
@@ -285,7 +286,7 @@ pub struct ElicitResult {
 impl ElicitResult {
     /// Create an accepted result with content.
     #[must_use]
-    pub fn accepted(content: serde_json::Map<String, serde_json::Value>) -> Self {
+    pub const fn accepted(content: serde_json::Map<String, serde_json::Value>) -> Self {
         Self {
             action: ElicitAction::Accept,
             content: Some(content),
@@ -294,7 +295,7 @@ impl ElicitResult {
 
     /// Create a declined result.
     #[must_use]
-    pub fn declined() -> Self {
+    pub const fn declined() -> Self {
         Self {
             action: ElicitAction::Decline,
             content: None,
@@ -303,7 +304,7 @@ impl ElicitResult {
 
     /// Create a cancelled result.
     #[must_use]
-    pub fn cancelled() -> Self {
+    pub const fn cancelled() -> Self {
         Self {
             action: ElicitAction::Cancel,
             content: None,
@@ -312,35 +313,26 @@ impl ElicitResult {
 
     /// Check if the user accepted.
     #[must_use]
-    pub fn is_accepted(&self) -> bool {
+    pub const fn is_accepted(&self) -> bool {
         matches!(self.action, ElicitAction::Accept)
     }
 
     /// Get a string value from the content.
     #[must_use]
     pub fn get_string(&self, key: &str) -> Option<&str> {
-        self.content
-            .as_ref()?
-            .get(key)?
-            .as_str()
+        self.content.as_ref()?.get(key)?.as_str()
     }
 
     /// Get a boolean value from the content.
     #[must_use]
     pub fn get_bool(&self, key: &str) -> Option<bool> {
-        self.content
-            .as_ref()?
-            .get(key)?
-            .as_bool()
+        self.content.as_ref()?.get(key)?.as_bool()
     }
 
     /// Get a number value from the content.
     #[must_use]
     pub fn get_number(&self, key: &str) -> Option<f64> {
-        self.content
-            .as_ref()?
-            .get(key)?
-            .as_f64()
+        self.content.as_ref()?.get(key)?.as_f64()
     }
 }
 
@@ -380,7 +372,10 @@ mod tests {
     #[test]
     fn test_confirm_elicitation() {
         let request = ElicitRequest::confirm("Are you sure?");
-        assert!(request.requested_schema.properties.contains_key("confirmed"));
+        assert!(request
+            .requested_schema
+            .properties
+            .contains_key("confirmed"));
     }
 
     #[test]
@@ -420,7 +415,10 @@ mod tests {
     #[test]
     fn test_elicit_result() {
         let mut content = serde_json::Map::new();
-        content.insert("name".to_string(), serde_json::Value::String("Alice".to_string()));
+        content.insert(
+            "name".to_string(),
+            serde_json::Value::String("Alice".to_string()),
+        );
         content.insert("age".to_string(), serde_json::Value::Number(30.into()));
 
         let result = ElicitResult::accepted(content);
@@ -439,9 +437,15 @@ mod tests {
     #[test]
     fn test_complex_schema() {
         let schema = ElicitationSchema::object()
-            .required_property("email", PropertySchema::string().pattern(r"^[\w\.-]+@[\w\.-]+\.\w+$"))
+            .required_property(
+                "email",
+                PropertySchema::string().pattern(r"^[\w\.-]+@[\w\.-]+\.\w+$"),
+            )
             .property("age", PropertySchema::integer().min(0.0).max(150.0))
-            .property("newsletter", PropertySchema::boolean().default_value(serde_json::Value::Bool(false)));
+            .property(
+                "newsletter",
+                PropertySchema::boolean().default_value(serde_json::Value::Bool(false)),
+            );
 
         assert_eq!(schema.required, Some(vec!["email".to_string()]));
         assert!(schema.properties.contains_key("email"));

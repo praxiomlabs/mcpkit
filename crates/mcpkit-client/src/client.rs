@@ -15,15 +15,18 @@ use mcpkit_core::capability::{
     is_version_supported, ClientCapabilities, ClientInfo, InitializeRequest, InitializeResult,
     ServerCapabilities, ServerInfo, PROTOCOL_VERSION, SUPPORTED_PROTOCOL_VERSIONS,
 };
-use mcpkit_core::error::{HandshakeDetails, JsonRpcError, McpError, TransportContext, TransportDetails, TransportErrorKind};
+use mcpkit_core::error::{
+    HandshakeDetails, JsonRpcError, McpError, TransportContext, TransportDetails,
+    TransportErrorKind,
+};
 use mcpkit_core::protocol::{Message, Notification, Request, RequestId, Response};
 use mcpkit_core::types::{
-    CallToolRequest, CallToolResult, CompleteRequest, CompleteResult, CompletionArgument,
-    CompletionRef, CreateMessageRequest, ElicitRequest, GetPromptRequest, GetPromptResult,
-    GetTaskRequest, CancelTaskRequest, ListPromptsResult, ListResourcesResult,
-    ListResourceTemplatesResult, ListTasksRequest, ListTasksResult, ListToolsResult, Prompt,
-    ReadResourceRequest, ReadResourceResult, Resource, ResourceContents, ResourceTemplate,
-    Task, TaskStatus, TaskSummary, Tool,
+    CallToolRequest, CallToolResult, CancelTaskRequest, CompleteRequest, CompleteResult,
+    CompletionArgument, CompletionRef, CreateMessageRequest, ElicitRequest, GetPromptRequest,
+    GetPromptResult, GetTaskRequest, ListPromptsResult, ListResourceTemplatesResult,
+    ListResourcesResult, ListTasksRequest, ListTasksResult, ListToolsResult, Prompt,
+    ReadResourceRequest, ReadResourceResult, Resource, ResourceContents, ResourceTemplate, Task,
+    TaskStatus, TaskSummary, Tool,
 };
 use mcpkit_transport::Transport;
 use std::collections::HashMap;
@@ -105,7 +108,13 @@ impl<T: Transport + 'static> Client<T, crate::handler::NoOpHandler> {
         client_info: ClientInfo,
         client_caps: ClientCapabilities,
     ) -> Self {
-        Self::with_handler(transport, init_result, client_info, client_caps, crate::handler::NoOpHandler)
+        Self::with_handler(
+            transport,
+            init_result,
+            client_info,
+            client_caps,
+            crate::handler::NoOpHandler,
+        )
     }
 }
 
@@ -261,23 +270,13 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
     }
 
     /// Handle a server-initiated request.
-    async fn handle_server_request(
-        request: Request,
-        handler: &Arc<H>,
-        transport: &Arc<T>,
-    ) {
+    async fn handle_server_request(request: Request, handler: &Arc<H>, transport: &Arc<T>) {
         trace!(method = %request.method, "Handling server request");
 
         let response = match request.method.as_ref() {
-            "sampling/createMessage" => {
-                Self::handle_sampling_request(&request, handler).await
-            }
-            "elicitation/elicit" => {
-                Self::handle_elicitation_request(&request, handler).await
-            }
-            "roots/list" => {
-                Self::handle_roots_request(&request, handler).await
-            }
+            "sampling/createMessage" => Self::handle_sampling_request(&request, handler).await,
+            "elicitation/elicit" => Self::handle_elicitation_request(&request, handler).await,
+            "roots/list" => Self::handle_roots_request(&request, handler).await,
             "ping" => {
                 // Respond to ping with empty result
                 Response::success(request.id.clone(), serde_json::json!({}))
@@ -286,7 +285,7 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
                 warn!(method = %request.method, "Unknown server request method");
                 Response::error(
                     request.id.clone(),
-                    JsonRpcError::method_not_found(&format!("Unknown method: {}", request.method)),
+                    JsonRpcError::method_not_found(format!("Unknown method: {}", request.method)),
                 )
             }
         };
@@ -318,15 +317,13 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
         };
 
         match handler.create_message(params).await {
-            Ok(result) => {
-                match serde_json::to_value(result) {
-                    Ok(value) => Response::success(request.id.clone(), value),
-                    Err(e) => Response::error(
-                        request.id.clone(),
-                        JsonRpcError::internal_error(format!("Serialization error: {e}")),
-                    ),
-                }
-            }
+            Ok(result) => match serde_json::to_value(result) {
+                Ok(value) => Response::success(request.id.clone(), value),
+                Err(e) => Response::error(
+                    request.id.clone(),
+                    JsonRpcError::internal_error(format!("Serialization error: {e}")),
+                ),
+            },
             Err(e) => Response::error(
                 request.id.clone(),
                 JsonRpcError::internal_error(e.to_string()),
@@ -355,15 +352,13 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
         };
 
         match handler.elicit(params).await {
-            Ok(result) => {
-                match serde_json::to_value(result) {
-                    Ok(value) => Response::success(request.id.clone(), value),
-                    Err(e) => Response::error(
-                        request.id.clone(),
-                        JsonRpcError::internal_error(format!("Serialization error: {e}")),
-                    ),
-                }
-            }
+            Ok(result) => match serde_json::to_value(result) {
+                Ok(value) => Response::success(request.id.clone(), value),
+                Err(e) => Response::error(
+                    request.id.clone(),
+                    JsonRpcError::internal_error(format!("Serialization error: {e}")),
+                ),
+            },
             Err(e) => Response::error(
                 request.id.clone(),
                 JsonRpcError::internal_error(e.to_string()),
@@ -384,11 +379,14 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
                         })
                     })
                     .collect();
-                Response::success(request.id.clone(), serde_json::json!({ "roots": roots_json }))
+                Response::success(
+                    request.id.clone(),
+                    serde_json::json!({ "roots": roots_json }),
+                )
             }
             Err(e) => Response::error(
                 request.id.clone(),
-                JsonRpcError::internal_error(&e.to_string()),
+                JsonRpcError::internal_error(e.to_string()),
             ),
         }
     }
@@ -413,7 +411,10 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
                         params.get("progressToken").and_then(|v| v.as_str()),
                         params.get("progress"),
                     ) {
-                        if let Ok(progress) = serde_json::from_value::<mcpkit_core::types::TaskProgress>(progress.clone()) {
+                        if let Ok(progress) = serde_json::from_value::<
+                            mcpkit_core::types::TaskProgress,
+                        >(progress.clone())
+                        {
                             debug!(task_id = %task_id, "Task progress update");
                             handler.on_task_progress(task_id.into(), progress).await;
                         }
@@ -447,22 +448,22 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
     }
 
     /// Get the server information.
-    pub fn server_info(&self) -> &ServerInfo {
+    pub const fn server_info(&self) -> &ServerInfo {
         &self.server_info
     }
 
     /// Get the server capabilities.
-    pub fn server_capabilities(&self) -> &ServerCapabilities {
+    pub const fn server_capabilities(&self) -> &ServerCapabilities {
         &self.server_caps
     }
 
     /// Get the client information.
-    pub fn client_info(&self) -> &ClientInfo {
+    pub const fn client_info(&self) -> &ClientInfo {
         &self.client_info
     }
 
     /// Get the client capabilities.
-    pub fn client_capabilities(&self) -> &ClientCapabilities {
+    pub const fn client_capabilities(&self) -> &ClientCapabilities {
         &self.client_caps
     }
 
@@ -472,27 +473,27 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
     }
 
     /// Check if the server supports tools.
-    pub fn has_tools(&self) -> bool {
+    pub const fn has_tools(&self) -> bool {
         self.server_caps.has_tools()
     }
 
     /// Check if the server supports resources.
-    pub fn has_resources(&self) -> bool {
+    pub const fn has_resources(&self) -> bool {
         self.server_caps.has_resources()
     }
 
     /// Check if the server supports prompts.
-    pub fn has_prompts(&self) -> bool {
+    pub const fn has_prompts(&self) -> bool {
         self.server_caps.has_prompts()
     }
 
     /// Check if the server supports tasks.
-    pub fn has_tasks(&self) -> bool {
+    pub const fn has_tasks(&self) -> bool {
         self.server_caps.has_tasks()
     }
 
     /// Check if the server supports completions.
-    pub fn has_completions(&self) -> bool {
+    pub const fn has_completions(&self) -> bool {
         self.server_caps.has_completions()
     }
 
@@ -606,13 +607,16 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
     /// # Errors
     ///
     /// Returns an error if resources are not supported or the read fails.
-    pub async fn read_resource(&self, uri: impl Into<String>) -> Result<Vec<ResourceContents>, McpError> {
+    pub async fn read_resource(
+        &self,
+        uri: impl Into<String>,
+    ) -> Result<Vec<ResourceContents>, McpError> {
         self.ensure_capability("resources", self.has_resources())?;
 
         let request = ReadResourceRequest { uri: uri.into() };
-        let result: ReadResourceResult =
-            self.request("resources/read", Some(serde_json::to_value(request)?))
-                .await?;
+        let result: ReadResourceResult = self
+            .request("resources/read", Some(serde_json::to_value(request)?))
+            .await?;
         Ok(result.contents)
     }
 
@@ -932,20 +936,24 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
         self.outgoing_tx
             .send(Message::Request(request))
             .await
-            .map_err(|_| McpError::Transport(Box::new(TransportDetails {
-                kind: TransportErrorKind::WriteFailed,
-                message: "Failed to send request (channel closed)".to_string(),
-                context: TransportContext::default(),
-                source: None,
-            })))?;
+            .map_err(|_| {
+                McpError::Transport(Box::new(TransportDetails {
+                    kind: TransportErrorKind::WriteFailed,
+                    message: "Failed to send request (channel closed)".to_string(),
+                    context: TransportContext::default(),
+                    source: None,
+                }))
+            })?;
 
         // Wait for the response with a timeout
-        let response = rx.await.map_err(|_| McpError::Transport(Box::new(TransportDetails {
-            kind: TransportErrorKind::ConnectionClosed,
-            message: "Response channel closed (server may have disconnected)".to_string(),
-            context: TransportContext::default(),
-            source: None,
-        })))?;
+        let response = rx.await.map_err(|_| {
+            McpError::Transport(Box::new(TransportDetails {
+                kind: TransportErrorKind::ConnectionClosed,
+                message: "Response channel closed (server may have disconnected)".to_string(),
+                context: TransportContext::default(),
+                source: None,
+            }))
+        })?;
 
         // Process the response
         if let Some(error) = response.error {
@@ -1036,18 +1044,20 @@ pub(crate) async fn initialize<T: Transport>(
     transport
         .send(Message::Request(init_request))
         .await
-        .map_err(|e| McpError::Transport(Box::new(TransportDetails {
-            kind: TransportErrorKind::WriteFailed,
-            message: format!("Failed to send initialize: {e}"),
-            context: TransportContext::default(),
-            source: None,
-        })))?;
+        .map_err(|e| {
+            McpError::Transport(Box::new(TransportDetails {
+                kind: TransportErrorKind::WriteFailed,
+                message: format!("Failed to send initialize: {e}"),
+                context: TransportContext::default(),
+                source: None,
+            }))
+        })?;
 
     // Wait for response
     let response = loop {
         match transport.recv().await {
             Ok(Some(Message::Response(r))) if r.id == RequestId::Number(0) => break r,
-            Ok(Some(_)) => continue,
+            Ok(Some(_)) => {} // Skip non-matching messages
             Ok(None) => {
                 return Err(McpError::HandshakeFailed(Box::new(HandshakeDetails {
                     message: "Connection closed during initialization".to_string(),
@@ -1081,12 +1091,14 @@ pub(crate) async fn initialize<T: Transport>(
         .result
         .map(serde_json::from_value)
         .transpose()?
-        .ok_or_else(|| McpError::HandshakeFailed(Box::new(HandshakeDetails {
-            message: "Empty initialize result".to_string(),
-            client_version: Some(PROTOCOL_VERSION.to_string()),
-            server_version: None,
-            source: None,
-        })))?;
+        .ok_or_else(|| {
+            McpError::HandshakeFailed(Box::new(HandshakeDetails {
+                message: "Empty initialize result".to_string(),
+                client_version: Some(PROTOCOL_VERSION.to_string()),
+                server_version: None,
+                source: None,
+            }))
+        })?;
 
     // Validate protocol version
     let server_version = &result.protocol_version;
@@ -1098,8 +1110,7 @@ pub(crate) async fn initialize<T: Transport>(
         );
         return Err(McpError::HandshakeFailed(Box::new(HandshakeDetails {
             message: format!(
-                "Unsupported protocol version: server returned '{}', but client only supports {:?}",
-                server_version, SUPPORTED_PROTOCOL_VERSIONS
+                "Unsupported protocol version: server returned '{server_version}', but client only supports {SUPPORTED_PROTOCOL_VERSIONS:?}"
             ),
             client_version: Some(PROTOCOL_VERSION.to_string()),
             server_version: Some(server_version.clone()),
@@ -1119,12 +1130,14 @@ pub(crate) async fn initialize<T: Transport>(
     transport
         .send(Message::Notification(notification))
         .await
-        .map_err(|e| McpError::Transport(Box::new(TransportDetails {
-            kind: TransportErrorKind::WriteFailed,
-            message: format!("Failed to send initialized: {e}"),
-            context: TransportContext::default(),
-            source: None,
-        })))?;
+        .map_err(|e| {
+            McpError::Transport(Box::new(TransportDetails {
+                kind: TransportErrorKind::WriteFailed,
+                message: format!("Failed to send initialized: {e}"),
+                context: TransportContext::default(),
+                source: None,
+            }))
+        })?;
 
     debug!("MCP initialization complete");
     Ok(result)

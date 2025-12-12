@@ -59,14 +59,14 @@ where
     ///
     /// For production, you should use `with_cors_layer` with a custom configuration.
     #[must_use]
-    pub fn with_cors(mut self) -> Self {
+    pub const fn with_cors(mut self) -> Self {
         self.enable_cors = true;
         self
     }
 
     /// Enable request tracing.
     #[must_use]
-    pub fn with_tracing(mut self) -> Self {
+    pub const fn with_tracing(mut self) -> Self {
         self.enable_tracing = true;
         self
     }

@@ -6,7 +6,7 @@
 use crate::context::Context;
 use mcpkit_core::error::McpError;
 use mcpkit_core::types::elicitation::{
-    ElicitRequest, ElicitResult, ElicitationSchema, ElicitAction,
+    ElicitAction, ElicitRequest, ElicitResult, ElicitationSchema,
 };
 use serde_json::Value;
 use std::future::Future;
@@ -17,7 +17,8 @@ pub type BoxedElicitationFn = Box<
     dyn for<'a> Fn(
             ElicitRequest,
             &'a Context<'a>,
-        ) -> Pin<Box<dyn Future<Output = Result<ElicitResult, McpError>> + Send + 'a>>
+        )
+            -> Pin<Box<dyn Future<Output = Result<ElicitResult, McpError>> + Send + 'a>>
         + Send
         + Sync,
 >;
@@ -38,6 +39,7 @@ impl Default for ElicitationService {
 
 impl ElicitationService {
     /// Create a new elicitation service without a handler.
+    #[must_use]
     pub fn new() -> Self {
         Self { handler: None }
     }
@@ -53,6 +55,7 @@ impl ElicitationService {
     }
 
     /// Check if elicitation is supported.
+    #[must_use]
     pub fn is_supported(&self) -> bool {
         self.handler.is_some()
     }
@@ -63,9 +66,10 @@ impl ElicitationService {
         request: ElicitRequest,
         ctx: &Context<'_>,
     ) -> Result<ElicitResult, McpError> {
-        let handler = self.handler.as_ref().ok_or_else(|| {
-            McpError::invalid_request("Elicitation not supported")
-        })?;
+        let handler = self
+            .handler
+            .as_ref()
+            .ok_or_else(|| McpError::invalid_request("Elicitation not supported"))?;
 
         (handler)(request, ctx).await
     }
@@ -87,6 +91,7 @@ impl ElicitationRequestBuilder {
     }
 
     /// Set the response schema.
+    #[must_use]
     pub fn schema(mut self, schema: ElicitationSchema) -> Self {
         self.schema = Some(schema);
         self
@@ -94,18 +99,18 @@ impl ElicitationRequestBuilder {
 
     /// Request a text response.
     pub fn text_response(self, field_name: impl Into<String>) -> Self {
-        self.schema(
-            ElicitationSchema::object()
-                .property(field_name, mcpkit_core::types::elicitation::PropertySchema::string()),
-        )
+        self.schema(ElicitationSchema::object().property(
+            field_name,
+            mcpkit_core::types::elicitation::PropertySchema::string(),
+        ))
     }
 
     /// Request a boolean response.
     pub fn boolean_response(self, field_name: impl Into<String>) -> Self {
-        self.schema(
-            ElicitationSchema::object()
-                .property(field_name, mcpkit_core::types::elicitation::PropertySchema::boolean()),
-        )
+        self.schema(ElicitationSchema::object().property(
+            field_name,
+            mcpkit_core::types::elicitation::PropertySchema::boolean(),
+        ))
     }
 
     /// Build the request.
@@ -125,7 +130,8 @@ pub struct ElicitationResultBuilder {
 
 impl ElicitationResultBuilder {
     /// Create a new result builder.
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             action: ElicitAction::Accept,
             content: None,
@@ -133,6 +139,7 @@ impl ElicitationResultBuilder {
     }
 
     /// Set the result as accepted with content.
+    #[must_use]
     pub fn accepted(mut self, content: Value) -> Self {
         self.action = ElicitAction::Accept;
         // Convert Value to Map if it's an object, otherwise wrap it
@@ -148,6 +155,7 @@ impl ElicitationResultBuilder {
     }
 
     /// Set the result as accepted with a map.
+    #[must_use]
     pub fn accepted_map(mut self, content: serde_json::Map<String, Value>) -> Self {
         self.action = ElicitAction::Accept;
         self.content = Some(content);
@@ -155,6 +163,7 @@ impl ElicitationResultBuilder {
     }
 
     /// Set the result as declined.
+    #[must_use]
     pub fn declined(mut self) -> Self {
         self.action = ElicitAction::Decline;
         self.content = None;
@@ -162,6 +171,7 @@ impl ElicitationResultBuilder {
     }
 
     /// Set the result as cancelled.
+    #[must_use]
     pub fn cancelled(mut self) -> Self {
         self.action = ElicitAction::Cancel;
         self.content = None;
@@ -169,6 +179,7 @@ impl ElicitationResultBuilder {
     }
 
     /// Build the result.
+    #[must_use]
     pub fn build(self) -> ElicitResult {
         ElicitResult {
             action: self.action,

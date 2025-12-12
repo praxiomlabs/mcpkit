@@ -70,8 +70,8 @@ fn test_protected_resource_metadata_validation_no_auth_server() {
 
 #[test]
 fn test_protected_resource_metadata_validation_empty_resource() {
-    let metadata = ProtectedResourceMetadata::new("")
-        .with_authorization_server("https://auth.example.com");
+    let metadata =
+        ProtectedResourceMetadata::new("").with_authorization_server("https://auth.example.com");
 
     let result = metadata.validate();
     assert!(result.is_err());
@@ -392,21 +392,24 @@ fn test_token_request_authorization_code() {
     assert_eq!(request.code, Some("auth_code_123".to_string()));
     assert_eq!(request.client_id, "client123");
     assert_eq!(request.code_verifier, Some("verifier456".to_string()));
-    assert_eq!(request.resource, Some("https://mcp.example.com".to_string()));
+    assert_eq!(
+        request.resource,
+        Some("https://mcp.example.com".to_string())
+    );
 }
 
 #[test]
 fn test_token_request_client_credentials() {
-    let request = TokenRequest::client_credentials(
-        "client123",
-        "secret789",
-        "https://mcp.example.com",
-    );
+    let request =
+        TokenRequest::client_credentials("client123", "secret789", "https://mcp.example.com");
 
     assert_eq!(request.grant_type, "client_credentials");
     assert_eq!(request.client_id, "client123");
     assert_eq!(request.client_secret, Some("secret789".to_string()));
-    assert_eq!(request.resource, Some("https://mcp.example.com".to_string()));
+    assert_eq!(
+        request.resource,
+        Some("https://mcp.example.com".to_string())
+    );
 }
 
 #[test]
@@ -420,14 +423,10 @@ fn test_token_request_refresh() {
 
 #[test]
 fn test_token_request_with_options() {
-    let request = TokenRequest::authorization_code(
-        "code",
-        "client",
-        "verifier",
-        "https://mcp.example.com",
-    )
-    .with_redirect_uri("http://localhost:8080/callback")
-    .with_scope("mcp:read");
+    let request =
+        TokenRequest::authorization_code("code", "client", "verifier", "https://mcp.example.com")
+            .with_redirect_uri("http://localhost:8080/callback")
+            .with_scope("mcp:read");
 
     assert!(request.redirect_uri.is_some());
     assert!(request.scope.is_some());
@@ -576,9 +575,8 @@ fn test_stored_token_expires_within() {
 
 #[test]
 fn test_www_authenticate_basic() {
-    let header = WwwAuthenticate::new(
-        "https://mcp.example.com/.well-known/oauth-protected-resource",
-    );
+    let header =
+        WwwAuthenticate::new("https://mcp.example.com/.well-known/oauth-protected-resource");
 
     let value = header.to_header_value();
 
@@ -588,12 +586,11 @@ fn test_www_authenticate_basic() {
 
 #[test]
 fn test_www_authenticate_with_options() {
-    let header = WwwAuthenticate::new(
-        "https://mcp.example.com/.well-known/oauth-protected-resource",
-    )
-    .with_realm("MCP Server")
-    .with_error(OAuthError::InvalidToken)
-    .with_error_description("The access token expired");
+    let header =
+        WwwAuthenticate::new("https://mcp.example.com/.well-known/oauth-protected-resource")
+            .with_realm("MCP Server")
+            .with_error(OAuthError::InvalidToken)
+            .with_error_description("The access token expired");
 
     let value = header.to_header_value();
 
@@ -625,10 +622,7 @@ fn test_www_authenticate_parse_with_error() {
     assert!(parsed.is_some());
     let parsed = parsed.unwrap();
     assert_eq!(parsed.error, Some(OAuthError::InvalidToken));
-    assert_eq!(
-        parsed.error_description,
-        Some("Token expired".to_string())
-    );
+    assert_eq!(parsed.error_description, Some("Token expired".to_string()));
 }
 
 #[test]
@@ -691,10 +685,7 @@ fn test_oauth_error_deserialization() {
     let response: OAuthErrorResponse = serde_json::from_value(json).unwrap();
 
     assert_eq!(response.error, OAuthError::InvalidGrant);
-    assert!(response
-        .error_description
-        .unwrap()
-        .contains("expired"));
+    assert!(response.error_description.unwrap().contains("expired"));
 }
 
 // =============================================================================
@@ -703,14 +694,20 @@ fn test_oauth_error_deserialization() {
 
 #[test]
 fn test_grant_type_display() {
-    assert_eq!(GrantType::AuthorizationCode.to_string(), "authorization_code");
-    assert_eq!(GrantType::ClientCredentials.to_string(), "client_credentials");
+    assert_eq!(
+        GrantType::AuthorizationCode.to_string(),
+        "authorization_code"
+    );
+    assert_eq!(
+        GrantType::ClientCredentials.to_string(),
+        "client_credentials"
+    );
     assert_eq!(GrantType::RefreshToken.to_string(), "refresh_token");
 }
 
 #[test]
 fn test_grant_type_serialization() {
-    let json = serde_json::to_value(&GrantType::AuthorizationCode).unwrap();
+    let json = serde_json::to_value(GrantType::AuthorizationCode).unwrap();
     assert_eq!(json, "authorization_code");
 }
 
@@ -759,10 +756,7 @@ fn test_client_registration_request_basic() {
     let request = ClientRegistrationRequest::new();
 
     // Defaults for public client
-    assert_eq!(
-        request.token_endpoint_auth_method,
-        Some("none".to_string())
-    );
+    assert_eq!(request.token_endpoint_auth_method, Some("none".to_string()));
     assert!(request
         .grant_types
         .as_ref()
@@ -774,7 +768,10 @@ fn test_client_registration_request_basic() {
 fn test_client_registration_request_with_options() {
     let request = ClientRegistrationRequest::new()
         .with_client_name("My MCP Client")
-        .with_redirect_uris(["http://localhost:8080/callback", "http://localhost:9090/callback"])
+        .with_redirect_uris([
+            "http://localhost:8080/callback",
+            "http://localhost:9090/callback",
+        ])
         .with_software_id("mcp-client-123");
 
     assert_eq!(request.client_name, Some("My MCP Client".to_string()));
@@ -820,11 +817,10 @@ fn test_authorization_code_flow_simulation() {
     let pkce = PkceChallenge::new();
 
     // Step 2: Build authorization request
-    let auth_request =
-        AuthorizationRequest::new("test-client", &pkce, "https://mcp.example.com")
-            .with_redirect_uri("http://localhost:8080/callback")
-            .with_scope("mcp:read")
-            .with_state("csrf_state");
+    let auth_request = AuthorizationRequest::new("test-client", &pkce, "https://mcp.example.com")
+        .with_redirect_uri("http://localhost:8080/callback")
+        .with_scope("mcp:read")
+        .with_state("csrf_state");
 
     let auth_url = auth_request
         .build_url("https://auth.example.com/authorize")
@@ -844,7 +840,10 @@ fn test_authorization_code_flow_simulation() {
     .with_redirect_uri("http://localhost:8080/callback");
 
     assert_eq!(token_request.grant_type, "authorization_code");
-    assert_eq!(token_request.code_verifier.as_ref().unwrap(), &pkce.verifier);
+    assert_eq!(
+        token_request.code_verifier.as_ref().unwrap(),
+        &pkce.verifier
+    );
 
     // Step 5: Simulate token response
     let token_response = TokenResponse {
@@ -887,10 +886,7 @@ fn test_client_credentials_flow_simulation() {
 
     // Step 3: Store and use token
     let stored = StoredToken::new(token_response, "https://mcp.example.com");
-    assert_eq!(
-        stored.authorization_header(),
-        "Bearer machine_access_token"
-    );
+    assert_eq!(stored.authorization_header(), "Bearer machine_access_token");
 }
 
 #[test]
@@ -902,10 +898,7 @@ fn test_token_refresh_flow_simulation() {
     let token_request = TokenRequest::refresh(refresh_token, "test-client");
 
     assert_eq!(token_request.grant_type, "refresh_token");
-    assert_eq!(
-        token_request.refresh_token.as_ref().unwrap(),
-        refresh_token
-    );
+    assert_eq!(token_request.refresh_token.as_ref().unwrap(), refresh_token);
 
     // Simulate new token response
     let new_token = TokenResponse {
@@ -927,11 +920,10 @@ fn test_token_refresh_flow_simulation() {
 #[test]
 fn test_mcp_401_response_handling() {
     // Simulate receiving a 401 with WWW-Authenticate header
-    let www_authenticate = WwwAuthenticate::new(
-        "https://mcp.example.com/.well-known/oauth-protected-resource",
-    )
-    .with_error(OAuthError::InvalidToken)
-    .with_error_description("Access token expired");
+    let www_authenticate =
+        WwwAuthenticate::new("https://mcp.example.com/.well-known/oauth-protected-resource")
+            .with_error(OAuthError::InvalidToken)
+            .with_error_description("Access token expired");
 
     let header_value = www_authenticate.to_header_value();
 

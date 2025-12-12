@@ -125,7 +125,7 @@ where
 /// Create a response for a request.
 ///
 /// This is a simplified implementation - a full implementation would
-/// route through the ServerHandler properly.
+/// route through the `ServerHandler` properly.
 async fn create_response_for_request<H>(
     state: &McpState<H>,
     request: &mcpkit_core::protocol::Request,
@@ -151,7 +151,7 @@ where
             // For other methods, return method not found
             Response::error(
                 request.id.clone(),
-                JsonRpcError::method_not_found(format!("Method '{}' not found", method)),
+                JsonRpcError::method_not_found(format!("Method '{method}' not found")),
             )
         }
     }
@@ -182,24 +182,21 @@ where
         .and_then(|v| v.to_str().ok())
         .map(String::from);
 
-    let (id, rx) = match session_id {
-        Some(id) => {
-            // Try to reconnect to existing session
-            if let Some(rx) = state.sse_sessions.get_receiver(&id) {
-                info!(session_id = %id, "Reconnected to SSE session");
-                (id, rx)
-            } else {
-                // Session not found, create new
-                let (new_id, rx) = state.sse_sessions.create_session();
-                info!(session_id = %new_id, "Created new SSE session (requested not found)");
-                (new_id, rx)
-            }
-        }
-        None => {
-            let (id, rx) = state.sse_sessions.create_session();
-            info!(session_id = %id, "Created new SSE session");
+    let (id, rx) = if let Some(id) = session_id {
+        // Try to reconnect to existing session
+        if let Some(rx) = state.sse_sessions.get_receiver(&id) {
+            info!(session_id = %id, "Reconnected to SSE session");
             (id, rx)
+        } else {
+            // Session not found, create new
+            let (new_id, rx) = state.sse_sessions.create_session();
+            info!(session_id = %new_id, "Created new SSE session (requested not found)");
+            (new_id, rx)
         }
+    } else {
+        let (id, rx) = state.sse_sessions.create_session();
+        info!(session_id = %id, "Created new SSE session");
+        (id, rx)
     };
 
     let stream = create_sse_stream(id, rx);
@@ -226,7 +223,7 @@ fn create_sse_stream(
                 }
                 Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
                     warn!(skipped = n, "SSE client lagged, skipped messages");
-                    continue;
+                    // Loop continues naturally
                 }
                 Err(tokio::sync::broadcast::error::RecvError::Closed) => {
                     debug!("SSE channel closed");

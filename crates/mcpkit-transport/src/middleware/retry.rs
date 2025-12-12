@@ -26,7 +26,7 @@ pub struct ExponentialBackoff {
 impl ExponentialBackoff {
     /// Create a new exponential backoff configuration.
     #[must_use]
-    pub fn new(initial: Duration, max: Duration) -> Self {
+    pub const fn new(initial: Duration, max: Duration) -> Self {
         Self {
             initial_delay: initial,
             max_delay: max,
@@ -37,7 +37,7 @@ impl ExponentialBackoff {
 
     /// Set the multiplier.
     #[must_use]
-    pub fn multiplier(mut self, multiplier: f64) -> Self {
+    pub const fn multiplier(mut self, multiplier: f64) -> Self {
         self.multiplier = multiplier;
         self
     }
@@ -51,7 +51,7 @@ impl ExponentialBackoff {
 
     /// Disable jitter.
     #[must_use]
-    pub fn no_jitter(mut self) -> Self {
+    pub const fn no_jitter(mut self) -> Self {
         self.jitter = None;
         self
     }
@@ -65,7 +65,8 @@ impl ExponentialBackoff {
         let delay = if let Some(jitter) = self.jitter {
             // Add jitter: delay * (1 - jitter + 2*jitter*random)
             // Since we don't have random access here, we use a simple deterministic jitter
-            let jitter_factor = 1.0 - jitter + 2.0 * jitter * (attempt as f64 % 1.0).fract();
+            let jitter_factor =
+                (2.0 * jitter).mul_add((f64::from(attempt) % 1.0).fract(), 1.0 - jitter);
             delay * jitter_factor
         } else {
             delay
@@ -132,7 +133,7 @@ impl RetryLayer {
 
     /// Set the backoff configuration.
     #[must_use]
-    pub fn backoff(mut self, backoff: ExponentialBackoff) -> Self {
+    pub const fn backoff(mut self, backoff: ExponentialBackoff) -> Self {
         self.backoff = backoff;
         self
     }
@@ -257,11 +258,8 @@ mod tests {
 
     #[test]
     fn test_exponential_backoff() {
-        let backoff = ExponentialBackoff::new(
-            Duration::from_millis(100),
-            Duration::from_secs(10),
-        )
-        .no_jitter();
+        let backoff = ExponentialBackoff::new(Duration::from_millis(100), Duration::from_secs(10))
+            .no_jitter();
 
         assert_eq!(backoff.delay_for_attempt(0), Duration::from_millis(100));
         assert_eq!(backoff.delay_for_attempt(1), Duration::from_millis(200));
@@ -271,11 +269,8 @@ mod tests {
 
     #[test]
     fn test_exponential_backoff_max() {
-        let backoff = ExponentialBackoff::new(
-            Duration::from_secs(1),
-            Duration::from_secs(5),
-        )
-        .no_jitter();
+        let backoff =
+            ExponentialBackoff::new(Duration::from_secs(1), Duration::from_secs(5)).no_jitter();
 
         // Should cap at max
         assert_eq!(backoff.delay_for_attempt(10), Duration::from_secs(5));
@@ -301,11 +296,10 @@ mod tests {
 
     #[test]
     fn test_retry_layer_creation() {
-        let layer = RetryLayer::new(5)
-            .backoff(ExponentialBackoff::new(
-                Duration::from_millis(50),
-                Duration::from_secs(5),
-            ));
+        let layer = RetryLayer::new(5).backoff(ExponentialBackoff::new(
+            Duration::from_millis(50),
+            Duration::from_secs(5),
+        ));
 
         assert_eq!(layer.max_attempts, 5);
     }

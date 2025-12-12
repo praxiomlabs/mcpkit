@@ -66,9 +66,18 @@ impl ToolHandler {
                 Ok(ToolOutput::text(message.to_string()))
             }
             "calculate" => {
-                let a = args.get("a").and_then(|v| v.as_f64()).ok_or("missing a")?;
-                let b = args.get("b").and_then(|v| v.as_f64()).ok_or("missing b")?;
-                let op = args.get("op").and_then(|v| v.as_str()).ok_or("missing op")?;
+                let a = args
+                    .get("a")
+                    .and_then(serde_json::Value::as_f64)
+                    .ok_or("missing a")?;
+                let b = args
+                    .get("b")
+                    .and_then(serde_json::Value::as_f64)
+                    .ok_or("missing b")?;
+                let op = args
+                    .get("op")
+                    .and_then(|v| v.as_str())
+                    .ok_or("missing op")?;
 
                 let result = match op {
                     "add" => a + b,
@@ -85,7 +94,7 @@ impl ToolHandler {
 
                 Ok(ToolOutput::text(result.to_string()))
             }
-            _ => Err(format!("Unknown tool: {}", name)),
+            _ => Err(format!("Unknown tool: {name}")),
         }
     }
 }
@@ -259,7 +268,10 @@ fn bench_full_invocation(c: &mut Criterion) {
         b.iter(|| {
             let request: Value = serde_json::from_str(black_box(request_json)).unwrap();
             let name = request.get("name").and_then(|v| v.as_str()).unwrap();
-            let args = request.get("arguments").cloned().unwrap_or(json!({}));
+            let args = request
+                .get("arguments")
+                .cloned()
+                .unwrap_or_else(|| json!({}));
             let result = handler.call_tool(name, args).unwrap();
             // Convert ToolOutput to CallToolResult for serialization
             let call_result: CallToolResult = result.into();
@@ -273,7 +285,10 @@ fn bench_full_invocation(c: &mut Criterion) {
         b.iter(|| {
             let request: Value = serde_json::from_str(black_box(request_json)).unwrap();
             let name = request.get("name").and_then(|v| v.as_str()).unwrap();
-            let args = request.get("arguments").cloned().unwrap_or(json!({}));
+            let args = request
+                .get("arguments")
+                .cloned()
+                .unwrap_or_else(|| json!({}));
             let result = handler.call_tool(name, args).unwrap();
             // Convert ToolOutput to CallToolResult for serialization
             let call_result: CallToolResult = result.into();

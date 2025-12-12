@@ -66,49 +66,49 @@ impl PoolConfig {
 
     /// Set the maximum number of connections.
     #[must_use]
-    pub fn max_connections(mut self, max: usize) -> Self {
+    pub const fn max_connections(mut self, max: usize) -> Self {
         self.max_connections = max;
         self
     }
 
     /// Set the minimum number of connections.
     #[must_use]
-    pub fn min_connections(mut self, min: usize) -> Self {
+    pub const fn min_connections(mut self, min: usize) -> Self {
         self.min_connections = min;
         self
     }
 
     /// Set the idle timeout.
     #[must_use]
-    pub fn idle_timeout(mut self, timeout: Duration) -> Self {
+    pub const fn idle_timeout(mut self, timeout: Duration) -> Self {
         self.idle_timeout = timeout;
         self
     }
 
     /// Set the acquire timeout.
     #[must_use]
-    pub fn acquire_timeout(mut self, timeout: Duration) -> Self {
+    pub const fn acquire_timeout(mut self, timeout: Duration) -> Self {
         self.acquire_timeout = timeout;
         self
     }
 
     /// Set the health check interval.
     #[must_use]
-    pub fn health_check_interval(mut self, interval: Duration) -> Self {
+    pub const fn health_check_interval(mut self, interval: Duration) -> Self {
         self.health_check_interval = interval;
         self
     }
 
     /// Enable or disable testing connections on acquire.
     #[must_use]
-    pub fn test_on_acquire(mut self, test: bool) -> Self {
+    pub const fn test_on_acquire(mut self, test: bool) -> Self {
         self.test_on_acquire = test;
         self
     }
 
     /// Enable or disable testing connections on release.
     #[must_use]
-    pub fn test_on_release(mut self, test: bool) -> Self {
+    pub const fn test_on_release(mut self, test: bool) -> Self {
         self.test_on_release = test;
         self
     }
@@ -155,17 +155,17 @@ impl<T> PooledConnection<T> {
     }
 
     /// Get the connection ID.
-    pub fn id(&self) -> u64 {
+    pub const fn id(&self) -> u64 {
         self.id
     }
 
     /// Get when the connection was created.
-    pub fn created_at(&self) -> Instant {
+    pub const fn created_at(&self) -> Instant {
         self.created_at
     }
 
     /// Get when the connection was last used.
-    pub fn last_used(&self) -> Instant {
+    pub const fn last_used(&self) -> Instant {
         self.last_used
     }
 
@@ -237,7 +237,7 @@ where
     Fut: Future<Output = Result<T, TransportError>> + Send,
 {
     /// Create a new connection pool.
-    pub fn new(config: PoolConfig, factory: F) -> Self {
+    pub const fn new(config: PoolConfig, factory: F) -> Self {
         Self {
             config,
             factory,
@@ -256,7 +256,7 @@ where
     }
 
     /// Get the pool configuration.
-    pub fn config(&self) -> &PoolConfig {
+    pub const fn config(&self) -> &PoolConfig {
         &self.config
     }
 
@@ -431,7 +431,7 @@ where
     Fut: Future<Output = Result<T, TransportError>> + Send,
 {
     /// Create a new guard wrapping a pooled connection.
-    pub fn new(pool: &'a Pool<T, F, Fut>, conn: PooledConnection<T>) -> Self {
+    pub const fn new(pool: &'a Pool<T, F, Fut>, conn: PooledConnection<T>) -> Self {
         Self {
             pool,
             conn: Some(conn),
@@ -444,7 +444,8 @@ where
     ///
     /// Panics if `take()` was previously called on this guard.
     pub fn transport(&self) -> &T {
-        &self.conn
+        &self
+            .conn
             .as_ref()
             .expect("transport() called after take()")
             .connection
@@ -456,7 +457,9 @@ where
     ///
     /// Panics if `take()` was previously called on this guard.
     pub fn take(mut self) -> PooledConnection<T> {
-        self.conn.take().expect("take() called twice on PooledConnectionGuard")
+        self.conn
+            .take()
+            .expect("take() called twice on PooledConnectionGuard")
     }
 
     /// Release the connection back to the pool.
@@ -472,7 +475,7 @@ where
     }
 }
 
-impl<'a, T, F, Fut> Drop for PooledConnectionGuard<'a, T, F, Fut>
+impl<T, F, Fut> Drop for PooledConnectionGuard<'_, T, F, Fut>
 where
     T: Transport,
     F: Fn() -> Fut + Send + Sync,
@@ -490,9 +493,8 @@ pub type SimplePool<T> = Arc<
     Pool<
         T,
         Box<
-            dyn Fn() -> std::pin::Pin<
-                    Box<dyn Future<Output = Result<T, TransportError>> + Send>,
-                > + Send
+            dyn Fn() -> std::pin::Pin<Box<dyn Future<Output = Result<T, TransportError>> + Send>>
+                + Send
                 + Sync,
         >,
         std::pin::Pin<Box<dyn Future<Output = Result<T, TransportError>> + Send>>,
@@ -556,7 +558,7 @@ mod stress_tests {
     }
 
     impl MockTransport {
-        fn new(id: u64) -> Self {
+        const fn new(id: u64) -> Self {
             Self {
                 connected: AtomicBool::new(true),
                 id,
@@ -639,19 +641,17 @@ mod stress_tests {
     }
 
     /// Type alias for mock pool future.
-    type MockFuture = std::pin::Pin<Box<dyn Future<Output = Result<MockTransport, TransportError>> + Send>>;
+    type MockFuture =
+        std::pin::Pin<Box<dyn Future<Output = Result<MockTransport, TransportError>> + Send>>;
 
     /// Type alias for slow mock pool future.
-    type SlowMockFuture = std::pin::Pin<Box<dyn Future<Output = Result<SlowMockTransport, TransportError>> + Send>>;
+    type SlowMockFuture =
+        std::pin::Pin<Box<dyn Future<Output = Result<SlowMockTransport, TransportError>> + Send>>;
 
     /// Creates a pool with mock transport factory.
     fn create_mock_pool(
         config: PoolConfig,
-    ) -> Pool<
-        MockTransport,
-        Box<dyn Fn() -> MockFuture + Send + Sync>,
-        MockFuture,
-    > {
+    ) -> Pool<MockTransport, Box<dyn Fn() -> MockFuture + Send + Sync>, MockFuture> {
         let counter = Arc::new(AtomicU64::new(0));
         let factory: Box<dyn Fn() -> MockFuture + Send + Sync> = Box::new(move || {
             let id = counter.fetch_add(1, Ordering::Relaxed);
@@ -664,11 +664,8 @@ mod stress_tests {
     fn create_slow_mock_pool(
         config: PoolConfig,
         delay: Duration,
-    ) -> Pool<
-        SlowMockTransport,
-        Box<dyn Fn() -> SlowMockFuture + Send + Sync>,
-        SlowMockFuture,
-    > {
+    ) -> Pool<SlowMockTransport, Box<dyn Fn() -> SlowMockFuture + Send + Sync>, SlowMockFuture>
+    {
         let counter = Arc::new(AtomicU64::new(0));
         let factory: Box<dyn Fn() -> SlowMockFuture + Send + Sync> = Box::new(move || {
             let id = counter.fetch_add(1, Ordering::Relaxed);
@@ -722,7 +719,10 @@ mod stress_tests {
         assert_eq!(id1, id2, "Pool should reuse connections");
 
         let stats = pool.stats().await;
-        assert_eq!(stats.connections_created, 1, "Should only create one connection");
+        assert_eq!(
+            stats.connections_created, 1,
+            "Should only create one connection"
+        );
     }
 
     // =========================================================================
@@ -745,14 +745,11 @@ mod stress_tests {
             let successful = Arc::clone(&successful);
 
             handles.push(tokio::spawn(async move {
-                match pool.acquire().await {
-                    Ok(conn) => {
-                        // Simulate some work
-                        crate::runtime::sleep(Duration::from_millis(1)).await;
-                        pool.release(conn).await;
-                        successful.fetch_add(1, Ordering::Relaxed);
-                    }
-                    Err(_) => {}
+                if let Ok(conn) = pool.acquire().await {
+                    // Simulate some work
+                    crate::runtime::sleep(Duration::from_millis(1)).await;
+                    pool.release(conn).await;
+                    successful.fetch_add(1, Ordering::Relaxed);
                 }
             }));
         }
@@ -763,10 +760,16 @@ mod stress_tests {
         }
 
         let success_count = successful.load(Ordering::Relaxed);
-        assert_eq!(success_count, 100, "All 100 tasks should complete successfully");
+        assert_eq!(
+            success_count, 100,
+            "All 100 tasks should complete successfully"
+        );
 
         let stats = pool.stats().await;
-        assert!(stats.connections_created <= 10, "Should create at most max_connections");
+        assert!(
+            stats.connections_created <= 10,
+            "Should create at most max_connections"
+        );
         assert_eq!(stats.acquires, 100, "Should have 100 acquires");
     }
 
@@ -786,15 +789,12 @@ mod stress_tests {
             let successful = Arc::clone(&successful);
 
             handles.push(tokio::spawn(async move {
-                match pool.acquire().await {
-                    Ok(conn) => {
-                        // Varying work times to create contention
-                        let work_time = Duration::from_micros((i % 10 * 100) as u64);
-                        crate::runtime::sleep(work_time).await;
-                        pool.release(conn).await;
-                        successful.fetch_add(1, Ordering::Relaxed);
-                    }
-                    Err(_) => {}
+                if let Ok(conn) = pool.acquire().await {
+                    // Varying work times to create contention
+                    let work_time = Duration::from_micros((i % 10 * 100) as u64);
+                    crate::runtime::sleep(work_time).await;
+                    pool.release(conn).await;
+                    successful.fetch_add(1, Ordering::Relaxed);
                 }
             }));
         }
@@ -829,9 +829,7 @@ mod stress_tests {
 
         // Spawn a task that waits for a connection
         let pool_clone = Arc::clone(&pool);
-        let waiter = tokio::spawn(async move {
-            pool_clone.acquire().await
-        });
+        let waiter = tokio::spawn(async move { pool_clone.acquire().await });
 
         // Give the waiter time to start waiting
         crate::runtime::sleep(Duration::from_millis(50)).await;
@@ -841,8 +839,14 @@ mod stress_tests {
 
         // Waiter should now complete
         let result = tokio::time::timeout(Duration::from_secs(2), waiter).await;
-        assert!(result.is_ok(), "Waiter should get a connection after release");
-        let conn4 = result.unwrap().expect("Waiter task panicked").expect("Failed to acquire");
+        assert!(
+            result.is_ok(),
+            "Waiter should get a connection after release"
+        );
+        let conn4 = result
+            .unwrap()
+            .expect("Waiter task panicked")
+            .expect("Failed to acquire");
 
         // Cleanup
         pool.release(conn2).await;
@@ -867,8 +871,14 @@ mod stress_tests {
         let elapsed = start.elapsed();
 
         assert!(result.is_err(), "Should timeout when pool is exhausted");
-        assert!(elapsed >= Duration::from_millis(100), "Should wait for timeout");
-        assert!(elapsed < Duration::from_millis(200), "Should not wait too long");
+        assert!(
+            elapsed >= Duration::from_millis(100),
+            "Should wait for timeout"
+        );
+        assert!(
+            elapsed < Duration::from_millis(200),
+            "Should not wait too long"
+        );
 
         let stats = pool.stats().await;
         assert_eq!(stats.timeouts, 1, "Should record the timeout");
@@ -908,8 +918,7 @@ mod stress_tests {
             assert_eq!(
                 wave_success.load(Ordering::Relaxed),
                 50,
-                "Wave {} should complete all tasks",
-                wave
+                "Wave {wave} should complete all tasks"
             );
         }
 
@@ -983,7 +992,10 @@ mod stress_tests {
         assert!(pool.is_closed().await);
 
         let stats = pool.stats().await;
-        assert!(stats.connections_closed >= 2, "Should close idle connections");
+        assert!(
+            stats.connections_closed >= 2,
+            "Should close idle connections"
+        );
 
         // Acquiring from closed pool should fail
         let result = pool.acquire().await;
@@ -992,9 +1004,7 @@ mod stress_tests {
 
     #[tokio::test]
     async fn test_pool_unhealthy_connection_removal() {
-        let config = PoolConfig::new()
-            .max_connections(5)
-            .test_on_acquire(true);
+        let config = PoolConfig::new().max_connections(5).test_on_acquire(true);
         let pool = Arc::new(create_mock_pool(config));
 
         // Acquire and release a connection
@@ -1007,10 +1017,17 @@ mod stress_tests {
         // Next acquire should skip the unhealthy connection and create a new one
         let conn2 = pool.acquire().await.expect("Failed to acquire");
         // Should have a different connection ID since old one was unhealthy
-        assert_ne!(conn2.id(), id, "Should get a new connection after unhealthy one");
+        assert_ne!(
+            conn2.id(),
+            id,
+            "Should get a new connection after unhealthy one"
+        );
 
         let stats = pool.stats().await;
-        assert!(stats.connections_closed >= 1, "Should have closed unhealthy connection");
+        assert!(
+            stats.connections_closed >= 1,
+            "Should have closed unhealthy connection"
+        );
 
         pool.release(conn2).await;
     }
@@ -1043,7 +1060,7 @@ mod stress_tests {
 
         // All connections should be used (1, 2, 3 created initially)
         let unique: std::collections::HashSet<_> = ids.iter().collect();
-        assert!(unique.len() >= 1, "Should reuse connections from pool");
+        assert!(!unique.is_empty(), "Should reuse connections from pool");
     }
 
     // =========================================================================
@@ -1112,7 +1129,10 @@ mod stress_tests {
         // Verify stats consistency
         assert_eq!(stats.acquires, 100, "Should track all acquires");
         assert_eq!(stats.releases, 100, "Should track all releases");
-        assert!(stats.connections_created <= 10, "Should respect max_connections");
+        assert!(
+            stats.connections_created <= 10,
+            "Should respect max_connections"
+        );
         assert_eq!(stats.in_use, 0, "All connections should be released");
         assert!(stats.idle > 0, "Should have idle connections");
         assert_eq!(stats.timeouts, 0, "Should have no timeouts");

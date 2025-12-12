@@ -144,7 +144,9 @@ impl fmt::Display for InvalidParamsDetails {
 
 impl std::error::Error for InvalidParamsDetails {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        self.source.as_ref().map(|e| e.as_ref() as &(dyn std::error::Error + 'static))
+        self.source
+            .as_ref()
+            .map(|e| e.as_ref() as &(dyn std::error::Error + 'static))
     }
 }
 
@@ -169,7 +171,9 @@ impl fmt::Display for TransportDetails {
 
 impl std::error::Error for TransportDetails {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        self.source.as_ref().map(|e| e.as_ref() as &(dyn std::error::Error + 'static))
+        self.source
+            .as_ref()
+            .map(|e| e.as_ref() as &(dyn std::error::Error + 'static))
     }
 }
 
@@ -196,7 +200,9 @@ impl fmt::Display for ToolExecutionDetails {
 
 impl std::error::Error for ToolExecutionDetails {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        self.source.as_ref().map(|e| e.as_ref() as &(dyn std::error::Error + 'static))
+        self.source
+            .as_ref()
+            .map(|e| e.as_ref() as &(dyn std::error::Error + 'static))
     }
 }
 
@@ -221,7 +227,9 @@ impl fmt::Display for HandshakeDetails {
 
 impl std::error::Error for HandshakeDetails {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        self.source.as_ref().map(|e| e.as_ref() as &(dyn std::error::Error + 'static))
+        self.source
+            .as_ref()
+            .map(|e| e.as_ref() as &(dyn std::error::Error + 'static))
     }
 }
 
@@ -897,7 +905,9 @@ impl From<&McpError> for JsonRpcError {
         let code = err.code();
         let message = err.to_string();
         let data = match err {
-            McpError::MethodNotFound { method, available, .. } => Some(serde_json::json!({
+            McpError::MethodNotFound {
+                method, available, ..
+            } => Some(serde_json::json!({
                 "method": method,
                 "available": available,
             })),
@@ -911,15 +921,16 @@ impl From<&McpError> for JsonRpcError {
                 "kind": format!("{:?}", details.kind),
                 "context": details.context,
             })),
-            McpError::ToolExecution(details) => {
-                details.data.clone().or_else(|| Some(serde_json::json!({ "tool": details.tool })))
-            }
+            McpError::ToolExecution(details) => details
+                .data
+                .clone()
+                .or_else(|| Some(serde_json::json!({ "tool": details.tool }))),
             McpError::HandshakeFailed(details) => Some(serde_json::json!({
                 "client_version": details.client_version,
                 "server_version": details.server_version,
             })),
             McpError::WithContext { source, .. } => {
-                let inner: JsonRpcError = source.as_ref().into();
+                let inner: Self = source.as_ref().into();
                 inner.data
             }
             _ => None,
@@ -971,14 +982,14 @@ pub trait McpResultExt<T> {
 }
 
 impl<T> McpResultExt<T> for Result<T, McpError> {
-    fn context<C: Into<String>>(self, context: C) -> Result<T, McpError> {
+    fn context<C: Into<String>>(self, context: C) -> Self {
         self.map_err(|e| McpError::WithContext {
             context: context.into(),
             source: Box::new(e),
         })
     }
 
-    fn with_context<C, F>(self, f: F) -> Result<T, McpError>
+    fn with_context<C, F>(self, f: F) -> Self
     where
         C: Into<String>,
         F: FnOnce() -> C,
@@ -1033,16 +1044,14 @@ mod tests {
         let size = std::mem::size_of::<McpError>();
         assert!(
             size <= 64,
-            "McpError is {} bytes, should be <= 64 bytes. Consider boxing more variants.",
-            size
+            "McpError is {size} bytes, should be <= 64 bytes. Consider boxing more variants."
         );
 
         // Also verify Result<(), McpError> is small
         let result_size = std::mem::size_of::<Result<(), McpError>>();
         assert!(
             result_size <= 72,
-            "Result<(), McpError> is {} bytes, should be <= 72 bytes.",
-            result_size
+            "Result<(), McpError> is {result_size} bytes, should be <= 72 bytes."
         );
     }
 

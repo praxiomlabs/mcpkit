@@ -32,7 +32,7 @@ async fn test_prompt_service_basic() {
             .unwrap_or_else(|| "World".to_string());
 
         Ok(PromptResultBuilder::new()
-            .user_text(format!("Hello, {}!", name))
+            .user_text(format!("Hello, {name}!"))
             .build())
     });
 
@@ -66,8 +66,7 @@ async fn test_prompt_render() {
         Ok(PromptResultBuilder::new()
             .description("Code review prompt")
             .user_text(format!(
-                "Please review the following {} code:\n{}",
-                language, code
+                "Please review the following {language} code:\n{code}"
             ))
             .build())
     });
@@ -114,7 +113,7 @@ async fn test_prompt_handler_trait() {
             .unwrap_or_default();
 
         Ok(PromptResultBuilder::new()
-            .user_text(format!("Please summarize: {}", text))
+            .user_text(format!("Please summarize: {text}"))
             .build())
     });
 
@@ -126,7 +125,10 @@ async fn test_prompt_handler_trait() {
     assert_eq!(prompts.len(), 1);
 
     let mut args = serde_json::Map::new();
-    args.insert("text".to_string(), Value::String("Long text...".to_string()));
+    args.insert(
+        "text".to_string(),
+        Value::String("Long text...".to_string()),
+    );
 
     let result = service.get_prompt("summarize", Some(args), &ctx).await;
     assert!(result.is_ok());
@@ -171,7 +173,7 @@ async fn test_multiple_prompts() {
 
     for name in ["analyze", "translate", "explain", "debug"] {
         let prompt = PromptBuilder::new(name)
-            .description(format!("{} something", name))
+            .description(format!("{name} something"))
             .build();
 
         service.register(prompt, |_args, _ctx| async {
@@ -192,9 +194,7 @@ async fn test_multiple_prompts() {
 async fn test_prompt_with_no_args() {
     let mut service = PromptService::new();
 
-    let prompt = PromptBuilder::new("help")
-        .description("Get help")
-        .build();
+    let prompt = PromptBuilder::new("help").description("Get help").build();
 
     service.register(prompt, |_args, _ctx| async {
         Ok(PromptResultBuilder::new()

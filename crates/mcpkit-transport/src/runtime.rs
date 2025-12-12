@@ -33,10 +33,10 @@ use std::task::{Context, Poll};
 /// Uses `async-lock` for runtime-agnostic behavior across all async runtimes.
 pub use async_lock::Mutex as AsyncMutex;
 
-/// A runtime-agnostic async RwLock.
+/// A runtime-agnostic async `RwLock`.
 ///
 /// Uses `async-lock` for runtime-agnostic behavior across all async runtimes.
-/// This is preferred over tokio::sync::RwLock when runtime agnosticism is needed.
+/// This is preferred over `tokio::sync::RwLock` when runtime agnosticism is needed.
 pub use async_lock::RwLock as AsyncRwLock;
 
 /// A runtime-agnostic semaphore.
@@ -60,7 +60,11 @@ pub type Sender<T> = tokio::sync::mpsc::Sender<T>;
 pub type Sender<T> = async_std::channel::Sender<T>;
 
 /// A runtime-agnostic bounded MPSC channel sender.
-#[cfg(all(feature = "smol-runtime", not(feature = "tokio-runtime"), not(feature = "async-std-runtime")))]
+#[cfg(all(
+    feature = "smol-runtime",
+    not(feature = "tokio-runtime"),
+    not(feature = "async-std-runtime")
+))]
 pub type Sender<T> = smol::channel::Sender<T>;
 
 /// A runtime-agnostic bounded MPSC channel receiver.
@@ -72,11 +76,16 @@ pub type Receiver<T> = tokio::sync::mpsc::Receiver<T>;
 pub type Receiver<T> = async_std::channel::Receiver<T>;
 
 /// A runtime-agnostic bounded MPSC channel receiver.
-#[cfg(all(feature = "smol-runtime", not(feature = "tokio-runtime"), not(feature = "async-std-runtime")))]
+#[cfg(all(
+    feature = "smol-runtime",
+    not(feature = "tokio-runtime"),
+    not(feature = "async-std-runtime")
+))]
 pub type Receiver<T> = smol::channel::Receiver<T>;
 
 /// Create a bounded channel.
 #[cfg(feature = "tokio-runtime")]
+#[must_use]
 pub fn channel<T>(capacity: usize) -> (Sender<T>, Receiver<T>) {
     tokio::sync::mpsc::channel(capacity)
 }
@@ -88,7 +97,11 @@ pub fn channel<T>(capacity: usize) -> (Sender<T>, Receiver<T>) {
 }
 
 /// Create a bounded channel.
-#[cfg(all(feature = "smol-runtime", not(feature = "tokio-runtime"), not(feature = "async-std-runtime")))]
+#[cfg(all(
+    feature = "smol-runtime",
+    not(feature = "tokio-runtime"),
+    not(feature = "async-std-runtime")
+))]
 pub fn channel<T>(capacity: usize) -> (Sender<T>, Receiver<T>) {
     smol::channel::bounded(capacity)
 }
@@ -99,6 +112,7 @@ pub fn channel<T>(capacity: usize) -> (Sender<T>, Receiver<T>) {
 
 /// Runtime-agnostic stdin.
 #[cfg(feature = "tokio-runtime")]
+#[must_use]
 pub fn stdin() -> impl AsyncRead + Unpin {
     TokioAsyncReadWrapper(tokio::io::stdin())
 }
@@ -110,13 +124,18 @@ pub fn stdin() -> impl AsyncRead + Unpin {
 }
 
 /// Runtime-agnostic stdin.
-#[cfg(all(feature = "smol-runtime", not(feature = "tokio-runtime"), not(feature = "async-std-runtime")))]
+#[cfg(all(
+    feature = "smol-runtime",
+    not(feature = "tokio-runtime"),
+    not(feature = "async-std-runtime")
+))]
 pub fn stdin() -> impl AsyncRead + Unpin {
     smol::Unblock::new(std::io::stdin())
 }
 
 /// Runtime-agnostic stdout.
 #[cfg(feature = "tokio-runtime")]
+#[must_use]
 pub fn stdout() -> impl AsyncWrite + Unpin {
     TokioAsyncWriteWrapper(tokio::io::stdout())
 }
@@ -128,7 +147,11 @@ pub fn stdout() -> impl AsyncWrite + Unpin {
 }
 
 /// Runtime-agnostic stdout.
-#[cfg(all(feature = "smol-runtime", not(feature = "tokio-runtime"), not(feature = "async-std-runtime")))]
+#[cfg(all(
+    feature = "smol-runtime",
+    not(feature = "tokio-runtime"),
+    not(feature = "async-std-runtime")
+))]
 pub fn stdout() -> impl AsyncWrite + Unpin {
     smol::Unblock::new(std::io::stdout())
 }
@@ -137,7 +160,7 @@ pub fn stdout() -> impl AsyncWrite + Unpin {
 // Tokio Compatibility Wrappers
 // =============================================================================
 
-/// Wrapper to convert Tokio's AsyncRead to futures::io::AsyncRead
+/// Wrapper to convert Tokio's `AsyncRead` to `futures::io::AsyncRead`
 #[cfg(feature = "tokio-runtime")]
 pub struct TokioAsyncReadWrapper<T>(pub T);
 
@@ -157,7 +180,7 @@ impl<T: tokio::io::AsyncRead + Unpin> AsyncRead for TokioAsyncReadWrapper<T> {
     }
 }
 
-/// Wrapper to convert Tokio's AsyncWrite to futures::io::AsyncWrite
+/// Wrapper to convert Tokio's `AsyncWrite` to `futures::io::AsyncWrite`
 #[cfg(feature = "tokio-runtime")]
 pub struct TokioAsyncWriteWrapper<T>(pub T);
 
@@ -212,7 +235,11 @@ where
 ///
 /// Note: This requires `'static` bound. Use sparingly - prefer passing
 /// futures through channels or letting the caller handle spawning.
-#[cfg(all(feature = "smol-runtime", not(feature = "tokio-runtime"), not(feature = "async-std-runtime")))]
+#[cfg(all(
+    feature = "smol-runtime",
+    not(feature = "tokio-runtime"),
+    not(feature = "async-std-runtime")
+))]
 pub fn spawn<F>(future: F)
 where
     F: Future<Output = ()> + Send + 'static,
@@ -237,7 +264,11 @@ pub async fn sleep(duration: std::time::Duration) {
 }
 
 /// Sleep for the given duration.
-#[cfg(all(feature = "smol-runtime", not(feature = "tokio-runtime"), not(feature = "async-std-runtime")))]
+#[cfg(all(
+    feature = "smol-runtime",
+    not(feature = "tokio-runtime"),
+    not(feature = "async-std-runtime")
+))]
 pub async fn sleep(duration: std::time::Duration) {
     smol::Timer::after(duration).await;
 }
@@ -269,7 +300,11 @@ where
 }
 
 /// Apply a timeout to a future.
-#[cfg(all(feature = "smol-runtime", not(feature = "tokio-runtime"), not(feature = "async-std-runtime")))]
+#[cfg(all(
+    feature = "smol-runtime",
+    not(feature = "tokio-runtime"),
+    not(feature = "async-std-runtime")
+))]
 pub async fn timeout<F, T>(duration: std::time::Duration, future: F) -> Result<T, TimeoutError>
 where
     F: Future<Output = T>,
@@ -324,7 +359,7 @@ impl<R> BufReader<R> {
     }
 
     /// Get a reference to the underlying reader.
-    pub fn get_ref(&self) -> &R {
+    pub const fn get_ref(&self) -> &R {
         &self.inner
     }
 

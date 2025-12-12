@@ -56,7 +56,11 @@ pub const MAX_MESSAGE_SIZE: usize = 16 * 1024 * 1024;
 ///
 /// This transport works with any async runtime (Tokio, async-std, smol)
 /// depending on which feature is enabled.
-#[cfg(any(feature = "tokio-runtime", feature = "async-std-runtime", feature = "smol-runtime"))]
+#[cfg(any(
+    feature = "tokio-runtime",
+    feature = "async-std-runtime",
+    feature = "smol-runtime"
+))]
 pub struct StdioTransport<R, W>
 where
     R: AsyncRead + Unpin + Send,
@@ -69,7 +73,12 @@ where
 }
 
 #[cfg(feature = "tokio-runtime")]
-impl StdioTransport<crate::runtime::TokioAsyncReadWrapper<tokio::io::Stdin>, crate::runtime::TokioAsyncWriteWrapper<tokio::io::Stdout>> {
+impl
+    StdioTransport<
+        crate::runtime::TokioAsyncReadWrapper<tokio::io::Stdin>,
+        crate::runtime::TokioAsyncWriteWrapper<tokio::io::Stdout>,
+    >
+{
     /// Create a new stdio transport using process stdin/stdout.
     #[must_use]
     pub fn new() -> Self {
@@ -104,7 +113,11 @@ impl StdioTransport<async_std::io::Stdin, async_std::io::Stdout> {
     }
 }
 
-#[cfg(all(feature = "smol-runtime", not(feature = "tokio-runtime"), not(feature = "async-std-runtime")))]
+#[cfg(all(
+    feature = "smol-runtime",
+    not(feature = "tokio-runtime"),
+    not(feature = "async-std-runtime")
+))]
 impl StdioTransport<smol::Unblock<std::io::Stdin>, smol::Unblock<std::io::Stdout>> {
     /// Create a new stdio transport using process stdin/stdout.
     #[must_use]
@@ -122,7 +135,12 @@ impl StdioTransport<smol::Unblock<std::io::Stdin>, smol::Unblock<std::io::Stdout
 }
 
 #[cfg(feature = "tokio-runtime")]
-impl Default for StdioTransport<crate::runtime::TokioAsyncReadWrapper<tokio::io::Stdin>, crate::runtime::TokioAsyncWriteWrapper<tokio::io::Stdout>> {
+impl Default
+    for StdioTransport<
+        crate::runtime::TokioAsyncReadWrapper<tokio::io::Stdin>,
+        crate::runtime::TokioAsyncWriteWrapper<tokio::io::Stdout>,
+    >
+{
     fn default() -> Self {
         Self::new()
     }
@@ -135,14 +153,22 @@ impl Default for StdioTransport<async_std::io::Stdin, async_std::io::Stdout> {
     }
 }
 
-#[cfg(all(feature = "smol-runtime", not(feature = "tokio-runtime"), not(feature = "async-std-runtime")))]
+#[cfg(all(
+    feature = "smol-runtime",
+    not(feature = "tokio-runtime"),
+    not(feature = "async-std-runtime")
+))]
 impl Default for StdioTransport<smol::Unblock<std::io::Stdin>, smol::Unblock<std::io::Stdout>> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-#[cfg(any(feature = "tokio-runtime", feature = "async-std-runtime", feature = "smol-runtime"))]
+#[cfg(any(
+    feature = "tokio-runtime",
+    feature = "async-std-runtime",
+    feature = "smol-runtime"
+))]
 impl<R, W> StdioTransport<R, W>
 where
     R: AsyncRead + Unpin + Send,
@@ -165,7 +191,11 @@ where
     }
 }
 
-#[cfg(any(feature = "tokio-runtime", feature = "async-std-runtime", feature = "smol-runtime"))]
+#[cfg(any(
+    feature = "tokio-runtime",
+    feature = "async-std-runtime",
+    feature = "smol-runtime"
+))]
 impl<R, W> Transport for StdioTransport<R, W>
 where
     R: AsyncRead + Unpin + Send + Sync,
@@ -297,10 +327,8 @@ impl SyncStdioTransport {
             });
         }
 
-        let mut stdout = self.stdout.lock().map_err(|_| {
-            TransportError::Protocol {
-                message: "stdout lock poisoned".to_string(),
-            }
+        let mut stdout = self.stdout.lock().map_err(|_| TransportError::Protocol {
+            message: "stdout lock poisoned".to_string(),
         })?;
 
         writeln!(stdout, "{json}")?;
@@ -320,10 +348,8 @@ impl SyncStdioTransport {
         }
 
         let mut line = String::new();
-        let mut stdin = self.stdin.lock().map_err(|_| {
-            TransportError::Protocol {
-                message: "stdin lock poisoned".to_string(),
-            }
+        let mut stdin = self.stdin.lock().map_err(|_| TransportError::Protocol {
+            message: "stdin lock poisoned".to_string(),
         })?;
 
         let bytes_read = stdin.read_line(&mut line)?;

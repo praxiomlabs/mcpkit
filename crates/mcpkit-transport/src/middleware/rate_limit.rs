@@ -85,7 +85,7 @@ impl RateLimitConfig {
     /// * `max_requests` - Maximum requests allowed per window
     /// * `window` - The time window for rate limiting
     #[must_use]
-    pub fn new(max_requests: u64, window: Duration) -> Self {
+    pub const fn new(max_requests: u64, window: Duration) -> Self {
         Self {
             max_requests,
             window,
@@ -97,21 +97,21 @@ impl RateLimitConfig {
 
     /// Set the burst size for token bucket algorithm.
     #[must_use]
-    pub fn with_burst(mut self, burst_size: u64) -> Self {
+    pub const fn with_burst(mut self, burst_size: u64) -> Self {
         self.burst_size = burst_size;
         self
     }
 
     /// Set the rate limiting algorithm.
     #[must_use]
-    pub fn with_algorithm(mut self, algorithm: RateLimitAlgorithm) -> Self {
+    pub const fn with_algorithm(mut self, algorithm: RateLimitAlgorithm) -> Self {
         self.algorithm = algorithm;
         self
     }
 
     /// Set the action to take when rate limited.
     #[must_use]
-    pub fn with_action(mut self, action: RateLimitAction) -> Self {
+    pub const fn with_action(mut self, action: RateLimitAction) -> Self {
         self.on_limit = action;
         self
     }
@@ -221,16 +221,13 @@ impl RateLimiter {
             self.state.total_rejected.fetch_add(1, Ordering::Relaxed);
 
             match self.config.on_limit {
-                RateLimitAction::Reject => {
-                    Err(TransportError::RateLimited {
-                        retry_after: Some(self.config.window),
-                    })
-                }
+                RateLimitAction::Reject => Err(TransportError::RateLimited {
+                    retry_after: Some(self.config.window),
+                }),
                 RateLimitAction::Wait => {
                     // Wait for token refill and retry
-                    let wait_time = Duration::from_millis(
-                        (1000.0 / self.config.refill_rate()).max(1.0) as u64
-                    );
+                    let wait_time =
+                        Duration::from_millis((1000.0 / self.config.refill_rate()).max(1.0) as u64);
                     crate::runtime::sleep(wait_time).await;
                     // Retry after waiting
                     Box::pin(self.check()).await
@@ -253,7 +250,8 @@ impl RateLimiter {
         let mut last_refill = self.state.last_refill.lock().await;
 
         let elapsed = now.duration_since(*last_refill);
-        let tokens_to_add = (elapsed.as_millis() as f64 * self.config.refill_rate() * 1000.0) as u64;
+        let tokens_to_add =
+            (elapsed.as_millis() as f64 * self.config.refill_rate() * 1000.0) as u64;
 
         if tokens_to_add > 0 {
             let current = self.state.tokens.load(Ordering::Relaxed);
@@ -276,7 +274,7 @@ impl RateLimiter {
                 Ordering::Relaxed,
             ) {
                 Ok(_) => return true,
-                Err(_) => continue, // Retry
+                Err(_) => {} // Retry - loop continues naturally
             }
         }
     }
@@ -284,7 +282,7 @@ impl RateLimiter {
     /// Sliding window algorithm implementation.
     async fn check_sliding_window(&self) -> bool {
         let now = Instant::now();
-        let window_start = now - self.config.window;
+        let window_start = now.checked_sub(self.config.window).unwrap();
 
         let mut times = self.state.request_times.lock().await;
 
@@ -336,7 +334,9 @@ impl RateLimiter {
 
     /// Reset the rate limiter state.
     pub async fn reset(&self) {
-        self.state.tokens.store(self.config.burst_size * 1000, Ordering::Relaxed);
+        self.state
+            .tokens
+            .store(self.config.burst_size * 1000, Ordering::Relaxed);
         self.state.window_count.store(0, Ordering::Relaxed);
         self.state.total_requests.store(0, Ordering::Relaxed);
         self.state.total_rejected.store(0, Ordering::Relaxed);
@@ -386,13 +386,13 @@ impl RateLimitLayer {
 
     /// Create with a shared rate limiter.
     #[must_use]
-    pub fn with_limiter(limiter: RateLimiter) -> Self {
+    pub const fn with_limiter(limiter: RateLimiter) -> Self {
         Self { limiter }
     }
 
     /// Get the rate limiter.
     #[must_use]
-    pub fn limiter(&self) -> &RateLimiter {
+    pub const fn limiter(&self) -> &RateLimiter {
         &self.limiter
     }
 }
@@ -431,12 +431,12 @@ impl<T: Transport> RateLimitedTransport<T> {
     }
 
     /// Get the inner transport.
-    pub fn inner(&self) -> &T {
+    pub const fn inner(&self) -> &T {
         &self.inner
     }
 
     /// Get the rate limiter.
-    pub fn limiter(&self) -> &RateLimiter {
+    pub const fn limiter(&self) -> &RateLimiter {
         &self.limiter
     }
 }
@@ -447,23 +447,32 @@ impl<T: Transport> Transport for RateLimitedTransport<T> {
     async fn send(&self, msg: Message) -> Result<(), Self::Error> {
         // Rate limit outbound messages
         self.limiter.check().await?;
-        self.inner.send(msg).await.map_err(|e| TransportError::Connection {
-            message: e.to_string(),
-        })
+        self.inner
+            .send(msg)
+            .await
+            .map_err(|e| TransportError::Connection {
+                message: e.to_string(),
+            })
     }
 
     async fn recv(&self) -> Result<Option<Message>, Self::Error> {
         // Note: We don't rate limit incoming messages by default
         // as that's controlled by the sender
-        self.inner.recv().await.map_err(|e| TransportError::Connection {
-            message: e.to_string(),
-        })
+        self.inner
+            .recv()
+            .await
+            .map_err(|e| TransportError::Connection {
+                message: e.to_string(),
+            })
     }
 
     async fn close(&self) -> Result<(), Self::Error> {
-        self.inner.close().await.map_err(|e| TransportError::Connection {
-            message: e.to_string(),
-        })
+        self.inner
+            .close()
+            .await
+            .map_err(|e| TransportError::Connection {
+                message: e.to_string(),
+            })
     }
 
     fn is_connected(&self) -> bool {

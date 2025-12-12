@@ -17,7 +17,8 @@ pub type BoxedPromptFn = Box<
     dyn for<'a> Fn(
             Option<Value>,
             &'a Context<'a>,
-        ) -> Pin<Box<dyn Future<Output = Result<GetPromptResult, McpError>> + Send + 'a>>
+        )
+            -> Pin<Box<dyn Future<Output = Result<GetPromptResult, McpError>> + Send + 'a>>
         + Send
         + Sync,
 >;
@@ -46,6 +47,7 @@ impl Default for PromptService {
 
 impl PromptService {
     /// Create a new empty prompt service.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             prompts: HashMap::new(),
@@ -70,26 +72,31 @@ impl PromptService {
     }
 
     /// Get a prompt by name.
+    #[must_use]
     pub fn get(&self, name: &str) -> Option<&RegisteredPrompt> {
         self.prompts.get(name)
     }
 
     /// Check if a prompt exists.
+    #[must_use]
     pub fn contains(&self, name: &str) -> bool {
         self.prompts.contains_key(name)
     }
 
     /// List all registered prompts.
+    #[must_use]
     pub fn list(&self) -> Vec<&Prompt> {
         self.prompts.values().map(|r| &r.prompt).collect()
     }
 
     /// Get the number of registered prompts.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.prompts.len()
     }
 
     /// Check if the service has no prompts.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.prompts.is_empty()
     }
@@ -169,12 +176,14 @@ impl PromptBuilder {
     }
 
     /// Add a custom argument.
+    #[must_use]
     pub fn argument(mut self, arg: PromptArgument) -> Self {
         self.arguments.push(arg);
         self
     }
 
     /// Build the prompt.
+    #[must_use]
     pub fn build(self) -> Prompt {
         Prompt {
             name: self.name,
@@ -202,7 +211,8 @@ impl Default for PromptResultBuilder {
 
 impl PromptResultBuilder {
     /// Create a new result builder.
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             description: None,
             messages: Vec::new(),
@@ -228,12 +238,14 @@ impl PromptResultBuilder {
     }
 
     /// Add a custom message.
+    #[must_use]
     pub fn message(mut self, msg: PromptMessage) -> Self {
         self.messages.push(msg);
         self
     }
 
     /// Build the result.
+    #[must_use]
     pub fn build(self) -> GetPromptResult {
         GetPromptResult {
             description: self.description,
@@ -245,7 +257,7 @@ impl PromptResultBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::context::{NoOpPeer, Context};
+    use crate::context::{Context, NoOpPeer};
     use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
     use mcpkit_core::protocol::RequestId;
 
@@ -267,8 +279,11 @@ mod tests {
             .build();
 
         assert_eq!(prompt.name, "code-review");
-        assert_eq!(prompt.description.as_deref(), Some("Review code for issues"));
-        assert_eq!(prompt.arguments.as_ref().map(|a| a.len()), Some(2));
+        assert_eq!(
+            prompt.description.as_deref(),
+            Some("Review code for issues")
+        );
+        assert_eq!(prompt.arguments.as_ref().map(std::vec::Vec::len), Some(2));
     }
 
     #[test]

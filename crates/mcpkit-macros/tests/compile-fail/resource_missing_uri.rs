@@ -1,5 +1,6 @@
 // Test: Missing required 'uri_pattern' attribute on resource
 
+#[allow(unused_imports)]
 use mcpkit_macros::{mcp_server, resource};
 
 struct MyServer;

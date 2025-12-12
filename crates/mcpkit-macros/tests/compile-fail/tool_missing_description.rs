@@ -1,5 +1,6 @@
 // Test: Missing required 'description' attribute on tool
 
+#[allow(unused_imports)]
 use mcpkit_macros::{mcp_server, tool};
 
 struct MyServer;

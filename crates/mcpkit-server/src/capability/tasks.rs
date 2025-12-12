@@ -37,6 +37,7 @@ impl TaskState {
     }
 
     /// Check if the task is cancelled.
+    #[must_use]
     pub fn is_cancelled(&self) -> bool {
         self.cancel_token.is_cancelled()
     }
@@ -53,13 +54,16 @@ pub struct TaskHandle {
 
 impl TaskHandle {
     /// Get the task ID.
-    pub fn id(&self) -> &TaskId {
+    #[must_use]
+    pub const fn id(&self) -> &TaskId {
         &self.task_id
     }
 
     /// Report that the task is now running.
     pub async fn running(&self) -> Result<(), McpError> {
-        self.manager.update_status(&self.task_id, TaskStatus::Running).await
+        self.manager
+            .update_status(&self.task_id, TaskStatus::Running)
+            .await
     }
 
     /// Report progress on the task.
@@ -81,15 +85,17 @@ impl TaskHandle {
 
     /// Mark the task as failed with an error.
     pub async fn error(&self, message: impl Into<String>) -> Result<(), McpError> {
-        self.manager.complete_error(&self.task_id, message.into()).await
+        self.manager
+            .complete_error(&self.task_id, message.into())
+            .await
     }
 
     /// Check if the task has been cancelled.
+    #[must_use]
     pub fn is_cancelled(&self) -> bool {
         self.manager
             .get(&self.task_id)
-            .map(|s| s.is_cancelled())
-            .unwrap_or(true)
+            .is_none_or(|s| s.is_cancelled())
     }
 
     /// Get a future that completes when the task is cancelled.
@@ -116,6 +122,7 @@ impl Default for TaskManager {
 
 impl TaskManager {
     /// Create a new task manager.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             tasks: RwLock::new(HashMap::new()),
@@ -159,9 +166,10 @@ impl TaskManager {
 
     /// Cancel a task.
     pub fn cancel(&self, id: &TaskId) -> Result<(), McpError> {
-        let mut tasks = self.tasks.write().map_err(|_| {
-            McpError::internal("Failed to acquire task lock")
-        })?;
+        let mut tasks = self
+            .tasks
+            .write()
+            .map_err(|_| McpError::internal("Failed to acquire task lock"))?;
 
         if let Some(state) = tasks.get_mut(id) {
             state.cancel_token.cancel();
@@ -178,9 +186,10 @@ impl TaskManager {
 
     /// Update task status.
     async fn update_status(&self, id: &TaskId, status: TaskStatus) -> Result<(), McpError> {
-        let mut tasks = self.tasks.write().map_err(|_| {
-            McpError::internal("Failed to acquire task lock")
-        })?;
+        let mut tasks = self
+            .tasks
+            .write()
+            .map_err(|_| McpError::internal("Failed to acquire task lock"))?;
 
         if let Some(state) = tasks.get_mut(id) {
             state.task.status = status;
@@ -203,9 +212,10 @@ impl TaskManager {
         total: Option<u64>,
         message: Option<&str>,
     ) -> Result<(), McpError> {
-        let mut tasks = self.tasks.write().map_err(|_| {
-            McpError::internal("Failed to acquire task lock")
-        })?;
+        let mut tasks = self
+            .tasks
+            .write()
+            .map_err(|_| McpError::internal("Failed to acquire task lock"))?;
 
         if let Some(state) = tasks.get_mut(id) {
             state.task.progress = Some(mcpkit_core::types::task::TaskProgress {
@@ -226,9 +236,10 @@ impl TaskManager {
 
     /// Complete a task with success.
     async fn complete_success(&self, id: &TaskId, result: Value) -> Result<(), McpError> {
-        let mut tasks = self.tasks.write().map_err(|_| {
-            McpError::internal("Failed to acquire task lock")
-        })?;
+        let mut tasks = self
+            .tasks
+            .write()
+            .map_err(|_| McpError::internal("Failed to acquire task lock"))?;
 
         if let Some(state) = tasks.get_mut(id) {
             state.task.status = TaskStatus::Completed;
@@ -246,9 +257,10 @@ impl TaskManager {
 
     /// Complete a task with an error.
     async fn complete_error(&self, id: &TaskId, message: String) -> Result<(), McpError> {
-        let mut tasks = self.tasks.write().map_err(|_| {
-            McpError::internal("Failed to acquire task lock")
-        })?;
+        let mut tasks = self
+            .tasks
+            .write()
+            .map_err(|_| McpError::internal("Failed to acquire task lock"))?;
 
         if let Some(state) = tasks.get_mut(id) {
             state.task.status = TaskStatus::Failed;
@@ -279,7 +291,7 @@ impl TaskManager {
     }
 }
 
-/// Task service implementing the TaskHandler trait.
+/// Task service implementing the `TaskHandler` trait.
 pub struct TaskService {
     manager: Arc<TaskManager>,
 }
@@ -292,6 +304,7 @@ impl Default for TaskService {
 
 impl TaskService {
     /// Create a new task service.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             manager: Arc::new(TaskManager::new()),
@@ -299,11 +312,13 @@ impl TaskService {
     }
 
     /// Get the underlying task manager.
-    pub fn manager(&self) -> &Arc<TaskManager> {
+    #[must_use]
+    pub const fn manager(&self) -> &Arc<TaskManager> {
         &self.manager
     }
 
     /// Create a new task and get a handle for it.
+    #[must_use]
     pub fn create(&self, tool_name: Option<&str>) -> TaskHandle {
         self.manager.create(tool_name)
     }
@@ -314,7 +329,11 @@ impl TaskHandler for TaskService {
         Ok(self.manager.list())
     }
 
-    async fn get_task(&self, task_id: &TaskId, _ctx: &Context<'_>) -> Result<Option<Task>, McpError> {
+    async fn get_task(
+        &self,
+        task_id: &TaskId,
+        _ctx: &Context<'_>,
+    ) -> Result<Option<Task>, McpError> {
         Ok(self.manager.get(task_id).map(|s| s.task))
     }
 
@@ -356,12 +375,18 @@ mod tests {
         assert_eq!(state.task.status, TaskStatus::Running);
 
         // Report progress
-        handle.progress(50, Some(100), Some("Halfway done")).await.unwrap();
+        handle
+            .progress(50, Some(100), Some("Halfway done"))
+            .await
+            .unwrap();
         let state = manager.get(&task_id).unwrap();
         assert_eq!(state.task.progress.as_ref().map(|p| p.current), Some(50));
 
         // Complete
-        handle.complete(serde_json::json!({"result": "success"})).await.unwrap();
+        handle
+            .complete(serde_json::json!({"result": "success"}))
+            .await
+            .unwrap();
         let state = manager.get(&task_id).unwrap();
         assert_eq!(state.task.status, TaskStatus::Completed);
     }

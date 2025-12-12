@@ -61,7 +61,8 @@ pub struct ConnectionData {
 
 impl ConnectionData {
     /// Create new connection data.
-    pub fn new(server_info: ServerInfo, server_capabilities: ServerCapabilities) -> Self {
+    #[must_use]
+    pub const fn new(server_info: ServerInfo, server_capabilities: ServerCapabilities) -> Self {
         Self {
             client_capabilities: None,
             server_capabilities,
@@ -121,6 +122,7 @@ impl<S> std::fmt::Debug for Connection<S> {
 
 impl Connection<state::Disconnected> {
     /// Create a new disconnected connection.
+    #[must_use]
     pub fn new(server_info: ServerInfo, server_capabilities: ServerCapabilities) -> Self {
         Self {
             inner: Arc::new(ConnectionData::new(server_info, server_capabilities)),
@@ -203,6 +205,7 @@ impl Connection<state::Ready> {
     /// This should never panic if the connection was properly initialized
     /// through the typestate transitions. Use `try_client_capabilities()`
     /// for a fallible version.
+    #[must_use]
     pub fn client_capabilities(&self) -> &ClientCapabilities {
         self.inner
             .client_capabilities
@@ -219,11 +222,13 @@ impl Connection<state::Ready> {
     }
 
     /// Get the server capabilities.
+    #[must_use]
     pub fn server_capabilities(&self) -> &ServerCapabilities {
         &self.inner.server_capabilities
     }
 
     /// Get the server info.
+    #[must_use]
     pub fn server_info(&self) -> &ServerInfo {
         &self.inner.server_info
     }
@@ -235,6 +240,7 @@ impl Connection<state::Ready> {
     /// This should never panic if the connection was properly initialized
     /// through the typestate transitions. Use `try_protocol_version()`
     /// for a fallible version.
+    #[must_use]
     pub fn protocol_version(&self) -> &str {
         self.inner
             .protocol_version
@@ -289,28 +295,32 @@ pub enum ConnectionState {
 
 impl ConnectionState {
     /// Create a new disconnected connection state.
+    #[must_use]
     pub fn new(server_info: ServerInfo, server_capabilities: ServerCapabilities) -> Self {
         Self::Disconnected(Connection::new(server_info, server_capabilities))
     }
 
     /// Check if the connection is ready for requests.
-    pub fn is_ready(&self) -> bool {
-        matches!(self, ConnectionState::Ready(_))
+    #[must_use]
+    pub const fn is_ready(&self) -> bool {
+        matches!(self, Self::Ready(_))
     }
 
     /// Check if the connection is disconnected.
-    pub fn is_disconnected(&self) -> bool {
-        matches!(self, ConnectionState::Disconnected(_))
+    #[must_use]
+    pub const fn is_disconnected(&self) -> bool {
+        matches!(self, Self::Disconnected(_))
     }
 
     /// Get the current state name.
-    pub fn state_name(&self) -> &'static str {
+    #[must_use]
+    pub const fn state_name(&self) -> &'static str {
         match self {
-            ConnectionState::Disconnected(_) => "Disconnected",
-            ConnectionState::Connected(_) => "Connected",
-            ConnectionState::Initializing(_) => "Initializing",
-            ConnectionState::Ready(_) => "Ready",
-            ConnectionState::Closing(_) => "Closing",
+            Self::Disconnected(_) => "Disconnected",
+            Self::Connected(_) => "Connected",
+            Self::Initializing(_) => "Initializing",
+            Self::Ready(_) => "Ready",
+            Self::Closing(_) => "Closing",
         }
     }
 }

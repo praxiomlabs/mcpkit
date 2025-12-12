@@ -35,6 +35,8 @@ jobs:
         run: cargo test --all-features
 
       - name: Run clippy
+        # Uses workspace lint configuration from Cargo.toml
+        # -D warnings treats warnings as errors in CI
         run: cargo clippy --all-features --all-targets -- -D warnings
 
   publish:

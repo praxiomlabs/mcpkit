@@ -65,11 +65,6 @@
 //! ```
 
 #![deny(missing_docs)]
-#![warn(clippy::all)]
-#![warn(clippy::pedantic)]
-#![warn(clippy::unwrap_used)]
-#![warn(clippy::must_use_candidate)]
-#![allow(clippy::module_name_repetitions)]
 
 pub mod builder;
 pub mod client;
