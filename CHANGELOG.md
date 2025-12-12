@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2025-12-12
+
 ### Added
 
 - Client APIs for Tasks (list, get, cancel)
@@ -17,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive error scenario tests
 - Middleware interaction tests
 - Async cancellation tests
+- Justfile for modern development workflow (73 recipes)
 
 ### Changed
 
@@ -56,5 +59,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mcpkit-testing` crate for test utilities
 - Protocol version detection and capability negotiation
 
-[Unreleased]: https://github.com/praxiomlabs/mcpkit/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/praxiomlabs/mcpkit/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/praxiomlabs/mcpkit/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/praxiomlabs/mcpkit/releases/tag/v0.1.0

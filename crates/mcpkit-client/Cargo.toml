@@ -11,8 +11,8 @@ categories.workspace = true
 
 [dependencies]
 # Internal crates - path takes precedence locally, version used for publishing
-mcpkit-core = { version = "0.1.0", path = "../mcpkit-core" }
-mcpkit-transport = { version = "0.1.0", path = "../mcpkit-transport" }
+mcpkit-core = { version = "0.2.0", path = "../mcpkit-core" }
+mcpkit-transport = { version = "0.2.0", path = "../mcpkit-transport" }
 
 # Serialization
 serde = { workspace = true }

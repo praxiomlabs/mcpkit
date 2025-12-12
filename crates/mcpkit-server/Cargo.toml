@@ -10,8 +10,8 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
-mcpkit-core = { version = "0.1.0", path = "../mcpkit-core" }
-mcpkit-transport = { version = "0.1.0", path = "../mcpkit-transport" }
+mcpkit-core = { version = "0.2.0", path = "../mcpkit-core" }
+mcpkit-transport = { version = "0.2.0", path = "../mcpkit-transport" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

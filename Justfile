@@ -26,7 +26,7 @@
 # ----------------------------------------------------------------------------
 
 project_name := "mcpkit"
-version := "0.1.0"
+version := "0.2.0"
 msrv := "1.75"
 edition := "2021"
 docker_image := project_name
