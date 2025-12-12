@@ -1,7 +1,6 @@
 //! Task capability implementation.
 //!
-//! This module provides full support for long-running tasks
-//! in MCP servers - a feature missing from rmcp.
+//! This module provides support for long-running tasks in MCP servers.
 //!
 //! Tasks allow servers to execute long-running operations while
 //! providing progress updates and supporting cancellation.

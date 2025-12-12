@@ -182,8 +182,7 @@ pub trait PromptHandler: Send + Sync {
 /// Handler for task-related operations.
 ///
 /// Implement this trait to support long-running operations that can be
-/// tracked, monitored, and cancelled. This is a key differentiator from
-/// rmcp which lacks task support.
+/// tracked, monitored, and cancelled.
 pub trait TaskHandler: Send + Sync {
     /// List all tasks, optionally filtered by status.
     fn list_tasks(&self, ctx: &Context<'_>) -> impl Future<Output = Result<Vec<Task>, McpError>> + Send;
@@ -278,7 +277,7 @@ impl std::fmt::Display for LogLevel {
 /// Handler for sampling requests (server-initiated LLM calls).
 ///
 /// Implement this trait to allow the server to request LLM completions
-/// from the client. This enables powerful agentic workflows where servers
+/// from the client. This enables agentic workflows where servers
 /// can leverage the client's AI capabilities.
 ///
 /// # Example

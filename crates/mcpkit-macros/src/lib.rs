@@ -42,7 +42,7 @@
 //!
 //! # Code Reduction
 //!
-//! This single macro replaces rmcp's 4 separate macros:
+//! This single macro replaces 4 separate macros:
 //! - `#[derive(Clone)]` with manual router field
 //! - `#[tool_router]`
 //! - `#[tool_handler]`

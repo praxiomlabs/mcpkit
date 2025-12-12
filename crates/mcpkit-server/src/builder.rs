@@ -216,8 +216,7 @@ where
     /// Register a task handler.
     ///
     /// Tasks are long-running operations that can be tracked, monitored,
-    /// and cancelled. This is a key differentiator from rmcp which lacks
-    /// task support.
+    /// and cancelled.
     ///
     /// This method is only available when no task handler has been registered yet.
     #[must_use]

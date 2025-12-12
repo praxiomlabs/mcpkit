@@ -1,7 +1,7 @@
 //! Sampling types for MCP servers.
 //!
 //! Sampling allows servers to request LLM completions from the client.
-//! This enables powerful agentic workflows where servers can leverage
+//! This enables agentic workflows where servers can leverage
 //! the client's AI capabilities.
 
 use super::content::{Content, Role};

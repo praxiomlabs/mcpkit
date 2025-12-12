@@ -10,7 +10,7 @@
 //! - **Tools**: Callable functions that servers expose for AI assistants
 //! - **Resources**: Data that servers expose (files, database entries, etc.)
 //! - **Prompts**: Templated messages with arguments
-//! - **Tasks**: Long-running operations with progress tracking (NEW vs rmcp)
+//! - **Tasks**: Long-running operations with progress tracking
 //! - **Sampling**: Requesting LLM completions from the client
 //! - **Elicitation**: Requesting structured input from the user
 //! - **Content**: Polymorphic content types (text, images, audio, resources)

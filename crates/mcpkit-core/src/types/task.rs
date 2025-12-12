@@ -1,7 +1,7 @@
 //! Task types for MCP servers.
 //!
 //! Tasks represent long-running operations that can be tracked, monitored,
-//! and cancelled. This is a key differentiator from rmcp which lacks task support.
+//! and cancelled.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

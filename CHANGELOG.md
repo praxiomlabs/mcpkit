@@ -34,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `#[prompt]` attribute for defining prompt handlers
 - `#[derive(ToolInput)]` for generating JSON Schema from structs
 - Full MCP 2025-11-25 protocol support
-- Tasks capability (not available in rmcp)
+- Tasks capability for long-running operations
 - Multiple transport implementations:
   - Standard I/O (stdio)
   - HTTP with Server-Sent Events (SSE)
