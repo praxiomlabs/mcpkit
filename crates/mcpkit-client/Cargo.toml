@@ -8,6 +8,7 @@ description = "Client implementation for mcpkit"
 repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
+readme = "README.md"
 
 [dependencies]
 # Internal crates - path takes precedence locally, version used for publishing

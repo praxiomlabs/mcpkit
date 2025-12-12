@@ -8,6 +8,7 @@ description = "Server implementation for mcpkit"
 repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
+readme = "README.md"
 
 [dependencies]
 mcpkit-core = { version = "0.2.0", path = "../mcpkit-core" }

@@ -8,6 +8,7 @@ description = "Procedural macros for mcpkit"
 repository.workspace = true
 keywords = ["mcp", "mcp-protocol", "ai", "macros", "proc-macro"]
 categories = ["development-tools::procedural-macro-helpers"]
+readme = "README.md"
 
 [lints]
 workspace = true
