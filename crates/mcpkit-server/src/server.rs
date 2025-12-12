@@ -490,7 +490,12 @@ async fn route_tools<TH: ToolHandler + Send + Sync>(
 ) -> Option<Result<serde_json::Value, McpError>> {
     match method {
         "tools/list" => {
+            tracing::debug!("Listing available tools");
             let result = handler.list_tools(ctx).await;
+            match &result {
+                Ok(tools) => tracing::debug!(count = tools.len(), "Listed tools"),
+                Err(e) => tracing::warn!(error = %e, "Failed to list tools"),
+            }
             Some(result.map(|tools| serde_json::json!({ "tools": tools })))
         }
         "tools/call" => {
@@ -504,7 +509,18 @@ async fn route_tools<TH: ToolHandler + Send + Sync>(
                 let args = params.get("arguments")
                     .cloned()
                     .unwrap_or(serde_json::json!({}));
-                let output = handler.call_tool(name, args, ctx).await?;
+
+                tracing::info!(tool = %name, "Calling tool");
+                let start = std::time::Instant::now();
+                let output = handler.call_tool(name, args, ctx).await;
+                let duration = start.elapsed();
+
+                match &output {
+                    Ok(_) => tracing::info!(tool = %name, duration_ms = duration.as_millis(), "Tool call completed"),
+                    Err(e) => tracing::warn!(tool = %name, duration_ms = duration.as_millis(), error = %e, "Tool call failed"),
+                }
+
+                let output = output?;
                 let result: CallToolResult = output.into();
                 Ok(serde_json::to_value(result).unwrap_or(serde_json::json!({})))
             })().await;
@@ -522,7 +538,12 @@ async fn route_resources<RH: ResourceHandler + Send + Sync>(
 ) -> Option<Result<serde_json::Value, McpError>> {
     match method {
         "resources/list" => {
+            tracing::debug!("Listing available resources");
             let result = handler.list_resources(ctx).await;
+            match &result {
+                Ok(resources) => tracing::debug!(count = resources.len(), "Listed resources"),
+                Err(e) => tracing::warn!(error = %e, "Failed to list resources"),
+            }
             Some(result.map(|resources| serde_json::json!({ "resources": resources })))
         }
         "resources/read" => {
@@ -533,7 +554,18 @@ async fn route_resources<RH: ResourceHandler + Send + Sync>(
                 let uri = params.get("uri")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| McpError::invalid_params("resources/read", "missing uri"))?;
-                let contents = handler.read_resource(uri, ctx).await?;
+
+                tracing::info!(uri = %uri, "Reading resource");
+                let start = std::time::Instant::now();
+                let contents = handler.read_resource(uri, ctx).await;
+                let duration = start.elapsed();
+
+                match &contents {
+                    Ok(_) => tracing::info!(uri = %uri, duration_ms = duration.as_millis(), "Resource read completed"),
+                    Err(e) => tracing::warn!(uri = %uri, duration_ms = duration.as_millis(), error = %e, "Resource read failed"),
+                }
+
+                let contents = contents?;
                 Ok(serde_json::json!({ "contents": contents }))
             })().await;
             Some(result)
@@ -550,7 +582,12 @@ async fn route_prompts<PH: PromptHandler + Send + Sync>(
 ) -> Option<Result<serde_json::Value, McpError>> {
     match method {
         "prompts/list" => {
+            tracing::debug!("Listing available prompts");
             let result = handler.list_prompts(ctx).await;
+            match &result {
+                Ok(prompts) => tracing::debug!(count = prompts.len(), "Listed prompts"),
+                Err(e) => tracing::warn!(error = %e, "Failed to list prompts"),
+            }
             Some(result.map(|prompts| serde_json::json!({ "prompts": prompts })))
         }
         "prompts/get" => {
@@ -564,7 +601,18 @@ async fn route_prompts<PH: PromptHandler + Send + Sync>(
                 let args = params.get("arguments")
                     .and_then(|v| v.as_object())
                     .cloned();
-                let result = handler.get_prompt(name, args, ctx).await?;
+
+                tracing::info!(prompt = %name, "Getting prompt");
+                let start = std::time::Instant::now();
+                let prompt_result = handler.get_prompt(name, args, ctx).await;
+                let duration = start.elapsed();
+
+                match &prompt_result {
+                    Ok(_) => tracing::info!(prompt = %name, duration_ms = duration.as_millis(), "Prompt retrieval completed"),
+                    Err(e) => tracing::warn!(prompt = %name, duration_ms = duration.as_millis(), error = %e, "Prompt retrieval failed"),
+                }
+
+                let result = prompt_result?;
                 Ok(serde_json::to_value(result).unwrap_or(serde_json::json!({})))
             })().await;
             Some(result)

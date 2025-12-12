@@ -87,11 +87,21 @@ pub struct PooledClient<T: Transport + 'static> {
 
 impl<T: Transport + 'static> PooledClient<T> {
     /// Get a reference to the underlying client.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the client was already dropped or taken. This should never
+    /// happen in normal use - the panic indicates a bug in the pool implementation.
     pub fn client(&self) -> &Client<T> {
         self.client.as_ref().expect("Client already dropped")
     }
 
     /// Get a mutable reference to the underlying client.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the client was already dropped or taken. This should never
+    /// happen in normal use - the panic indicates a bug in the pool implementation.
     pub fn client_mut(&mut self) -> &mut Client<T> {
         self.client.as_mut().expect("Client already dropped")
     }

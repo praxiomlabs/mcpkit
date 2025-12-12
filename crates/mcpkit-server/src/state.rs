@@ -197,11 +197,25 @@ impl Connection<state::Initializing> {
 
 impl Connection<state::Ready> {
     /// Get the client capabilities.
+    ///
+    /// # Panics
+    ///
+    /// This should never panic if the connection was properly initialized
+    /// through the typestate transitions. Use `try_client_capabilities()`
+    /// for a fallible version.
     pub fn client_capabilities(&self) -> &ClientCapabilities {
         self.inner
             .client_capabilities
             .as_ref()
             .expect("Ready connection must have client capabilities")
+    }
+
+    /// Try to get the client capabilities.
+    ///
+    /// Returns `None` if capabilities were not set (should not happen in normal use).
+    #[must_use]
+    pub fn try_client_capabilities(&self) -> Option<&ClientCapabilities> {
+        self.inner.client_capabilities.as_ref()
     }
 
     /// Get the server capabilities.
@@ -215,11 +229,25 @@ impl Connection<state::Ready> {
     }
 
     /// Get the negotiated protocol version.
+    ///
+    /// # Panics
+    ///
+    /// This should never panic if the connection was properly initialized
+    /// through the typestate transitions. Use `try_protocol_version()`
+    /// for a fallible version.
     pub fn protocol_version(&self) -> &str {
         self.inner
             .protocol_version
             .as_ref()
             .expect("Ready connection must have protocol version")
+    }
+
+    /// Try to get the negotiated protocol version.
+    ///
+    /// Returns `None` if version was not set (should not happen in normal use).
+    #[must_use]
+    pub fn try_protocol_version(&self) -> Option<&str> {
+        self.inner.protocol_version.as_deref()
     }
 
     /// Start graceful shutdown.
