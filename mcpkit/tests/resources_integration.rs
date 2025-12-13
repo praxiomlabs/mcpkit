@@ -266,7 +266,7 @@ async fn test_resource_template_uri_matching() {
         async move {
             Ok(ResourceContents::text(
                 uri.clone(),
-                format!(r#"{{"uri": "{}"}}"#, uri),
+                format!(r#"{{"uri": "{uri}"}}"#),
             ))
         }
     });
@@ -393,16 +393,6 @@ async fn test_list_resource_templates() {
         let uri = uri.to_string();
         async move { Ok(ResourceContents::text(uri, "v2 response".to_string())) }
     });
-
-    let (req_id, client_caps, server_caps, protocol_version, peer) = make_test_context();
-    let ctx = Context::new(
-        &req_id,
-        None,
-        &client_caps,
-        &server_caps,
-        protocol_version,
-        &peer,
-    );
 
     let templates = service.list_templates();
     assert_eq!(templates.len(), 2);

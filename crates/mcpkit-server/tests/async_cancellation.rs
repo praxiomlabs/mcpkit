@@ -416,19 +416,17 @@ async fn test_high_contention_cancellation() {
 #[tokio::test]
 async fn test_cancellation_in_nested_async_context() {
     let token = CancellationToken::new();
+    let token_clone = token.clone();
 
-    async fn inner_work(token: &CancellationToken) -> bool {
+    let handle = tokio::spawn(async move {
         for _ in 0..10 {
-            if token.is_cancelled() {
+            if token_clone.is_cancelled() {
                 return false;
             }
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
         true
-    }
-
-    let token_clone = token.clone();
-    let handle = tokio::spawn(async move { inner_work(&token_clone).await });
+    });
 
     // Cancel after a short time
     tokio::time::sleep(Duration::from_millis(25)).await;
@@ -450,8 +448,8 @@ async fn test_cancellation_race_with_completion() {
 
         let handle = tokio::spawn(async move {
             tokio::select! {
-                _ = token.cancelled() => false,
-                _ = tokio::time::sleep(Duration::from_micros(100)) => {
+                () = token.cancelled() => false,
+                () = tokio::time::sleep(Duration::from_micros(100)) => {
                     completed.fetch_add(1, Ordering::Relaxed);
                     true
                 }
@@ -471,9 +469,7 @@ async fn test_cancellation_race_with_completion() {
 
 #[tokio::test]
 async fn test_cancellation_token_in_result_chain() {
-    let token = CancellationToken::new();
-
-    async fn fallible_work(token: &CancellationToken) -> Result<String, &'static str> {
+    async fn do_fallible_work(token: &CancellationToken) -> Result<String, &'static str> {
         if token.is_cancelled() {
             return Err("cancelled");
         }
@@ -484,13 +480,15 @@ async fn test_cancellation_token_in_result_chain() {
         Ok("done".to_string())
     }
 
+    let token = CancellationToken::new();
+
     // Without cancellation
-    let result = fallible_work(&token).await;
+    let result = do_fallible_work(&token).await;
     assert!(result.is_ok());
 
     // With cancellation
     token.cancel();
-    let result = fallible_work(&token).await;
+    let result = do_fallible_work(&token).await;
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), "cancelled");
 }
@@ -503,9 +501,6 @@ async fn test_cancellation_cleanup_pattern() {
     let cleanup = cleanup_done.clone();
     let token_clone = token.clone();
     let handle = tokio::spawn(async move {
-        // Simulate resource acquisition
-        let _resource = "acquired";
-
         // Do work with cancellation check
         loop {
             if token_clone.is_cancelled() {
