@@ -1,0 +1,57 @@
+# mcpkit-axum
+
+Axum integration for the Model Context Protocol (MCP).
+
+This crate provides integration between the MCP SDK and the Axum web framework, making it easy to expose MCP servers over HTTP.
+
+## Features
+
+- HTTP POST endpoint for JSON-RPC messages
+- Server-Sent Events (SSE) streaming for notifications
+- Session management with automatic cleanup
+- Protocol version validation
+- CORS support
+
+## Usage
+
+```rust
+use mcpkit_axum::{McpRouter, McpState};
+use mcpkit_server::ServerHandler;
+use axum::Router;
+
+// Your MCP server handler (must implement ServerHandler)
+struct MyServer;
+
+#[tokio::main]
+async fn main() {
+    // Create MCP router with your handler
+    let mcp_router = McpRouter::new(MyServer);
+
+    // Build the full application
+    let app = Router::new()
+        .nest("/mcp", mcp_router.into_router());
+
+    // Run the server
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    axum::serve(listener, app).await.unwrap();
+}
+```
+
+## Exports
+
+| Export | Purpose |
+|--------|---------|
+| `McpRouter` | Router builder for MCP endpoints |
+| `handle_mcp_post` | Handler for POST requests |
+| `handle_sse` | Handler for SSE streaming |
+| `Session` | Individual client session |
+| `SessionManager` | Manages active sessions |
+| `SessionStore` | Storage for session data |
+
+## Part of mcpkit
+
+This crate is part of the [mcpkit](https://crates.io/crates/mcpkit) SDK. For most use cases, depend on `mcpkit` directly rather than this crate.
+
+## License
+
+Licensed under either of Apache License, Version 2.0 or MIT license at your option.

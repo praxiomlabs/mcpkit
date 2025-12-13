@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2025-12-13
+
+### Added
+
+- `ToolBuilder` annotation methods: `destructive()`, `idempotent()`, `read_only()`
+- Warning log when server returns unknown protocol version (falls back to latest)
+- Comprehensive test coverage for:
+  - Tool annotations and metadata
+  - Protocol version edge cases
+  - HTTP session recovery
+  - Resource template URI matching
+  - Async cancellation propagation
+
+### Fixed
+
+- HTTP header casing changed to lowercase for HTTP/2 compatibility (`mcp-session-id`, `mcp-protocol-version`)
+- Clarified TODO comment in macro crate (annotations were already implemented)
+
+### Changed
+
+- Updated documentation to reflect lowercase HTTP headers
+
 ## [0.2.0] - 2025-12-12
 
 ### Added
@@ -59,6 +81,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mcpkit-testing` crate for test utilities
 - Protocol version detection and capability negotiation
 
-[Unreleased]: https://github.com/praxiomlabs/mcpkit/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/praxiomlabs/mcpkit/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/praxiomlabs/mcpkit/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/praxiomlabs/mcpkit/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/praxiomlabs/mcpkit/releases/tag/v0.1.0
