@@ -34,7 +34,7 @@ Initialize a session:
 ```bash
 curl -X POST http://localhost:3000/mcp \
   -H "Content-Type: application/json" \
-  -H "MCP-Protocol-Version: 2025-06-18" \
+  -H "mcp-protocol-version: 2025-06-18" \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","clientInfo":{"name":"curl","version":"1.0"}}}'
 ```
 
@@ -44,8 +44,8 @@ List available tools:
 # Use the session ID from the initialize response
 curl -X POST http://localhost:3000/mcp \
   -H "Content-Type: application/json" \
-  -H "MCP-Protocol-Version: 2025-06-18" \
-  -H "Mcp-Session-Id: <session-id>" \
+  -H "mcp-protocol-version: 2025-06-18" \
+  -H "mcp-session-id: <session-id>" \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
 ```
 
@@ -54,8 +54,8 @@ Call a tool:
 ```bash
 curl -X POST http://localhost:3000/mcp \
   -H "Content-Type: application/json" \
-  -H "MCP-Protocol-Version: 2025-06-18" \
-  -H "Mcp-Session-Id: <session-id>" \
+  -H "mcp-protocol-version: 2025-06-18" \
+  -H "mcp-session-id: <session-id>" \
   -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"add","arguments":{"a":2,"b":3}}}'
 ```
 

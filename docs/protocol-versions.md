@@ -167,8 +167,10 @@ Per the MCP specification, version errors use code `-32602`:
 The HTTP transport layer uses a separate version header:
 
 ```
-MCP-Protocol-Version: 2025-06-18
+mcp-protocol-version: 2025-06-18
 ```
+
+Note: HTTP/2 requires lowercase header names. HTTP/1.1 headers are case-insensitive, so lowercase works universally.
 
 This is the Streamable HTTP transport specification version, which is independent of the core MCP protocol version.
 

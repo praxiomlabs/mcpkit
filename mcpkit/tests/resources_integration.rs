@@ -249,3 +249,166 @@ async fn test_binary_resource() {
     let result = service.read("file:///image.png", &ctx).await;
     assert!(result.is_ok());
 }
+
+#[tokio::test]
+async fn test_resource_template_uri_matching() {
+    let mut service = ResourceService::new();
+
+    // Register a template with multiple path segments
+    let template =
+        ResourceTemplateBuilder::new("db://{database}/tables/{table}/rows/{id}", "DB Row")
+            .description("Database row by ID")
+            .mime_type("application/json")
+            .build();
+
+    service.register_template(template, |uri, _ctx| {
+        let uri = uri.to_string();
+        async move {
+            Ok(ResourceContents::text(
+                uri.clone(),
+                format!(r#"{{"uri": "{}"}}"#, uri),
+            ))
+        }
+    });
+
+    let (req_id, client_caps, server_caps, protocol_version, peer) = make_test_context();
+    let ctx = Context::new(
+        &req_id,
+        None,
+        &client_caps,
+        &server_caps,
+        protocol_version,
+        &peer,
+    );
+
+    // Should match with specific values
+    let result = service.read("db://mydb/tables/users/rows/123", &ctx).await;
+    assert!(result.is_ok());
+
+    // Should also match with different values
+    let result = service.read("db://prod/tables/orders/rows/456", &ctx).await;
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_resource_template_with_special_characters() {
+    let mut service = ResourceService::new();
+
+    // Template that might receive URL-encoded values
+    let template = ResourceTemplateBuilder::new("search://{query}", "Search")
+        .description("Search query")
+        .build();
+
+    service.register_template(template, |uri, _ctx| {
+        let uri = uri.to_string();
+        async move {
+            Ok(ResourceContents::text(
+                uri.clone(),
+                "Search results".to_string(),
+            ))
+        }
+    });
+
+    let (req_id, client_caps, server_caps, protocol_version, peer) = make_test_context();
+    let ctx = Context::new(
+        &req_id,
+        None,
+        &client_caps,
+        &server_caps,
+        protocol_version,
+        &peer,
+    );
+
+    // Should work with simple query
+    let result = service.read("search://hello", &ctx).await;
+    assert!(result.is_ok());
+
+    // Should work with query containing special chars (URL encoded)
+    let result = service.read("search://hello%20world", &ctx).await;
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_resource_template_priority_over_exact() {
+    let mut service = ResourceService::new();
+
+    // Register an exact resource
+    let resource = ResourceBuilder::new("file:///exact.txt", "Exact File").build();
+
+    service.register(resource, |uri, _ctx| {
+        let uri = uri.to_string();
+        async move { Ok(ResourceContents::text(uri, "Exact content".to_string())) }
+    });
+
+    // Register a template that could also match
+    let template = ResourceTemplateBuilder::new("file:///{filename}", "Any File").build();
+
+    service.register_template(template, |uri, _ctx| {
+        let uri = uri.to_string();
+        async move { Ok(ResourceContents::text(uri, "Template content".to_string())) }
+    });
+
+    let (req_id, client_caps, server_caps, protocol_version, peer) = make_test_context();
+    let ctx = Context::new(
+        &req_id,
+        None,
+        &client_caps,
+        &server_caps,
+        protocol_version,
+        &peer,
+    );
+
+    // Exact match should take priority
+    let result = service.read("file:///exact.txt", &ctx).await;
+    assert!(result.is_ok());
+    let contents = result.unwrap();
+    // The exact resource handler returns "Exact content"
+    let text = contents.text.as_ref().unwrap();
+    assert!(text.contains("Exact") || text.contains("exact"));
+
+    // Non-exact should fall through to template
+    let result = service.read("file:///other.txt", &ctx).await;
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_list_resource_templates() {
+    let mut service = ResourceService::new();
+
+    // Register multiple templates
+    let template1 = ResourceTemplateBuilder::new("api://v1/{endpoint}", "API v1")
+        .description("Version 1 API")
+        .build();
+
+    let template2 = ResourceTemplateBuilder::new("api://v2/{endpoint}", "API v2")
+        .description("Version 2 API")
+        .build();
+
+    service.register_template(template1, |uri, _ctx| {
+        let uri = uri.to_string();
+        async move { Ok(ResourceContents::text(uri, "v1 response".to_string())) }
+    });
+
+    service.register_template(template2, |uri, _ctx| {
+        let uri = uri.to_string();
+        async move { Ok(ResourceContents::text(uri, "v2 response".to_string())) }
+    });
+
+    let (req_id, client_caps, server_caps, protocol_version, peer) = make_test_context();
+    let ctx = Context::new(
+        &req_id,
+        None,
+        &client_caps,
+        &server_caps,
+        protocol_version,
+        &peer,
+    );
+
+    let templates = service.list_templates();
+    assert_eq!(templates.len(), 2);
+
+    // Check template names
+    let names: Vec<_> = templates.iter().map(|t| t.name.as_str()).collect();
+    assert!(names.contains(&"API v1"));
+    assert!(names.contains(&"API v2"));
+}

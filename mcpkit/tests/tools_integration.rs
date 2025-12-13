@@ -223,3 +223,77 @@ async fn test_tool_output_error_with_suggestion() {
     // The suggestion should be appended to the content
     assert!(!result.content.is_empty());
 }
+
+#[tokio::test]
+async fn test_tool_builder_annotations() {
+    // Test destructive tool
+    let tool = ToolBuilder::new("delete_file")
+        .description("Delete a file from the filesystem")
+        .destructive(true)
+        .build();
+
+    assert!(tool.annotations.is_some());
+    let annotations = tool.annotations.as_ref().unwrap();
+    assert_eq!(annotations.destructive_hint, Some(true));
+    assert_eq!(annotations.read_only_hint, Some(false));
+    assert_eq!(annotations.idempotent_hint, Some(false));
+
+    // Test read-only tool
+    let tool = ToolBuilder::new("read_file")
+        .description("Read a file")
+        .read_only(true)
+        .build();
+
+    assert!(tool.annotations.is_some());
+    let annotations = tool.annotations.as_ref().unwrap();
+    assert_eq!(annotations.read_only_hint, Some(true));
+    assert_eq!(annotations.destructive_hint, Some(false));
+
+    // Test idempotent tool
+    let tool = ToolBuilder::new("set_value")
+        .description("Set a configuration value")
+        .idempotent(true)
+        .build();
+
+    assert!(tool.annotations.is_some());
+    let annotations = tool.annotations.as_ref().unwrap();
+    assert_eq!(annotations.idempotent_hint, Some(true));
+
+    // Test all annotations combined
+    let tool = ToolBuilder::new("complex_tool")
+        .description("A complex tool with multiple hints")
+        .destructive(false)
+        .read_only(true)
+        .idempotent(true)
+        .build();
+
+    assert!(tool.annotations.is_some());
+    let annotations = tool.annotations.as_ref().unwrap();
+    assert_eq!(annotations.destructive_hint, Some(false));
+    assert_eq!(annotations.read_only_hint, Some(true));
+    assert_eq!(annotations.idempotent_hint, Some(true));
+}
+
+#[tokio::test]
+async fn test_tool_service_preserves_annotations() {
+    let mut service = ToolService::new();
+
+    // Register a tool with annotations
+    let tool = ToolBuilder::new("dangerous_operation")
+        .description("A potentially dangerous operation")
+        .destructive(true)
+        .idempotent(false)
+        .build();
+
+    service.register(tool, |_args, _ctx| async move {
+        Ok(ToolOutput::text("done".to_string()))
+    });
+
+    // Verify annotations are preserved in list
+    let tools = service.list();
+    assert_eq!(tools.len(), 1);
+    let tool = &tools[0];
+    assert!(tool.annotations.is_some());
+    let annotations = tool.annotations.as_ref().unwrap();
+    assert_eq!(annotations.destructive_hint, Some(true));
+}

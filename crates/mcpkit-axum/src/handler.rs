@@ -19,8 +19,8 @@ use tracing::{debug, info, warn};
 ///
 /// # Headers
 ///
-/// - `MCP-Protocol-Version`: Required. Must be a supported protocol version.
-/// - `Mcp-Session-Id`: Optional. Used to track sessions.
+/// - `mcp-protocol-version`: Required. Must be a supported protocol version.
+/// - `mcp-session-id`: Optional. Used to track sessions.
 /// - `Content-Type`: Should be `application/json`.
 ///
 /// # Response
@@ -36,7 +36,7 @@ where
 {
     // Validate protocol version
     let version = headers
-        .get("MCP-Protocol-Version")
+        .get("mcp-protocol-version")
         .and_then(|v| v.to_str().ok());
 
     if !is_supported_version(version) {
@@ -52,7 +52,7 @@ where
 
     // Get or create session
     let session_id = headers
-        .get("Mcp-Session-Id")
+        .get("mcp-session-id")
         .and_then(|v| v.to_str().ok())
         .map(String::from);
 
@@ -94,7 +94,7 @@ where
                     StatusCode::OK,
                     [
                         ("content-type", "application/json"),
-                        ("Mcp-Session-Id", session_id.as_str()),
+                        ("mcp-session-id", session_id.as_str()),
                     ],
                     body,
                 )
@@ -110,7 +110,7 @@ where
             );
             (
                 StatusCode::ACCEPTED,
-                [("Mcp-Session-Id", session_id.as_str())],
+                [("mcp-session-id", session_id.as_str())],
             )
                 .into_response()
         }
@@ -164,7 +164,7 @@ where
 ///
 /// # Headers
 ///
-/// - `Mcp-Session-Id`: Optional. If provided, reconnects to an existing session.
+/// - `mcp-session-id`: Optional. If provided, reconnects to an existing session.
 ///
 /// # Events
 ///
@@ -178,7 +178,7 @@ where
     H: HasServerInfo + Send + Sync + 'static,
 {
     let session_id = headers
-        .get("Mcp-Session-Id")
+        .get("mcp-session-id")
         .and_then(|v| v.to_str().ok())
         .map(String::from);
 

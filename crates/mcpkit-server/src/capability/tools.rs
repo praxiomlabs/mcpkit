@@ -160,6 +160,9 @@ pub struct ToolBuilder {
     name: String,
     description: Option<String>,
     input_schema: Value,
+    destructive: Option<bool>,
+    idempotent: Option<bool>,
+    read_only: Option<bool>,
 }
 
 impl ToolBuilder {
@@ -172,6 +175,9 @@ impl ToolBuilder {
                 "type": "object",
                 "properties": {},
             }),
+            destructive: None,
+            idempotent: None,
+            read_only: None,
         }
     }
 
@@ -188,14 +194,58 @@ impl ToolBuilder {
         self
     }
 
+    /// Mark this tool as destructive.
+    ///
+    /// Destructive tools modify data or state in ways that cannot be easily undone.
+    /// When set to true, clients should warn users before executing.
+    #[must_use]
+    pub fn destructive(mut self, value: bool) -> Self {
+        self.destructive = Some(value);
+        self
+    }
+
+    /// Mark this tool as idempotent.
+    ///
+    /// Idempotent tools produce the same result when called multiple times
+    /// with the same arguments.
+    #[must_use]
+    pub fn idempotent(mut self, value: bool) -> Self {
+        self.idempotent = Some(value);
+        self
+    }
+
+    /// Mark this tool as read-only.
+    ///
+    /// Read-only tools do not modify any data or state.
+    #[must_use]
+    pub fn read_only(mut self, value: bool) -> Self {
+        self.read_only = Some(value);
+        self
+    }
+
     /// Build the tool.
     #[must_use]
     pub fn build(self) -> Tool {
+        let has_annotations =
+            self.destructive.is_some() || self.idempotent.is_some() || self.read_only.is_some();
+
+        let annotations = if has_annotations {
+            Some(mcpkit_core::types::tool::ToolAnnotations {
+                title: None,
+                read_only_hint: self.read_only.or(Some(false)),
+                destructive_hint: self.destructive.or(Some(false)),
+                idempotent_hint: self.idempotent.or(Some(false)),
+                open_world_hint: None,
+            })
+        } else {
+            None
+        };
+
         Tool {
             name: self.name,
             description: self.description,
             input_schema: self.input_schema,
-            annotations: None,
+            annotations,
         }
     }
 }

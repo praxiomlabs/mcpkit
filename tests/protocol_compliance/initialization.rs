@@ -182,3 +182,86 @@ fn test_initialize_result_optional_instructions() {
     let result: InitializeResult = serde_json::from_value(json).unwrap();
     assert!(result.instructions.is_none());
 }
+
+// Protocol version edge case tests
+mod protocol_version_tests {
+    use mcpkit_core::protocol_version::{ProtocolVersion, VersionParseError};
+
+    #[test]
+    fn test_version_parse_error_message() {
+        let err = "invalid-version".parse::<ProtocolVersion>().unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("invalid-version"));
+        assert!(msg.contains("2024-11-05"));
+        assert!(msg.contains("2025-11-25"));
+    }
+
+    #[test]
+    fn test_version_parse_edge_cases() {
+        // Empty string
+        assert!("".parse::<ProtocolVersion>().is_err());
+
+        // Version with extra characters
+        assert!("2024-11-05-beta".parse::<ProtocolVersion>().is_err());
+        assert!(" 2024-11-05".parse::<ProtocolVersion>().is_err());
+        assert!("2024-11-05 ".parse::<ProtocolVersion>().is_err());
+
+        // Wrong delimiter
+        assert!("2024/11/05".parse::<ProtocolVersion>().is_err());
+        assert!("2024.11.05".parse::<ProtocolVersion>().is_err());
+
+        // Valid versions work
+        assert!("2024-11-05".parse::<ProtocolVersion>().is_ok());
+        assert!("2025-11-25".parse::<ProtocolVersion>().is_ok());
+    }
+
+    #[test]
+    fn test_version_try_from() {
+        // From String
+        let result = ProtocolVersion::try_from("2024-11-05".to_string());
+        assert!(result.is_ok());
+
+        // From &str
+        let result = ProtocolVersion::try_from("invalid");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_version_default() {
+        let default = ProtocolVersion::default();
+        assert_eq!(default, ProtocolVersion::LATEST);
+    }
+
+    #[test]
+    fn test_negotiate_edge_cases() {
+        // Negotiate with subset of versions
+        let subset = &[ProtocolVersion::V2025_03_26, ProtocolVersion::V2025_06_18];
+
+        // Client requests oldest - not in subset, return oldest in subset
+        let result = ProtocolVersion::negotiate("2024-11-05", subset);
+        assert_eq!(result, None);
+
+        // Client requests version in subset
+        let result = ProtocolVersion::negotiate("2025-06-18", subset);
+        assert_eq!(result, Some(ProtocolVersion::V2025_06_18));
+
+        // Client requests latest - not in subset, return highest in subset
+        let result = ProtocolVersion::negotiate("2025-11-25", subset);
+        assert_eq!(result, Some(ProtocolVersion::V2025_06_18));
+
+        // Malformed version string - returns latest in subset
+        let result = ProtocolVersion::negotiate("not-a-version", subset);
+        assert_eq!(result, Some(ProtocolVersion::V2025_06_18));
+    }
+
+    #[test]
+    fn test_version_all_constant() {
+        // ALL should be in chronological order
+        let all = ProtocolVersion::ALL;
+        assert!(all.len() >= 4);
+
+        for i in 1..all.len() {
+            assert!(all[i - 1] < all[i], "Versions should be in ascending order");
+        }
+    }
+}

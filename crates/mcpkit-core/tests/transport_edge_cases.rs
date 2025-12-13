@@ -406,3 +406,72 @@ fn test_message_send_sync() {
     fn assert_send_sync<T: Send + Sync>() {}
     assert_send_sync::<Message>();
 }
+
+// =============================================================================
+// Large Message Additional Edge Cases
+// =============================================================================
+
+#[test]
+fn test_very_large_string_content() {
+    // Test 1MB string content
+    let large_content: String = "x".repeat(1_000_000);
+    let request = Request::with_params(
+        "test",
+        RequestId::Number(1),
+        json!({ "content": large_content }),
+    );
+
+    let json = serde_json::to_string(&request).unwrap();
+    assert!(json.len() > 1_000_000, "JSON length: {} bytes", json.len());
+
+    let parsed: Request = serde_json::from_str(&json).unwrap();
+    let content = parsed.params.as_ref().unwrap()["content"].as_str().unwrap();
+    assert_eq!(content.len(), 1_000_000);
+}
+
+#[test]
+fn test_large_response_result() {
+    // Test large response payload
+    let large_data: Vec<String> = (0..1000)
+        .map(|i| format!("Item {}: {}", i, "data".repeat(100)))
+        .collect();
+
+    let response = Response::success(RequestId::Number(1), json!({ "items": large_data }));
+
+    let json = serde_json::to_string(&response).unwrap();
+    let parsed: Response = serde_json::from_str(&json).unwrap();
+    assert!(parsed.is_success());
+}
+
+#[test]
+fn test_many_concurrent_request_ids() {
+    // Verify we can handle many unique request IDs
+    let ids: Vec<RequestId> = (0..10000).map(RequestId::Number).collect();
+
+    for id in &ids {
+        let request = Request::new("test", id.clone());
+        let json = serde_json::to_string(&request).unwrap();
+        let parsed: Request = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.id, *id);
+    }
+}
+
+#[test]
+fn test_message_with_binary_like_content() {
+    // Test that non-UTF8-like content in strings is handled
+    // (Base64 encoded binary data, for instance)
+    let binary_like = base64_like_content(10000);
+    let request =
+        Request::with_params("test", RequestId::Number(1), json!({ "blob": binary_like }));
+
+    let json = serde_json::to_string(&request).unwrap();
+    let parsed: Request = serde_json::from_str(&json).unwrap();
+    assert!(parsed.params.is_some());
+}
+
+fn base64_like_content(len: usize) -> String {
+    const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    (0..len)
+        .map(|i| ALPHABET[i % ALPHABET.len()] as char)
+        .collect()
+}

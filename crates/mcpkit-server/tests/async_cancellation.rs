@@ -408,3 +408,125 @@ async fn test_high_contention_cancellation() {
     assert_eq!(cancel_count.load(Ordering::Relaxed), 10);
     assert!(check_count.load(Ordering::Relaxed) > 0);
 }
+
+// =============================================================================
+// Request-Level Cancellation Patterns
+// =============================================================================
+
+#[tokio::test]
+async fn test_cancellation_in_nested_async_context() {
+    let token = CancellationToken::new();
+
+    async fn inner_work(token: &CancellationToken) -> bool {
+        for _ in 0..10 {
+            if token.is_cancelled() {
+                return false;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        true
+    }
+
+    let token_clone = token.clone();
+    let handle = tokio::spawn(async move { inner_work(&token_clone).await });
+
+    // Cancel after a short time
+    tokio::time::sleep(Duration::from_millis(25)).await;
+    token.cancel();
+
+    let result = handle.await.unwrap();
+    assert!(!result, "Work should have been cancelled");
+}
+
+#[tokio::test]
+async fn test_cancellation_race_with_completion() {
+    // Test the race between cancellation and normal completion
+    let token = CancellationToken::new();
+    let completed = Arc::new(AtomicU32::new(0));
+
+    for _ in 0..100 {
+        let token = token.clone();
+        let completed = completed.clone();
+
+        let handle = tokio::spawn(async move {
+            tokio::select! {
+                _ = token.cancelled() => false,
+                _ = tokio::time::sleep(Duration::from_micros(100)) => {
+                    completed.fetch_add(1, Ordering::Relaxed);
+                    true
+                }
+            }
+        });
+
+        let _ = handle.await;
+    }
+
+    // Most should complete before we even try to cancel
+    assert!(
+        completed.load(Ordering::Relaxed) > 50,
+        "Most tasks should complete normally: {}",
+        completed.load(Ordering::Relaxed)
+    );
+}
+
+#[tokio::test]
+async fn test_cancellation_token_in_result_chain() {
+    let token = CancellationToken::new();
+
+    async fn fallible_work(token: &CancellationToken) -> Result<String, &'static str> {
+        if token.is_cancelled() {
+            return Err("cancelled");
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        if token.is_cancelled() {
+            return Err("cancelled");
+        }
+        Ok("done".to_string())
+    }
+
+    // Without cancellation
+    let result = fallible_work(&token).await;
+    assert!(result.is_ok());
+
+    // With cancellation
+    token.cancel();
+    let result = fallible_work(&token).await;
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err(), "cancelled");
+}
+
+#[tokio::test]
+async fn test_cancellation_cleanup_pattern() {
+    let token = CancellationToken::new();
+    let cleanup_done = Arc::new(AtomicU32::new(0));
+
+    let cleanup = cleanup_done.clone();
+    let token_clone = token.clone();
+    let handle = tokio::spawn(async move {
+        // Simulate resource acquisition
+        let _resource = "acquired";
+
+        // Do work with cancellation check
+        loop {
+            if token_clone.is_cancelled() {
+                // Cleanup before returning
+                cleanup.fetch_add(1, Ordering::Relaxed);
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    });
+
+    // Cancel after a short time
+    tokio::time::sleep(Duration::from_millis(25)).await;
+    token.cancel();
+
+    // Wait for task to complete
+    let _ = handle.await;
+
+    assert_eq!(
+        cleanup_done.load(Ordering::Relaxed),
+        1,
+        "Cleanup should run"
+    );
+}

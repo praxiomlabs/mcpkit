@@ -61,10 +61,16 @@ use {
 pub const MCP_PROTOCOL_VERSION: &str = "2025-06-18";
 
 /// Header name for MCP protocol version.
-pub const MCP_PROTOCOL_VERSION_HEADER: &str = "MCP-Protocol-Version";
+///
+/// Note: HTTP/2 requires lowercase header names. HTTP/1.1 headers are
+/// case-insensitive, so lowercase works universally.
+pub const MCP_PROTOCOL_VERSION_HEADER: &str = "mcp-protocol-version";
 
 /// Header name for MCP session ID.
-pub const MCP_SESSION_ID_HEADER: &str = "Mcp-Session-Id";
+///
+/// Note: HTTP/2 requires lowercase header names. HTTP/1.1 headers are
+/// case-insensitive, so lowercase works universally.
+pub const MCP_SESSION_ID_HEADER: &str = "mcp-session-id";
 
 /// Default maximum message size (16 MB).
 pub const DEFAULT_MAX_MESSAGE_SIZE: usize = 16 * 1024 * 1024;

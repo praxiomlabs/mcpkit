@@ -20,10 +20,10 @@ use tokio::net::TcpListener;
 use tokio::sync::RwLock;
 use tokio::time::timeout;
 
-/// MCP Protocol version header.
-const MCP_PROTOCOL_VERSION_HEADER: &str = "MCP-Protocol-Version";
+/// MCP Protocol version header (lowercase for HTTP/2 compatibility).
+const MCP_PROTOCOL_VERSION_HEADER: &str = "mcp-protocol-version";
 const MCP_PROTOCOL_VERSION: &str = "2025-06-18";
-const MCP_SESSION_ID_HEADER: &str = "Mcp-Session-Id";
+const MCP_SESSION_ID_HEADER: &str = "mcp-session-id";
 
 /// Simple server state
 #[derive(Clone, Default)]
@@ -386,4 +386,106 @@ async fn test_http_notification() {
 
     // Notifications get 202 Accepted with empty body
     assert_eq!(response.status(), 202);
+}
+
+#[tokio::test]
+async fn test_http_session_id_persistence() {
+    let addr = get_available_addr().await;
+    let _server = spawn_test_server(addr).await;
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    let client = reqwest::Client::new();
+    let url = format!("http://{addr}/mcp");
+
+    // First request - get session ID
+    let request = Request::new("ping", 1u64);
+    let body = serde_json::to_string(&Message::Request(request)).unwrap();
+
+    let response = client
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .header(MCP_PROTOCOL_VERSION_HEADER, MCP_PROTOCOL_VERSION)
+        .body(body)
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+    let session_id = response
+        .headers()
+        .get(MCP_SESSION_ID_HEADER)
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+
+    // Second request - include session ID
+    let request = Request::new("ping", 2u64);
+    let body = serde_json::to_string(&Message::Request(request)).unwrap();
+
+    let response = client
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .header(MCP_PROTOCOL_VERSION_HEADER, MCP_PROTOCOL_VERSION)
+        .header(MCP_SESSION_ID_HEADER, &session_id)
+        .body(body)
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+
+    // Session ID should be preserved in response
+    let response_session_id = response
+        .headers()
+        .get(MCP_SESSION_ID_HEADER)
+        .unwrap()
+        .to_str()
+        .unwrap();
+    assert_eq!(session_id, response_session_id);
+}
+
+#[tokio::test]
+async fn test_http_concurrent_requests() {
+    let addr = get_available_addr().await;
+    let _server = spawn_test_server(addr).await;
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    let client = reqwest::Client::new();
+    let url = format!("http://{addr}/mcp");
+
+    // Send multiple concurrent requests
+    let mut handles = Vec::new();
+    for i in 1..=10 {
+        let client = client.clone();
+        let url = url.clone();
+        handles.push(tokio::spawn(async move {
+            let request = Request::new("ping", i);
+            let body = serde_json::to_string(&Message::Request(request)).unwrap();
+
+            let response = client
+                .post(&url)
+                .header("Content-Type", "application/json")
+                .header(MCP_PROTOCOL_VERSION_HEADER, MCP_PROTOCOL_VERSION)
+                .body(body)
+                .send()
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), 200);
+            let body = response.text().await.unwrap();
+            let msg: Message = serde_json::from_str(&body).unwrap();
+            let resp = msg.as_response().unwrap();
+            assert!(resp.is_success());
+            i
+        }));
+    }
+
+    // Wait for all requests to complete
+    let mut completed = Vec::new();
+    for handle in handles {
+        completed.push(handle.await.unwrap());
+    }
+
+    assert_eq!(completed.len(), 10);
 }

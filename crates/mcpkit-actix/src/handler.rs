@@ -17,8 +17,8 @@ use tracing::{debug, info, warn};
 ///
 /// # Headers
 ///
-/// - `MCP-Protocol-Version`: Required. Must be a supported protocol version.
-/// - `Mcp-Session-Id`: Optional. Used to track sessions.
+/// - `mcp-protocol-version`: Required. Must be a supported protocol version.
+/// - `mcp-session-id`: Optional. Used to track sessions.
 /// - `Content-Type`: Should be `application/json`.
 ///
 /// # Response
@@ -35,7 +35,7 @@ where
     // Validate protocol version
     let version = req
         .headers()
-        .get("MCP-Protocol-Version")
+        .get("mcp-protocol-version")
         .and_then(|v| v.to_str().ok());
 
     if !is_supported_version(version) {
@@ -51,7 +51,7 @@ where
     // Get or create session
     let session_id = req
         .headers()
-        .get("Mcp-Session-Id")
+        .get("mcp-session-id")
         .and_then(|v| v.to_str().ok())
         .map(String::from);
 
@@ -87,7 +87,7 @@ where
 
             Ok(HttpResponse::Ok()
                 .content_type(ContentType::json())
-                .insert_header(("Mcp-Session-Id", session_id))
+                .insert_header(("mcp-session-id", session_id))
                 .body(body))
         }
         Message::Notification(notification) => {
@@ -97,7 +97,7 @@ where
                 "Received notification"
             );
             Ok(HttpResponse::Accepted()
-                .insert_header(("Mcp-Session-Id", session_id))
+                .insert_header(("mcp-session-id", session_id))
                 .finish())
         }
         _ => {
@@ -151,7 +151,7 @@ where
 ///
 /// # Headers
 ///
-/// - `Mcp-Session-Id`: Optional. If provided, reconnects to an existing session.
+/// - `mcp-session-id`: Optional. If provided, reconnects to an existing session.
 ///
 /// # Events
 ///
@@ -163,7 +163,7 @@ where
 {
     let session_id = req
         .headers()
-        .get("Mcp-Session-Id")
+        .get("mcp-session-id")
         .and_then(|v| v.to_str().ok())
         .map(String::from);
 

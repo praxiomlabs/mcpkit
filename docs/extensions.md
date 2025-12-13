@@ -159,7 +159,7 @@ where
 {
     // Validate protocol version
     let version = headers
-        .get("MCP-Protocol-Version")
+        .get("mcp-protocol-version")
         .and_then(|v| v.to_str().ok());
 
     if !is_supported_version(version) {
@@ -234,7 +234,7 @@ pub async fn handle_sse(
     headers: HeaderMap,
 ) -> impl IntoResponse {
     let session_id = headers
-        .get("Mcp-Session-Id")
+        .get("mcp-session-id")
         .and_then(|v| v.to_str().ok())
         .map(String::from);
 
@@ -284,7 +284,7 @@ where
     // Check protocol version
     let version = req
         .headers()
-        .get("MCP-Protocol-Version")
+        .get("mcp-protocol-version")
         .and_then(|v| v.to_str().ok());
 
     if !is_supported_version(version) {
@@ -494,7 +494,7 @@ mod integration_tests {
                     .method("POST")
                     .uri("/mcp")
                     .header("Content-Type", "application/json")
-                    .header("MCP-Protocol-Version", "2025-06-18")
+                    .header("mcp-protocol-version", "2025-06-18")
                     .body(Body::from(r#"{"jsonrpc":"2.0","id":1,"method":"ping"}"#))
                     .unwrap(),
             )
@@ -510,7 +510,7 @@ mod integration_tests {
 
 ### 1. Protocol Version Validation
 
-Always validate the `MCP-Protocol-Version` header:
+Always validate the `mcp-protocol-version` header:
 
 ```rust
 const SUPPORTED_VERSIONS: &[&str] = &["2024-11-05", "2025-03-26", "2025-06-18"];
@@ -550,7 +550,7 @@ pub async fn handle_mcp_traced<H>(
     body: String,
 ) -> impl IntoResponse {
     let session_id = headers
-        .get("Mcp-Session-Id")
+        .get("mcp-session-id")
         .and_then(|v| v.to_str().ok())
         .unwrap_or("unknown");
 

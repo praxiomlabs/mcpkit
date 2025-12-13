@@ -23,11 +23,14 @@ pub fn expand_tool(attr: TokenStream, item: TokenStream) -> Result<TokenStream> 
     // Validate the method signature
     validate_tool_method(&method)?;
 
-    // For now, just preserve the method with a marker attribute
-    // The actual code generation happens in mcp_server
+    // When used standalone, this macro just preserves the method with a marker attribute.
+    // The actual code generation (including annotations) happens in #[mcp_server].
+    // The destructive, idempotent, and read_only attributes are parsed from the original
+    // #[tool(...)] attribute by mcp_server's find_tool_attr function.
     let description = &attrs.description;
     let tool_name = attrs.name.unwrap_or_else(|| method.sig.ident.to_string());
-    // TODO: Use these attributes in generated code when implementing tool metadata
+    // Note: These attributes are used when #[mcp_server] processes the impl block.
+    // They're intentionally unused here since standalone #[tool] just creates a marker.
     let _ = (attrs.destructive, attrs.idempotent, attrs.read_only);
 
     // Generate a hidden constant that mcp_server can find

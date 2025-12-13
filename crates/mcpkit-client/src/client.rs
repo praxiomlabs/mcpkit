@@ -139,10 +139,17 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
         let running = Arc::new(AtomicBool::new(true));
 
         // Parse the negotiated protocol version
-        let protocol_version = init_result
-            .protocol_version
-            .parse::<ProtocolVersion>()
-            .unwrap_or(ProtocolVersion::LATEST);
+        let protocol_version =
+            if let Ok(v) = init_result.protocol_version.parse::<ProtocolVersion>() {
+                v
+            } else {
+                warn!(
+                    server_version = %init_result.protocol_version,
+                    fallback_version = %ProtocolVersion::LATEST,
+                    "Server returned unknown protocol version, falling back to latest supported"
+                );
+                ProtocolVersion::LATEST
+            };
 
         // Create channel for outgoing messages
         let (outgoing_tx, outgoing_rx) = mpsc::channel::<Message>(256);

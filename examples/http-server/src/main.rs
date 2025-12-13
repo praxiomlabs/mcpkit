@@ -17,7 +17,7 @@
 //! ```bash
 //! curl -X POST http://127.0.0.1:3000/mcp \
 //!   -H "Content-Type: application/json" \
-//!   -H "MCP-Protocol-Version: 2025-06-18" \
+//!   -H "mcp-protocol-version: 2025-06-18" \
 //!   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","clientInfo":{"name":"curl","version":"1.0"}}}'
 //! ```
 
@@ -47,11 +47,11 @@ use tracing::{info, warn};
 /// MCP Protocol version.
 const MCP_PROTOCOL_VERSION: &str = "2025-06-18";
 
-/// Session ID header name.
-const MCP_SESSION_ID_HEADER: &str = "Mcp-Session-Id";
+/// Session ID header name (lowercase for HTTP/2 compatibility).
+const MCP_SESSION_ID_HEADER: &str = "mcp-session-id";
 
-/// Protocol version header name.
-const MCP_PROTOCOL_VERSION_HEADER: &str = "MCP-Protocol-Version";
+/// Protocol version header name (lowercase for HTTP/2 compatibility).
+const MCP_PROTOCOL_VERSION_HEADER: &str = "mcp-protocol-version";
 
 /// Session state.
 #[derive(Debug)]
