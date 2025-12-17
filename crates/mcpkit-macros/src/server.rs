@@ -110,7 +110,12 @@ pub fn expand_mcp_server(attr: TokenStream, item: TokenStream) -> Result<TokenSt
     };
 
     // Generate convenience methods
-    let convenience_methods = generate_convenience_methods(self_ty);
+    let convenience_methods = generate_convenience_methods(
+        self_ty,
+        !tool_methods.is_empty(),
+        !resource_methods.is_empty(),
+        !prompt_methods.is_empty(),
+    );
 
     // Debug output if requested
     if attrs.debug_expand {
@@ -459,7 +464,7 @@ fn generate_server_handler(
         .map_or_else(|| quote!(None), |s| quote!(Some(#s.to_string())));
 
     // Build capabilities chain based on what's implemented
-    let mut capability_chain = vec![quote!(::mcpkit_core::capability::ServerCapabilities::new())];
+    let mut capability_chain = vec![quote!(::mcpkit::capability::ServerCapabilities::new())];
 
     if has_tools {
         capability_chain.push(quote!(.with_tools()));
@@ -473,7 +478,7 @@ fn generate_server_handler(
 
     // Join the capability chain
     let capabilities = if capability_chain.len() == 1 {
-        quote!(::mcpkit_core::capability::ServerCapabilities::new())
+        quote!(::mcpkit::capability::ServerCapabilities::new())
     } else {
         let mut result = capability_chain[0].clone();
         for cap in &capability_chain[1..] {
@@ -483,12 +488,12 @@ fn generate_server_handler(
     };
 
     quote! {
-        impl ::mcpkit_server::ServerHandler for #self_ty {
-            fn server_info(&self) -> ::mcpkit_core::capability::ServerInfo {
-                ::mcpkit_core::capability::ServerInfo::new(#name, #version)
+        impl ::mcpkit::ServerHandler for #self_ty {
+            fn server_info(&self) -> ::mcpkit::capability::ServerInfo {
+                ::mcpkit::capability::ServerInfo::new(#name, #version)
             }
 
-            fn capabilities(&self) -> ::mcpkit_core::capability::ServerCapabilities {
+            fn capabilities(&self) -> ::mcpkit::capability::ServerCapabilities {
                 #capabilities
             }
 
@@ -515,11 +520,11 @@ fn generate_tool_handler(tools: &[ToolMethod], self_ty: &syn::Type) -> TokenStre
             let read_only = tool.read_only;
 
             quote! {
-                ::mcpkit_core::types::Tool {
+                ::mcpkit::types::Tool {
                     name: #name.to_string(),
                     description: Some(#description.to_string()),
                     input_schema: #input_schema,
-                    annotations: Some(::mcpkit_core::types::ToolAnnotations {
+                    annotations: Some(::mcpkit::types::ToolAnnotations {
                         title: None,
                         read_only_hint: Some(#read_only),
                         destructive_hint: Some(#destructive),
@@ -542,11 +547,11 @@ fn generate_tool_handler(tools: &[ToolMethod], self_ty: &syn::Type) -> TokenStre
     let _available_tools = tool_names.join(", ");
 
     quote! {
-        impl ::mcpkit_server::ToolHandler for #self_ty {
+        impl ::mcpkit::ToolHandler for #self_ty {
             fn list_tools(
                 &self,
-                _ctx: &::mcpkit_server::Context,
-            ) -> impl std::future::Future<Output = Result<Vec<::mcpkit_core::types::Tool>, ::mcpkit_core::error::McpError>> + Send {
+                _ctx: &::mcpkit::Context,
+            ) -> impl std::future::Future<Output = Result<Vec<::mcpkit::types::Tool>, ::mcpkit::error::McpError>> + Send {
                 async move {
                     Ok(vec![
                         #(#tool_defs),*
@@ -558,8 +563,8 @@ fn generate_tool_handler(tools: &[ToolMethod], self_ty: &syn::Type) -> TokenStre
                 &self,
                 name: &str,
                 args: ::serde_json::Value,
-                _ctx: &::mcpkit_server::Context,
-            ) -> impl std::future::Future<Output = Result<::mcpkit_core::types::ToolOutput, ::mcpkit_core::error::McpError>> + Send {
+                _ctx: &::mcpkit::Context,
+            ) -> impl std::future::Future<Output = Result<::mcpkit::types::ToolOutput, ::mcpkit::error::McpError>> + Send {
                 // Convert args to a map for easier access
                 let args_clone = args.clone();
 
@@ -571,7 +576,7 @@ fn generate_tool_handler(tools: &[ToolMethod], self_ty: &syn::Type) -> TokenStre
 
                     match name {
                         #(#dispatch_arms)*
-                        _ => Err(::mcpkit_core::error::McpError::method_not_found_with_suggestions(
+                        _ => Err(::mcpkit::error::McpError::method_not_found_with_suggestions(
                             name,
                             vec![#(#tool_names.to_string()),*],
                         ))
@@ -600,7 +605,7 @@ fn generate_resource_handler(resources: &[ResourceMethod], self_ty: &syn::Type) 
                 quote!()
             } else {
                 quote! {
-                    ::mcpkit_core::types::Resource {
+                    ::mcpkit::types::Resource {
                         uri: #uri.to_string(),
                         name: #name.to_string(),
                         description: if #description.is_empty() { None } else { Some(#description.to_string()) },
@@ -674,11 +679,11 @@ fn generate_resource_handler(resources: &[ResourceMethod], self_ty: &syn::Type) 
     let _uri_patterns: Vec<_> = resources.iter().map(|r| r.uri_pattern.as_str()).collect();
 
     quote! {
-        impl ::mcpkit_server::ResourceHandler for #self_ty {
+        impl ::mcpkit::ResourceHandler for #self_ty {
             fn list_resources(
                 &self,
-                _ctx: &::mcpkit_server::Context,
-            ) -> impl std::future::Future<Output = Result<Vec<::mcpkit_core::types::Resource>, ::mcpkit_core::error::McpError>> + Send {
+                _ctx: &::mcpkit::Context,
+            ) -> impl std::future::Future<Output = Result<Vec<::mcpkit::types::Resource>, ::mcpkit::error::McpError>> + Send {
                 async move {
                     Ok(vec![
                         #(#resource_defs)*
@@ -689,15 +694,15 @@ fn generate_resource_handler(resources: &[ResourceMethod], self_ty: &syn::Type) 
             fn read_resource(
                 &self,
                 uri: &str,
-                _ctx: &::mcpkit_server::Context,
-            ) -> impl std::future::Future<Output = Result<Vec<::mcpkit_core::types::ResourceContents>, ::mcpkit_core::error::McpError>> + Send {
+                _ctx: &::mcpkit::Context,
+            ) -> impl std::future::Future<Output = Result<Vec<::mcpkit::types::ResourceContents>, ::mcpkit::error::McpError>> + Send {
                 let uri_owned = uri.to_string();
 
                 async move {
                     let uri: &str = &uri_owned;
                     #(#dispatch_arms)*
 
-                    Err(::mcpkit_core::error::McpError::resource_not_found(uri))
+                    Err(::mcpkit::error::McpError::resource_not_found(uri))
                 }
             }
         }
@@ -723,7 +728,7 @@ fn generate_prompt_handler(prompts: &[PromptMethod], self_ty: &syn::Type) -> Tok
                     let required = !param.is_optional;
 
                     quote! {
-                        ::mcpkit_core::types::PromptArgument {
+                        ::mcpkit::types::PromptArgument {
                             name: #param_name.to_string(),
                             description: if #param_desc.is_empty() { None } else { Some(#param_desc.to_string()) },
                             required: Some(#required),
@@ -739,7 +744,7 @@ fn generate_prompt_handler(prompts: &[PromptMethod], self_ty: &syn::Type) -> Tok
             };
 
             quote! {
-                ::mcpkit_core::types::Prompt {
+                ::mcpkit::types::Prompt {
                     name: #name.to_string(),
                     description: if #description.is_empty() { None } else { Some(#description.to_string()) },
                     arguments: #arguments_expr,
@@ -786,14 +791,14 @@ fn generate_prompt_handler(prompts: &[PromptMethod], self_ty: &syn::Type) -> Tok
                                     .and_then(|args| args.get(#name_str))
                                 {
                                     Some(v) => v.clone(),
-                                    None => return Err(::mcpkit_core::error::McpError::invalid_params(
+                                    None => return Err(::mcpkit::error::McpError::invalid_params(
                                         #prompt_name,
                                         format!("missing required argument: {}", #name_str),
                                     )),
                                 };
                                 match ::serde_json::from_value::<#ty>(value) {
                                     Ok(v) => v,
-                                    Err(e) => return Err(::mcpkit_core::error::McpError::invalid_params(
+                                    Err(e) => return Err(::mcpkit::error::McpError::invalid_params(
                                         #prompt_name,
                                         format!("invalid argument '{}': {}", #name_str, e),
                                     )),
@@ -831,11 +836,11 @@ fn generate_prompt_handler(prompts: &[PromptMethod], self_ty: &syn::Type) -> Tok
     let prompt_names: Vec<_> = prompts.iter().map(|p| p.prompt_name.as_str()).collect();
 
     quote! {
-        impl ::mcpkit_server::PromptHandler for #self_ty {
+        impl ::mcpkit::PromptHandler for #self_ty {
             fn list_prompts(
                 &self,
-                _ctx: &::mcpkit_server::Context,
-            ) -> impl std::future::Future<Output = Result<Vec<::mcpkit_core::types::Prompt>, ::mcpkit_core::error::McpError>> + Send {
+                _ctx: &::mcpkit::Context,
+            ) -> impl std::future::Future<Output = Result<Vec<::mcpkit::types::Prompt>, ::mcpkit::error::McpError>> + Send {
                 async move {
                     Ok(vec![
                         #(#prompt_defs),*
@@ -847,14 +852,14 @@ fn generate_prompt_handler(prompts: &[PromptMethod], self_ty: &syn::Type) -> Tok
                 &self,
                 name: &str,
                 arguments: Option<::serde_json::Map<String, ::serde_json::Value>>,
-                _ctx: &::mcpkit_server::Context,
-            ) -> impl std::future::Future<Output = Result<::mcpkit_core::types::GetPromptResult, ::mcpkit_core::error::McpError>> + Send {
+                _ctx: &::mcpkit::Context,
+            ) -> impl std::future::Future<Output = Result<::mcpkit::types::GetPromptResult, ::mcpkit::error::McpError>> + Send {
                 let name = name.to_string();
 
                 async move {
                     match name.as_str() {
                         #(#dispatch_arms)*
-                        _ => Err(::mcpkit_core::error::McpError::method_not_found_with_suggestions(
+                        _ => Err(::mcpkit::error::McpError::method_not_found_with_suggestions(
                             &name,
                             vec![#(#prompt_names.to_string()),*],
                         ))
@@ -867,20 +872,101 @@ fn generate_prompt_handler(prompts: &[PromptMethod], self_ty: &syn::Type) -> Tok
 
 /// Generate convenience methods.
 ///
+/// Generates an `into_server()` method that automatically wires up all handlers
+/// defined via `#[tool]`, `#[resource]`, and `#[prompt]` attributes.
+///
+/// Uses `Arc` internally to share the handler across registrations, eliminating
+/// the need for users to implement `Clone` on their handler types.
+///
 /// Note: We intentionally do NOT generate runtime-specific methods like `serve_stdio()`
 /// because the SDK is runtime-agnostic. Users should create their own transport
 /// and call `server.serve(transport)` directly.
-fn generate_convenience_methods(_self_ty: &syn::Type) -> TokenStream {
-    // No convenience methods generated - runtime-agnostic design means
-    // users must provide their own transport instance.
-    //
-    // Example usage:
-    // ```
-    // let transport = StdioTransport::new(); // User chooses runtime
-    // let server = ServerBuilder::new(my_handler).with_tools(my_handler).build();
-    // server.serve(transport).await?;
-    // ```
-    quote! {}
+fn generate_convenience_methods(
+    self_ty: &syn::Type,
+    has_tools: bool,
+    has_resources: bool,
+    has_prompts: bool,
+) -> TokenStream {
+    // Type alias for Arc<Self>
+    let arc_self = quote!(::std::sync::Arc<Self>);
+
+    // Determine the Server type parameters based on which handlers exist
+    // Note: We use Arc<Self> as the handler type since we wrap in Arc internally
+    let tools_ty = if has_tools {
+        quote!(::mcpkit::server::Registered<#arc_self>)
+    } else {
+        quote!(::mcpkit::server::NotRegistered)
+    };
+    let resources_ty = if has_resources {
+        quote!(::mcpkit::server::Registered<#arc_self>)
+    } else {
+        quote!(::mcpkit::server::NotRegistered)
+    };
+    let prompts_ty = if has_prompts {
+        quote!(::mcpkit::server::Registered<#arc_self>)
+    } else {
+        quote!(::mcpkit::server::NotRegistered)
+    };
+    let tasks_ty = quote!(::mcpkit::server::NotRegistered);
+
+    // Count handlers to determine if we need Arc
+    let handler_count = [has_tools, has_resources, has_prompts]
+        .iter()
+        .filter(|&&x| x)
+        .count();
+
+    let builder_body = if handler_count == 0 {
+        // No handlers - wrap in Arc for consistency
+        quote! {
+            let handler = ::std::sync::Arc::new(self);
+            ::mcpkit::ServerBuilder::new(handler).build()
+        }
+    } else {
+        // Generate the chain using Arc::clone()
+        // Build the method chain: .with_tools(...).with_resources(...).with_prompts(...)
+        let mut method_chain = quote!(::mcpkit::ServerBuilder::new(::std::sync::Arc::clone(&handler)));
+
+        if has_tools {
+            method_chain = quote!(#method_chain.with_tools(::std::sync::Arc::clone(&handler)));
+        }
+        if has_resources {
+            method_chain = quote!(#method_chain.with_resources(::std::sync::Arc::clone(&handler)));
+        }
+        if has_prompts {
+            method_chain = quote!(#method_chain.with_prompts(::std::sync::Arc::clone(&handler)));
+        }
+
+        quote! {
+            let handler = ::std::sync::Arc::new(self);
+            #method_chain.build()
+        }
+    };
+
+    quote! {
+        impl #self_ty {
+            /// Convert this handler into a fully-configured MCP server.
+            ///
+            /// This method automatically registers all handlers defined on this type
+            /// via `#[tool]`, `#[resource]`, and `#[prompt]` attributes.
+            ///
+            /// The handler is wrapped in `Arc` internally, so there's no need to
+            /// implement `Clone` on your handler type.
+            ///
+            /// # Example
+            ///
+            /// ```ignore
+            /// let server = MyServer::new().into_server();
+            /// server.serve(transport).await?;
+            /// ```
+            #[must_use]
+            pub fn into_server(self) -> ::mcpkit::server::Server<#arc_self, #tools_ty, #resources_ty, #prompts_ty, #tasks_ty>
+            where
+                Self: Send + Sync + 'static,
+            {
+                #builder_body
+            }
+        }
+    }
 }
 
 #[cfg(test)]

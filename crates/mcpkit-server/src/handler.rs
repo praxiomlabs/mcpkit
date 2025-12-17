@@ -387,6 +387,182 @@ pub trait ElicitationHandler: Send + Sync {
     ) -> impl Future<Output = Result<ElicitResult, McpError>> + Send;
 }
 
+// =============================================================================
+// Blanket implementations for Arc<T>
+//
+// These allow sharing a single handler instance across multiple registrations
+// without requiring Clone on the user's type. The macro-generated `into_server()`
+// method uses Arc internally to wire everything up automatically.
+// =============================================================================
+
+use std::sync::Arc;
+
+impl<T: ServerHandler> ServerHandler for Arc<T> {
+    fn server_info(&self) -> ServerInfo {
+        (**self).server_info()
+    }
+
+    fn capabilities(&self) -> ServerCapabilities {
+        (**self).capabilities()
+    }
+
+    fn instructions(&self) -> Option<String> {
+        (**self).instructions()
+    }
+
+    fn on_initialized(&self, ctx: &Context<'_>) -> impl Future<Output = ()> + Send {
+        (**self).on_initialized(ctx)
+    }
+
+    fn on_shutdown(&self) -> impl Future<Output = ()> + Send {
+        (**self).on_shutdown()
+    }
+}
+
+impl<T: ToolHandler> ToolHandler for Arc<T> {
+    fn list_tools(
+        &self,
+        ctx: &Context<'_>,
+    ) -> impl Future<Output = Result<Vec<Tool>, McpError>> + Send {
+        (**self).list_tools(ctx)
+    }
+
+    fn call_tool(
+        &self,
+        name: &str,
+        args: Value,
+        ctx: &Context<'_>,
+    ) -> impl Future<Output = Result<ToolOutput, McpError>> + Send {
+        (**self).call_tool(name, args, ctx)
+    }
+
+    fn on_tools_changed(&self) -> impl Future<Output = ()> + Send {
+        (**self).on_tools_changed()
+    }
+}
+
+impl<T: ResourceHandler> ResourceHandler for Arc<T> {
+    fn list_resources(
+        &self,
+        ctx: &Context<'_>,
+    ) -> impl Future<Output = Result<Vec<Resource>, McpError>> + Send {
+        (**self).list_resources(ctx)
+    }
+
+    fn read_resource(
+        &self,
+        uri: &str,
+        ctx: &Context<'_>,
+    ) -> impl Future<Output = Result<Vec<ResourceContents>, McpError>> + Send {
+        (**self).read_resource(uri, ctx)
+    }
+
+    fn subscribe(
+        &self,
+        uri: &str,
+        ctx: &Context<'_>,
+    ) -> impl Future<Output = Result<bool, McpError>> + Send {
+        (**self).subscribe(uri, ctx)
+    }
+
+    fn unsubscribe(
+        &self,
+        uri: &str,
+        ctx: &Context<'_>,
+    ) -> impl Future<Output = Result<bool, McpError>> + Send {
+        (**self).unsubscribe(uri, ctx)
+    }
+}
+
+impl<T: PromptHandler> PromptHandler for Arc<T> {
+    fn list_prompts(
+        &self,
+        ctx: &Context<'_>,
+    ) -> impl Future<Output = Result<Vec<Prompt>, McpError>> + Send {
+        (**self).list_prompts(ctx)
+    }
+
+    fn get_prompt(
+        &self,
+        name: &str,
+        args: Option<serde_json::Map<String, Value>>,
+        ctx: &Context<'_>,
+    ) -> impl Future<Output = Result<GetPromptResult, McpError>> + Send {
+        (**self).get_prompt(name, args, ctx)
+    }
+}
+
+impl<T: TaskHandler> TaskHandler for Arc<T> {
+    fn list_tasks(
+        &self,
+        ctx: &Context<'_>,
+    ) -> impl Future<Output = Result<Vec<Task>, McpError>> + Send {
+        (**self).list_tasks(ctx)
+    }
+
+    fn get_task(
+        &self,
+        id: &TaskId,
+        ctx: &Context<'_>,
+    ) -> impl Future<Output = Result<Option<Task>, McpError>> + Send {
+        (**self).get_task(id, ctx)
+    }
+
+    fn cancel_task(
+        &self,
+        id: &TaskId,
+        ctx: &Context<'_>,
+    ) -> impl Future<Output = Result<bool, McpError>> + Send {
+        (**self).cancel_task(id, ctx)
+    }
+}
+
+impl<T: CompletionHandler> CompletionHandler for Arc<T> {
+    fn complete_resource(
+        &self,
+        partial_uri: &str,
+        ctx: &Context<'_>,
+    ) -> impl Future<Output = Result<Vec<String>, McpError>> + Send {
+        (**self).complete_resource(partial_uri, ctx)
+    }
+
+    fn complete_prompt_arg(
+        &self,
+        prompt_name: &str,
+        arg_name: &str,
+        partial_value: &str,
+        ctx: &Context<'_>,
+    ) -> impl Future<Output = Result<Vec<String>, McpError>> + Send {
+        (**self).complete_prompt_arg(prompt_name, arg_name, partial_value, ctx)
+    }
+}
+
+impl<T: LoggingHandler> LoggingHandler for Arc<T> {
+    fn set_level(&self, level: LogLevel) -> impl Future<Output = Result<(), McpError>> + Send {
+        (**self).set_level(level)
+    }
+}
+
+impl<T: SamplingHandler> SamplingHandler for Arc<T> {
+    fn create_message(
+        &self,
+        request: CreateMessageRequest,
+        ctx: &Context<'_>,
+    ) -> impl Future<Output = Result<CreateMessageResult, McpError>> + Send {
+        (**self).create_message(request, ctx)
+    }
+}
+
+impl<T: ElicitationHandler> ElicitationHandler for Arc<T> {
+    fn elicit(
+        &self,
+        request: ElicitRequest,
+        ctx: &Context<'_>,
+    ) -> impl Future<Output = Result<ElicitResult, McpError>> + Send {
+        (**self).elicit(request, ctx)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -412,5 +588,13 @@ mod tests {
         assert!(LogLevel::Debug < LogLevel::Error);
         assert!(LogLevel::Info < LogLevel::Warning);
         assert!(LogLevel::Emergency > LogLevel::Alert);
+    }
+
+    #[test]
+    fn test_arc_server_handler() {
+        let server = Arc::new(TestServer);
+        let info = server.server_info();
+        assert_eq!(info.name, "test");
+        assert_eq!(info.version, "1.0.0");
     }
 }

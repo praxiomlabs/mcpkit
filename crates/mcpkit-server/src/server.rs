@@ -354,10 +354,7 @@ where
         // Build response with negotiated version (serialized to string by serde)
         let result = serde_json::json!({
             "protocolVersion": negotiated_version.as_str(),
-            "serverInfo": {
-                "name": "mcp-server",
-                "version": "1.0.0"
-            },
+            "serverInfo": self.server.server_info(),
             "capabilities": self.state.server_caps
         });
 
@@ -465,6 +462,9 @@ where
 /// which handlers are registered.
 #[allow(async_fn_in_trait)]
 pub trait RequestRouter: Send + Sync {
+    /// Get the server info.
+    fn server_info(&self) -> mcpkit_core::capability::ServerInfo;
+
     /// Route a request and return the result.
     async fn route(
         &self,
@@ -652,6 +652,10 @@ macro_rules! impl_request_router {
         where
             H: ServerHandler + Send + Sync,
         {
+            fn server_info(&self) -> mcpkit_core::capability::ServerInfo {
+                self.handler().server_info()
+            }
+
             async fn route(
                 &self,
                 method: &str,
@@ -673,6 +677,10 @@ macro_rules! impl_request_router {
             H: ServerHandler + Send + Sync,
             TH: ToolHandler + Send + Sync,
         {
+            fn server_info(&self) -> mcpkit_core::capability::ServerInfo {
+                self.handler().server_info()
+            }
+
             async fn route(
                 &self,
                 method: &str,
@@ -697,6 +705,10 @@ macro_rules! impl_request_router {
             H: ServerHandler + Send + Sync,
             RH: ResourceHandler + Send + Sync,
         {
+            fn server_info(&self) -> mcpkit_core::capability::ServerInfo {
+                self.handler().server_info()
+            }
+
             async fn route(
                 &self,
                 method: &str,
@@ -721,6 +733,10 @@ macro_rules! impl_request_router {
             H: ServerHandler + Send + Sync,
             PH: PromptHandler + Send + Sync,
         {
+            fn server_info(&self) -> mcpkit_core::capability::ServerInfo {
+                self.handler().server_info()
+            }
+
             async fn route(
                 &self,
                 method: &str,
@@ -746,6 +762,10 @@ macro_rules! impl_request_router {
             TH: ToolHandler + Send + Sync,
             RH: ResourceHandler + Send + Sync,
         {
+            fn server_info(&self) -> mcpkit_core::capability::ServerInfo {
+                self.handler().server_info()
+            }
+
             async fn route(
                 &self,
                 method: &str,
@@ -774,6 +794,10 @@ macro_rules! impl_request_router {
             TH: ToolHandler + Send + Sync,
             PH: PromptHandler + Send + Sync,
         {
+            fn server_info(&self) -> mcpkit_core::capability::ServerInfo {
+                self.handler().server_info()
+            }
+
             async fn route(
                 &self,
                 method: &str,
@@ -802,6 +826,10 @@ macro_rules! impl_request_router {
             RH: ResourceHandler + Send + Sync,
             PH: PromptHandler + Send + Sync,
         {
+            fn server_info(&self) -> mcpkit_core::capability::ServerInfo {
+                self.handler().server_info()
+            }
+
             async fn route(
                 &self,
                 method: &str,
@@ -831,6 +859,10 @@ macro_rules! impl_request_router {
             RH: ResourceHandler + Send + Sync,
             PH: PromptHandler + Send + Sync,
         {
+            fn server_info(&self) -> mcpkit_core::capability::ServerInfo {
+                self.handler().server_info()
+            }
+
             async fn route(
                 &self,
                 method: &str,

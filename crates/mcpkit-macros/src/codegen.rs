@@ -128,13 +128,13 @@ impl ToolMethod {
                     let value_var = quote::format_ident!("__{}_value", name);
                     quote! {
                         let #value_var = args.get(#name_str)
-                            .ok_or_else(|| ::mcpkit_core::error::McpError::invalid_params(
+                            .ok_or_else(|| ::mcpkit::error::McpError::invalid_params(
                                 #tool_name,
                                 format!("missing required parameter: {}", #name_str),
                             ))?
                             .clone();
                         let #name: #ty = ::serde_json::from_value(#value_var)
-                            .map_err(|e| ::mcpkit_core::error::McpError::invalid_params(
+                            .map_err(|e| ::mcpkit::error::McpError::invalid_params(
                                 #tool_name,
                                 format!("invalid parameter '{}': {}", #name_str, e),
                             ))?;
