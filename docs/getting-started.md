@@ -4,7 +4,7 @@ This guide walks you through creating your first MCP server using the Rust MCP S
 
 ## Prerequisites
 
-- Rust 1.85 or later (see [MSRV policy](https://blog.rust-lang.org/2025/02/20/Rust-1.85.0.html))
+- Rust 1.85 or later (see [MSRV policy](https://blog.rust-lang.org/2025/02/20/Rust-1.85.0/))
 - Basic familiarity with async Rust (Tokio)
 
 ## Installation

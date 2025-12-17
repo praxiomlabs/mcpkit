@@ -263,6 +263,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         // Send response through middleware stack
+        // Note: Using nested if-let instead of if-let chain for MSRV 1.85 compatibility
+        #[allow(clippy::collapsible_if)]
         if let Some(resp) = response {
             if let Err(e) = transport.send(resp).await {
                 tracing::error!(error = ?e, "Send error");

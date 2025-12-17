@@ -94,6 +94,8 @@ impl AppState {
     async fn get_or_create_session(&self, session_id: Option<&str>) -> (String, bool) {
         let mut sessions = self.sessions.write().await;
 
+        // Note: Using nested if-let instead of if-let chain for MSRV 1.85 compatibility
+        #[allow(clippy::collapsible_if)]
         if let Some(id) = session_id {
             if sessions.contains_key(id) {
                 return (id.to_string(), false);
