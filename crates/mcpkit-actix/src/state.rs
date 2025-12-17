@@ -21,6 +21,9 @@ impl<T: ServerHandler> HasServerInfo for T {
 ///
 /// This struct holds all the state needed by MCP HTTP handlers, including
 /// the user's handler implementation and session management.
+///
+/// Note: Clone is implemented manually to avoid requiring `H: Clone`.
+/// The handler is wrapped in `Arc`, so cloning only clones the Arc pointer.
 #[derive(Debug)]
 pub struct McpConfig<H> {
     /// The user's MCP handler.

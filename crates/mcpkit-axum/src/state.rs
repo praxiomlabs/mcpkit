@@ -8,7 +8,9 @@ use std::sync::Arc;
 ///
 /// This struct holds all the shared state needed by MCP HTTP handlers,
 /// including session management and server information.
-#[derive(Clone)]
+///
+/// Note: Clone is implemented manually to avoid requiring `H: Clone`.
+/// The handler is wrapped in `Arc`, so cloning only clones the Arc pointer.
 pub struct McpState<H> {
     /// The MCP server handler.
     pub handler: Arc<H>,
@@ -18,6 +20,18 @@ pub struct McpState<H> {
     pub sessions: Arc<SessionStore>,
     /// Session manager for SSE streaming.
     pub sse_sessions: Arc<SessionManager>,
+}
+
+// Manual Clone implementation to avoid requiring H: Clone
+impl<H> Clone for McpState<H> {
+    fn clone(&self) -> Self {
+        Self {
+            handler: Arc::clone(&self.handler),
+            server_info: self.server_info.clone(),
+            sessions: Arc::clone(&self.sessions),
+            sse_sessions: Arc::clone(&self.sse_sessions),
+        }
+    }
 }
 
 impl<H> McpState<H> {

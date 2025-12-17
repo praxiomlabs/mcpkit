@@ -49,7 +49,6 @@ where
         + HasServerInfo
         + Send
         + Sync
-        + Clone
         + 'static,
 {
     /// Create a new MCP router with the given handler.
@@ -116,6 +115,27 @@ where
 
         router
     }
+
+    /// Serve the MCP server on the given address.
+    ///
+    /// This is a convenience method that provides a stdio-like experience:
+    ///
+    /// ```ignore
+    /// // stdio pattern:
+    /// handler.into_server().serve(transport).await?;
+    ///
+    /// // http pattern (now similar):
+    /// McpRouter::new(handler).serve("0.0.0.0:3000").await?;
+    /// ```
+    ///
+    /// For more control over the server, use [`into_router`] instead.
+    pub async fn serve(self, addr: &str) -> std::io::Result<()> {
+        let router = self.into_router();
+        let listener = tokio::net::TcpListener::bind(addr).await?;
+        axum::serve(listener, router)
+            .await
+            .map_err(std::io::Error::other)
+    }
 }
 
 #[cfg(test)]
@@ -127,7 +147,7 @@ mod tests {
     use mcpkit_server::context::Context;
     use mcpkit_server::ServerHandler;
 
-    #[derive(Clone)]
+    // Note: Clone is NOT required - the handler is wrapped in Arc internally
     struct TestHandler;
 
     impl ServerHandler for TestHandler {

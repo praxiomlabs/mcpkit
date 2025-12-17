@@ -11,29 +11,84 @@
 //! - Protocol version validation
 //! - CORS support
 //!
-//! # Example
+//! # HTTP Protocol Requirements
+//!
+//! Clients must include the `Mcp-Protocol-Version` header in all requests:
+//!
+//! ```text
+//! POST /mcp HTTP/1.1
+//! Content-Type: application/json
+//! Mcp-Protocol-Version: 2025-11-25
+//!
+//! {"jsonrpc":"2.0","id":1,"method":"initialize","params":{...}}
+//! ```
+//!
+//! Supported protocol versions: `2024-11-05`, `2025-03-26`, `2025-06-18`, `2025-11-25`
+//!
+//! # Quick Start
 //!
 //! ```ignore
-//! use mcpkit_axum::{McpRouter, McpState};
-//! use mcpkit_server::ServerHandler;
-//! use axum::Router;
+//! use mcpkit::prelude::*;
+//! use mcpkit_axum::McpRouter;
 //!
-//! // Your MCP server handler (must implement ServerHandler)
-//! struct MyServer;
+//! // Your MCP server handler (use #[mcp_server] macro)
+//! #[mcp_server(name = "my-server", version = "1.0.0")]
+//! impl MyServer {
+//!     #[tool(description = "Say hello")]
+//!     async fn hello(&self, name: String) -> ToolOutput {
+//!         ToolOutput::text(format!("Hello, {name}!"))
+//!     }
+//! }
 //!
 //! #[tokio::main]
-//! async fn main() {
-//!     // Create MCP router with your handler
-//!     let mcp_router = McpRouter::new(MyServer);
-//!
-//!     // Build the full application
-//!     let app = Router::new()
-//!         .nest("/mcp", mcp_router.into_router());
-//!
-//!     // Run the server
-//!     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-//!     axum::serve(listener, app).await.unwrap();
+//! async fn main() -> std::io::Result<()> {
+//!     // Simple one-liner (similar to stdio transport):
+//!     McpRouter::new(MyServer::new())
+//!         .serve("0.0.0.0:3000")
+//!         .await
 //! }
+//! ```
+//!
+//! # Advanced Usage
+//!
+//! For more control, use `into_router()` to integrate with an existing app:
+//!
+//! ```ignore
+//! use mcpkit_axum::McpRouter;
+//! use axum::Router;
+//!
+//! let mcp_router = McpRouter::new(MyServer::new())
+//!     .with_cors()      // Enable CORS
+//!     .with_tracing();  // Enable request tracing
+//!
+//! let app = Router::new()
+//!     .nest("/mcp", mcp_router.into_router())
+//!     .route("/health", axum::routing::get(|| async { "OK" }));
+//!
+//! let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
+//! axum::serve(listener, app).await?;
+//! ```
+//!
+//! # Client Example (curl)
+//!
+//! ```bash
+//! # Initialize the connection
+//! curl -X POST http://localhost:3000/mcp \
+//!   -H "Content-Type: application/json" \
+//!   -H "Mcp-Protocol-Version: 2025-11-25" \
+//!   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","clientInfo":{"name":"test","version":"1.0"},"capabilities":{}}}'
+//!
+//! # List available tools
+//! curl -X POST http://localhost:3000/mcp \
+//!   -H "Content-Type: application/json" \
+//!   -H "Mcp-Protocol-Version: 2025-11-25" \
+//!   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
+//!
+//! # Call a tool
+//! curl -X POST http://localhost:3000/mcp \
+//!   -H "Content-Type: application/json" \
+//!   -H "Mcp-Protocol-Version: 2025-11-25" \
+//!   -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"hello","arguments":{"name":"World"}}}'
 //! ```
 
 #![warn(missing_docs)]
