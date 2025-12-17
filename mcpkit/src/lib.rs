@@ -65,6 +65,23 @@
 // Re-export all public items from core
 pub use mcpkit_core::*;
 
+// Re-export core modules explicitly for macro hygiene
+// The macro generates paths like ::mcpkit::capability::ServerInfo
+pub mod capability {
+    //! Capability negotiation types.
+    pub use mcpkit_core::capability::*;
+}
+
+pub mod types {
+    //! MCP type definitions.
+    pub use mcpkit_core::types::*;
+}
+
+pub mod error {
+    //! Error types and handling.
+    pub use mcpkit_core::error::*;
+}
+
 // Re-export server types
 pub use mcpkit_server::{
     CancellationToken, CancelledFuture, CompletionHandler, Context, ContextData,

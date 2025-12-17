@@ -2220,8 +2220,7 @@ name = "mcpkit-macros"
 version = "0.2.2"
 dependencies = [
  "darling 0.20.11",
- "mcpkit-core",
- "mcpkit-server",
+ "mcpkit",
  "proc-macro2",
  "quote",
  "serde_json",
