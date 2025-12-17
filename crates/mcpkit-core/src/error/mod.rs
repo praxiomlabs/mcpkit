@@ -117,7 +117,9 @@ mod types;
 // Re-export all public types
 pub use codes::*;
 pub use context::McpResultExt;
-pub use details::{BoxError, HandshakeDetails, InvalidParamsDetails, ToolExecutionDetails, TransportDetails};
+pub use details::{
+    BoxError, HandshakeDetails, InvalidParamsDetails, ToolExecutionDetails, TransportDetails,
+};
 pub use jsonrpc::JsonRpcError;
 pub use transport::{TransportContext, TransportErrorKind};
 pub use types::McpError;
@@ -147,18 +149,9 @@ mod tests {
     #[test]
     fn test_error_codes() {
         assert_eq!(McpError::parse("test").code(), PARSE_ERROR);
-        assert_eq!(
-            McpError::invalid_request("test").code(),
-            INVALID_REQUEST
-        );
-        assert_eq!(
-            McpError::method_not_found("test").code(),
-            METHOD_NOT_FOUND
-        );
-        assert_eq!(
-            McpError::invalid_params("m", "test").code(),
-            INVALID_PARAMS
-        );
+        assert_eq!(McpError::invalid_request("test").code(), INVALID_REQUEST);
+        assert_eq!(McpError::method_not_found("test").code(), METHOD_NOT_FOUND);
+        assert_eq!(McpError::invalid_params("m", "test").code(), INVALID_PARAMS);
         assert_eq!(McpError::internal("test").code(), INTERNAL_ERROR);
         assert_eq!(
             McpError::transport(TransportErrorKind::ConnectionFailed, "test").code(),

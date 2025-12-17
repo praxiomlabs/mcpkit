@@ -49,9 +49,8 @@ mod server;
 // Re-export public types
 pub use client::HttpTransport;
 pub use config::{
-    HttpTransportBuilder, HttpTransportConfig,
-    DEFAULT_MAX_MESSAGE_SIZE, MCP_PROTOCOL_VERSION, MCP_PROTOCOL_VERSION_HEADER,
-    MCP_SESSION_ID_HEADER,
+    DEFAULT_MAX_MESSAGE_SIZE, HttpTransportBuilder, HttpTransportConfig, MCP_PROTOCOL_VERSION,
+    MCP_PROTOCOL_VERSION_HEADER, MCP_SESSION_ID_HEADER,
 };
 
 #[cfg(feature = "http")]

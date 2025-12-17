@@ -12,7 +12,10 @@ use mcpkit_core::protocol::Message;
 use crate::error::TransportError;
 use crate::runtime::AsyncMutex;
 
-use super::config::{DEFAULT_MAX_MESSAGE_SIZE, MCP_PROTOCOL_VERSION, MCP_PROTOCOL_VERSION_HEADER, MCP_SESSION_ID_HEADER};
+use super::config::{
+    DEFAULT_MAX_MESSAGE_SIZE, MCP_PROTOCOL_VERSION, MCP_PROTOCOL_VERSION_HEADER,
+    MCP_SESSION_ID_HEADER,
+};
 
 /// HTTP transport listener for server-side HTTP transport.
 ///

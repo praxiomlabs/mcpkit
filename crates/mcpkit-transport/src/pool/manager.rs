@@ -14,13 +14,13 @@ use super::config::{PoolConfig, PoolStats};
 use super::connection::PooledConnection;
 
 /// Internal pool state.
-pub(crate) struct PoolState<T> {
+pub struct PoolState<T> {
     /// Available connections.
-    pub(crate) available: VecDeque<PooledConnection<T>>,
+    pub available: VecDeque<PooledConnection<T>>,
     /// Number of connections currently in use.
-    pub(crate) in_use: usize,
+    pub in_use: usize,
     /// Whether the pool is closed.
-    pub(crate) closed: bool,
+    pub closed: bool,
 }
 
 /// A connection pool for managing MCP transport connections.

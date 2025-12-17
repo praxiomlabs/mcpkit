@@ -136,7 +136,10 @@ mod tests {
 
         let result = process_sse_buffer(&mut state, &messages_received, 10); // Very small limit
 
-        assert!(matches!(result, Err(TransportError::MessageTooLarge { .. })));
+        assert!(matches!(
+            result,
+            Err(TransportError::MessageTooLarge { .. })
+        ));
     }
 
     #[test]

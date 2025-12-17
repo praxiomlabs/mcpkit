@@ -398,7 +398,7 @@ impl From<ToolOutput> for CallToolResult {
 }
 
 impl From<String> for ToolOutput {
-    /// Convert a string into a text ToolOutput.
+    /// Convert a string into a text `ToolOutput`.
     ///
     /// # Example
     ///
@@ -413,7 +413,7 @@ impl From<String> for ToolOutput {
 }
 
 impl From<&str> for ToolOutput {
-    /// Convert a string slice into a text ToolOutput.
+    /// Convert a string slice into a text `ToolOutput`.
     ///
     /// # Example
     ///

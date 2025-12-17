@@ -48,8 +48,8 @@ mod stress_tests {
     use crate::error::TransportError;
     use crate::traits::{Transport, TransportMetadata};
     use mcpkit_core::protocol::Message;
-    use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
     use std::time::{Duration, Instant};
 
     /// Mock transport for stress testing.
@@ -142,12 +142,14 @@ mod stress_tests {
     }
 
     /// Type alias for mock pool future.
-    type MockFuture =
-        std::pin::Pin<Box<dyn std::future::Future<Output = Result<MockTransport, TransportError>> + Send>>;
+    type MockFuture = std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<MockTransport, TransportError>> + Send>,
+    >;
 
     /// Type alias for slow mock pool future.
-    type SlowMockFuture =
-        std::pin::Pin<Box<dyn std::future::Future<Output = Result<SlowMockTransport, TransportError>> + Send>>;
+    type SlowMockFuture = std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<SlowMockTransport, TransportError>> + Send>,
+    >;
 
     /// Creates a pool with mock transport factory.
     fn create_mock_pool(

@@ -8,18 +8,18 @@ use crate::error::TransportError;
 use crate::runtime::AsyncMutex;
 use crate::traits::{Transport, TransportMetadata};
 
-use super::config::{HttpTransportConfig, HttpTransportBuilder};
+use super::config::{HttpTransportBuilder, HttpTransportConfig};
 use super::sse::{HttpTransportState, process_sse_buffer};
 
 #[cfg(feature = "http")]
 use {
+    super::config::{MCP_PROTOCOL_VERSION_HEADER, MCP_SESSION_ID_HEADER},
     bytes::Bytes,
     futures::StreamExt,
     reqwest::{
         Client, Response, StatusCode,
         header::{ACCEPT, CONTENT_TYPE, HeaderMap, HeaderValue},
     },
-    super::config::{MCP_PROTOCOL_VERSION_HEADER, MCP_SESSION_ID_HEADER},
 };
 
 /// HTTP transport with SSE streaming support.
@@ -300,7 +300,11 @@ impl HttpTransport {
             state.sse_buffer.push_str(chunk_str);
 
             // Process complete events
-            process_sse_buffer(&mut state, &self.messages_received, self.config.max_message_size)?;
+            process_sse_buffer(
+                &mut state,
+                &self.messages_received,
+                self.config.max_message_size,
+            )?;
         }
 
         Ok(())

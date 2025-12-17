@@ -120,14 +120,16 @@ async fn main() -> Result<(), McpError> {
     println!();
     println!("Calling multiply(4, 5)...");
     let args = serde_json::json!({"a": 4.0, "b": 5.0});
-    let result = <Calculator as ToolHandler>::call_tool(&calculator, "multiply", args, &ctx).await?;
+    let result =
+        <Calculator as ToolHandler>::call_tool(&calculator, "multiply", args, &ctx).await?;
     print_result(&result);
 
     // Check the operation count (demonstrates stateful behavior)
     println!();
     println!("Calling get_stats()...");
     let args = serde_json::json!({});
-    let result = <Calculator as ToolHandler>::call_tool(&calculator, "get_stats", args, &ctx).await?;
+    let result =
+        <Calculator as ToolHandler>::call_tool(&calculator, "get_stats", args, &ctx).await?;
     print_result(&result);
 
     // Demonstrate into_server() - the recommended way to create a server
@@ -354,8 +356,7 @@ mod tests {
         let test_ctx = TestContext::new();
         let ctx = test_ctx.as_context();
         let args = serde_json::json!({});
-        let result =
-            <Calculator as ToolHandler>::call_tool(&calc, "unknown", args, &ctx).await;
+        let result = <Calculator as ToolHandler>::call_tool(&calc, "unknown", args, &ctx).await;
         assert!(result.is_err());
     }
 }

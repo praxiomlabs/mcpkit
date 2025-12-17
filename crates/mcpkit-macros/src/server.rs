@@ -924,7 +924,9 @@ fn generate_convenience_methods(
     } else {
         // Generate the chain using Arc::clone()
         // Build the method chain: .with_tools(...).with_resources(...).with_prompts(...)
-        let mut method_chain = quote!(::mcpkit::ServerBuilder::new(::std::sync::Arc::clone(&handler)));
+        let mut method_chain = quote!(::mcpkit::ServerBuilder::new(::std::sync::Arc::clone(
+            &handler
+        )));
 
         if has_tools {
             method_chain = quote!(#method_chain.with_tools(::std::sync::Arc::clone(&handler)));
