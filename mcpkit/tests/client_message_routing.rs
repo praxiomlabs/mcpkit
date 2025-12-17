@@ -110,7 +110,10 @@ async fn test_client_request_response_correlation() {
         .expect("Client should connect successfully");
 
     // Make multiple requests - these should all succeed without warnings
-    let tools = client.list_tools().await.expect("list_tools should succeed");
+    let tools = client
+        .list_tools()
+        .await
+        .expect("list_tools should succeed");
     assert_eq!(tools.len(), 1);
     assert_eq!(tools[0].name, "test_tool");
 

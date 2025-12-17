@@ -3,11 +3,11 @@
 use dashmap::DashMap;
 use mcpkit_core::capability::ClientCapabilities;
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
-use tokio::sync::broadcast;
 use tokio::sync::RwLock;
+use tokio::sync::broadcast;
 
 /// Default session timeout duration (1 hour).
 pub const DEFAULT_SESSION_TIMEOUT: Duration = Duration::from_secs(3600);
@@ -110,7 +110,10 @@ impl EventStoreConfig {
     /// Create a new event store configuration.
     #[must_use]
     pub const fn new(max_events: usize, max_age: Duration) -> Self {
-        Self { max_events, max_age }
+        Self {
+            max_events,
+            max_age,
+        }
     }
 
     /// Set the maximum number of events to retain.
@@ -173,7 +176,12 @@ impl EventStore {
     }
 
     /// Store an event with a specific ID.
-    pub fn store(&self, id: impl Into<String>, event_type: impl Into<String>, data: impl Into<String>) {
+    pub fn store(
+        &self,
+        id: impl Into<String>,
+        event_type: impl Into<String>,
+        data: impl Into<String>,
+    ) {
         let event = StoredEvent::new(id.into(), event_type, data);
 
         // Use blocking write since we can't use async in this sync method
@@ -198,7 +206,12 @@ impl EventStore {
     }
 
     /// Store an event asynchronously.
-    pub async fn store_async(&self, id: impl Into<String>, event_type: impl Into<String>, data: impl Into<String>) {
+    pub async fn store_async(
+        &self,
+        id: impl Into<String>,
+        event_type: impl Into<String>,
+        data: impl Into<String>,
+    ) {
         let event = StoredEvent::new(id.into(), event_type, data);
         let mut events = self.events.write().await;
 
@@ -632,7 +645,8 @@ mod tests {
         let manager = SessionManager::new();
         let (id, mut rx) = manager.create_session();
 
-        let event_id = manager.send_to_session_with_storage(&id, "message", "test data".to_string());
+        let event_id =
+            manager.send_to_session_with_storage(&id, "message", "test data".to_string());
         assert!(event_id.is_some());
 
         let msg = rx.recv().await.expect("Should receive message");

@@ -429,9 +429,9 @@ mod tests {
         assert_eq!(err.to_string(), "operation timed out");
     }
 
-    /// Test that BufReader doesn't duplicate data when futures are cancelled.
+    /// Test that `BufReader` doesn't duplicate data when futures are cancelled.
     ///
-    /// This is a regression test for a bug where cancelling a read_line future
+    /// This is a regression test for a bug where cancelling a `read_line` future
     /// during buffer refill would cause the same data to be read twice.
     #[cfg(feature = "tokio-runtime")]
     #[tokio::test]
@@ -470,7 +470,7 @@ mod tests {
         assert_eq!(eof, "");
     }
 
-    /// Test BufReader handles partial buffer consumption correctly.
+    /// Test `BufReader` handles partial buffer consumption correctly.
     #[cfg(feature = "tokio-runtime")]
     #[tokio::test]
     async fn test_bufreader_partial_buffer() {
@@ -494,7 +494,7 @@ mod tests {
         assert_eq!(line3, "x\n");
     }
 
-    /// Test that BufReader handles empty lines correctly.
+    /// Test that `BufReader` handles empty lines correctly.
     #[cfg(feature = "tokio-runtime")]
     #[tokio::test]
     async fn test_bufreader_empty_lines() {

@@ -194,5 +194,9 @@ fn test_request_id_hashmap_lookup() {
     let key = RequestId::Number(1);
     let json = serde_json::to_string(&key).unwrap();
     let roundtrip: RequestId = serde_json::from_str(&json).unwrap();
-    assert_eq!(map.get(&roundtrip), Some(&"first"), "Lookup after roundtrip should work");
+    assert_eq!(
+        map.get(&roundtrip),
+        Some(&"first"),
+        "Lookup after roundtrip should work"
+    );
 }
