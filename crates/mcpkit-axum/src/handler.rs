@@ -1,6 +1,7 @@
 //! HTTP handlers for MCP requests.
 
 use crate::error::ExtensionError;
+use crate::session::{EventStore, StoredEvent};
 use crate::state::{HasServerInfo, McpState};
 use crate::{SUPPORTED_VERSIONS, is_supported_version};
 use axum::extract::State;
@@ -17,6 +18,7 @@ use mcpkit_server::{
     route_tools,
 };
 use std::convert::Infallible;
+use std::sync::Arc;
 use tracing::{debug, info, warn};
 
 /// Handle MCP POST requests.
@@ -214,11 +216,19 @@ where
 /// # Headers
 ///
 /// - `mcp-session-id`: Optional. If provided, reconnects to an existing session.
+/// - `last-event-id`: Optional. If provided with mcp-session-id, replays missed events.
 ///
 /// # Events
 ///
 /// - `connected`: Sent when the connection is established, includes session ID.
 /// - `message`: MCP notification messages.
+///
+/// # Message Resumability
+///
+/// Per the MCP Streamable HTTP specification, clients can reconnect with
+/// the `Last-Event-ID` header to receive events they may have missed during
+/// a connection interruption. The server will replay stored events that
+/// occurred after the specified event ID.
 pub async fn handle_sse<H>(
     State(state): State<McpState<H>>,
     headers: HeaderMap,
@@ -231,48 +241,105 @@ where
         .and_then(|v| v.to_str().ok())
         .map(String::from);
 
-    let (id, rx) = if let Some(id) = session_id {
+    let last_event_id = headers
+        .get("last-event-id")
+        .and_then(|v| v.to_str().ok())
+        .map(String::from);
+
+    let (id, rx, replay_events) = if let Some(id) = session_id {
         // Try to reconnect to existing session
         if let Some(rx) = state.sse_sessions.get_receiver(&id) {
-            info!(session_id = %id, "Reconnected to SSE session");
-            (id, rx)
+            // Check if we need to replay events
+            let replay = if let Some(last_id) = &last_event_id {
+                info!(session_id = %id, last_event_id = %last_id, "Reconnecting with Last-Event-ID");
+                state
+                    .sse_sessions
+                    .get_events_for_replay(&id, last_id)
+                    .await
+                    .unwrap_or_default()
+            } else {
+                Vec::new()
+            };
+
+            info!(
+                session_id = %id,
+                replay_count = replay.len(),
+                "Reconnected to SSE session"
+            );
+            (id, rx, replay)
         } else {
             // Session not found, create new
             let (new_id, rx) = state.sse_sessions.create_session();
             info!(session_id = %new_id, "Created new SSE session (requested not found)");
-            (new_id, rx)
+            (new_id, rx, Vec::new())
         }
     } else {
         let (id, rx) = state.sse_sessions.create_session();
         info!(session_id = %id, "Created new SSE session");
-        (id, rx)
+        (id, rx, Vec::new())
     };
 
-    let stream = create_sse_stream(id, rx);
+    let event_store = state.sse_sessions.get_event_store(&id);
+    let stream = create_sse_stream_with_replay(id, rx, replay_events, event_store);
     Sse::new(stream).keep_alive(KeepAlive::default())
 }
 
-fn create_sse_stream(
+/// Create an SSE stream with support for event replay.
+///
+/// This function creates an SSE stream that:
+/// 1. Sends any replay events (from Last-Event-ID reconnection)
+/// 2. Sends the "connected" event with session ID
+/// 3. Streams new messages as they arrive
+///
+/// All events include an `id` field for client-side tracking and reconnection.
+fn create_sse_stream_with_replay(
     session_id: String,
     mut rx: tokio::sync::broadcast::Receiver<String>,
+    replay_events: Vec<StoredEvent>,
+    event_store: Option<Arc<EventStore>>,
 ) -> impl Stream<Item = Result<Event, Infallible>> {
     async_stream::stream! {
-        // Send connected event with session ID
+        // First, replay any missed events
+        for stored in replay_events {
+            debug!(event_id = %stored.id, "Replaying missed event");
+            yield Ok(Event::default()
+                .id(&stored.id)
+                .event(&stored.event_type)
+                .data(&stored.data));
+        }
+
+        // Send connected event with session ID and an event ID
+        // Per MCP spec: servers MUST immediately send an SSE event with an id
+        // to prime the client for reconnection
+        let connected_event_id = event_store
+            .as_ref()
+            .map(|store| store.next_event_id())
+            .unwrap_or_else(|| "evt-connected".to_string());
+
         yield Ok(Event::default()
+            .id(&connected_event_id)
             .event("connected")
             .data(&session_id));
 
-        // Stream messages
+        // Stream new messages with event IDs
         loop {
             match rx.recv().await {
                 Ok(msg) => {
+                    // Generate event ID for the new message
+                    let event_id = event_store
+                        .as_ref()
+                        .map(|store| store.next_event_id())
+                        .unwrap_or_else(|| format!("evt-{}", uuid::Uuid::new_v4()));
+
                     yield Ok(Event::default()
+                        .id(&event_id)
                         .event("message")
                         .data(msg));
                 }
                 Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
                     warn!(skipped = n, "SSE client lagged, skipped messages");
-                    // Loop continues naturally
+                    // Note: Lagged events may be available in the event store
+                    // for replay on reconnection
                 }
                 Err(tokio::sync::broadcast::error::RecvError::Closed) => {
                     debug!("SSE channel closed");

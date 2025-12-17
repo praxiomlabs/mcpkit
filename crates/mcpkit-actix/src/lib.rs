@@ -91,7 +91,7 @@ mod state;
 pub use error::ExtensionError;
 pub use handler::{handle_mcp_post, handle_sse};
 pub use router::McpRouter;
-pub use session::{Session, SessionManager, SessionStore};
+pub use session::{EventStore, EventStoreConfig, Session, SessionManager, SessionStore, StoredEvent};
 pub use state::McpState;
 
 /// Prelude module for convenient imports.
@@ -105,7 +105,7 @@ pub mod prelude {
     pub use crate::error::ExtensionError;
     pub use crate::handler::{handle_mcp_post, handle_sse};
     pub use crate::router::McpRouter;
-    pub use crate::session::{Session, SessionManager, SessionStore};
+    pub use crate::session::{EventStore, EventStoreConfig, Session, SessionManager, SessionStore, StoredEvent};
     pub use crate::state::McpState;
 }
 
