@@ -543,12 +543,9 @@ pub async fn route_tools<TH: ToolHandler + Send + Sync>(
                 let params = params.ok_or_else(|| {
                     McpError::invalid_params(methods::TOOLS_CALL, "missing params")
                 })?;
-                let name = params
-                    .get("name")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| {
-                        McpError::invalid_params(methods::TOOLS_CALL, "missing tool name")
-                    })?;
+                let name = params.get("name").and_then(|v| v.as_str()).ok_or_else(|| {
+                    McpError::invalid_params(methods::TOOLS_CALL, "missing tool name")
+                })?;
                 let args = params
                     .get("arguments")
                     .cloned()
@@ -697,10 +694,7 @@ pub async fn route_prompts<PH: PromptHandler + Send + Sync>(
                 let name = params.get("name").and_then(|v| v.as_str()).ok_or_else(|| {
                     McpError::invalid_params(methods::PROMPTS_GET, "missing prompt name")
                 })?;
-                let args = params
-                    .get("arguments")
-                    .and_then(|v| v.as_object())
-                    .cloned();
+                let args = params.get("arguments").and_then(|v| v.as_object()).cloned();
 
                 tracing::info!(prompt = %name, "Getting prompt");
                 let start = std::time::Instant::now();

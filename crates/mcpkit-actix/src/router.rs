@@ -4,7 +4,7 @@ use crate::handler::{handle_mcp_post, handle_sse};
 use crate::state::{HasServerInfo, McpState};
 use actix_cors::Cors;
 use actix_web::middleware::Logger;
-use actix_web::{web, App, HttpServer};
+use actix_web::{App, HttpServer, web};
 use mcpkit_server::{PromptHandler, ResourceHandler, ServerHandler, ToolHandler};
 
 /// Builder for MCP Actix routers.
@@ -99,9 +99,7 @@ where
     /// Configure an Actix App with MCP routes.
     ///
     /// This is useful when you need to integrate MCP routes with an existing Actix application.
-    pub fn configure_app(
-        &self,
-    ) -> impl Fn(&mut web::ServiceConfig) + Clone + 'static
+    pub fn configure_app(&self) -> impl Fn(&mut web::ServiceConfig) + Clone + 'static
     where
         H: Clone,
     {
@@ -201,8 +199,8 @@ mod tests {
     use mcpkit_core::types::{
         GetPromptResult, Prompt, Resource, ResourceContents, Tool, ToolOutput,
     };
-    use mcpkit_server::context::Context;
     use mcpkit_server::ServerHandler;
+    use mcpkit_server::context::Context;
 
     // Note: Clone IS required for actix due to HttpServer::new closure requirements
     #[derive(Clone)]

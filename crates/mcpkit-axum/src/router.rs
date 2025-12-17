@@ -143,9 +143,11 @@ mod tests {
     use super::*;
     use mcpkit_core::capability::{ServerCapabilities, ServerInfo};
     use mcpkit_core::error::McpError;
-    use mcpkit_core::types::{GetPromptResult, Prompt, Resource, ResourceContents, Tool, ToolOutput};
-    use mcpkit_server::context::Context;
+    use mcpkit_core::types::{
+        GetPromptResult, Prompt, Resource, ResourceContents, Tool, ToolOutput,
+    };
     use mcpkit_server::ServerHandler;
+    use mcpkit_server::context::Context;
 
     // Note: Clone is NOT required - the handler is wrapped in Arc internally
     struct TestHandler;
@@ -160,7 +162,10 @@ mod tests {
         }
 
         fn capabilities(&self) -> ServerCapabilities {
-            ServerCapabilities::new().with_tools().with_resources().with_prompts()
+            ServerCapabilities::new()
+                .with_tools()
+                .with_resources()
+                .with_prompts()
         }
     }
 

@@ -171,9 +171,7 @@ where
         }
         _ => {
             // Try routing to tools
-            if let Some(result) =
-                route_tools(state.handler.as_ref(), method, params, &ctx).await
-            {
+            if let Some(result) = route_tools(state.handler.as_ref(), method, params, &ctx).await {
                 return match result {
                     Ok(value) => Response::success(request.id.clone(), value),
                     Err(e) => Response::error(request.id.clone(), e.into()),
@@ -191,8 +189,7 @@ where
             }
 
             // Try routing to prompts
-            if let Some(result) =
-                route_prompts(state.handler.as_ref(), method, params, &ctx).await
+            if let Some(result) = route_prompts(state.handler.as_ref(), method, params, &ctx).await
             {
                 return match result {
                     Ok(value) => Response::success(request.id.clone(), value),

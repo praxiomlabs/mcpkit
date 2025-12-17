@@ -570,7 +570,9 @@ async fn route_resources<RH: ResourceHandler + Send + Sync>(
             tracing::debug!("Listing available resource templates");
             let result = handler.list_resource_templates(ctx).await;
             match &result {
-                Ok(templates) => tracing::debug!(count = templates.len(), "Listed resource templates"),
+                Ok(templates) => {
+                    tracing::debug!(count = templates.len(), "Listed resource templates")
+                }
                 Err(e) => tracing::warn!(error = %e, "Failed to list resource templates"),
             }
             Some(result.map(|templates| serde_json::json!({ "resourceTemplates": templates })))

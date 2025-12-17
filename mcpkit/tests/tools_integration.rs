@@ -1,11 +1,11 @@
 //! Integration tests for tool handling.
 
+use mcpkit::ToolInput;
 use mcpkit::capability::{ClientCapabilities, ServerCapabilities};
 use mcpkit::protocol::RequestId;
 use mcpkit::protocol_version::ProtocolVersion;
 use mcpkit::types::ToolOutput;
 use mcpkit::types::tool::CallToolResult;
-use mcpkit::ToolInput;
 use mcpkit_server::capability::tools::{ToolBuilder, ToolService};
 use mcpkit_server::context::{Context, NoOpPeer};
 use mcpkit_server::handler::ToolHandler;
