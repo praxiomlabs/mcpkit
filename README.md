@@ -11,12 +11,12 @@ A Rust SDK for the Model Context Protocol (MCP) that simplifies server developme
 
 ## Features
 
-- **Reduced boilerplate** via unified `#[mcp_server]` macro
+- **Unified `#[mcp_server]` macro** for defining tools, resources, and prompts
 - **Runtime-agnostic** async support (Tokio, async-std, smol)
-- **Type-safe state machines** via typestate pattern for connection lifecycle
-- **Rich error handling** with context chains
-- **Full MCP 2025-11-25 protocol coverage** including Tasks
-- **First-class middleware** via Tower-compatible Layer pattern
+- **Typestate builders** for compile-time validation of server configuration
+- **Context-based error handling** with `McpError` and `.context()` chains
+- **MCP 2025-11-25 protocol** including Tasks, Elicitation, and OAuth 2.1
+- **Tower-compatible middleware** via built-in Layer pattern
 
 ## Why mcpkit?
 
@@ -30,7 +30,7 @@ mcpkit implements **MCP 2025-11-25** — the latest protocol specification. As o
 | **Tool Annotations** | 2025-03-26 | `readOnly`, `destructive`, `idempotent` hints for tools |
 | **Structured Output** | 2025-06-18 | Type-safe JSON responses with schema validation |
 
-If you need these features in Rust, mcpkit is currently the most complete implementation.
+See the [detailed comparison](docs/comparison.md) for a full overview of Rust MCP SDK options.
 
 ## Quick Start
 
@@ -83,23 +83,19 @@ async fn main() -> Result<(), McpError> {
 > Tokio, async-std, smol, or any other async runtime. The examples use Tokio, but the
 > SDK itself doesn't depend on any specific runtime.
 
-## Comparison with rmcp
+## mcpkit Highlights
 
-> **Note**: This comparison reflects December 2025. See the [detailed comparison](docs/comparison.md) for the latest information, including other Rust MCP SDKs.
+| Feature | Description |
+|---------|-------------|
+| **Protocol** | MCP 2025-11-25 (supports all 4 protocol versions) |
+| **Macro** | Single `#[mcp_server]` with `#[tool]`, `#[resource]`, `#[prompt]` |
+| **Parameters** | Extracted directly from function signatures |
+| **Errors** | Unified `McpError` with `.context()` chains |
+| **Transports** | stdio, WebSocket, HTTP/SSE, Unix sockets |
+| **Middleware** | Built-in Tower-compatible Layer system |
+| **Runtime** | Agnostic (Tokio, async-std, smol) |
 
-| Aspect | rmcp | This SDK |
-|--------|------|----------|
-| **Protocol Version** | 2024-11-05 (per docs) | **2025-11-25** (latest) |
-| Macros | 4 interdependent | 1 unified `#[mcp_server]` |
-| Boilerplate | Manual router wiring | Automatic wiring |
-| Parameters | `Parameters<T>` wrapper | Direct from signature |
-| Error types | 3 nested layers | 1 unified `McpError` |
-| Tasks | [Check repo](https://github.com/modelcontextprotocol/rust-sdk) | Full support |
-| Elicitation | [Check repo](https://github.com/modelcontextprotocol/rust-sdk) | Full support |
-| OAuth 2.1 | [Check repo](https://github.com/modelcontextprotocol/rust-sdk) | Full support |
-| WebSocket | Custom implementation | Built-in |
-| Middleware | Manual/Tower separate | Built-in Layer system |
-| Runtime | Tokio-only | Runtime-agnostic |
+For comparisons with other Rust MCP SDKs (rmcp, rust-mcp-sdk, mcp-protocol-sdk), see the [detailed comparison](docs/comparison.md).
 
 ## Crate Structure
 

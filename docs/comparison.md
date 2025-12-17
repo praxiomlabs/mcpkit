@@ -7,15 +7,12 @@ This document provides an honest, transparent comparison between `mcpkit` and `r
 ## Executive Summary
 
 | Aspect | mcpkit | rmcp |
-|--------|--------------|------|
-| **Code Size** | ~15% less boilerplate | Baseline |
-| **Macro Approach** | Single unified macro | Multiple specialized macros |
-| **Transport Options** | 5 transports | 2 transports |
-| **Error Handling** | Two-tier (recoverable + fatal) | Single result type |
-| **Maturity** | New (pre-1.0) | Established |
-| **Best For** | Ergonomic tool development | Proven, minimal API |
-
-**Important Note**: The previously claimed "66% less boilerplate" is overstated. Realistic measurements show approximately 15-25% reduction for typical use cases.
+|--------|--------|------|
+| **Macro Approach** | Single `#[mcp_server]` macro | Multiple macros (`#[tool_router]`, etc.) |
+| **Transport Options** | 5 built-in (stdio, WebSocket, HTTP, Unix, Memory) | 2 (stdio, SSE) |
+| **Error Handling** | `McpError` + `ToolOutput::error()` | `Result<CallToolResult, Error>` |
+| **Maturity** | Pre-1.0 | Established (0.11.x) |
+| **Protocol Version** | 2025-11-25 (per docs) | 2024-11-05 (per docs) |
 
 ## Code Size Comparison
 
@@ -75,41 +72,23 @@ impl Calculator {
 }
 ```
 
-### Analysis
+### Observations
 
-| Metric | mcpkit | rmcp | Difference |
-|--------|--------------|------|------------|
-| Core tool code lines | 19 | 24 | -21% |
-| Required struct fields | 0 | 1 (tool_router) | -100% |
-| Constructor boilerplate | 0 lines | 3 lines | -100% |
-| Return type verbosity | `ToolOutput` | `Result<CallToolResult, McpError>` | Simpler |
-| Imports | 1 | 3 | -67% |
+The examples above illustrate different API design choices:
 
-The reduction comes primarily from:
-1. No `tool_router` field requirement
-2. No explicit constructor needed
-3. Simpler return type for success cases
-4. Unified prelude import
+**mcpkit approach:**
+- No router field needed in struct
+- No explicit constructor required
+- Returns `ToolOutput` directly for simple cases
+- Single prelude import
 
-### Where rmcp Has Less Code
+**rmcp approach:**
+- Explicit router field for tool registration
+- Constructor initializes the router
+- Returns `Result<CallToolResult, McpError>`
+- Multiple imports
 
-For complex scenarios with custom error handling:
-
-```rust
-// rmcp - error handling is more explicit
-async fn risky_op(&self) -> Result<CallToolResult, McpError> {
-    self.do_work()?;  // ? operator works directly
-    Ok(CallToolResult::success(vec![...]))
-}
-
-// mcpkit - requires wrapping
-async fn risky_op(&self) -> Result<ToolOutput, McpError> {
-    self.do_work()?;
-    Ok(ToolOutput::text("done"))
-}
-```
-
-Both are similar for complex error handling scenarios.
+Both approaches are valid. mcpkit prioritizes convenience for simple cases; rmcp provides explicit control. The "right" choice depends on your preferences and requirements.
 
 ## Performance Comparison
 
@@ -138,90 +117,88 @@ From our Criterion benchmarks:
 | Argument parsing | ~50-250ns | Depends on complexity |
 | End-to-end tool call | ~500ns | Excluding I/O |
 
-### Memory Comparison
+### Memory
 
-| Metric | mcpkit | rmcp (estimated) |
-|--------|--------------|------------------|
-| Per-request overhead | ~200-500 bytes | Similar |
-| Per-tool registry cost | ~500 bytes | Similar |
-| Connection pool | Configurable | N/A (no built-in pool) |
-
-Both use Rust's ownership system, ensuring no memory leaks by design.
+Both SDKs use Rust's ownership system, ensuring no memory leaks by design. mcpkit includes optional connection pooling for long-running servers.
 
 ## Feature Comparison
 
 ### Transport Support
 
-| Transport | mcpkit | rmcp |
-|-----------|--------------|------|
-| stdio | Yes | Yes |
-| WebSocket | Yes | No |
-| HTTP/SSE | Yes | SSE only |
-| Unix sockets | Yes | No |
-| Memory (testing) | Yes | No |
+**mcpkit transports:**
+
+| Transport | Status |
+|-----------|--------|
+| stdio | Built-in |
+| WebSocket | Built-in |
+| HTTP/SSE | Built-in |
+| Unix sockets | Built-in |
+| Memory (testing) | Built-in |
+
+**rmcp transports:** Check [rmcp's repository](https://github.com/modelcontextprotocol/rust-sdk) for current transport support.
 
 ### Protocol Features
 
-| Feature | mcpkit | rmcp |
-|---------|--------------|------|
-| 2024-11-05 version | Yes | Yes |
-| 2025-03-26 version | Yes | [Check repo](https://github.com/modelcontextprotocol/rust-sdk) |
-| 2025-06-18 version | Yes | [Check repo](https://github.com/modelcontextprotocol/rust-sdk) |
-| 2025-11-25 version | Yes | [Check repo](https://github.com/modelcontextprotocol/rust-sdk) |
-| Version negotiation | Automatic | Manual |
-| Capability negotiation | Built-in | Built-in |
+**mcpkit protocol support:**
 
-> **Note**: rmcp's README currently references protocol version 2024-11-05. The SDK may support additional versions—verify directly with their repository for the most current information.
+| Version | Status |
+|---------|--------|
+| 2024-11-05 | Supported |
+| 2025-03-26 | Supported |
+| 2025-06-18 | Supported |
+| 2025-11-25 | Supported (default) |
 
-### Developer Experience
+mcpkit includes automatic version negotiation and capability negotiation.
 
-| Feature | mcpkit | rmcp |
-|---------|--------------|------|
-| Unified macro | `#[mcp_server]` | Multiple (`#[tool_router]`, `#[tool]`) |
-| Schema generation | Built-in | Via schemars |
-| Error suggestions | Yes (`ToolOutput::error_with_suggestion`) | No |
-| Typestate builders | Yes | No |
-| Connection pooling | Yes | No |
+**rmcp protocol support:** Check [rmcp's repository](https://github.com/modelcontextprotocol/rust-sdk) for current protocol version support. As of December 2025, their README references version 2024-11-05.
 
-## Tradeoffs
+### mcpkit-Specific Features
 
-### Choose mcpkit If:
+These features are available in mcpkit:
 
-1. **You want simpler tool definitions** - Single macro, direct parameters
-2. **You need multiple transports** - WebSocket, HTTP, Unix sockets built-in
-3. **You value error suggestions** - Help LLMs recover from errors
-4. **You're building long-running servers** - Connection pooling, memory management
+| Feature | Description |
+|---------|-------------|
+| Unified macro | Single `#[mcp_server]` with `#[tool]`, `#[resource]`, `#[prompt]` |
+| Built-in schema generation | No external crate required |
+| Error suggestions | `ToolOutput::error_with_suggestion()` for LLM recovery hints |
+| Typestate builders | Compile-time validation of server configuration |
+| Connection pooling | Optional pooling for long-running servers |
 
-### Choose rmcp If:
+Check [rmcp's documentation](https://github.com/modelcontextprotocol/rust-sdk) for its current feature set.
 
-1. **You prefer the official SDK** - Maintained by Anthropic/community
-2. **You want minimal dependencies** - Focused, smaller crate
-3. **You're already using it** - Migration has cost
-4. **You need maximum ecosystem compatibility** - More examples/resources
+## When to Consider Each SDK
 
-### Neither Is Clearly "Better"
+### mcpkit may be a good fit if you:
 
-Both SDKs:
-- Implement the same MCP protocol correctly
+- Need MCP 2025-11-25 features (Tasks, Elicitation)
+- Want multiple transport options (WebSocket, HTTP, Unix sockets)
+- Prefer a single macro approach for defining servers
+- Need runtime flexibility (async-std, smol support)
+
+### rmcp may be a good fit if you:
+
+- Prefer the official SDK maintained by the MCP community
+- Want an established, widely-used implementation
+- Have existing rmcp code you don't want to migrate
+- Need maximum ecosystem compatibility
+
+### Both SDKs:
+
+- Implement the MCP protocol correctly
 - Are wire-compatible with each other
-- Have similar runtime performance
-- Are production-quality Rust code
+- Produce production-quality Rust code
 
 ## Migration Considerations
 
 ### From rmcp to mcpkit
 
-Effort: **Medium** (1-2 hours for small projects)
-
-- Import changes are straightforward
-- Tool definitions need restructuring
-- Error handling patterns differ slightly
+- Import changes needed (different module structure)
+- Tool definitions need restructuring (different macro approach)
+- Error handling patterns differ
 
 See [Migration Guide](migration-from-rmcp.md) for details.
 
 ### From mcpkit to rmcp
-
-Effort: **Medium**
 
 - Add `tool_router` fields to structs
 - Change return types to `Result<CallToolResult, McpError>`
@@ -240,22 +217,24 @@ The Rust MCP ecosystem includes several implementations beyond mcpkit and rmcp. 
 
 ### Choosing an SDK
 
-Each SDK has valid use cases:
+Each SDK has different strengths:
 
-- **rmcp**: Best for projects wanting official SDK status and maximum ecosystem compatibility
-- **rust-mcp-sdk**: Good for projects needing specific OAuth integrations (Keycloak, WorkOS, Scalekit)
-- **mcp-protocol-sdk**: Suitable if you need 2025-06-18 features with a focused API
-- **mcpkit**: Best for projects needing 2025-11-25 features (Tasks), runtime flexibility, or ergonomic macros
+- **rmcp**: Official SDK with wide ecosystem adoption
+- **rust-mcp-sdk**: Multiple OAuth provider integrations (Keycloak, WorkOS, Scalekit)
+- **mcp-protocol-sdk**: Focused on 2025-06-18 features
+- **mcpkit**: 2025-11-25 support, runtime flexibility, unified macro approach
 
 We encourage you to evaluate based on your specific requirements. All these SDKs implement the same MCP protocol and are wire-compatible.
 
 ## Conclusion
 
-**mcpkit** provides a more ergonomic API with additional transports and features, but the "66% less boilerplate" claim in documentation should be revised to a more accurate "15-25% reduction for typical cases."
+Multiple quality Rust MCP SDKs exist, each with different design priorities:
 
-**rmcp** is a solid, well-maintained official SDK that prioritizes simplicity and minimal API surface.
+- **rmcp** is the official SDK with established community adoption
+- **mcpkit** offers 2025-11-25 protocol support, multiple transports, and runtime flexibility
+- **rust-mcp-sdk** and **mcp-protocol-sdk** provide additional options in the ecosystem
 
-All Rust MCP SDKs are excellent choices. Pick based on your specific needs—protocol version requirements, transport options, OAuth integrations, or developer experience—rather than benchmarks or code size metrics.
+Choose based on your requirements: protocol version needs, transport options, runtime constraints, or API preferences. All implement the same underlying protocol and interoperate correctly.
 
 ## Appendix: Measuring Code Size
 
