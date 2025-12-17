@@ -124,9 +124,34 @@ pub fn mcp_server(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// - `description` - Required description of what the tool does
 /// - `name` - Override the tool name (defaults to the method name)
-/// - `destructive` - Hint that the tool may cause destructive changes (default: false)
-/// - `idempotent` - Hint that calling the tool multiple times has same effect (default: false)
-/// - `read_only` - Hint that the tool only reads data (default: false)
+///
+/// ## Tool Annotations (Hints for AI Assistants)
+///
+/// These attributes provide hints to AI assistants about the tool's behavior.
+/// They appear in the tool's JSON schema as `annotations`:
+///
+/// - `destructive = true` - The tool may cause irreversible changes (e.g., delete files,
+///   drop tables, send emails). AI assistants may ask for confirmation before calling.
+///
+/// - `idempotent = true` - Calling the tool multiple times with the same arguments
+///   produces the same result (safe to retry on failure).
+///
+/// - `read_only = true` - The tool only reads data and has no side effects.
+///   AI assistants may call these tools more freely.
+///
+/// ```ignore
+/// // A destructive tool - deletes data
+/// #[tool(description = "Delete a user account", destructive = true)]
+/// async fn delete_user(&self, user_id: String) -> ToolOutput { ... }
+///
+/// // A read-only tool - safe to call repeatedly
+/// #[tool(description = "Get user profile", read_only = true)]
+/// async fn get_user(&self, user_id: String) -> ToolOutput { ... }
+///
+/// // An idempotent tool - safe to retry
+/// #[tool(description = "Set user email", idempotent = true)]
+/// async fn set_email(&self, user_id: String, email: String) -> ToolOutput { ... }
+/// ```
 ///
 /// # Parameter Extraction
 ///
@@ -150,9 +175,53 @@ pub fn mcp_server(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # Return Types
 ///
-/// Tools can return:
-/// - `ToolOutput` - The standard output type
-/// - `Result<ToolOutput, McpError>` - For fallible operations
+/// Tools can return either `ToolOutput` or `Result<ToolOutput, McpError>`:
+///
+/// ## Using `ToolOutput` directly
+///
+/// Use this when you want to handle errors as recoverable user-facing messages:
+///
+/// ```ignore
+/// #[tool(description = "Divide two numbers")]
+/// async fn divide(&self, a: f64, b: f64) -> ToolOutput {
+///     if b == 0.0 {
+///         // User sees this as a tool error they can recover from
+///         return ToolOutput::error("Cannot divide by zero");
+///     }
+///     ToolOutput::text(format!("{}", a / b))
+/// }
+/// ```
+///
+/// ## Using `Result<ToolOutput, McpError>`
+///
+/// Use this for errors that should propagate as JSON-RPC errors (e.g., invalid
+/// parameters, resource not found, permission denied):
+///
+/// ```ignore
+/// #[tool(description = "Read a file")]
+/// async fn read_file(&self, path: String) -> Result<ToolOutput, McpError> {
+///     // Parameter validation - returns JSON-RPC error
+///     if path.contains("..") {
+///         return Err(McpError::invalid_params("read_file", "Path traversal not allowed"));
+///     }
+///
+///     // Resource access - returns JSON-RPC error
+///     let content = std::fs::read_to_string(&path)
+///         .map_err(|e| McpError::resource_not_found(&path))?;
+///
+///     Ok(ToolOutput::text(content))
+/// }
+/// ```
+///
+/// ## When to use which
+///
+/// | Scenario | Return Type | Example |
+/// |----------|-------------|---------|
+/// | User input can be corrected | `ToolOutput::error()` | "Please provide a valid email" |
+/// | Invalid parameters | `Err(McpError::invalid_params())` | Missing required field |
+/// | Resource not found | `Err(McpError::resource_not_found())` | File doesn't exist |
+/// | Permission denied | `Err(McpError::resource_access_denied())` | No read access |
+/// | Internal server error | `Err(McpError::internal())` | Database connection failed |
 #[proc_macro_attribute]
 pub fn tool(attr: TokenStream, item: TokenStream) -> TokenStream {
     tool::expand_tool(attr.into(), item.into())
