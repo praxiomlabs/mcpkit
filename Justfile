@@ -265,7 +265,7 @@ fmt-check:
 clippy:
     #!/usr/bin/env bash
     printf '{{cyan}}[INFO]{{reset}} Running clippy...\n'
-    {{cargo}} clippy --all-features --all-targets -- -D warnings
+    {{cargo}} clippy --workspace --all-features --all-targets -- -D warnings
     printf '{{green}}[OK]{{reset}}   Clippy passed\n'
 
 [group('lint')]
@@ -273,7 +273,7 @@ clippy:
 clippy-strict:
     #!/usr/bin/env bash
     printf '{{cyan}}[INFO]{{reset}} Running clippy (strict)...\n'
-    {{cargo}} clippy --all-targets --all-features -- \
+    {{cargo}} clippy --workspace --all-targets --all-features -- \
         -D warnings \
         -D clippy::all \
         -D clippy::pedantic \
@@ -287,7 +287,7 @@ clippy-strict:
 clippy-fix:
     #!/usr/bin/env bash
     printf '{{cyan}}[INFO]{{reset}} Auto-fixing clippy warnings...\n'
-    {{cargo}} clippy --all-targets --all-features --fix --allow-dirty --allow-staged
+    {{cargo}} clippy --workspace --all-targets --all-features --fix --allow-dirty --allow-staged
     printf '{{green}}[OK]{{reset}}   Clippy fixes applied\n'
 
 [group('security')]
@@ -533,7 +533,10 @@ mutants package="mcpkit-core":
 examples:
     #!/usr/bin/env bash
     printf '{{cyan}}[INFO]{{reset}} Building all examples...\n'
-    {{cargo}} build --examples --all-features
+    # Examples are workspace packages, not --examples targets
+    {{cargo}} build -p minimal-server -p full-server -p http-server-example \
+        -p client-example -p database-server-example -p websocket-server-example \
+        -p with-middleware-example
     printf '{{green}}[OK]{{reset}}   Examples built\n'
 
 [group('examples')]
@@ -640,7 +643,7 @@ docker-ci:
     #!/usr/bin/env bash
     printf '{{cyan}}[INFO]{{reset}} Running CI in Docker...\n'
     {{docker}} run --rm -v "$(pwd):/workspace" -w /workspace {{docker_image}}:{{docker_tag}} \
-        bash -c "cargo fmt --check && cargo clippy --all-targets --all-features && cargo test --workspace --all-features --locked"
+        bash -c "cargo fmt --check && cargo clippy --workspace --all-targets --all-features -- -D warnings && cargo test --workspace --all-features --locked"
     printf '{{green}}[OK]{{reset}}   Docker CI passed\n'
 
 [group('docker')]
@@ -681,7 +684,7 @@ watch-check:
 watch-clippy:
     #!/usr/bin/env bash
     printf '{{cyan}}[INFO]{{reset}} Watching for changes (clippy)...\n'
-    {{cargo}} watch -x "clippy --all-targets --all-features"
+    {{cargo}} watch -x "clippy --workspace --all-targets --all-features"
 
 # ============================================================================
 # CI/CD RECIPES
