@@ -571,7 +571,7 @@ async fn route_resources<RH: ResourceHandler + Send + Sync>(
             let result = handler.list_resource_templates(ctx).await;
             match &result {
                 Ok(templates) => {
-                    tracing::debug!(count = templates.len(), "Listed resource templates")
+                    tracing::debug!(count = templates.len(), "Listed resource templates");
                 }
                 Err(e) => tracing::warn!(error = %e, "Failed to list resource templates"),
             }
