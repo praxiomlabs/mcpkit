@@ -221,6 +221,13 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
                     result = transport.recv() => {
                         match result {
                             Ok(Some(message)) => {
+                                // Debug: log what was received
+                                let msg_id = match &message {
+                                    Message::Request(r) => format!("Request({})", r.id),
+                                    Message::Response(r) => format!("Response({})", r.id),
+                                    Message::Notification(n) => format!("Notification({})", n.method),
+                                };
+                                debug!(msg = %msg_id, "Router received message from transport");
                                 Self::handle_incoming_message(
                                     message,
                                     &pending,
@@ -274,13 +281,14 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
         response: Response,
         pending: &Arc<RwLock<HashMap<RequestId, oneshot::Sender<Response>>>>,
     ) {
+        let pending_count = pending.read().await.len();
         let sender = {
             let mut pending_guard = pending.write().await;
             pending_guard.remove(&response.id)
         };
 
         if let Some(sender) = sender {
-            trace!(?response.id, "Routing response to pending request");
+            debug!(?response.id, pending_count, "Routing response to pending request (found in pending)");
             if sender.send(response).is_err() {
                 warn!("Pending request receiver dropped");
             }
@@ -289,8 +297,8 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
             // 1. A response arrives that was already handled (e.g., after timeout)
             // 2. The server sends an unsolicited response
             // 3. A previous response is re-delivered due to transport buffering
-            // Log at trace level since this doesn't affect functionality.
-            trace!(?response.id, "Received response for unknown request (likely already handled)");
+            // Log at debug level to help diagnose correlation issues.
+            debug!(?response.id, pending_count, "Response not found in pending (possible race or duplicate)");
         }
     }
 

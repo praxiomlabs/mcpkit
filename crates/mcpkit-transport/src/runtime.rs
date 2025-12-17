@@ -403,10 +403,15 @@ impl<R: AsyncRead + Unpin> BufReader<R> {
             }
 
             // Refill buffer
+            // IMPORTANT: Mark buffer as empty BEFORE the await to ensure cancellation safety.
+            // If the future is cancelled by tokio::select! during the read, the next call
+            // will see an empty buffer (pos=0, filled=0) and refill it, avoiding data duplication.
+            self.filled = 0;
             self.pos = 0;
-            self.filled = self.inner.read(&mut self.buffer).await?;
+            let n = self.inner.read(&mut self.buffer).await?;
+            self.filled = n;
 
-            if self.filled == 0 {
+            if n == 0 {
                 // EOF
                 return Ok(total_read);
             }
@@ -422,5 +427,93 @@ mod tests {
     fn test_timeout_error_display() {
         let err = TimeoutError;
         assert_eq!(err.to_string(), "operation timed out");
+    }
+
+    /// Test that BufReader doesn't duplicate data when futures are cancelled.
+    ///
+    /// This is a regression test for a bug where cancelling a read_line future
+    /// during buffer refill would cause the same data to be read twice.
+    #[cfg(feature = "tokio-runtime")]
+    #[tokio::test]
+    async fn test_bufreader_cancellation_safety() {
+        use futures::io::Cursor;
+
+        // Create test data with multiple lines
+        let data = b"line1\nline2\nline3\n";
+        let cursor = Cursor::new(data.to_vec());
+        let mut reader = BufReader::new(cursor);
+
+        // Read first line normally
+        let mut line1 = String::new();
+        let n1 = reader.read_line(&mut line1).await.unwrap();
+        assert_eq!(n1, 6);
+        assert_eq!(line1, "line1\n");
+
+        // Simulate what happens in tokio::select! - start reading but cancel quickly
+        // We can't perfectly simulate cancellation mid-await, but we can verify
+        // that consecutive reads work correctly
+        let mut line2 = String::new();
+        let n2 = reader.read_line(&mut line2).await.unwrap();
+        assert_eq!(n2, 6);
+        assert_eq!(line2, "line2\n");
+
+        // Verify no duplication - third line should be "line3", not "line2" again
+        let mut line3 = String::new();
+        let n3 = reader.read_line(&mut line3).await.unwrap();
+        assert_eq!(n3, 6);
+        assert_eq!(line3, "line3\n");
+
+        // EOF should return 0
+        let mut eof = String::new();
+        let n4 = reader.read_line(&mut eof).await.unwrap();
+        assert_eq!(n4, 0);
+        assert_eq!(eof, "");
+    }
+
+    /// Test BufReader handles partial buffer consumption correctly.
+    #[cfg(feature = "tokio-runtime")]
+    #[tokio::test]
+    async fn test_bufreader_partial_buffer() {
+        use futures::io::Cursor;
+
+        // Create data where multiple lines fit in one buffer read
+        let data = b"short\nlonger line here\nx\n";
+        let cursor = Cursor::new(data.to_vec());
+        let mut reader = BufReader::new(cursor);
+
+        let mut line1 = String::new();
+        reader.read_line(&mut line1).await.unwrap();
+        assert_eq!(line1, "short\n");
+
+        let mut line2 = String::new();
+        reader.read_line(&mut line2).await.unwrap();
+        assert_eq!(line2, "longer line here\n");
+
+        let mut line3 = String::new();
+        reader.read_line(&mut line3).await.unwrap();
+        assert_eq!(line3, "x\n");
+    }
+
+    /// Test that BufReader handles empty lines correctly.
+    #[cfg(feature = "tokio-runtime")]
+    #[tokio::test]
+    async fn test_bufreader_empty_lines() {
+        use futures::io::Cursor;
+
+        let data = b"first\n\nsecond\n";
+        let cursor = Cursor::new(data.to_vec());
+        let mut reader = BufReader::new(cursor);
+
+        let mut line1 = String::new();
+        reader.read_line(&mut line1).await.unwrap();
+        assert_eq!(line1, "first\n");
+
+        let mut line2 = String::new();
+        reader.read_line(&mut line2).await.unwrap();
+        assert_eq!(line2, "\n"); // Empty line (just newline)
+
+        let mut line3 = String::new();
+        reader.read_line(&mut line3).await.unwrap();
+        assert_eq!(line3, "second\n");
     }
 }

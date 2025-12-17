@@ -210,6 +210,14 @@ where
 
         let json = serde_json::to_string(&msg)?;
 
+        // Debug: log what we're sending
+        let msg_id = match &msg {
+            Message::Request(r) => format!("Request({})", r.id),
+            Message::Response(r) => format!("Response({})", r.id),
+            Message::Notification(n) => format!("Notification({})", n.method),
+        };
+        tracing::debug!(msg = %msg_id, len = json.len(), "StdioTransport sending message");
+
         if json.len() > MAX_MESSAGE_SIZE {
             return Err(TransportError::MessageTooLarge {
                 size: json.len(),

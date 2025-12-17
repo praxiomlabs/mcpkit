@@ -242,6 +242,10 @@ impl Transport for SpawnedTransport {
                 continue;
             }
 
+            // Debug: log raw line read with first 100 chars
+            let preview: String = trimmed.chars().take(100).collect();
+            tracing::debug!(raw_line_len = line.len(), preview = %preview, "SpawnedTransport read line from stdout");
+
             let msg: Message = serde_json::from_str(trimmed)?;
             return Ok(Some(msg));
         }
