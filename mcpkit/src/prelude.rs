@@ -52,4 +52,4 @@ pub use mcpkit_server::{
 pub use mcpkit_transport::{Transport, TransportListener, TransportMetadata};
 
 // Macros - these are automatically available at crate root
-pub use mcpkit_macros::{mcp_server, prompt, resource, tool, ToolInput};
+pub use mcpkit_macros::{ToolInput, mcp_server, prompt, resource, tool};

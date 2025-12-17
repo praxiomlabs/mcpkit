@@ -12,8 +12,8 @@ use mcpkit_transport::memory::MemoryTransport;
 use mcpkit_transport::pool::{Pool, PoolConfig};
 use mcpkit_transport::traits::Transport;
 use serde_json::json;
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 use tokio::time::timeout;
 

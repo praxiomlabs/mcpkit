@@ -40,7 +40,7 @@ use {
     futures::{SinkExt, StreamExt},
     tokio::net::TcpStream,
     tokio_tungstenite::{
-        connect_async, tungstenite::protocol::Message as WsMessage, MaybeTlsStream, WebSocketStream,
+        MaybeTlsStream, WebSocketStream, connect_async, tungstenite::protocol::Message as WsMessage,
     },
 };
 

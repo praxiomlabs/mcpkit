@@ -42,9 +42,9 @@ use mcpkit_core::protocol_version::ProtocolVersion;
 use mcpkit_core::types::CallToolResult;
 use mcpkit_transport::Transport;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::sync::RwLock;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// State for a running server.
 pub struct ServerState {

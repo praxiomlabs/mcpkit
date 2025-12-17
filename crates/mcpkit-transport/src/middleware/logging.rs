@@ -7,7 +7,7 @@ use crate::middleware::TransportLayer;
 use crate::traits::{Transport, TransportMetadata};
 use mcpkit_core::protocol::Message;
 use std::sync::atomic::{AtomicU64, Ordering};
-use tracing::{debug, trace, Level};
+use tracing::{Level, debug, trace};
 
 /// A layer that adds logging to a transport.
 ///

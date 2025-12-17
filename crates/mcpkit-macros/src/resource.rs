@@ -7,7 +7,7 @@
 
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{parse2, Error, ImplItemFn, Result};
+use syn::{Error, ImplItemFn, Result, parse2};
 
 use crate::attrs::ResourceAttrs;
 

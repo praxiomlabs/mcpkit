@@ -12,8 +12,8 @@
 
 use futures::channel::oneshot;
 use mcpkit_core::capability::{
-    is_version_supported, ClientCapabilities, ClientInfo, InitializeRequest, InitializeResult,
-    ServerCapabilities, ServerInfo, PROTOCOL_VERSION, SUPPORTED_PROTOCOL_VERSIONS,
+    ClientCapabilities, ClientInfo, InitializeRequest, InitializeResult, PROTOCOL_VERSION,
+    SUPPORTED_PROTOCOL_VERSIONS, ServerCapabilities, ServerInfo, is_version_supported,
 };
 use mcpkit_core::error::{
     HandshakeDetails, JsonRpcError, McpError, TransportContext, TransportDetails,
@@ -31,8 +31,8 @@ use mcpkit_core::types::{
 };
 use mcpkit_transport::Transport;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use tracing::{debug, error, info, trace, warn};
 
 // Runtime-agnostic sync primitives

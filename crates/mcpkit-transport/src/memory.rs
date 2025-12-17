@@ -27,8 +27,8 @@
 use crate::error::TransportError;
 use crate::traits::{Transport, TransportMetadata};
 use mcpkit_core::protocol::Message;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 // =============================================================================
 // Runtime-agnostic implementation using futures channels

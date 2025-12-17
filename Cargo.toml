@@ -22,7 +22,7 @@ members = [
 
 [workspace.package]
 version = "0.2.1"
-edition = "2021"
+edition = "2024"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/praxiomlabs/mcpkit"
@@ -52,7 +52,7 @@ tokio-util = { version = "0.7", features = ["codec"] }
 
 # HTTP/WebSocket
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
-axum = { version = "0.7" }
+axum = { version = "0.8" }
 tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
 hyper = { version = "1.0", features = ["full"] }
 

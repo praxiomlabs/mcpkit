@@ -6,7 +6,7 @@
 //! These benchmarks measure core protocol operations to track
 //! performance and enable comparison with other implementations.
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
 use mcpkit_core::error::JsonRpcError;
 use mcpkit_core::protocol::{Message, Request, RequestId, Response};
 use mcpkit_core::types::{Content, Tool, ToolOutput};

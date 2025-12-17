@@ -6,10 +6,10 @@
 #![cfg(feature = "http")]
 
 use axum::{
+    Router,
     extract::State,
     http::{HeaderMap, StatusCode},
     routing::post,
-    Router,
 };
 use mcpkit::protocol::{Message, Request, RequestId, Response};
 use serde_json::json;

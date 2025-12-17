@@ -4,7 +4,7 @@ This guide walks you through creating your first MCP server using the Rust MCP S
 
 ## Prerequisites
 
-- Rust 1.75 or later
+- Rust 1.85 or later (see [MSRV policy](https://blog.rust-lang.org/2025/02/20/Rust-1.85.0/))
 - Basic familiarity with async Rust (Tokio)
 
 ## Installation
@@ -13,12 +13,13 @@ Add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-mcp = "0.1"
-mcp-server = "0.1"
-mcp-transport = "0.1"
+mcpkit = "0.2"
 tokio = { version = "1", features = ["full"] }
 serde_json = "1"
 ```
+
+> **Note:** The `mcpkit` facade crate re-exports everything you need. For finer control,
+> you can depend on individual crates: `mcpkit-core`, `mcpkit-server`, `mcpkit-transport`, etc.
 
 ## Your First MCP Server
 
@@ -54,8 +55,7 @@ impl Calculator {
 ### Step 3: Create the Main Function
 
 ```rust
-use mcpkit_server::ServerBuilder;
-use mcpkit_transport::stdio::StdioTransport;
+use mcpkit::transport::stdio::StdioTransport;
 
 #[tokio::main]
 async fn main() -> Result<(), McpError> {
@@ -69,12 +69,14 @@ async fn main() -> Result<(), McpError> {
 }
 ```
 
+> **Note:** `ServerBuilder` is re-exported via `mcpkit::prelude::*`, and transports are
+> available under `mcpkit::transport`.
+
 ### Complete Example
 
 ```rust
 use mcpkit::prelude::*;
-use mcpkit_server::ServerBuilder;
-use mcpkit_transport::stdio::StdioTransport;
+use mcpkit::transport::stdio::StdioTransport;
 
 struct Calculator;
 
@@ -135,4 +137,4 @@ The server will listen on stdin/stdout for JSON-RPC messages.
 - [Adding Prompts](./prompts.md) - Create reusable prompt templates
 - [Error Handling](./error-handling.md) - Handle errors gracefully
 - [Using Middleware](./middleware.md) - Add logging, timeouts, and retries
-- [WebSocket Transport](./websocket.md) - Use WebSocket instead of stdio
+- [WebSocket Transport](./transports.md#websocket) - Use WebSocket instead of stdio

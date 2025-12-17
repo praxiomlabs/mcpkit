@@ -15,7 +15,8 @@
 //! # Example
 //!
 //! ```ignore
-//! use mcp::prelude::*;
+//! use mcpkit::prelude::*;
+//! use mcpkit::transport::stdio::StdioTransport;
 //!
 //! struct Calculator;
 //!
@@ -36,7 +37,11 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), McpError> {
-//!     Calculator.serve_stdio().await
+//!     let transport = StdioTransport::new();
+//!     let server = ServerBuilder::new(Calculator)
+//!         .with_tools(Calculator)
+//!         .build();
+//!     server.serve(transport).await
 //! }
 //! ```
 //!
@@ -96,7 +101,13 @@ use proc_macro::TokenStream;
 /// 2. `impl ToolHandler` with `list_tools()` and `call_tool()` (if any `#[tool]` methods)
 /// 3. `impl ResourceHandler` (if any `#[resource]` methods)
 /// 4. `impl PromptHandler` (if any `#[prompt]` methods)
-/// 5. A `serve_stdio()` convenience method
+///
+/// To serve the MCP server, use `ServerBuilder` with your preferred transport:
+///
+/// ```ignore
+/// let server = ServerBuilder::new(MyServer).with_tools(MyServer).build();
+/// server.serve(StdioTransport::new()).await?;
+/// ```
 #[proc_macro_attribute]
 pub fn mcp_server(attr: TokenStream, item: TokenStream) -> TokenStream {
     server::expand_mcp_server(attr.into(), item.into())

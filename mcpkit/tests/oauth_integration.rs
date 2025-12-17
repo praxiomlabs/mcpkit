@@ -63,9 +63,11 @@ fn test_protected_resource_metadata_validation_no_auth_server() {
 
     let result = metadata.validate();
     assert!(result.is_err());
-    assert!(result
-        .unwrap_err()
-        .contains("authorization server is required"));
+    assert!(
+        result
+            .unwrap_err()
+            .contains("authorization server is required")
+    );
 }
 
 #[test]
@@ -607,9 +609,11 @@ fn test_www_authenticate_parse() {
 
     assert!(parsed.is_some());
     let parsed = parsed.unwrap();
-    assert!(parsed
-        .resource_metadata
-        .contains("oauth-protected-resource"));
+    assert!(
+        parsed
+            .resource_metadata
+            .contains("oauth-protected-resource")
+    );
     assert_eq!(parsed.realm, Some("MCP".to_string()));
 }
 
@@ -757,11 +761,13 @@ fn test_client_registration_request_basic() {
 
     // Defaults for public client
     assert_eq!(request.token_endpoint_auth_method, Some("none".to_string()));
-    assert!(request
-        .grant_types
-        .as_ref()
-        .unwrap()
-        .contains(&"authorization_code".to_string()));
+    assert!(
+        request
+            .grant_types
+            .as_ref()
+            .unwrap()
+            .contains(&"authorization_code".to_string())
+    );
 }
 
 #[test]
@@ -931,9 +937,11 @@ fn test_mcp_401_response_handling() {
     let parsed = WwwAuthenticate::parse(&header_value).unwrap();
 
     // Client should discover the resource metadata URL
-    assert!(parsed
-        .resource_metadata
-        .contains("oauth-protected-resource"));
+    assert!(
+        parsed
+            .resource_metadata
+            .contains("oauth-protected-resource")
+    );
 
     // And understand the error
     assert_eq!(parsed.error, Some(OAuthError::InvalidToken));

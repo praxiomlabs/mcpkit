@@ -5,7 +5,7 @@
 
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{parse2, Data, DeriveInput, Error, Fields, GenericArgument, PathArguments, Result, Type};
+use syn::{Data, DeriveInput, Error, Fields, GenericArgument, PathArguments, Result, Type, parse2};
 
 /// Expand the `#[derive(ToolInput)]` macro.
 ///
@@ -24,26 +24,26 @@ pub fn expand_tool_input(input: TokenStream) -> Result<TokenStream> {
                 return Err(Error::new_spanned(
                     name,
                     "ToolInput can only be derived for structs with named fields",
-                ))
+                ));
             }
             Fields::Unit => {
                 return Err(Error::new_spanned(
                     name,
                     "ToolInput cannot be derived for unit structs",
-                ))
+                ));
             }
         },
         Data::Enum(_) => {
             return Err(Error::new_spanned(
                 name,
                 "ToolInput can only be derived for structs, not enums",
-            ))
+            ));
         }
         Data::Union(_) => {
             return Err(Error::new_spanned(
                 name,
                 "ToolInput can only be derived for structs, not unions",
-            ))
+            ));
         }
     };
 

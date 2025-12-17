@@ -7,7 +7,7 @@ use mcpkit_core::capability::{ClientCapabilities, ClientInfo};
 use mcpkit_core::error::McpError;
 use mcpkit_transport::Transport;
 
-use crate::client::{initialize, Client};
+use crate::client::{Client, initialize};
 
 /// Builder for constructing MCP clients.
 ///

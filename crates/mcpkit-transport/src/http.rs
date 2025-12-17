@@ -52,8 +52,8 @@ use {
     bytes::Bytes,
     futures::StreamExt,
     reqwest::{
-        header::{HeaderMap, HeaderValue, ACCEPT, CONTENT_TYPE},
         Client, Response, StatusCode,
+        header::{ACCEPT, CONTENT_TYPE, HeaderMap, HeaderValue},
     },
 };
 
@@ -762,8 +762,8 @@ impl HttpTransportListener {
     /// ```
     pub fn create_router_with_config(config: HttpServerConfig) -> axum::Router {
         use axum::{
-            routing::{delete, get, post},
             Router,
+            routing::{delete, get, post},
         };
         use std::sync::Arc;
 
@@ -1012,8 +1012,8 @@ async fn handle_mcp_sse_with_state(
     use axum::{
         http::StatusCode,
         response::{
-            sse::{Event, KeepAlive, Sse},
             IntoResponse,
+            sse::{Event, KeepAlive, Sse},
         },
     };
     use futures::stream;

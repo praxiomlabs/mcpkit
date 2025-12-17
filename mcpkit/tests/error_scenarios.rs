@@ -8,7 +8,7 @@
 //! - Error propagation and context preservation
 
 use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
-use mcpkit_core::error::{codes, McpError, McpResultExt};
+use mcpkit_core::error::{McpError, McpResultExt, codes};
 use mcpkit_core::protocol::{RequestId, Response};
 
 // =============================================================================

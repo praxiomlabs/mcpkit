@@ -298,7 +298,7 @@ fn test_mcp_error_codes() {
 
 #[test]
 fn test_error_context_preserves_code() {
-    use mcpkit_core::error::{codes, McpResultExt};
+    use mcpkit_core::error::{McpResultExt, codes};
 
     fn inner() -> Result<(), McpError> {
         Err(McpError::resource_not_found("test://x"))
