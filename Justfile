@@ -412,6 +412,7 @@ link-check:
     lychee --verbose --no-progress --accept 200,204,206 \
         --exclude '^https://crates.io' \
         --exclude '^https://docs.rs' \
+        --exclude '^https://www.reddit.com' \
         './docs/**/*.md' './README.md' './CONTRIBUTING.md'
     printf '{{green}}[OK]{{reset}}   Link check passed\n'
 

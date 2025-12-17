@@ -279,8 +279,7 @@ Releases are handled by maintainers:
 
 ## Getting Help
 
-- **Questions**: Open a [Discussion](https://github.com/praxiomlabs/mcpkit/discussions)
-- **Bugs**: Open an [Issue](https://github.com/praxiomlabs/mcpkit/issues)
+- **Questions & Bugs**: Open an [Issue](https://github.com/praxiomlabs/mcpkit/issues)
 - **Security**: See [SECURITY.md](SECURITY.md)
 
 ## Recognition

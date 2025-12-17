@@ -137,4 +137,4 @@ The server will listen on stdin/stdout for JSON-RPC messages.
 - [Adding Prompts](./prompts.md) - Create reusable prompt templates
 - [Error Handling](./error-handling.md) - Handle errors gracefully
 - [Using Middleware](./middleware.md) - Add logging, timeouts, and retries
-- [WebSocket Transport](./websocket.md) - Use WebSocket instead of stdio
+- [WebSocket Transport](./transports.md#websocket) - Use WebSocket instead of stdio

@@ -85,6 +85,7 @@ jobs:
             --accept 200,204,206
             --exclude "^https://crates.io"
             --exclude "^https://docs.rs"
+            --exclude "^https://www.reddit.com"
             './docs/**/*.md'
             './README.md'
             './CONTRIBUTING.md'
