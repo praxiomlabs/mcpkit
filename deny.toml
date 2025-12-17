@@ -19,8 +19,17 @@ db-urls = ["https://github.com/rustsec/advisory-db"]
 # unmaintained checks only workspace crates (not transitive deps)
 unmaintained = "workspace"
 yanked = "warn"
-# async-std discontinued but not a security issue
-ignore = ["RUSTSEC-2025-0052"]
+
+# Ignored advisories with explanations:
+ignore = [
+    # RUSTSEC-2025-0052: async-std project discontinued
+    # - This is NOT a security vulnerability, just a project status notice
+    # - async-std is an optional runtime for users who prefer it over tokio
+    # - The crate remains functional and sound, just no longer actively maintained
+    # - Users who need long-term support should use the default tokio runtime
+    # - See: https://rustsec.org/advisories/RUSTSEC-2025-0052
+    "RUSTSEC-2025-0052",
+]
 
 [licenses]
 version = 2

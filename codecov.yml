@@ -40,21 +40,33 @@ ignore:
 flags:
   core:
     paths:
-      - crates/mcp-core/
+      - crates/mcpkit-core/
     carryforward: true
   transport:
     paths:
-      - crates/mcp-transport/
+      - crates/mcpkit-transport/
     carryforward: true
   server:
     paths:
-      - crates/mcp-server/
+      - crates/mcpkit-server/
     carryforward: true
   client:
     paths:
-      - crates/mcp-client/
+      - crates/mcpkit-client/
     carryforward: true
   macros:
     paths:
-      - crates/mcp-macros/
+      - crates/mcpkit-macros/
+    carryforward: true
+  testing:
+    paths:
+      - crates/mcpkit-testing/
+    carryforward: true
+  axum:
+    paths:
+      - crates/mcpkit-axum/
+    carryforward: true
+  actix:
+    paths:
+      - crates/mcpkit-actix/
     carryforward: true

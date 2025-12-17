@@ -10,7 +10,7 @@ This project follows the [Rust Code of Conduct](https://www.rust-lang.org/polici
 
 ### Prerequisites
 
-- Rust 1.75 or later
+- Rust 1.85 or later (see [MSRV policy](docs/versioning.md#minimum-supported-rust-version))
 - Git
 
 ### Setup
