@@ -1,6 +1,8 @@
 # Migration Guide: rmcp to mcpkit
 
-This guide helps you migrate from the `rmcp` crate (the original Rust MCP SDK) to `mcpkit`. Both SDKs implement the same MCP protocol and are wire-compatible.
+This guide helps you migrate from the `rmcp` crate (the official Rust MCP SDK) to `mcpkit`. Both SDKs implement the same MCP protocol and are wire-compatible.
+
+> **Note**: This guide reflects rmcp's API as of December 2025. Check [rmcp's documentation](https://github.com/modelcontextprotocol/rust-sdk) for the latest API details.
 
 ## Quick Comparison
 

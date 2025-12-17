@@ -20,7 +20,7 @@ A Rust SDK for the Model Context Protocol (MCP) that simplifies server developme
 
 ## Why mcpkit?
 
-mcpkit implements **MCP 2025-11-25** — the latest protocol specification — while the official `rmcp` SDK still uses 2024-11-05. This means mcpkit supports features not available in the official SDK:
+mcpkit implements **MCP 2025-11-25** — the latest protocol specification. As of December 2025, the official `rmcp` SDK documentation references protocol version 2024-11-05 (always [verify current status](https://github.com/modelcontextprotocol/rust-sdk)). mcpkit supports the newest MCP features:
 
 | Feature | Added In | Description |
 |---------|----------|-------------|
@@ -85,16 +85,18 @@ async fn main() -> Result<(), McpError> {
 
 ## Comparison with rmcp
 
+> **Note**: This comparison reflects December 2025. See the [detailed comparison](docs/comparison.md) for the latest information, including other Rust MCP SDKs.
+
 | Aspect | rmcp | This SDK |
 |--------|------|----------|
-| **Protocol Version** | 2024-11-05 | **2025-11-25** (latest) |
+| **Protocol Version** | 2024-11-05 (per docs) | **2025-11-25** (latest) |
 | Macros | 4 interdependent | 1 unified `#[mcp_server]` |
 | Boilerplate | Manual router wiring | Automatic wiring |
 | Parameters | `Parameters<T>` wrapper | Direct from signature |
 | Error types | 3 nested layers | 1 unified `McpError` |
-| Tasks | Not in 2024-11-05 | Full support |
-| Elicitation | Not in 2024-11-05 | Full support |
-| OAuth 2.1 | Not in 2024-11-05 | Full support |
+| Tasks | [Check repo](https://github.com/modelcontextprotocol/rust-sdk) | Full support |
+| Elicitation | [Check repo](https://github.com/modelcontextprotocol/rust-sdk) | Full support |
+| OAuth 2.1 | [Check repo](https://github.com/modelcontextprotocol/rust-sdk) | Full support |
 | WebSocket | Custom implementation | Built-in |
 | Middleware | Manual/Tower separate | Built-in Layer system |
 | Runtime | Tokio-only | Runtime-agnostic |

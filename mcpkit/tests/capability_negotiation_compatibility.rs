@@ -604,15 +604,21 @@ fn test_protocol_version_constant() {
 
 #[test]
 fn test_supported_versions() {
-    // Both versions should be supported
-    assert!(SUPPORTED_PROTOCOL_VERSIONS.contains(&"2025-11-25"));
-    assert!(SUPPORTED_PROTOCOL_VERSIONS.contains(&"2024-11-05"));
+    // All 4 MCP protocol versions should be supported
+    assert!(SUPPORTED_PROTOCOL_VERSIONS.contains(&"2025-11-25")); // Latest
+    assert!(SUPPORTED_PROTOCOL_VERSIONS.contains(&"2025-06-18")); // Elicitation
+    assert!(SUPPORTED_PROTOCOL_VERSIONS.contains(&"2025-03-26")); // OAuth 2.1
+    assert!(SUPPORTED_PROTOCOL_VERSIONS.contains(&"2024-11-05")); // Original
 }
 
 #[test]
 fn test_is_version_supported() {
+    // All 4 versions should be supported
     assert!(is_version_supported("2025-11-25"));
+    assert!(is_version_supported("2025-06-18"));
+    assert!(is_version_supported("2025-03-26"));
     assert!(is_version_supported("2024-11-05"));
+    // Invalid versions should not be supported
     assert!(!is_version_supported("1.0.0"));
     assert!(!is_version_supported(""));
     assert!(!is_version_supported("invalid"));

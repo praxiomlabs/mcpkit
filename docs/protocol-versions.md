@@ -4,10 +4,14 @@ This document describes the MCP protocol versions supported by this SDK and how 
 
 ## Supported Protocol Versions
 
-| Version | Status | Description |
-|---------|--------|-------------|
-| `2025-11-25` | **Latest** | Full feature support, including latest MCP capabilities |
+| Version | Status | Key Features |
+|---------|--------|--------------|
+| `2025-11-25` | **Latest** | Tasks, parallel tools, agent loops, .well-known discovery |
+| `2025-06-18` | Supported | Elicitation, structured output, resource links |
+| `2025-03-26` | Supported | OAuth 2.1, Streamable HTTP, tool annotations, audio |
 | `2024-11-05` | Supported | Original MCP specification, widely deployed |
+
+mcpkit supports all four MCP protocol versions for maximum compatibility. The SDK defaults to the latest version (`2025-11-25`) but will negotiate with clients/servers that only support earlier versions.
 
 ## Version Negotiation
 
@@ -145,22 +149,25 @@ Per the MCP specification, version errors use code `-32602`:
 
 ### Feature Availability by Version
 
-| Feature | 2024-11-05 | 2025-11-25 |
-|---------|------------|------------|
-| Tools | Yes | Yes |
-| Resources | Yes | Yes |
-| Prompts | Yes | Yes |
-| Tasks | No | Yes |
-| Sampling | Yes | Yes |
-| Elicitation | No | Yes |
-| Completions | No | Yes |
+| Feature | 2024-11-05 | 2025-03-26 | 2025-06-18 | 2025-11-25 |
+|---------|------------|------------|------------|------------|
+| Tools | Yes | Yes | Yes | Yes |
+| Resources | Yes | Yes | Yes | Yes |
+| Prompts | Yes | Yes | Yes | Yes |
+| Sampling | Yes | Yes | Yes | Yes |
+| Tool annotations | No | Yes | Yes | Yes |
+| OAuth 2.1 | No | Yes | Yes | Yes |
+| Streamable HTTP | No | Yes | Yes | Yes |
+| Audio content | No | Yes | Yes | Yes |
+| Elicitation | No | No | Yes | Yes |
+| Structured output | No | No | Yes | Yes |
+| Tasks | No | No | No | Yes |
+| Completions | No | No | Yes | Yes |
+| .well-known discovery | No | No | No | Yes |
 
 ### SDK Compatibility
 
-| rmcp (Reference Implementation) | mcpkit |
-|--------------------------------|--------------|
-| 2024-11-05 | Compatible |
-| 2025-11-25 | Compatible (SDK native) |
+All protocol versions supported by mcpkit are wire-compatible with other MCP implementations. The SDK will automatically negotiate to the highest mutually-supported version during initialization.
 
 ## HTTP Transport Version
 

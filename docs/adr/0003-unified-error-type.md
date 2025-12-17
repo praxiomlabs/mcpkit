@@ -6,7 +6,7 @@ Accepted
 
 ## Context
 
-The official rmcp SDK uses multiple nested error types:
+The official rmcp SDK (as of December 2025) uses multiple nested error types:
 
 ```rust
 // Three separate error types

@@ -223,11 +223,11 @@ fn test_supported_protocol_versions() {
     // Verify supported versions list is populated
     assert!(!SUPPORTED_PROTOCOL_VERSIONS.is_empty());
 
-    // Verify 2025-11-25 (latest) is supported
-    assert!(SUPPORTED_PROTOCOL_VERSIONS.contains(&"2025-11-25"));
-
-    // Verify 2024-11-05 (original MCP spec) is supported
-    assert!(SUPPORTED_PROTOCOL_VERSIONS.contains(&"2024-11-05"));
+    // Verify all 4 MCP protocol versions are supported
+    assert!(SUPPORTED_PROTOCOL_VERSIONS.contains(&"2025-11-25")); // Latest - Tasks, parallel tools
+    assert!(SUPPORTED_PROTOCOL_VERSIONS.contains(&"2025-06-18")); // Elicitation, structured output
+    assert!(SUPPORTED_PROTOCOL_VERSIONS.contains(&"2025-03-26")); // OAuth 2.1, Streamable HTTP
+    assert!(SUPPORTED_PROTOCOL_VERSIONS.contains(&"2024-11-05")); // Original MCP spec
 }
 
 #[test]

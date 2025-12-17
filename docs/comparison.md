@@ -2,6 +2,8 @@
 
 This document provides an honest, transparent comparison between `mcpkit` and `rmcp` (the official Rust MCP SDK) to help you choose the right tool for your project.
 
+> **Last verified**: December 2025. SDK ecosystems evolve rapidly—always check the respective repositories for the latest information.
+
 ## Executive Summary
 
 | Aspect | mcpkit | rmcp |
@@ -163,10 +165,13 @@ Both use Rust's ownership system, ensuring no memory leaks by design.
 | Feature | mcpkit | rmcp |
 |---------|--------------|------|
 | 2024-11-05 version | Yes | Yes |
-| 2025-03-26 version | Yes | Yes |
-| 2025-06-18 version | Yes | Yes |
+| 2025-03-26 version | Yes | [Check repo](https://github.com/modelcontextprotocol/rust-sdk) |
+| 2025-06-18 version | Yes | [Check repo](https://github.com/modelcontextprotocol/rust-sdk) |
+| 2025-11-25 version | Yes | [Check repo](https://github.com/modelcontextprotocol/rust-sdk) |
 | Version negotiation | Automatic | Manual |
 | Capability negotiation | Built-in | Built-in |
+
+> **Note**: rmcp's README currently references protocol version 2024-11-05. The SDK may support additional versions—verify directly with their repository for the most current information.
 
 ### Developer Experience
 
@@ -222,13 +227,35 @@ Effort: **Medium**
 - Change return types to `Result<CallToolResult, McpError>`
 - Add schemars for schema generation
 
+## Other Rust MCP SDKs
+
+The Rust MCP ecosystem includes several implementations beyond mcpkit and rmcp. Here's an overview to help you evaluate alternatives:
+
+| SDK | Protocol Versions | Key Differentiators |
+|-----|-------------------|---------------------|
+| **[rmcp](https://github.com/modelcontextprotocol/rust-sdk)** | 2024-11-05 (per docs) | Official SDK, wide adoption |
+| **[rust-mcp-sdk](https://github.com/rust-mcp-stack/rust-mcp-sdk)** | All versions (default: 2025-06-18) | DNS rebinding protection, OAuth providers, batch messages |
+| **[mcp-protocol-sdk](https://docs.rs/mcp-protocol-sdk)** | 2025-06-18 | Audio support, annotations, autocompletion |
+| **mcpkit** | All versions (default: 2025-11-25) | Unified macro, runtime-agnostic, Tasks support |
+
+### Choosing an SDK
+
+Each SDK has valid use cases:
+
+- **rmcp**: Best for projects wanting official SDK status and maximum ecosystem compatibility
+- **rust-mcp-sdk**: Good for projects needing specific OAuth integrations (Keycloak, WorkOS, Scalekit)
+- **mcp-protocol-sdk**: Suitable if you need 2025-06-18 features with a focused API
+- **mcpkit**: Best for projects needing 2025-11-25 features (Tasks), runtime flexibility, or ergonomic macros
+
+We encourage you to evaluate based on your specific requirements. All these SDKs implement the same MCP protocol and are wire-compatible.
+
 ## Conclusion
 
 **mcpkit** provides a more ergonomic API with additional transports and features, but the "66% less boilerplate" claim in documentation should be revised to a more accurate "15-25% reduction for typical cases."
 
 **rmcp** is a solid, well-maintained official SDK that prioritizes simplicity and minimal API surface.
 
-Both are excellent choices. Pick based on your specific needs rather than benchmarks or code size metrics—these differences are marginal in practice.
+All Rust MCP SDKs are excellent choices. Pick based on your specific needs—protocol version requirements, transport options, OAuth integrations, or developer experience—rather than benchmarks or code size metrics.
 
 ## Appendix: Measuring Code Size
 

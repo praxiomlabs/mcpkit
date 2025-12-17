@@ -13,7 +13,7 @@ The Rust async ecosystem has multiple runtime options:
 - **smol**: Minimal, composable, small binary size
 - **Custom**: Some projects use custom executors
 
-The official rmcp SDK is tightly coupled to Tokio:
+The official rmcp SDK is tightly coupled to Tokio (as of December 2025):
 
 ```rust
 // rmcp requires Tokio

@@ -6,7 +6,7 @@ Accepted
 
 ## Context
 
-The official Rust MCP SDK (rmcp) requires developers to use 4 separate, interdependent macros to define an MCP server:
+The official Rust MCP SDK (rmcp), as of December 2025, requires developers to use 4 separate, interdependent macros to define an MCP server:
 
 1. Manual router field in struct
 2. `#[tool_router]` macro
