@@ -61,8 +61,8 @@ where
             state: McpState::new(handler),
             enable_cors: false,
             enable_logging: false,
-            post_path: "/".to_string(),
-            sse_path: "/sse".to_string(),
+            post_path: "/mcp".to_string(),
+            sse_path: "/mcp/sse".to_string(),
         }
     }
 

@@ -285,7 +285,12 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
                 warn!("Pending request receiver dropped");
             }
         } else {
-            warn!(?response.id, "Received response for unknown request");
+            // This can happen benignly when:
+            // 1. A response arrives that was already handled (e.g., after timeout)
+            // 2. The server sends an unsolicited response
+            // 3. A previous response is re-delivered due to transport buffering
+            // Log at trace level since this doesn't affect functionality.
+            trace!(?response.id, "Received response for unknown request (likely already handled)");
         }
     }
 
