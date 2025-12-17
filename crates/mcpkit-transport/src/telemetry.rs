@@ -433,6 +433,7 @@ impl<T: Transport> TelemetryTransport<T> {
     }
 
     /// Get the inner transport.
+    #[must_use]
     pub const fn inner(&self) -> &T {
         &self.inner
     }

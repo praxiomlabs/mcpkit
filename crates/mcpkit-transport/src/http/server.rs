@@ -81,6 +81,7 @@ impl HttpTransportListener {
     }
 
     /// Get the session timeout.
+    #[must_use]
     pub const fn session_timeout(&self) -> Duration {
         self.session_timeout
     }
@@ -132,11 +133,13 @@ impl HttpTransportListener {
     }
 
     /// Get the allowed origins.
+    #[must_use]
     pub fn allowed_origins(&self) -> &[String] {
         &self.allowed_origins
     }
 
     /// Get the maximum message size.
+    #[must_use]
     pub const fn max_message_size(&self) -> usize {
         self.max_message_size
     }
@@ -242,11 +245,13 @@ impl HttpTransportListener {
     }
 
     /// Check if the listener is running.
+    #[must_use]
     pub fn is_running(&self) -> bool {
         self.running.load(Ordering::Acquire)
     }
 
     /// Get the bind address.
+    #[must_use]
     pub fn bind_addr(&self) -> &str {
         &self.bind_addr
     }

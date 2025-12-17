@@ -177,11 +177,13 @@ impl WebSocketListener {
     }
 
     /// Check if the listener is running.
+    #[must_use]
     pub fn is_running(&self) -> bool {
         self.running.load(Ordering::Acquire)
     }
 
     /// Get the bind address.
+    #[must_use]
     pub fn bind_addr(&self) -> &str {
         &self.bind_addr
     }
@@ -236,11 +238,13 @@ impl WebSocketListener {
     }
 
     /// Check if the listener is running.
+    #[must_use]
     pub fn is_running(&self) -> bool {
         self.running.load(Ordering::Acquire)
     }
 
     /// Get the bind address.
+    #[must_use]
     pub fn bind_addr(&self) -> &str {
         &self.bind_addr
     }

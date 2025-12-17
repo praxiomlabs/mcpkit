@@ -22,6 +22,7 @@ pub struct HttpTransportState {
 
 impl HttpTransportState {
     /// Create a new HTTP transport state.
+    #[must_use]
     pub fn new(session_id: Option<String>) -> Self {
         Self {
             session_id,

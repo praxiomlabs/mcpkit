@@ -97,16 +97,19 @@ impl HttpTransport {
     }
 
     /// Get the number of messages sent.
+    #[must_use]
     pub fn messages_sent(&self) -> u64 {
         self.messages_sent.load(Ordering::Relaxed)
     }
 
     /// Get the number of messages received.
+    #[must_use]
     pub fn messages_received(&self) -> u64 {
         self.messages_received.load(Ordering::Relaxed)
     }
 
     /// Get the last event ID for SSE resumption.
+    #[must_use]
     pub async fn last_event_id(&self) -> Option<String> {
         self.state.lock().await.last_event_id.clone()
     }
