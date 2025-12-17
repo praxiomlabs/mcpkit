@@ -14,8 +14,50 @@
 //!
 //! # Available Transports
 //!
-//! - [`stdio::StdioTransport`]: Standard I/O transport for subprocess communication
-//! - [`memory::MemoryTransport`]: In-memory transport for testing
+//! | Transport | Use Case | Feature Flag |
+//! |-----------|----------|--------------|
+//! | [`stdio::SyncStdioTransport`] | Subprocess communication (CLI tools) | Always available |
+//! | [`memory::MemoryTransport`] | Testing and in-process communication | Requires runtime feature |
+//! | [`spawn::SpawnedTransport`] | Spawn MCP servers as subprocesses | `tokio-runtime` |
+//! | [`http::HttpTransport`] | HTTP client for streamable HTTP servers | Always available |
+//! | [`http::HttpTransportListener`] | HTTP server (Streamable HTTP) | `http` feature |
+//! | [`websocket::WebSocketTransport`] | WebSocket client with reconnection | Always available |
+//! | [`websocket::WebSocketListener`] | WebSocket server | Always available |
+//! | [`unix::UnixTransport`] | Unix domain sockets (local IPC) | Unix platforms only |
+//!
+//! ## Quick Reference
+//!
+//! **For CLI tools / subprocess servers:**
+//! ```ignore
+//! // Client spawning an MCP server
+//! let transport = SpawnedTransport::spawn("my-mcp-server", &[]).await?;
+//!
+//! // Server reading from stdin/stdout
+//! let transport = SyncStdioTransport::new();
+//! ```
+//!
+//! **For HTTP (Streamable HTTP transport):**
+//! ```ignore
+//! // Client
+//! let transport = HttpTransport::connect("http://localhost:8080/mcp").await?;
+//!
+//! // Server (requires `http` feature)
+//! let listener = HttpTransportListener::bind("0.0.0.0:8080").await?;
+//! ```
+//!
+//! **For WebSocket:**
+//! ```ignore
+//! // Client
+//! let transport = WebSocketTransport::connect("ws://localhost:8080/mcp").await?;
+//!
+//! // Server
+//! let listener = WebSocketListener::bind("0.0.0.0:8080").await?;
+//! ```
+//!
+//! **For testing:**
+//! ```ignore
+//! let (client, server) = MemoryTransport::pair();
+//! ```
 //!
 //! # Runtime Support
 //!
