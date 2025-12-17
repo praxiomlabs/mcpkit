@@ -324,7 +324,60 @@ For workspaces with interdependencies:
 
 ## 9. Git & Release Protocol
 
-### Tagging Convention
+### ⚠️ Release Workflow (Follow This Order)
+
+**Publishing to crates.io is IRREVERSIBLE.** Follow this exact sequence:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  1. PREPARE: Version bump + CHANGELOG + commit              │
+│                         ↓                                   │
+│  2. PUSH: git push origin main                              │
+│                         ↓                                   │
+│  3. WAIT: CI must pass on main (watch with `gh run watch`)  │
+│                         ↓                                   │
+│  4. TAG: just tag (creates v<version>)                      │
+│                         ↓                                   │
+│  5. RELEASE: git push origin v<version>                     │
+│                         ↓                                   │
+│  6. AUTOMATED: CI publishes to crates.io + GitHub Release   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Step-by-step commands:**
+
+```bash
+# Step 1: Prepare (already done if following this checklist)
+# - Bump version in Cargo.toml (workspace + all crates)
+# - Update CHANGELOG.md with new version section
+# - Commit: git commit -m "chore: bump version to X.Y.Z"
+
+# Step 2: Push to main
+git push origin main
+
+# Step 3: Wait for CI to pass
+gh run watch                    # Interactive watch
+# OR
+gh run list --limit 1           # Check status
+
+# Step 4: Create tag (ONLY after CI passes!)
+just tag                        # Creates annotated tag v<version>
+
+# Step 5: Push tag to trigger release
+git push origin v<version>      # Triggers release.yml workflow
+
+# Step 6: Monitor release
+gh run watch                    # Watch publish workflow
+```
+
+### Pre-Tag Checklist
+
+- [ ] Version bumped in all Cargo.toml files
+- [ ] CHANGELOG.md updated with version and date
+- [ ] Version bump committed and pushed to main
+- [ ] **CI passing on main** (critical - verify before tagging!)
+
+### Tagging
 
 ```bash
 just tag    # Create annotated tag from Cargo.toml version
@@ -333,19 +386,10 @@ just tag    # Create annotated tag from Cargo.toml version
 - [ ] Run `just tag` to create `v<version>` tag
 - [ ] Tag matches version in Cargo.toml exactly
 - [ ] Tags are annotated (not lightweight)
+- [ ] Tag pushed: `git push origin v<version>`
 
-### Branch State
-
-```bash
-just release-check    # Full release validation (includes git state check)
-```
-
-- [ ] All changes merged to main/release branch
-- [ ] No uncommitted changes (`just release-check` verifies this)
-- [ ] CI passing on release commit
-
-### Release Artifacts
-- [ ] GitHub Release created (automated or manual)
+### Release Artifacts (Automated)
+- [ ] GitHub Release created (automated by release.yml)
 - [ ] Release notes extracted from CHANGELOG
 - [ ] Prerelease flag set appropriately for alpha/beta/rc
 
