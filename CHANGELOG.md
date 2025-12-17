@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2025-12-17
+
+### Added
+
+- `From<String>` and `From<&str>` implementations for `ToolOutput` for ergonomic returns
+- Expansion tests for resource-only and prompt-only servers
+- Tool annotation documentation with usage examples
+- Error handling guidance for `ToolOutput::error()` vs `Result<ToolOutput, McpError>`
+- Transport availability documentation table with feature flags
+- Stateful handler example in minimal-server demonstrating `AtomicU64` usage
+
+### Changed
+
+- Split `error.rs` (1200+ lines) into focused submodules: `types`, `codes`, `context`, `details`, `jsonrpc`, `transport`
+- Split `http.rs` (42KB) into submodules: `client`, `server`, `sse`, `config`
+- Split `websocket.rs` (36KB) into submodules: `client`, `server`, `config`
+- Split `pool.rs` (36KB) into submodules: `config`, `connection`, `manager`
+- Added 673+ `#[must_use]` annotations across all crates for clearer API semantics
+- Server `initialize` response now uses handler's `server_info()` instead of hardcoded values
+
+### Fixed
+
+- Server name/version attributes from `#[mcp_server]` macro now properly appear in initialize response
+- Unused import warnings for feature-gated HTTP headers
+- Macro-generated code now uses facade crate paths (`::mcpkit::`) for proper resolution
+
 ## [0.2.2] - 2025-12-17
 
 ### Fixed

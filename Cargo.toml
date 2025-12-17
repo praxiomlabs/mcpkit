@@ -21,7 +21,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.2.2"
+version = "0.2.3"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
@@ -83,12 +83,12 @@ pretty_assertions = "1.4"
 criterion = { version = "0.5", features = ["html_reports", "async_tokio"] }
 
 # Internal crates - path takes precedence locally, version used for publishing
-mcpkit-core = { version = "0.2.2", path = "crates/mcpkit-core" }
-mcpkit-transport = { version = "0.2.2", path = "crates/mcpkit-transport" }
-mcpkit-server = { version = "0.2.2", path = "crates/mcpkit-server" }
-mcpkit-client = { version = "0.2.2", path = "crates/mcpkit-client" }
-mcpkit-macros = { version = "0.2.2", path = "crates/mcpkit-macros" }
-mcpkit-testing = { version = "0.2.2", path = "crates/mcpkit-testing" }
+mcpkit-core = { version = "0.2.3", path = "crates/mcpkit-core" }
+mcpkit-transport = { version = "0.2.3", path = "crates/mcpkit-transport" }
+mcpkit-server = { version = "0.2.3", path = "crates/mcpkit-server" }
+mcpkit-client = { version = "0.2.3", path = "crates/mcpkit-client" }
+mcpkit-macros = { version = "0.2.3", path = "crates/mcpkit-macros" }
+mcpkit-testing = { version = "0.2.3", path = "crates/mcpkit-testing" }
 
 [workspace.lints.rust]
 unsafe_code = "deny"
