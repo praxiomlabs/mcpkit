@@ -128,7 +128,7 @@ where
     /// McpRouter::new(handler).serve("0.0.0.0:3000").await?;
     /// ```
     ///
-    /// For more control over the server, use [`configure_app`] instead.
+    /// For more control over the server, use [`Self::configure_app`] instead.
     pub async fn serve(self, addr: &str) -> std::io::Result<()>
     where
         H: Clone,

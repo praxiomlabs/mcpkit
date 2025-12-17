@@ -128,7 +128,7 @@ where
     /// McpRouter::new(handler).serve("0.0.0.0:3000").await?;
     /// ```
     ///
-    /// For more control over the server, use [`into_router`] instead.
+    /// For more control over the server, use [`Self::into_router`] instead.
     pub async fn serve(self, addr: &str) -> std::io::Result<()> {
         let router = self.into_router();
         let listener = tokio::net::TcpListener::bind(addr).await?;
