@@ -1,7 +1,7 @@
 [package]
 name = "http-server-example"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 publish = false
 description = "MCP server using HTTP/SSE transport"
 
@@ -16,7 +16,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-axum = "0.7"
+axum = "0.8"
 tower = "0.4"
 uuid = { version = "1", features = ["v4"] }
 async-stream = "0.3"
