@@ -397,6 +397,36 @@ impl From<ToolOutput> for CallToolResult {
     }
 }
 
+impl From<String> for ToolOutput {
+    /// Convert a string into a text ToolOutput.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use mcpkit_core::types::ToolOutput;
+    ///
+    /// let output: ToolOutput = "Hello, world!".to_string().into();
+    /// ```
+    fn from(text: String) -> Self {
+        Self::text(text)
+    }
+}
+
+impl From<&str> for ToolOutput {
+    /// Convert a string slice into a text ToolOutput.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use mcpkit_core::types::ToolOutput;
+    ///
+    /// let output: ToolOutput = "Hello, world!".into();
+    /// ```
+    fn from(text: &str) -> Self {
+        Self::text(text)
+    }
+}
+
 /// Request parameters for listing tools.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ListToolsRequest {
@@ -470,6 +500,21 @@ mod tests {
         let result: CallToolResult = output.into();
         assert!(result.is_error());
         assert!(result.content[0].as_text().unwrap().contains("Suggestion"));
+    }
+
+    #[test]
+    fn test_tool_output_from_string() {
+        // From<String>
+        let output: ToolOutput = "Hello, world!".to_string().into();
+        let result: CallToolResult = output.into();
+        assert!(!result.is_error());
+        assert_eq!(result.content[0].as_text().unwrap(), "Hello, world!");
+
+        // From<&str>
+        let output: ToolOutput = "Hello again!".into();
+        let result: CallToolResult = output.into();
+        assert!(!result.is_error());
+        assert_eq!(result.content[0].as_text().unwrap(), "Hello again!");
     }
 
     #[test]
