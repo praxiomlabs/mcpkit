@@ -6,8 +6,8 @@
 //! These benchmarks compare protocol operations between this SDK and the
 //! official rmcp SDK to track relative performance.
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
-use serde_json::{json, Value};
+use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
+use serde_json::{Value, json};
 
 // Our SDK types
 use mcpkit_core::protocol::{Message as OurMessage, Request as OurRequest};

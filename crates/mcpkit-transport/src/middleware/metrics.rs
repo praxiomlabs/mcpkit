@@ -9,8 +9,8 @@
 use crate::middleware::TransportLayer;
 use crate::traits::{Transport, TransportMetadata};
 use mcpkit_core::protocol::Message;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 /// Metrics collected by the metrics layer.

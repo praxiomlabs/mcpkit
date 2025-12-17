@@ -28,7 +28,7 @@ use mcpkit_core::{
         CallToolResult, GetPromptResult, Prompt, Resource, ResourceContents, Tool, ToolOutput,
     },
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::{
     net::{TcpListener, TcpStream},

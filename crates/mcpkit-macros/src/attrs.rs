@@ -4,7 +4,7 @@
 
 #![allow(dead_code)]
 
-use darling::{ast::NestedMeta, FromMeta};
+use darling::{FromMeta, ast::NestedMeta};
 use proc_macro2::Span;
 
 /// Attributes for the `#[mcp_server]` macro.

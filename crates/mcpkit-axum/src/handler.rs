@@ -2,11 +2,11 @@
 
 use crate::error::ExtensionError;
 use crate::state::{HasServerInfo, McpState};
-use crate::{is_supported_version, SUPPORTED_VERSIONS};
+use crate::{SUPPORTED_VERSIONS, is_supported_version};
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
-use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::IntoResponse;
+use axum::response::sse::{Event, KeepAlive, Sse};
 use futures::stream::Stream;
 use mcpkit_core::protocol::Message;
 use mcpkit_server::ServerHandler;

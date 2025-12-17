@@ -55,8 +55,8 @@
 use crate::error::TransportError;
 use crate::traits::{Transport, TransportMetadata};
 use mcpkit_core::protocol::Message;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 // Use async-lock for runtime-agnostic async mutex

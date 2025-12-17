@@ -4,9 +4,9 @@
 //! initialization handshake, including protocol version negotiation.
 
 use mcpkit::capability::{
-    is_version_supported, negotiate_version, negotiate_version_detailed, ClientCapabilities,
-    ClientInfo, InitializeRequest, InitializeResult, ServerCapabilities, ServerInfo,
-    VersionNegotiationResult, PROTOCOL_VERSION, SUPPORTED_PROTOCOL_VERSIONS,
+    ClientCapabilities, ClientInfo, InitializeRequest, InitializeResult, PROTOCOL_VERSION,
+    SUPPORTED_PROTOCOL_VERSIONS, ServerCapabilities, ServerInfo, VersionNegotiationResult,
+    is_version_supported, negotiate_version, negotiate_version_detailed,
 };
 use serde_json::json;
 

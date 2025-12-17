@@ -18,7 +18,7 @@
 //! ```
 
 use mcpkit_core::protocol::{Message, Notification, Request, RequestId};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::{
     process::Stdio,
     sync::atomic::{AtomicU64, Ordering},

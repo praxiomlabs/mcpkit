@@ -27,13 +27,13 @@ use mcpkit_core::{
     types::{CallToolResult, Tool, ToolOutput},
 };
 use mcpkit_transport::{
+    Transport,
     middleware::{ExponentialBackoff, LayerStack, LoggingLayer, RetryLayer, TimeoutLayer},
     stdio::StdioTransport,
-    Transport,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::time::Duration;
-use tracing::{info, Level};
+use tracing::{Level, info};
 
 /// MCP Protocol version.
 const MCP_PROTOCOL_VERSION: &str = "2025-06-18";
@@ -264,10 +264,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Send response through middleware stack
         if let Some(resp) = response
-            && let Err(e) = transport.send(resp).await {
-                tracing::error!(error = ?e, "Send error");
-                break;
-            }
+            && let Err(e) = transport.send(resp).await
+        {
+            tracing::error!(error = ?e, "Send error");
+            break;
+        }
     }
 
     info!("Server shutting down");

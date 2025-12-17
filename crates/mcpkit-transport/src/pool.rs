@@ -34,8 +34,8 @@ use crate::runtime::AsyncMutex;
 use crate::traits::Transport;
 use std::collections::VecDeque;
 use std::future::Future;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 /// Configuration for the connection pool.

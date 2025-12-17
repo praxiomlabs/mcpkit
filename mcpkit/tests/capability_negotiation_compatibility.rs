@@ -11,11 +11,11 @@
 //! 5. Optional fields are correctly skipped when None
 
 use mcpkit::capability::{
-    is_version_supported, negotiate_version, negotiate_version_detailed, ClientCapabilities,
-    ClientInfo, CompletionCapability, ElicitationCapability, InitializeRequest, InitializeResult,
-    LoggingCapability, PromptCapability, ResourceCapability, RootsCapability, SamplingCapability,
-    ServerCapabilities, ServerInfo, TaskCapability, ToolCapability, VersionNegotiationResult,
-    PROTOCOL_VERSION, SUPPORTED_PROTOCOL_VERSIONS,
+    ClientCapabilities, ClientInfo, CompletionCapability, ElicitationCapability, InitializeRequest,
+    InitializeResult, LoggingCapability, PROTOCOL_VERSION, PromptCapability, ResourceCapability,
+    RootsCapability, SUPPORTED_PROTOCOL_VERSIONS, SamplingCapability, ServerCapabilities,
+    ServerInfo, TaskCapability, ToolCapability, VersionNegotiationResult, is_version_supported,
+    negotiate_version, negotiate_version_detailed,
 };
 use serde_json::json;
 

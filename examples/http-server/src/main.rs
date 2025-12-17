@@ -22,14 +22,14 @@
 //! ```
 
 use axum::{
+    Router,
     extract::State,
     http::{HeaderMap, StatusCode},
     response::{
-        sse::{Event, KeepAlive, Sse},
         IntoResponse, Response,
+        sse::{Event, KeepAlive, Sse},
     },
     routing::{delete, get, post},
-    Router,
 };
 use mcpkit_core::{
     capability::{ClientCapabilities, ServerCapabilities, ServerInfo},
@@ -39,9 +39,9 @@ use mcpkit_core::{
         CallToolResult, GetPromptResult, Prompt, Resource, ResourceContents, Tool, ToolOutput,
     },
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::{collections::HashMap, convert::Infallible, sync::Arc, time::Duration};
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{RwLock, broadcast};
 use tracing::{info, warn};
 
 /// MCP Protocol version.
@@ -95,9 +95,10 @@ impl AppState {
         let mut sessions = self.sessions.write().await;
 
         if let Some(id) = session_id
-            && sessions.contains_key(id) {
-                return (id.to_string(), false);
-            }
+            && sessions.contains_key(id)
+        {
+            return (id.to_string(), false);
+        }
 
         // Create new session
         let id = uuid::Uuid::new_v4().to_string();
@@ -634,7 +635,9 @@ async fn main() {
     println!("  curl -X POST http://{addr}/mcp \\");
     println!("    -H \"Content-Type: application/json\" \\");
     println!("    -H \"MCP-Protocol-Version: {MCP_PROTOCOL_VERSION}\" \\");
-    println!("    -d '{{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{{\"protocolVersion\":\"{MCP_PROTOCOL_VERSION}\",\"clientInfo\":{{\"name\":\"curl\",\"version\":\"1.0\"}}}}}}'");
+    println!(
+        "    -d '{{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{{\"protocolVersion\":\"{MCP_PROTOCOL_VERSION}\",\"clientInfo\":{{\"name\":\"curl\",\"version\":\"1.0\"}}}}}}'"
+    );
     println!();
 
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();

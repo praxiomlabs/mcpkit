@@ -2,8 +2,8 @@
 
 use crate::handler::{handle_mcp_post, handle_sse};
 use crate::state::{HasServerInfo, McpState};
-use axum::routing::{get, post};
 use axum::Router;
+use axum::routing::{get, post};
 use mcpkit_server::ServerHandler;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;

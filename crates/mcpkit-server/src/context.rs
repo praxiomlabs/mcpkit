@@ -49,8 +49,8 @@ use mcpkit_core::protocol::{Notification, ProgressToken, RequestId};
 use mcpkit_core::protocol_version::ProtocolVersion;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Trait for sending messages to the peer (client or server).
 ///

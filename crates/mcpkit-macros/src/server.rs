@@ -4,10 +4,10 @@
 
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{parse2, Attribute, Error, FnArg, ImplItem, ImplItemFn, ItemImpl, Result};
+use syn::{Attribute, Error, FnArg, ImplItem, ImplItemFn, ItemImpl, Result, parse2};
 
 use crate::attrs::{PromptAttrs, ResourceAttrs, ServerAttrs, ToolAttrs};
-use crate::codegen::{extract_param, is_result_type, ToolMethod, ToolParam};
+use crate::codegen::{ToolMethod, ToolParam, extract_param, is_result_type};
 
 /// Information about a resource method extracted from the AST.
 #[derive(Debug)]

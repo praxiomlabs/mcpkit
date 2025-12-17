@@ -1,6 +1,6 @@
 //! Error types for the MCP Actix extension.
 
-use actix_web::{http::StatusCode, HttpResponse, ResponseError};
+use actix_web::{HttpResponse, ResponseError, http::StatusCode};
 use std::fmt;
 
 /// Errors that can occur in the MCP Actix extension.

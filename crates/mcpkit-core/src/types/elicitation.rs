@@ -372,10 +372,12 @@ mod tests {
     #[test]
     fn test_confirm_elicitation() {
         let request = ElicitRequest::confirm("Are you sure?");
-        assert!(request
-            .requested_schema
-            .properties
-            .contains_key("confirmed"));
+        assert!(
+            request
+                .requested_schema
+                .properties
+                .contains_key("confirmed")
+        );
     }
 
     #[test]

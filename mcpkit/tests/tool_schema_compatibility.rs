@@ -10,11 +10,11 @@
 //! 4. `ListToolsResult` format is compatible
 //! 5. Tool annotations serialize correctly
 
+use mcpkit::types::Content;
 use mcpkit::types::tool::{
     CallToolRequest, CallToolResult, ListToolsRequest, ListToolsResult, Tool, ToolAnnotations,
     ToolOutput,
 };
-use mcpkit::types::Content;
 use serde_json::json;
 
 // =============================================================================
@@ -581,10 +581,12 @@ fn test_tools_call_response_matches_mcp_spec() {
     // Verify MCP-compliant structure
     assert!(json["content"].is_array());
     assert_eq!(json["content"][0]["type"], "text");
-    assert!(json["content"][0]["text"]
-        .as_str()
-        .unwrap()
-        .contains("72°F"));
+    assert!(
+        json["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("72°F")
+    );
 }
 
 // =============================================================================
@@ -601,10 +603,12 @@ fn test_empty_input_schema() {
     let json = serde_json::to_value(&tool).unwrap();
 
     assert_eq!(json["inputSchema"]["type"], "object");
-    assert!(json["inputSchema"]["properties"]
-        .as_object()
-        .unwrap()
-        .is_empty());
+    assert!(
+        json["inputSchema"]["properties"]
+            .as_object()
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[test]
@@ -674,14 +678,18 @@ fn test_with_string_param_produces_valid_schema() {
 
     assert_eq!(schema["properties"]["query"]["type"], "string");
     assert_eq!(schema["properties"]["filter"]["type"], "string");
-    assert!(schema["required"]
-        .as_array()
-        .unwrap()
-        .contains(&json!("query")));
-    assert!(!schema["required"]
-        .as_array()
-        .unwrap()
-        .contains(&json!("filter")));
+    assert!(
+        schema["required"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("query"))
+    );
+    assert!(
+        !schema["required"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("filter"))
+    );
 }
 
 #[test]

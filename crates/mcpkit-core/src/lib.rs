@@ -65,9 +65,9 @@ pub mod types;
 
 // Re-export commonly used types at the crate root
 pub use capability::{
-    is_version_supported, negotiate_version, negotiate_version_detailed, ClientCapabilities,
-    ClientInfo, InitializeRequest, InitializeResult, ServerCapabilities, ServerInfo,
-    VersionNegotiationResult, PROTOCOL_VERSION, SUPPORTED_PROTOCOL_VERSIONS,
+    ClientCapabilities, ClientInfo, InitializeRequest, InitializeResult, PROTOCOL_VERSION,
+    SUPPORTED_PROTOCOL_VERSIONS, ServerCapabilities, ServerInfo, VersionNegotiationResult,
+    is_version_supported, negotiate_version, negotiate_version_detailed,
 };
 pub use error::{JsonRpcError, McpError, McpResultExt};
 pub use protocol::{Message, Notification, ProgressToken, Request, RequestId, Response};
@@ -83,9 +83,9 @@ pub use state::{Closing, Connected, Connection, Disconnected, Initializing, Read
 /// ```
 pub mod prelude {
     pub use crate::capability::{
-        is_version_supported, negotiate_version, negotiate_version_detailed, ClientCapabilities,
-        ClientInfo, InitializeRequest, InitializeResult, ServerCapabilities, ServerInfo,
-        VersionNegotiationResult, PROTOCOL_VERSION, SUPPORTED_PROTOCOL_VERSIONS,
+        ClientCapabilities, ClientInfo, InitializeRequest, InitializeResult, PROTOCOL_VERSION,
+        SUPPORTED_PROTOCOL_VERSIONS, ServerCapabilities, ServerInfo, VersionNegotiationResult,
+        is_version_supported, negotiate_version, negotiate_version_detailed,
     };
     pub use crate::error::{McpError, McpResultExt};
     pub use crate::protocol::{Message, Notification, ProgressToken, Request, RequestId, Response};

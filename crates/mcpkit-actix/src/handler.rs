@@ -2,9 +2,9 @@
 
 use crate::error::ExtensionError;
 use crate::state::{HasServerInfo, McpConfig};
-use crate::{is_supported_version, SUPPORTED_VERSIONS};
+use crate::{SUPPORTED_VERSIONS, is_supported_version};
 use actix_web::http::header::ContentType;
-use actix_web::{web, HttpRequest, HttpResponse};
+use actix_web::{HttpRequest, HttpResponse, web};
 use futures::stream::{self, StreamExt};
 use mcpkit_core::protocol::Message;
 use mcpkit_server::ServerHandler;

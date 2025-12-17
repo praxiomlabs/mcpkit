@@ -76,7 +76,7 @@ pub use mcpkit_server::{
 pub use mcpkit_transport::{Transport, TransportListener, TransportMetadata};
 
 // Re-export macros
-pub use mcpkit_macros::{mcp_server, prompt, resource, tool, ToolInput};
+pub use mcpkit_macros::{ToolInput, mcp_server, prompt, resource, tool};
 
 pub mod prelude;
 

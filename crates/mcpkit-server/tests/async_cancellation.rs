@@ -3,8 +3,8 @@
 //! Tests verifying correct behavior for request and task cancellation.
 
 use mcpkit_server::context::CancellationToken;
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
 // =============================================================================
