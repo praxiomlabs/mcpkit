@@ -17,9 +17,29 @@ This crate provides integration between the MCP SDK and the Axum web framework, 
 ```rust
 use mcpkit_axum::{McpRouter, McpState};
 use mcpkit_server::ServerHandler;
-use axum::Router;
 
 // Your MCP server handler (must implement ServerHandler)
+struct MyServer;
+
+#[tokio::main]
+async fn main() {
+    // Simplest approach: use McpRouter for stdio-like ergonomics
+    McpRouter::new(MyServer)
+        .serve("0.0.0.0:3000")
+        .await
+        .unwrap();
+}
+```
+
+### Integration with Existing App
+
+For more control, integrate MCP routes into an existing Axum application:
+
+```rust
+use mcpkit_axum::{McpRouter, McpState};
+use mcpkit_server::ServerHandler;
+use axum::Router;
+
 struct MyServer;
 
 #[tokio::main]
@@ -30,6 +50,7 @@ async fn main() {
     // Build the full application
     let app = Router::new()
         .nest("/mcp", mcp_router.into_router());
+        // Add your other routes here
 
     // Run the server
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
@@ -42,11 +63,12 @@ async fn main() {
 | Export | Purpose |
 |--------|---------|
 | `McpRouter` | Router builder for MCP endpoints |
+| `McpState` | Shared state for MCP handlers |
 | `handle_mcp_post` | Handler for POST requests |
 | `handle_sse` | Handler for SSE streaming |
 | `Session` | Individual client session |
-| `SessionManager` | Manages active sessions |
-| `SessionStore` | Storage for session data |
+| `SessionManager` | Manages SSE broadcast channels |
+| `SessionStore` | Storage for HTTP session data |
 
 ## Part of mcpkit
 

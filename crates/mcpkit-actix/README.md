@@ -15,23 +15,42 @@ This crate provides integration between the MCP SDK and the Actix-web framework,
 ## Usage
 
 ```rust
-use mcpkit_actix::{McpConfig, handle_mcp_post, handle_sse};
+use mcpkit_actix::{McpRouter, McpState};
 use mcpkit_server::ServerHandler;
-use actix_web::{web, App, HttpServer};
 
 // Your MCP server handler (must implement ServerHandler)
 struct MyServer;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    // Create MCP config with your handler
-    let config = McpConfig::new(MyServer);
+    // Simplest approach: use McpRouter for stdio-like ergonomics
+    McpRouter::new(MyServer)
+        .with_cors()
+        .with_logging()
+        .serve("0.0.0.0:3000")
+        .await
+}
+```
+
+### Integration with Existing App
+
+For more control, integrate MCP routes into an existing Actix-web application:
+
+```rust
+use mcpkit_actix::{McpRouter, handle_mcp_post, handle_sse, McpState};
+use mcpkit_server::ServerHandler;
+use actix_web::{web, App, HttpServer};
+
+struct MyServer;
+
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    let router = McpRouter::new(MyServer);
 
     HttpServer::new(move || {
         App::new()
-            .app_data(web::Data::new(config.clone()))
-            .route("/mcp", web::post().to(handle_mcp_post::<MyServer>))
-            .route("/mcp/sse", web::get().to(handle_sse::<MyServer>))
+            .configure(router.configure_app())
+            // Add your other routes here
     })
     .bind("0.0.0.0:3000")?
     .run()
@@ -43,12 +62,13 @@ async fn main() -> std::io::Result<()> {
 
 | Export | Purpose |
 |--------|---------|
-| `McpConfig` | Configuration for MCP HTTP endpoints |
+| `McpRouter` | Router builder for MCP endpoints |
+| `McpState` | Shared state for MCP handlers |
 | `handle_mcp_post` | Handler for POST requests |
 | `handle_sse` | Handler for SSE streaming |
 | `Session` | Individual client session |
-| `SessionManager` | Manages active sessions |
-| `SessionStore` | Storage for session data |
+| `SessionManager` | Manages SSE broadcast channels |
+| `SessionStore` | Storage for HTTP session data |
 
 ## Part of mcpkit
 

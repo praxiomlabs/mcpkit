@@ -4,10 +4,12 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Rust SDK for the Model Context Protocol (MCP)"
+description = "Rust SDK for the Model Context Protocol (MCP) - the official facade crate providing unified access to all mcpkit functionality"
 repository.workspace = true
-keywords = ["mcp", "mcp-protocol", "ai", "llm"]
-categories = ["asynchronous", "network-programming"]
+homepage.workspace = true
+documentation.workspace = true
+keywords = ["mcp", "mcp-protocol", "ai", "llm", "sdk"]
+categories = ["api-bindings", "asynchronous", "network-programming"]
 readme = "../README.md"
 
 [dependencies]

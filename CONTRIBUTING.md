@@ -138,13 +138,37 @@ cargo test -- --nocapture
 
 # Integration tests only
 cargo test --test '*'
+
+# Run benchmarks
+cargo bench --package mcpkit-benches
 ```
 
-### Writing Tests
+### Test Organization Conventions
 
-- Place unit tests in the same file as the code
-- Place integration tests in `tests/`
-- Use `mcpkit-testing` utilities for complex tests
+We use a consistent test organization pattern across all crates:
+
+**Inline Unit Tests** (`#[cfg(test)] mod tests`):
+- Test individual functions and types in isolation
+- Located in the same file as the code being tested
+- Use for fast, focused tests of internal logic
+- No external dependencies (mock everything)
+
+**Integration Tests** (`mcpkit/tests/`):
+- Test public API behavior across crate boundaries
+- Located in the workspace `mcpkit/tests/` directory
+- Use for end-to-end workflow testing
+- May use real transports, file I/O, etc.
+
+**Crate-Specific Integration Tests** (`crates/*/tests/`):
+- Some crates have their own `tests/` directory for crate-specific integration tests
+- Use when tests need access to crate internals not exposed publicly
+
+**Benchmarks** (`benches/`):
+- Performance benchmarks using Criterion
+- Located in the dedicated `benches/` workspace member
+- Run with `cargo bench`
+
+### Writing Tests
 
 ```rust
 #[cfg(test)]
@@ -153,13 +177,27 @@ mod tests {
 
     #[test]
     fn test_something() {
-        // ...
+        // Unit test for internal function
     }
 
     #[tokio::test]
     async fn test_async_something() {
-        // ...
+        // Async unit test
     }
+}
+```
+
+### Test Utilities
+
+Use `mcpkit-testing` utilities for complex tests:
+
+```rust
+use mcpkit_testing::{assert_tool_result, TestServer};
+
+#[tokio::test]
+async fn test_with_utilities() {
+    let server = TestServer::new();
+    // ...
 }
 ```
 
