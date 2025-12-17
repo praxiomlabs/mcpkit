@@ -687,8 +687,29 @@ watch-clippy:
 # ============================================================================
 
 [group('ci')]
-[doc("Standard CI pipeline (fmt, clippy, test, doc)")]
-ci: fmt-check clippy test-locked doc-check
+[doc("Check documentation versions match Cargo.toml")]
+version-sync:
+    #!/usr/bin/env bash
+    printf '{{cyan}}[INFO]{{reset}} Checking version sync...\n'
+    VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "mcpkit") | .version')
+    MAJOR_MINOR=$(echo "$VERSION" | cut -d. -f1,2)
+
+    # Check README.md
+    if ! grep -q "mcpkit = \"$MAJOR_MINOR\"" README.md; then
+        printf '{{red}}[ERR]{{reset}}  README.md version mismatch (expected %s)\n' "$MAJOR_MINOR"
+        exit 1
+    fi
+
+    # Check docs/getting-started.md
+    if ! grep -q "mcpkit = \"$MAJOR_MINOR\"" docs/getting-started.md; then
+        printf '{{red}}[ERR]{{reset}}  docs/getting-started.md version mismatch (expected %s)\n' "$MAJOR_MINOR"
+        exit 1
+    fi
+    printf '{{green}}[OK]{{reset}}   Version sync passed (v%s)\n' "$MAJOR_MINOR"
+
+[group('ci')]
+[doc("Standard CI pipeline (matches GitHub Actions)")]
+ci: fmt-check clippy test-locked doc-check link-check version-sync
     #!/usr/bin/env bash
     printf '\n{{bold}}{{blue}}══════ CI Pipeline Complete ══════{{reset}}\n\n'
     printf '{{green}}[OK]{{reset}}   All CI checks passed\n'
