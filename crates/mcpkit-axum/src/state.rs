@@ -2,6 +2,7 @@
 
 use crate::session::{SessionManager, SessionStore};
 use mcpkit_core::capability::ServerInfo;
+use std::fmt;
 use std::sync::Arc;
 
 /// Shared state for MCP handlers.
@@ -9,7 +10,7 @@ use std::sync::Arc;
 /// This struct holds all the shared state needed by MCP HTTP handlers,
 /// including session management and server information.
 ///
-/// Note: Clone is implemented manually to avoid requiring `H: Clone`.
+/// Note: Clone and Debug are implemented manually to avoid requiring `H: Clone` or `H: Debug`.
 /// The handler is wrapped in `Arc`, so cloning only clones the Arc pointer.
 pub struct McpState<H> {
     /// The MCP server handler.
@@ -31,6 +32,18 @@ impl<H> Clone for McpState<H> {
             sessions: Arc::clone(&self.sessions),
             sse_sessions: Arc::clone(&self.sse_sessions),
         }
+    }
+}
+
+// Manual Debug implementation to avoid requiring H: Debug
+impl<H> fmt::Debug for McpState<H> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("McpState")
+            .field("handler", &format_args!("Arc<H>"))
+            .field("server_info", &self.server_info)
+            .field("sessions", &self.sessions)
+            .field("sse_sessions", &format_args!("Arc<SessionManager>"))
+            .finish()
     }
 }
 

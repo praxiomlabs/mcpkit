@@ -56,6 +56,7 @@ impl Session {
 /// Session manager for SSE connections.
 ///
 /// Manages broadcast channels for pushing messages to SSE clients.
+#[derive(Debug)]
 pub struct SessionManager {
     sessions: DashMap<String, broadcast::Sender<String>>,
 }
@@ -126,6 +127,7 @@ impl SessionManager {
 /// Thread-safe session store with automatic cleanup.
 ///
 /// Stores session metadata for HTTP request handling.
+#[derive(Debug)]
 pub struct SessionStore {
     sessions: DashMap<String, Session>,
     timeout: Duration,

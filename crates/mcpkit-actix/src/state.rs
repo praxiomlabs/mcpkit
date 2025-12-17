@@ -25,39 +25,50 @@ impl<T: ServerHandler> HasServerInfo for T {
 /// Note: Clone is implemented manually to avoid requiring `H: Clone`.
 /// The handler is wrapped in `Arc`, so cloning only clones the Arc pointer.
 #[derive(Debug)]
-pub struct McpConfig<H> {
+pub struct McpState<H> {
     /// The user's MCP handler.
     pub handler: Arc<H>,
-    /// Session manager for tracking HTTP sessions.
-    pub sessions: SessionManager,
-    /// SSE session store for streaming connections.
-    pub sse_sessions: SessionStore,
+    /// Session store for tracking HTTP sessions.
+    pub sessions: Arc<SessionStore>,
+    /// Session manager for SSE streaming connections.
+    pub sse_sessions: Arc<SessionManager>,
     /// Server info for the initialize response.
     pub server_info: ServerInfo,
 }
 
-impl<H> McpConfig<H>
+impl<H> McpState<H>
 where
     H: HasServerInfo,
 {
-    /// Create new MCP config with the given handler.
+    /// Create new MCP state with the given handler.
     pub fn new(handler: H) -> Self {
         let server_info = handler.server_info();
         Self {
             handler: Arc::new(handler),
-            sessions: SessionManager::new(),
-            sse_sessions: SessionStore::new(),
+            sessions: Arc::new(SessionStore::with_default_timeout()),
+            sse_sessions: Arc::new(SessionManager::new()),
             server_info,
+        }
+    }
+
+    /// Create new MCP state with custom session configuration.
+    pub fn with_sessions(handler: H, sessions: SessionStore, sse_sessions: SessionManager) -> Self {
+        let server_info = handler.server_info();
+        Self {
+            handler: Arc::new(handler),
+            server_info,
+            sessions: Arc::new(sessions),
+            sse_sessions: Arc::new(sse_sessions),
         }
     }
 }
 
-impl<H> Clone for McpConfig<H> {
+impl<H> Clone for McpState<H> {
     fn clone(&self) -> Self {
         Self {
             handler: Arc::clone(&self.handler),
-            sessions: self.sessions.clone(),
-            sse_sessions: self.sse_sessions.clone(),
+            sessions: Arc::clone(&self.sessions),
+            sse_sessions: Arc::clone(&self.sse_sessions),
             server_info: self.server_info.clone(),
         }
     }

@@ -19,6 +19,7 @@ mcpkit-transport = { version = "0.2.2", path = "../mcpkit-transport", features =
 actix-web = "4"
 actix-rt = "2"
 actix-web-actors = "4"
+actix-cors = "0.7"
 
 # Async runtime
 tokio = { workspace = true, features = ["sync", "rt"] }

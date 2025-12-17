@@ -1,7 +1,7 @@
 //! HTTP handlers for MCP requests.
 
 use crate::error::ExtensionError;
-use crate::state::{HasServerInfo, McpConfig};
+use crate::state::{HasServerInfo, McpState};
 use crate::{SUPPORTED_VERSIONS, is_supported_version};
 use actix_web::http::header::ContentType;
 use actix_web::{HttpRequest, HttpResponse, web};
@@ -32,7 +32,7 @@ use tracing::{debug, info, warn};
 /// Returns a JSON-RPC response for request messages, or 202 Accepted for notifications.
 pub async fn handle_mcp_post<H>(
     req: HttpRequest,
-    config: web::Data<McpConfig<H>>,
+    state: web::Data<McpState<H>>,
     body: String,
 ) -> Result<HttpResponse, ExtensionError>
 where
@@ -63,10 +63,10 @@ where
 
     let session_id = match session_id {
         Some(id) => {
-            config.sessions.touch(&id);
+            state.sessions.touch(&id);
             id
         }
-        None => config.sessions.create(),
+        None => state.sessions.create(),
     };
 
     debug!(session_id = %session_id, "Processing MCP request");
@@ -86,7 +86,7 @@ where
             );
 
             // Create a basic response using the handler's capabilities
-            let response = create_response_for_request(&config, &request).await;
+            let response = create_response_for_request(&state, &request).await;
 
             let body = serde_json::to_string(&Message::Response(response))
                 .map_err(ExtensionError::Serialization)?;
@@ -119,7 +119,7 @@ where
 ///
 /// Routes all MCP methods through the appropriate handler traits.
 async fn create_response_for_request<H>(
-    config: &McpConfig<H>,
+    state: &McpState<H>,
     request: &mcpkit_core::protocol::Request,
 ) -> mcpkit_core::protocol::Response
 where
@@ -134,7 +134,7 @@ where
     // Create a context for the request
     let req_id = request.id.clone();
     let client_caps = ClientCapabilities::default();
-    let server_caps = config.handler.capabilities();
+    let server_caps = state.handler.capabilities();
     let protocol_version = ProtocolVersion::LATEST;
     let peer = NoOpPeer;
     let ctx = Context::new(
@@ -151,16 +151,14 @@ where
         "initialize" => {
             let init_result = serde_json::json!({
                 "protocolVersion": ProtocolVersion::LATEST.as_str(),
-                "serverInfo": config.server_info,
-                "capabilities": config.handler.capabilities(),
+                "serverInfo": state.server_info,
+                "capabilities": state.handler.capabilities(),
             });
             Response::success(request.id.clone(), init_result)
         }
         _ => {
             // Try routing to tools
-            if let Some(result) =
-                route_tools(config.handler.as_ref(), method, params, &ctx).await
-            {
+            if let Some(result) = route_tools(state.handler.as_ref(), method, params, &ctx).await {
                 return match result {
                     Ok(value) => Response::success(request.id.clone(), value),
                     Err(e) => Response::error(request.id.clone(), e.into()),
@@ -169,7 +167,7 @@ where
 
             // Try routing to resources
             if let Some(result) =
-                route_resources(config.handler.as_ref(), method, params, &ctx).await
+                route_resources(state.handler.as_ref(), method, params, &ctx).await
             {
                 return match result {
                     Ok(value) => Response::success(request.id.clone(), value),
@@ -179,7 +177,7 @@ where
 
             // Try routing to prompts
             if let Some(result) =
-                route_prompts(config.handler.as_ref(), method, params, &ctx).await
+                route_prompts(state.handler.as_ref(), method, params, &ctx).await
             {
                 return match result {
                     Ok(value) => Response::success(request.id.clone(), value),
@@ -209,7 +207,7 @@ where
 ///
 /// - `connected`: Sent when the connection is established, includes session ID.
 /// - `message`: MCP notification messages.
-pub async fn handle_sse<H>(req: HttpRequest, config: web::Data<McpConfig<H>>) -> HttpResponse
+pub async fn handle_sse<H>(req: HttpRequest, state: web::Data<McpState<H>>) -> HttpResponse
 where
     H: HasServerInfo + Send + Sync + 'static,
 {
@@ -221,17 +219,17 @@ where
 
     let (id, rx) = if let Some(id) = session_id {
         // Try to reconnect to existing session
-        if let Some(rx) = config.sse_sessions.get_receiver(&id) {
+        if let Some(rx) = state.sse_sessions.get_receiver(&id) {
             info!(session_id = %id, "Reconnected to SSE session");
             (id, rx)
         } else {
             // Session not found, create new
-            let (new_id, rx) = config.sse_sessions.create_session();
+            let (new_id, rx) = state.sse_sessions.create_session();
             info!(session_id = %new_id, "Created new SSE session (requested not found)");
             (new_id, rx)
         }
     } else {
-        let (id, rx) = config.sse_sessions.create_session();
+        let (id, rx) = state.sse_sessions.create_session();
         info!(session_id = %id, "Created new SSE session");
         (id, rx)
     };

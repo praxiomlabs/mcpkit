@@ -25,11 +25,11 @@
 //!
 //! Supported protocol versions: `2024-11-05`, `2025-03-26`, `2025-06-18`, `2025-11-25`
 //!
-//! # Example
+//! # Quick Start
 //!
 //! ```ignore
 //! use mcpkit::prelude::*;
-//! use mcpkit_actix::{McpConfig, handle_mcp_post, handle_sse};
+//! use mcpkit_actix::{McpState, handle_mcp_post, handle_sse};
 //! use actix_web::{web, App, HttpServer};
 //!
 //! // Your MCP server handler (use #[mcp_server] macro)
@@ -43,12 +43,12 @@
 //!
 //! #[actix_web::main]
 //! async fn main() -> std::io::Result<()> {
-//!     // Create MCP config - no Clone required on handler!
-//!     let config = McpConfig::new(MyServer::new());
+//!     // Create MCP state - no Clone required on handler!
+//!     let state = McpState::new(MyServer::new());
 //!
 //!     HttpServer::new(move || {
 //!         App::new()
-//!             .app_data(web::Data::new(config.clone()))
+//!             .app_data(web::Data::new(state.clone()))
 //!             .route("/mcp", web::post().to(handle_mcp_post::<MyServer>))
 //!             .route("/mcp/sse", web::get().to(handle_sse::<MyServer>))
 //!     })
@@ -84,13 +84,15 @@
 
 mod error;
 mod handler;
+mod router;
 mod session;
 mod state;
 
 pub use error::ExtensionError;
 pub use handler::{handle_mcp_post, handle_sse};
+pub use router::McpRouter;
 pub use session::{Session, SessionManager, SessionStore};
-pub use state::McpConfig;
+pub use state::McpState;
 
 /// Protocol versions supported by this extension.
 pub const SUPPORTED_VERSIONS: &[&str] = &["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"];

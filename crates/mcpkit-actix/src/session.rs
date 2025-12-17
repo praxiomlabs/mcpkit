@@ -1,124 +1,71 @@
-//! Session management for MCP connections.
+//! Session management for MCP HTTP connections.
 
 use dashmap::DashMap;
+use mcpkit_core::capability::ClientCapabilities;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::broadcast;
-use uuid::Uuid;
 
-/// Default session timeout duration (30 minutes).
-pub const DEFAULT_SESSION_TIMEOUT: Duration = Duration::from_secs(30 * 60);
+/// Default session timeout duration (1 hour).
+pub const DEFAULT_SESSION_TIMEOUT: Duration = Duration::from_secs(3600);
 
 /// Default SSE broadcast channel capacity.
 pub const DEFAULT_SSE_CAPACITY: usize = 100;
 
-/// Represents an active MCP session.
+/// A single MCP session.
 #[derive(Debug, Clone)]
 pub struct Session {
     /// Unique session identifier.
     pub id: String,
     /// When the session was created.
     pub created_at: Instant,
-    /// When the session was last accessed.
-    pub last_accessed: Instant,
+    /// When the session was last active.
+    pub last_active: Instant,
+    /// Whether the session has been initialized.
+    pub initialized: bool,
+    /// Client capabilities from initialization.
+    pub client_capabilities: Option<ClientCapabilities>,
 }
 
 impl Session {
     /// Create a new session.
     #[must_use]
-    pub fn new() -> Self {
+    pub fn new(id: String) -> Self {
         let now = Instant::now();
         Self {
-            id: Uuid::new_v4().to_string(),
+            id,
             created_at: now,
-            last_accessed: now,
+            last_active: now,
+            initialized: false,
+            client_capabilities: None,
         }
     }
 
     /// Check if the session has expired.
     #[must_use]
     pub fn is_expired(&self, timeout: Duration) -> bool {
-        self.last_accessed.elapsed() > timeout
+        self.last_active.elapsed() >= timeout
+    }
+
+    /// Mark the session as active.
+    pub fn touch(&mut self) {
+        self.last_active = Instant::now();
+    }
+
+    /// Mark the session as initialized.
+    pub fn mark_initialized(&mut self, capabilities: Option<ClientCapabilities>) {
+        self.initialized = true;
+        self.client_capabilities = capabilities;
     }
 }
 
-impl Default for Session {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Manages MCP sessions with automatic cleanup.
-#[derive(Debug, Clone)]
+/// Session manager for SSE connections.
+///
+/// Manages broadcast channels for pushing messages to SSE clients.
+#[derive(Debug)]
 pub struct SessionManager {
-    sessions: Arc<DashMap<String, Session>>,
-    timeout: Duration,
-}
-
-impl SessionManager {
-    /// Create a new session manager with default timeout.
-    #[must_use]
-    pub fn new() -> Self {
-        Self::with_timeout(DEFAULT_SESSION_TIMEOUT)
-    }
-
-    /// Create a new session manager with a custom timeout.
-    #[must_use]
-    pub fn with_timeout(timeout: Duration) -> Self {
-        Self {
-            sessions: Arc::new(DashMap::new()),
-            timeout,
-        }
-    }
-
-    /// Create a new session and return its ID.
-    #[must_use]
-    pub fn create(&self) -> String {
-        let session = Session::new();
-        let id = session.id.clone();
-        self.sessions.insert(id.clone(), session);
-        id
-    }
-
-    /// Get a session by ID, updating its last accessed time.
-    #[must_use]
-    pub fn get(&self, id: &str) -> Option<Session> {
-        self.sessions.get_mut(id).map(|mut session| {
-            session.last_accessed = Instant::now();
-            session.clone()
-        })
-    }
-
-    /// Check if a session exists.
-    #[must_use]
-    pub fn exists(&self, id: &str) -> bool {
-        self.sessions.contains_key(id)
-    }
-
-    /// Update the last accessed time for a session.
-    pub fn touch(&self, id: &str) {
-        if let Some(mut session) = self.sessions.get_mut(id) {
-            session.last_accessed = Instant::now();
-        }
-    }
-
-    /// Remove expired sessions.
-    pub fn cleanup(&self) {
-        self.sessions
-            .retain(|_, session| !session.is_expired(self.timeout));
-    }
-
-    /// Get the number of active sessions.
-    #[must_use]
-    pub fn len(&self) -> usize {
-        self.sessions.len()
-    }
-
-    /// Check if there are no active sessions.
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.sessions.is_empty()
-    }
+    sessions: DashMap<String, broadcast::Sender<String>>,
+    capacity: usize,
 }
 
 impl Default for SessionManager {
@@ -127,83 +74,153 @@ impl Default for SessionManager {
     }
 }
 
-/// Manages Server-Sent Events sessions with broadcast channels.
-#[derive(Debug, Clone)]
-pub struct SessionStore {
-    senders: Arc<DashMap<String, broadcast::Sender<String>>>,
-    capacity: usize,
-}
-
-impl SessionStore {
-    /// Create a new SSE session store.
+impl SessionManager {
+    /// Create a new session manager.
     #[must_use]
     pub fn new() -> Self {
         Self::with_capacity(DEFAULT_SSE_CAPACITY)
     }
 
-    /// Create a new SSE session store with custom channel capacity.
+    /// Create a new session manager with custom channel capacity.
     #[must_use]
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
-            senders: Arc::new(DashMap::new()),
+            sessions: DashMap::new(),
             capacity,
         }
     }
 
-    /// Create a new SSE session.
+    /// Create a new session and return its ID and receiver.
     #[must_use]
     pub fn create_session(&self) -> (String, broadcast::Receiver<String>) {
-        let id = Uuid::new_v4().to_string();
+        let id = uuid::Uuid::new_v4().to_string();
         let (tx, rx) = broadcast::channel(self.capacity);
-        self.senders.insert(id.clone(), tx);
+        self.sessions.insert(id.clone(), tx);
         (id, rx)
     }
 
     /// Get a receiver for an existing session.
     #[must_use]
     pub fn get_receiver(&self, id: &str) -> Option<broadcast::Receiver<String>> {
-        self.senders.get(id).map(|tx| tx.subscribe())
+        self.sessions.get(id).map(|tx| tx.subscribe())
     }
 
     /// Send a message to a specific session.
-    pub fn send(&self, id: &str, message: String) -> Result<(), String> {
-        if let Some(tx) = self.senders.get(id) {
-            tx.send(message)
-                .map(|_| ())
-                .map_err(|e| format!("Failed to send: {e}"))
+    ///
+    /// Returns `true` if the message was sent, `false` if the session doesn't exist.
+    #[must_use]
+    pub fn send_to_session(&self, id: &str, message: String) -> bool {
+        if let Some(tx) = self.sessions.get(id) {
+            // Ignore send errors (no receivers)
+            let _ = tx.send(message);
+            true
         } else {
-            Err(format!("Session not found: {id}"))
+            false
         }
     }
 
     /// Broadcast a message to all sessions.
     pub fn broadcast(&self, message: String) {
-        for tx in self.senders.iter() {
-            let _ = tx.send(message.clone());
+        for entry in &self.sessions {
+            let _ = entry.value().send(message.clone());
         }
     }
 
     /// Remove a session.
-    pub fn remove(&self, id: &str) {
-        self.senders.remove(id);
+    pub fn remove_session(&self, id: &str) {
+        self.sessions.remove(id);
     }
 
-    /// Get the number of active SSE sessions.
+    /// Get the number of active sessions.
     #[must_use]
-    pub fn len(&self) -> usize {
-        self.senders.len()
-    }
-
-    /// Check if there are no active SSE sessions.
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.senders.is_empty()
+    pub fn session_count(&self) -> usize {
+        self.sessions.len()
     }
 }
 
-impl Default for SessionStore {
-    fn default() -> Self {
-        Self::new()
+/// Thread-safe session store with automatic cleanup.
+///
+/// Stores session metadata for HTTP request handling.
+#[derive(Debug)]
+pub struct SessionStore {
+    sessions: DashMap<String, Session>,
+    timeout: Duration,
+}
+
+impl SessionStore {
+    /// Create a new session store with the given timeout.
+    #[must_use]
+    pub fn new(timeout: Duration) -> Self {
+        Self {
+            sessions: DashMap::new(),
+            timeout,
+        }
+    }
+
+    /// Create a new session store with a default 1-hour timeout.
+    #[must_use]
+    pub fn with_default_timeout() -> Self {
+        Self::new(DEFAULT_SESSION_TIMEOUT)
+    }
+
+    /// Create a new session and return its ID.
+    #[must_use]
+    pub fn create(&self) -> String {
+        let id = uuid::Uuid::new_v4().to_string();
+        self.sessions.insert(id.clone(), Session::new(id.clone()));
+        id
+    }
+
+    /// Get a session by ID.
+    #[must_use]
+    pub fn get(&self, id: &str) -> Option<Session> {
+        self.sessions.get(id).map(|r| r.clone())
+    }
+
+    /// Touch a session to update its last active time.
+    pub fn touch(&self, id: &str) {
+        if let Some(mut session) = self.sessions.get_mut(id) {
+            session.touch();
+        }
+    }
+
+    /// Update a session.
+    pub fn update<F>(&self, id: &str, f: F)
+    where
+        F: FnOnce(&mut Session),
+    {
+        if let Some(mut session) = self.sessions.get_mut(id) {
+            f(&mut session);
+        }
+    }
+
+    /// Remove expired sessions.
+    pub fn cleanup_expired(&self) {
+        let timeout = self.timeout;
+        self.sessions.retain(|_, s| !s.is_expired(timeout));
+    }
+
+    /// Remove a session.
+    #[must_use]
+    pub fn remove(&self, id: &str) -> Option<Session> {
+        self.sessions.remove(id).map(|(_, s)| s)
+    }
+
+    /// Get the number of active sessions.
+    #[must_use]
+    pub fn session_count(&self) -> usize {
+        self.sessions.len()
+    }
+
+    /// Start a background task to periodically clean up expired sessions.
+    pub fn start_cleanup_task(self: &Arc<Self>, interval: Duration) {
+        let store = Arc::clone(self);
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(interval).await;
+                store.cleanup_expired();
+            }
+        });
     }
 }
 
@@ -213,47 +230,50 @@ mod tests {
 
     #[test]
     fn test_session_creation() {
-        let session = Session::new();
-        assert!(!session.id.is_empty());
-        assert!(!session.is_expired(Duration::from_secs(60)));
+        let session = Session::new("test-123".to_string());
+        assert_eq!(session.id, "test-123");
+        assert!(!session.initialized);
+        assert!(session.client_capabilities.is_none());
     }
 
     #[test]
     fn test_session_expiry() {
-        let mut session = Session::new();
-        // Simulate old access time
-        session.last_accessed = Instant::now()
+        let mut session = Session::new("test".to_string());
+        assert!(!session.is_expired(Duration::from_secs(60)));
+
+        // Simulate old session by setting last_active in the past
+        session.last_active = Instant::now()
             .checked_sub(Duration::from_secs(120))
             .unwrap();
         assert!(session.is_expired(Duration::from_secs(60)));
     }
 
     #[test]
-    fn test_session_manager() {
-        let manager = SessionManager::new();
+    fn test_session_store() {
+        let store = SessionStore::new(Duration::from_secs(60));
+        let id = store.create();
 
-        let id = manager.create();
-        assert!(manager.exists(&id));
-        assert_eq!(manager.len(), 1);
+        assert!(store.get(&id).is_some());
+        store.touch(&id);
 
-        let session = manager.get(&id);
-        assert!(session.is_some());
-
-        manager.cleanup();
-        assert!(manager.exists(&id)); // Should still exist
+        let _ = store.remove(&id);
+        assert!(store.get(&id).is_none());
     }
 
-    #[test]
-    fn test_session_store() {
-        let store = SessionStore::new();
+    #[tokio::test]
+    async fn test_session_manager() {
+        let manager = SessionManager::new();
+        let (id, mut rx) = manager.create_session();
 
-        let (id, _rx) = store.create_session();
-        assert_eq!(store.len(), 1);
+        // Send a message
+        assert!(manager.send_to_session(&id, "test message".to_string()));
 
-        let rx2 = store.get_receiver(&id);
-        assert!(rx2.is_some());
+        // Receive the message
+        let msg = rx.recv().await.expect("Should receive message");
+        assert_eq!(msg, "test message");
 
-        store.remove(&id);
-        assert!(store.is_empty());
+        // Remove session
+        manager.remove_session(&id);
+        assert!(!manager.send_to_session(&id, "another".to_string()));
     }
 }
