@@ -26,7 +26,8 @@
 # ----------------------------------------------------------------------------
 
 project_name := "mcpkit"
-version := "0.2.0"
+# Version is read dynamically from Cargo.toml to avoid drift
+version := `cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "mcpkit") | .version'`
 msrv := "1.85"
 edition := "2024"
 docker_image := project_name
@@ -791,9 +792,106 @@ tree-features package:
 # RELEASE RECIPES
 # ============================================================================
 
+# ============================================================================
+# RELEASE CHECKLIST RECIPES
+# ============================================================================
+
+[group('release')]
+[doc("Check for WIP markers (TODO, FIXME, XXX, HACK, todo!, unimplemented!)")]
+wip-check:
+    #!/usr/bin/env bash
+    printf '{{cyan}}[INFO]{{reset}} Checking for WIP markers...\n'
+
+    # Search for comment markers
+    COMMENTS=$(grep -rn "TODO\|FIXME\|XXX\|HACK" --include="*.rs" crates/ 2>/dev/null || true)
+    if [ -n "$COMMENTS" ]; then
+        printf '{{yellow}}[WARN]{{reset}} Found WIP comments:\n'
+        echo "$COMMENTS" | head -20
+        COMMENT_COUNT=$(echo "$COMMENTS" | wc -l)
+        if [ "$COMMENT_COUNT" -gt 20 ]; then
+            printf '{{yellow}}[WARN]{{reset}} ... and %d more\n' "$((COMMENT_COUNT - 20))"
+        fi
+    fi
+
+    # Search for incomplete macros (excluding tests)
+    MACROS=$(grep -rn "todo!\|unimplemented!" --include="*.rs" crates/*/src/ 2>/dev/null || true)
+    if [ -n "$MACROS" ]; then
+        printf '{{red}}[ERR]{{reset}}  Found incomplete macros in production code:\n'
+        echo "$MACROS"
+        exit 1
+    fi
+
+    printf '{{green}}[OK]{{reset}}   WIP check passed (no blocking issues)\n'
+
+[group('release')]
+[doc("Audit panic paths (.unwrap(), .expect()) in production code")]
+panic-audit:
+    #!/usr/bin/env bash
+    printf '{{cyan}}[INFO]{{reset}} Auditing panic paths in production code...\n'
+
+    # Find .unwrap() in src/ directories (production code)
+    UNWRAPS=$(grep -rn "\.unwrap()" crates/*/src/ --include="*.rs" 2>/dev/null || true)
+    EXPECTS=$(grep -rn "\.expect(" crates/*/src/ --include="*.rs" 2>/dev/null || true)
+
+    if [ -n "$UNWRAPS" ] || [ -n "$EXPECTS" ]; then
+        printf '{{yellow}}[WARN]{{reset}} Found potential panic paths:\n'
+        if [ -n "$UNWRAPS" ]; then
+            echo "$UNWRAPS" | head -15
+            UNWRAP_COUNT=$(echo "$UNWRAPS" | wc -l)
+            printf '{{cyan}}[INFO]{{reset}} Total .unwrap() calls: %d\n' "$UNWRAP_COUNT"
+        fi
+        if [ -n "$EXPECTS" ]; then
+            echo "$EXPECTS" | head -10
+            EXPECT_COUNT=$(echo "$EXPECTS" | wc -l)
+            printf '{{cyan}}[INFO]{{reset}} Total .expect() calls: %d\n' "$EXPECT_COUNT"
+        fi
+        printf '{{yellow}}[NOTE]{{reset}} Review each for production safety. High line numbers may be test modules.\n'
+    else
+        printf '{{green}}[OK]{{reset}}   No panic paths found in production code\n'
+    fi
+
+[group('release')]
+[doc("Verify Cargo.toml metadata for crates.io publishing")]
+metadata-check:
+    #!/usr/bin/env bash
+    printf '{{cyan}}[INFO]{{reset}} Checking Cargo.toml metadata...\n'
+
+    METADATA=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "mcpkit")')
+
+    # Required fields
+    DESC=$(echo "$METADATA" | jq -r '.description // empty')
+    LICENSE=$(echo "$METADATA" | jq -r '.license // empty')
+    REPO=$(echo "$METADATA" | jq -r '.repository // empty')
+
+    MISSING=""
+    [ -z "$DESC" ] && MISSING="$MISSING description"
+    [ -z "$LICENSE" ] && MISSING="$MISSING license"
+    [ -z "$REPO" ] && MISSING="$MISSING repository"
+
+    if [ -n "$MISSING" ]; then
+        printf '{{red}}[ERR]{{reset}}  Missing required fields:%s\n' "$MISSING"
+        exit 1
+    fi
+
+    # Recommended fields
+    KEYWORDS=$(echo "$METADATA" | jq -r '.keywords // [] | length')
+    CATEGORIES=$(echo "$METADATA" | jq -r '.categories // [] | length')
+
+    [ "$KEYWORDS" -eq 0 ] && printf '{{yellow}}[WARN]{{reset}} No keywords defined (recommended for discoverability)\n'
+    [ "$CATEGORIES" -eq 0 ] && printf '{{yellow}}[WARN]{{reset}} No categories defined (recommended for discoverability)\n'
+
+    printf '{{cyan}}[INFO]{{reset}} Package metadata:\n'
+    printf '  description: %s\n' "$DESC"
+    printf '  license:     %s\n' "$LICENSE"
+    printf '  repository:  %s\n' "$REPO"
+    printf '  keywords:    %d defined\n' "$KEYWORDS"
+    printf '  categories:  %d defined\n' "$CATEGORIES"
+
+    printf '{{green}}[OK]{{reset}}   Metadata check passed\n'
+
 [group('release')]
 [doc("Prepare for release (full validation)")]
-release-check: ci-release
+release-check: ci-release wip-check panic-audit metadata-check
     #!/usr/bin/env bash
     printf '\n{{bold}}{{blue}}══════ Release Validation ══════{{reset}}\n\n'
     printf '{{cyan}}[INFO]{{reset}} Checking for uncommitted changes...\n'
