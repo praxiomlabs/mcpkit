@@ -3,7 +3,7 @@
 //! These tests verify that the client's message router correctly correlates
 //! requests and responses without spurious warnings.
 //!
-//! Run with RUST_LOG=mcpkit_client=warn to see any warning messages.
+//! Run with `RUST_LOG=mcpkit_client=warn` to see any warning messages.
 
 use mcpkit::protocol::{Message, Response};
 use mcpkit_client::ClientBuilder;

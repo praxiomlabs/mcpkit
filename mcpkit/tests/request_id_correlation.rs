@@ -142,12 +142,12 @@ async fn test_request_id_correlation_with_diagnostics() {
 
     // Make a request
     let tools = client.list_tools().await.expect("Should list tools");
-    println!("\n=== CLIENT: Got tools: {:?} ===", tools);
+    println!("\n=== CLIENT: Got tools: {tools:?} ===");
 
     server_handle.await.unwrap();
 }
 
-/// Test that RequestId equality works correctly after JSON serialization
+/// Test that `RequestId` equality works correctly after JSON serialization
 #[test]
 fn test_request_id_json_roundtrip() {
     use serde_json::{from_str, to_string};
@@ -155,26 +155,26 @@ fn test_request_id_json_roundtrip() {
     // Test numeric ID
     let original = RequestId::Number(42);
     let json = to_string(&original).unwrap();
-    println!("Number ID JSON: {}", json);
+    println!("Number ID JSON: {json}");
     let roundtrip: RequestId = from_str(&json).unwrap();
     assert_eq!(original, roundtrip, "Number ID should roundtrip");
 
     // Test string ID
     let original = RequestId::String("req-001".to_string());
     let json = to_string(&original).unwrap();
-    println!("String ID JSON: {}", json);
+    println!("String ID JSON: {json}");
     let roundtrip: RequestId = from_str(&json).unwrap();
     assert_eq!(original, roundtrip, "String ID should roundtrip");
 
     // Test within Response
     let response = Response::success(RequestId::Number(5), serde_json::json!({"foo": "bar"}));
     let json = to_string(&response).unwrap();
-    println!("Response JSON: {}", json);
+    println!("Response JSON: {json}");
     let roundtrip: Response = from_str(&json).unwrap();
     assert_eq!(response.id, roundtrip.id, "Response ID should roundtrip");
 }
 
-/// Test that HashMap lookup works with RequestId
+/// Test that `HashMap` lookup works with `RequestId`
 #[test]
 fn test_request_id_hashmap_lookup() {
     use std::collections::HashMap;
