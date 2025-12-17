@@ -499,6 +499,238 @@ fn parse_list_params(params: Option<&Value>) -> ListParams {
     }
 }
 
+// =============================================================================
+// Public routing functions for HTTP integrations
+//
+// These functions allow HTTP handlers (axum, actix, etc.) to properly route
+// requests to handler trait implementations.
+// =============================================================================
+
+use crate::context::Context;
+use crate::handler::{PromptHandler, ResourceHandler, ToolHandler};
+use mcpkit_core::types::CallToolResult;
+
+/// Route tool-related requests to a handler implementing [`ToolHandler`].
+///
+/// This function handles `tools/list` and `tools/call` methods.
+/// Returns `None` if the method is not tool-related.
+///
+/// # Example
+///
+/// ```ignore
+/// if let Some(result) = route_tools(&handler, method, params, &ctx).await {
+///     return result;
+/// }
+/// ```
+pub async fn route_tools<TH: ToolHandler + Send + Sync>(
+    handler: &TH,
+    method: &str,
+    params: Option<&serde_json::Value>,
+    ctx: &Context<'_>,
+) -> Option<Result<serde_json::Value, McpError>> {
+    match method {
+        methods::TOOLS_LIST => {
+            tracing::debug!("Listing available tools");
+            let result = handler.list_tools(ctx).await;
+            match &result {
+                Ok(tools) => tracing::debug!(count = tools.len(), "Listed tools"),
+                Err(e) => tracing::warn!(error = %e, "Failed to list tools"),
+            }
+            Some(result.map(|tools| serde_json::json!({ "tools": tools })))
+        }
+        methods::TOOLS_CALL => {
+            let result = async {
+                let params = params.ok_or_else(|| {
+                    McpError::invalid_params(methods::TOOLS_CALL, "missing params")
+                })?;
+                let name = params
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| {
+                        McpError::invalid_params(methods::TOOLS_CALL, "missing tool name")
+                    })?;
+                let args = params
+                    .get("arguments")
+                    .cloned()
+                    .unwrap_or_else(|| serde_json::json!({}));
+
+                tracing::info!(tool = %name, "Calling tool");
+                let start = std::time::Instant::now();
+                let output = handler.call_tool(name, args, ctx).await;
+                let duration = start.elapsed();
+
+                match &output {
+                    Ok(_) => tracing::info!(
+                        tool = %name,
+                        duration_ms = duration.as_millis(),
+                        "Tool call completed"
+                    ),
+                    Err(e) => tracing::warn!(
+                        tool = %name,
+                        duration_ms = duration.as_millis(),
+                        error = %e,
+                        "Tool call failed"
+                    ),
+                }
+
+                let output = output?;
+                let result: CallToolResult = output.into();
+                Ok(serde_json::to_value(result).unwrap_or_else(|_| serde_json::json!({})))
+            }
+            .await;
+            Some(result)
+        }
+        _ => None,
+    }
+}
+
+/// Route resource-related requests to a handler implementing [`ResourceHandler`].
+///
+/// This function handles `resources/list`, `resources/templates/list`, and `resources/read` methods.
+/// Returns `None` if the method is not resource-related.
+///
+/// # Example
+///
+/// ```ignore
+/// if let Some(result) = route_resources(&handler, method, params, &ctx).await {
+///     return result;
+/// }
+/// ```
+pub async fn route_resources<RH: ResourceHandler + Send + Sync>(
+    handler: &RH,
+    method: &str,
+    params: Option<&serde_json::Value>,
+    ctx: &Context<'_>,
+) -> Option<Result<serde_json::Value, McpError>> {
+    match method {
+        methods::RESOURCES_LIST => {
+            tracing::debug!("Listing available resources");
+            let result = handler.list_resources(ctx).await;
+            match &result {
+                Ok(resources) => tracing::debug!(count = resources.len(), "Listed resources"),
+                Err(e) => tracing::warn!(error = %e, "Failed to list resources"),
+            }
+            Some(result.map(|resources| serde_json::json!({ "resources": resources })))
+        }
+        methods::RESOURCES_TEMPLATES_LIST => {
+            tracing::debug!("Listing available resource templates");
+            let result = handler.list_resource_templates(ctx).await;
+            match &result {
+                Ok(templates) => {
+                    tracing::debug!(count = templates.len(), "Listed resource templates");
+                }
+                Err(e) => tracing::warn!(error = %e, "Failed to list resource templates"),
+            }
+            Some(result.map(|templates| serde_json::json!({ "resourceTemplates": templates })))
+        }
+        methods::RESOURCES_READ => {
+            let result = async {
+                let params = params.ok_or_else(|| {
+                    McpError::invalid_params(methods::RESOURCES_READ, "missing params")
+                })?;
+                let uri = params.get("uri").and_then(|v| v.as_str()).ok_or_else(|| {
+                    McpError::invalid_params(methods::RESOURCES_READ, "missing uri")
+                })?;
+
+                tracing::info!(uri = %uri, "Reading resource");
+                let start = std::time::Instant::now();
+                let contents = handler.read_resource(uri, ctx).await;
+                let duration = start.elapsed();
+
+                match &contents {
+                    Ok(_) => tracing::info!(
+                        uri = %uri,
+                        duration_ms = duration.as_millis(),
+                        "Resource read completed"
+                    ),
+                    Err(e) => tracing::warn!(
+                        uri = %uri,
+                        duration_ms = duration.as_millis(),
+                        error = %e,
+                        "Resource read failed"
+                    ),
+                }
+
+                let contents = contents?;
+                Ok(serde_json::json!({ "contents": contents }))
+            }
+            .await;
+            Some(result)
+        }
+        _ => None,
+    }
+}
+
+/// Route prompt-related requests to a handler implementing [`PromptHandler`].
+///
+/// This function handles `prompts/list` and `prompts/get` methods.
+/// Returns `None` if the method is not prompt-related.
+///
+/// # Example
+///
+/// ```ignore
+/// if let Some(result) = route_prompts(&handler, method, params, &ctx).await {
+///     return result;
+/// }
+/// ```
+pub async fn route_prompts<PH: PromptHandler + Send + Sync>(
+    handler: &PH,
+    method: &str,
+    params: Option<&serde_json::Value>,
+    ctx: &Context<'_>,
+) -> Option<Result<serde_json::Value, McpError>> {
+    match method {
+        methods::PROMPTS_LIST => {
+            tracing::debug!("Listing available prompts");
+            let result = handler.list_prompts(ctx).await;
+            match &result {
+                Ok(prompts) => tracing::debug!(count = prompts.len(), "Listed prompts"),
+                Err(e) => tracing::warn!(error = %e, "Failed to list prompts"),
+            }
+            Some(result.map(|prompts| serde_json::json!({ "prompts": prompts })))
+        }
+        methods::PROMPTS_GET => {
+            let result = async {
+                let params = params.ok_or_else(|| {
+                    McpError::invalid_params(methods::PROMPTS_GET, "missing params")
+                })?;
+                let name = params.get("name").and_then(|v| v.as_str()).ok_or_else(|| {
+                    McpError::invalid_params(methods::PROMPTS_GET, "missing prompt name")
+                })?;
+                let args = params
+                    .get("arguments")
+                    .and_then(|v| v.as_object())
+                    .cloned();
+
+                tracing::info!(prompt = %name, "Getting prompt");
+                let start = std::time::Instant::now();
+                let prompt_result = handler.get_prompt(name, args, ctx).await;
+                let duration = start.elapsed();
+
+                match &prompt_result {
+                    Ok(_) => tracing::info!(
+                        prompt = %name,
+                        duration_ms = duration.as_millis(),
+                        "Prompt retrieval completed"
+                    ),
+                    Err(e) => tracing::warn!(
+                        prompt = %name,
+                        duration_ms = duration.as_millis(),
+                        error = %e,
+                        "Prompt retrieval failed"
+                    ),
+                }
+
+                let result = prompt_result?;
+                Ok(serde_json::to_value(result).unwrap_or_else(|_| serde_json::json!({})))
+            }
+            .await;
+            Some(result)
+        }
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

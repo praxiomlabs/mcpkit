@@ -76,6 +76,7 @@ pub use handler::{
     ResourceHandler, SamplingHandler, ServerHandler, TaskHandler, ToolHandler,
 };
 pub use metrics::{MethodStats, MetricsSnapshot, ServerMetrics};
+pub use router::{route_prompts, route_resources, route_tools};
 pub use server::{RequestRouter, RuntimeConfig, ServerRuntime, ServerState, TransportPeer};
 
 /// Prelude module for convenient imports.

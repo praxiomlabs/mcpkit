@@ -6,8 +6,14 @@ use crate::{SUPPORTED_VERSIONS, is_supported_version};
 use actix_web::http::header::ContentType;
 use actix_web::{HttpRequest, HttpResponse, web};
 use futures::stream::{self, StreamExt};
+use mcpkit_core::capability::ClientCapabilities;
 use mcpkit_core::protocol::Message;
-use mcpkit_server::ServerHandler;
+use mcpkit_core::protocol_version::ProtocolVersion;
+use mcpkit_server::context::{Context, NoOpPeer};
+use mcpkit_server::{
+    PromptHandler, ResourceHandler, ServerHandler, ToolHandler, route_prompts, route_resources,
+    route_tools,
+};
 use std::time::Duration;
 use tracing::{debug, info, warn};
 
@@ -30,7 +36,7 @@ pub async fn handle_mcp_post<H>(
     body: String,
 ) -> Result<HttpResponse, ExtensionError>
 where
-    H: ServerHandler + Send + Sync + 'static,
+    H: ServerHandler + ToolHandler + ResourceHandler + PromptHandler + Send + Sync + 'static,
 {
     // Validate protocol version
     let version = req
@@ -111,31 +117,77 @@ where
 
 /// Create a response for a request.
 ///
-/// This is a simplified implementation - a full implementation would
-/// route through the `ServerHandler` properly.
+/// Routes all MCP methods through the appropriate handler traits.
 async fn create_response_for_request<H>(
     config: &McpConfig<H>,
     request: &mcpkit_core::protocol::Request,
 ) -> mcpkit_core::protocol::Response
 where
-    H: ServerHandler + Send + Sync + 'static,
+    H: ServerHandler + ToolHandler + ResourceHandler + PromptHandler + Send + Sync + 'static,
 {
     use mcpkit_core::error::JsonRpcError;
     use mcpkit_core::protocol::Response;
 
     let method = request.method.as_ref();
+    let params = request.params.as_ref();
+
+    // Create a context for the request
+    let req_id = request.id.clone();
+    let client_caps = ClientCapabilities::default();
+    let server_caps = config.handler.capabilities();
+    let protocol_version = ProtocolVersion::LATEST;
+    let peer = NoOpPeer;
+    let ctx = Context::new(
+        &req_id,
+        None,
+        &client_caps,
+        &server_caps,
+        protocol_version,
+        &peer,
+    );
+
     match method {
         "ping" => Response::success(request.id.clone(), serde_json::json!({})),
         "initialize" => {
             let init_result = serde_json::json!({
-                "protocolVersion": "2025-06-18",
+                "protocolVersion": ProtocolVersion::LATEST.as_str(),
                 "serverInfo": config.server_info,
                 "capabilities": config.handler.capabilities(),
             });
             Response::success(request.id.clone(), init_result)
         }
         _ => {
-            // For other methods, return method not found
+            // Try routing to tools
+            if let Some(result) =
+                route_tools(config.handler.as_ref(), method, params, &ctx).await
+            {
+                return match result {
+                    Ok(value) => Response::success(request.id.clone(), value),
+                    Err(e) => Response::error(request.id.clone(), e.into()),
+                };
+            }
+
+            // Try routing to resources
+            if let Some(result) =
+                route_resources(config.handler.as_ref(), method, params, &ctx).await
+            {
+                return match result {
+                    Ok(value) => Response::success(request.id.clone(), value),
+                    Err(e) => Response::error(request.id.clone(), e.into()),
+                };
+            }
+
+            // Try routing to prompts
+            if let Some(result) =
+                route_prompts(config.handler.as_ref(), method, params, &ctx).await
+            {
+                return match result {
+                    Ok(value) => Response::success(request.id.clone(), value),
+                    Err(e) => Response::error(request.id.clone(), e.into()),
+                };
+            }
+
+            // Method not found
             Response::error(
                 request.id.clone(),
                 JsonRpcError::method_not_found(format!("Method '{method}' not found")),

@@ -4,7 +4,7 @@ use crate::handler::{handle_mcp_post, handle_sse};
 use crate::state::{HasServerInfo, McpState};
 use axum::Router;
 use axum::routing::{get, post};
-use mcpkit_server::ServerHandler;
+use mcpkit_server::{PromptHandler, ResourceHandler, ServerHandler, ToolHandler};
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 
@@ -42,7 +42,15 @@ pub struct McpRouter<H> {
 
 impl<H> McpRouter<H>
 where
-    H: ServerHandler + HasServerInfo + Send + Sync + Clone + 'static,
+    H: ServerHandler
+        + ToolHandler
+        + ResourceHandler
+        + PromptHandler
+        + HasServerInfo
+        + Send
+        + Sync
+        + Clone
+        + 'static,
 {
     /// Create a new MCP router with the given handler.
     pub fn new(handler: H) -> Self {
@@ -114,6 +122,9 @@ where
 mod tests {
     use super::*;
     use mcpkit_core::capability::{ServerCapabilities, ServerInfo};
+    use mcpkit_core::error::McpError;
+    use mcpkit_core::types::{GetPromptResult, Prompt, Resource, ResourceContents, Tool, ToolOutput};
+    use mcpkit_server::context::Context;
     use mcpkit_server::ServerHandler;
 
     #[derive(Clone)]
@@ -129,7 +140,54 @@ mod tests {
         }
 
         fn capabilities(&self) -> ServerCapabilities {
-            ServerCapabilities::default()
+            ServerCapabilities::new().with_tools().with_resources().with_prompts()
+        }
+    }
+
+    impl ToolHandler for TestHandler {
+        async fn list_tools(&self, _ctx: &Context<'_>) -> Result<Vec<Tool>, McpError> {
+            Ok(vec![])
+        }
+
+        async fn call_tool(
+            &self,
+            _name: &str,
+            _args: serde_json::Value,
+            _ctx: &Context<'_>,
+        ) -> Result<ToolOutput, McpError> {
+            Ok(ToolOutput::text("test"))
+        }
+    }
+
+    impl ResourceHandler for TestHandler {
+        async fn list_resources(&self, _ctx: &Context<'_>) -> Result<Vec<Resource>, McpError> {
+            Ok(vec![])
+        }
+
+        async fn read_resource(
+            &self,
+            uri: &str,
+            _ctx: &Context<'_>,
+        ) -> Result<Vec<ResourceContents>, McpError> {
+            Ok(vec![ResourceContents::text(uri, "test")])
+        }
+    }
+
+    impl PromptHandler for TestHandler {
+        async fn list_prompts(&self, _ctx: &Context<'_>) -> Result<Vec<Prompt>, McpError> {
+            Ok(vec![])
+        }
+
+        async fn get_prompt(
+            &self,
+            _name: &str,
+            _args: Option<serde_json::Map<String, serde_json::Value>>,
+            _ctx: &Context<'_>,
+        ) -> Result<GetPromptResult, McpError> {
+            Ok(GetPromptResult {
+                description: Some("Test prompt".to_string()),
+                messages: vec![],
+            })
         }
     }
 
