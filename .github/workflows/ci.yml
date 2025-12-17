@@ -83,7 +83,6 @@ jobs:
             --verbose
             --no-progress
             --accept 200,204,206
-            --exclude-mail
             --exclude "^https://crates.io"
             --exclude "^https://docs.rs"
             './docs/**/*.md'

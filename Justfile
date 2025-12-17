@@ -410,7 +410,6 @@ link-check:
         exit 0
     fi
     lychee --verbose --no-progress --accept 200,204,206 \
-        --exclude-mail \
         --exclude '^https://crates.io' \
         --exclude '^https://docs.rs' \
         './docs/**/*.md' './README.md' './CONTRIBUTING.md'
