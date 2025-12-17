@@ -2120,7 +2120,7 @@ checksum = "47e1ffaa40ddd1f3ed91f717a33c8c0ee23fff369e3aa8772b9605cc1d22f4c3"
 
 [[package]]
 name = "mcpkit"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "axum",
  "futures",
@@ -2138,7 +2138,7 @@ dependencies = [
 
 [[package]]
 name = "mcpkit-actix"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "actix-cors",
  "actix-rt",
@@ -2160,7 +2160,7 @@ dependencies = [
 
 [[package]]
 name = "mcpkit-axum"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "async-stream",
  "axum",
@@ -2195,7 +2195,7 @@ dependencies = [
 
 [[package]]
 name = "mcpkit-client"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "async-lock",
  "futures",
@@ -2212,7 +2212,7 @@ dependencies = [
 
 [[package]]
 name = "mcpkit-core"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "base64",
  "chrono",
@@ -2234,7 +2234,7 @@ dependencies = [
 
 [[package]]
 name = "mcpkit-macros"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "darling 0.20.11",
  "mcpkit",
@@ -2248,7 +2248,7 @@ dependencies = [
 
 [[package]]
 name = "mcpkit-server"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "chrono",
  "futures",
@@ -2263,7 +2263,7 @@ dependencies = [
 
 [[package]]
 name = "mcpkit-testing"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "futures",
  "mcpkit-core",
@@ -2276,7 +2276,7 @@ dependencies = [
 
 [[package]]
 name = "mcpkit-transport"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "async-io",
  "async-lock",

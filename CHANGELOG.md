@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.4] - 2025-12-17
+
+### Added
+
+- `resources/templates/list` support for resource template discovery
+- `McpRouter` struct in mcpkit-axum and mcpkit-actix for type-safe route mounting
+- Exported routing functions (`route_prompts`, `route_resources`, `route_tools`) from mcpkit-server
+
+### Changed
+
+- Unified HTTP crate APIs: renamed `McpConfig` to `McpRouter` in mcpkit-actix for consistency with mcpkit-axum
+- All MCP request methods now route through handler traits for consistent behavior
+- HTTP integration ergonomics improved with builder pattern refinements
+
+### Fixed
+
+- Protocol version references updated from 2025-06-18 to 2025-11-25 across all crates
+- Crate consistency issues preventing crates.io publishing (missing route_* exports)
+- Documentation standardized across all crates
+
 ## [0.2.3] - 2025-12-17
 
 ### Added
@@ -129,7 +149,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mcpkit-testing` crate for test utilities
 - Protocol version detection and capability negotiation
 
-[Unreleased]: https://github.com/praxiomlabs/mcpkit/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/praxiomlabs/mcpkit/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/praxiomlabs/mcpkit/compare/v0.2.3...v0.2.4
+[0.2.3]: https://github.com/praxiomlabs/mcpkit/compare/v0.2.2...v0.2.3
+[0.2.2]: https://github.com/praxiomlabs/mcpkit/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/praxiomlabs/mcpkit/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/praxiomlabs/mcpkit/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/praxiomlabs/mcpkit/releases/tag/v0.1.0
