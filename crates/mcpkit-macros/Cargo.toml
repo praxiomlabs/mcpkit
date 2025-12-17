@@ -27,7 +27,9 @@ syn = { version = "2", features = ["full", "parsing", "extra-traits"] }
 darling = "0.20"
 
 [dev-dependencies]
-mcpkit = { version = "0.2.4", path = "../../mcpkit" }
+# Note: Use path-only during development, version is resolved during publish
+# Dev dependency can use any 0.2.x version since tests work with recent versions
+mcpkit = { version = "0.2", path = "../../mcpkit" }
 serde_json.workspace = true
 trybuild = "1.0"
 tokio = { workspace = true, features = ["rt", "macros"] }
