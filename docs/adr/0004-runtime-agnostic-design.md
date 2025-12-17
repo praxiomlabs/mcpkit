@@ -34,7 +34,7 @@ We design the SDK with **runtime agnosticism** as a core principle:
 
 ### 1. Core Crate Has No Runtime Dependency
 
-`mcp-core` contains:
+`mcpkit-core` contains:
 - Protocol types (Request, Response, Notification)
 - Error types (McpError)
 - Capability types
@@ -97,33 +97,33 @@ pub trait Transport: Send + Sync {
 **With Tokio (default):**
 ```toml
 [dependencies]
-mcp-transport = "0.1"  # tokio-runtime is default
+mcpkit-transport = "0.2"  # tokio-runtime is default
 ```
 
 **With async-std:**
 ```toml
 [dependencies]
-mcp-transport = { version = "0.1", default-features = false, features = ["async-std-runtime"] }
+mcpkit-transport = { version = "0.2", default-features = false, features = ["async-std-runtime"] }
 ```
 
 **With smol:**
 ```toml
 [dependencies]
-mcp-transport = { version = "0.1", default-features = false, features = ["smol-runtime"] }
+mcpkit-transport = { version = "0.2", default-features = false, features = ["smol-runtime"] }
 ```
 
 ### Crate Dependency Graph
 
 ```
-mcp-core (no runtime)
+mcpkit-core (no runtime)
     │
-    ├── mcp-macros (no runtime, proc-macro)
+    ├── mcpkit-macros (no runtime, proc-macro)
     │
-    └── mcp-transport (runtime via features)
+    └── mcpkit-transport (runtime via features)
             │
-            ├── mcp-server (inherits runtime)
+            ├── mcpkit-server (inherits runtime)
             │
-            └── mcp-client (inherits runtime)
+            └── mcpkit-client (inherits runtime)
 ```
 
 ### Runtime-Specific Code

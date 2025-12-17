@@ -13,21 +13,21 @@ This document provides a high-level overview of the mcpkit architecture, explain
          │                  │                  │
          ▼                  ▼                  ▼
 ┌────────────────┐  ┌────────────────┐  ┌────────────────┐
-│  mcp-client    │  │   mcp-server   │  │  mcp-testing   │
+│ mcpkit-client  │  │ mcpkit-server  │  │ mcpkit-testing │
 └───────┬────────┘  └───────┬────────┘  └───────┬────────┘
         │                   │                   │
         └─────────┬─────────┴───────────────────┘
                   │
                   ▼
          ┌────────────────┐
-         │  mcp-transport │
+         │mcpkit-transport│
          └───────┬────────┘
                  │
          ┌───────┴────────┐
          │                │
          ▼                ▼
 ┌────────────────┐  ┌────────────────┐
-│   mcp-core     │  │  mcp-macros    │
+│  mcpkit-core   │  │ mcpkit-macros  │
 └────────────────┘  └────────────────┘
 ```
 

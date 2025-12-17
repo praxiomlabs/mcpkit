@@ -50,7 +50,7 @@ For servers expected to run continuously:
 
 ### WebSocket Pool
 
-The WebSocket connection pool (`crates/mcp-transport/src/pool.rs`) manages reusable connections.
+The WebSocket connection pool (`crates/mcpkit-transport/src/pool.rs`) manages reusable connections.
 
 #### Recommended Settings
 

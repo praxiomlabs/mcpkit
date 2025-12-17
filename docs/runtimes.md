@@ -18,8 +18,8 @@ Tokio is the default runtime and requires no additional configuration:
 
 ```toml
 [dependencies]
-mcpkit-transport = "0.1"
-mcpkit-server = "0.1"
+mcpkit-transport = "0.2"
+mcpkit-server = "0.2"
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -29,8 +29,8 @@ To use async-std, disable default features and enable `async-std-runtime`:
 
 ```toml
 [dependencies]
-mcpkit-transport = { version = "0.1", default-features = false, features = ["async-std-runtime"] }
-mcpkit-server = { version = "0.1", default-features = false, features = ["async-std-runtime"] }
+mcpkit-transport = { version = "0.2", default-features = false, features = ["async-std-runtime"] }
+mcpkit-server = { version = "0.2", default-features = false, features = ["async-std-runtime"] }
 async-std = { version = "1", features = ["attributes"] }
 ```
 
@@ -55,8 +55,8 @@ For minimal binary size, use smol:
 
 ```toml
 [dependencies]
-mcpkit-transport = { version = "0.1", default-features = false, features = ["smol-runtime"] }
-mcpkit-server = { version = "0.1", default-features = false, features = ["smol-runtime"] }
+mcpkit-transport = { version = "0.2", default-features = false, features = ["smol-runtime"] }
+mcpkit-server = { version = "0.2", default-features = false, features = ["smol-runtime"] }
 smol = "2"
 ```
 
