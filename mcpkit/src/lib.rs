@@ -15,6 +15,7 @@
 //!
 //! ```ignore
 //! use mcpkit::prelude::*;
+//! use mcpkit::transport::stdio::StdioTransport;
 //!
 //! struct Calculator;
 //!
@@ -33,7 +34,11 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), McpError> {
-//!     Calculator.serve_stdio().await
+//!     let transport = StdioTransport::new();
+//!     let server = ServerBuilder::new(Calculator)
+//!         .with_tools(Calculator)
+//!         .build();
+//!     server.serve(transport).await
 //! }
 //! ```
 //!
