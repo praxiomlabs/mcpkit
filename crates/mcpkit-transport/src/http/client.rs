@@ -8,7 +8,7 @@ use crate::error::TransportError;
 use crate::runtime::AsyncMutex;
 use crate::traits::{Transport, TransportMetadata};
 
-use super::config::{HttpTransportConfig, HttpTransportBuilder, MCP_PROTOCOL_VERSION_HEADER, MCP_SESSION_ID_HEADER};
+use super::config::{HttpTransportConfig, HttpTransportBuilder};
 use super::sse::{HttpTransportState, process_sse_buffer};
 
 #[cfg(feature = "http")]
@@ -19,6 +19,7 @@ use {
         Client, Response, StatusCode,
         header::{ACCEPT, CONTENT_TYPE, HeaderMap, HeaderValue},
     },
+    super::config::{MCP_PROTOCOL_VERSION_HEADER, MCP_SESSION_ID_HEADER},
 };
 
 /// HTTP transport with SSE streaming support.
