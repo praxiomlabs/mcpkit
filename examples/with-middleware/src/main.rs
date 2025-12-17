@@ -263,12 +263,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         // Send response through middleware stack
-        if let Some(resp) = response {
-            if let Err(e) = transport.send(resp).await {
+        if let Some(resp) = response
+            && let Err(e) = transport.send(resp).await {
                 tracing::error!(error = ?e, "Send error");
                 break;
             }
-        }
     }
 
     info!("Server shutting down");

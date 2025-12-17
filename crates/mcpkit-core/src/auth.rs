@@ -407,7 +407,7 @@ impl PkceChallenge {
 
         // Generate a random 32-byte verifier
         let mut rng = rand::thread_rng();
-        let verifier_bytes: [u8; 32] = rng.gen();
+        let verifier_bytes: [u8; 32] = rng.r#gen();
         let verifier = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(verifier_bytes);
 
         let challenge = match method {

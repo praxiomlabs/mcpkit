@@ -94,11 +94,10 @@ impl AppState {
     async fn get_or_create_session(&self, session_id: Option<&str>) -> (String, bool) {
         let mut sessions = self.sessions.write().await;
 
-        if let Some(id) = session_id {
-            if sessions.contains_key(id) {
+        if let Some(id) = session_id
+            && sessions.contains_key(id) {
                 return (id.to_string(), false);
             }
-        }
 
         // Create new session
         let id = uuid::Uuid::new_v4().to_string();
