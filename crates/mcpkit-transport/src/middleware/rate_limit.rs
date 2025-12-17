@@ -282,12 +282,14 @@ impl RateLimiter {
     /// Sliding window algorithm implementation.
     async fn check_sliding_window(&self) -> bool {
         let now = Instant::now();
-        let window_start = now.checked_sub(self.config.window).unwrap();
+        // If window is larger than process uptime, keep all requests (they're all within the window)
+        let window_start = now.checked_sub(self.config.window);
 
         let mut times = self.state.request_times.lock().await;
 
         // Remove requests outside the window
-        times.retain(|&t| t > window_start);
+        // If window_start is None (window > process uptime), keep all requests
+        times.retain(|&t| window_start.is_none_or(|start| t > start));
 
         // Check if we're under the limit
         if times.len() < self.config.max_requests as usize {

@@ -260,7 +260,7 @@ impl MetricsSnapshot {
             .iter()
             .filter(|(_, s)| s.errors > 0)
             .collect();
-        methods.sort_by(|a, b| b.1.error_rate().partial_cmp(&a.1.error_rate()).unwrap());
+        methods.sort_by(|a, b| b.1.error_rate().total_cmp(&a.1.error_rate()));
         methods.into_iter().take(limit).collect()
     }
 
@@ -268,7 +268,7 @@ impl MetricsSnapshot {
     #[must_use]
     pub fn slowest_methods(&self, limit: usize) -> Vec<(&String, &MethodStats)> {
         let mut methods: Vec<_> = self.per_method.iter().collect();
-        methods.sort_by(|a, b| b.1.avg_latency_ms.partial_cmp(&a.1.avg_latency_ms).unwrap());
+        methods.sort_by(|a, b| b.1.avg_latency_ms.total_cmp(&a.1.avg_latency_ms));
         methods.into_iter().take(limit).collect()
     }
 }
