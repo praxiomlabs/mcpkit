@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.5] - 2025-12-17
+
+### Added
+
+- `EventStore` for SSE message resumability in mcpkit-axum and mcpkit-actix (MCP Streamable HTTP spec compliance)
+- Re-export `Serialize`, `Deserialize` traits and `json!` macro from mcpkit prelude
+- Client message routing integration tests
+
+### Changed
+
+- Removed `Clone` requirement from handler types in mcpkit-actix (API improvement)
+- Improved README documentation for mcpkit-axum and mcpkit-actix crates
+
+### Fixed
+
+- **Critical**: Async cancellation bug in `BufReader::read_line()` causing message duplication in `SpawnedTransport`
+  - Root cause: Setting `pos=0` before await point caused duplicate reads when futures were cancelled by `tokio::select!`
+  - Manifested as "unknown request" warnings when using client with spawned servers
+- Justfile `clippy` recipes now use `--workspace` flag to lint all workspace members
+- Justfile `examples` recipe now correctly builds workspace packages instead of using `--examples` flag
+
 ## [0.2.4] - 2025-12-17
 
 ### Added
@@ -149,7 +170,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mcpkit-testing` crate for test utilities
 - Protocol version detection and capability negotiation
 
-[Unreleased]: https://github.com/praxiomlabs/mcpkit/compare/v0.2.4...HEAD
+[Unreleased]: https://github.com/praxiomlabs/mcpkit/compare/v0.2.5...HEAD
+[0.2.5]: https://github.com/praxiomlabs/mcpkit/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/praxiomlabs/mcpkit/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/praxiomlabs/mcpkit/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/praxiomlabs/mcpkit/compare/v0.2.1...v0.2.2

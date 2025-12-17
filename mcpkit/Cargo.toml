@@ -14,11 +14,11 @@ readme = "../README.md"
 
 [dependencies]
 # Internal crates - path takes precedence locally, version used for publishing
-mcpkit-core = { version = "0.2.4", path = "../crates/mcpkit-core" }
-mcpkit-transport = { version = "0.2.4", path = "../crates/mcpkit-transport" }
-mcpkit-server = { version = "0.2.4", path = "../crates/mcpkit-server" }
-mcpkit-client = { version = "0.2.4", path = "../crates/mcpkit-client" }
-mcpkit-macros = { version = "0.2.4", path = "../crates/mcpkit-macros" }
+mcpkit-core = { version = "0.2.5", path = "../crates/mcpkit-core" }
+mcpkit-transport = { version = "0.2.5", path = "../crates/mcpkit-transport" }
+mcpkit-server = { version = "0.2.5", path = "../crates/mcpkit-server" }
+mcpkit-client = { version = "0.2.5", path = "../crates/mcpkit-client" }
+mcpkit-macros = { version = "0.2.5", path = "../crates/mcpkit-macros" }
 
 [features]
 default = ["server", "client", "tokio-runtime"]
