@@ -82,6 +82,10 @@ pub use state::{Closing, Connected, Connection, Disconnected, Initializing, Read
 /// use mcpkit_core::prelude::*;
 /// ```
 pub mod prelude {
+    // Re-export common serde types for convenience
+    pub use serde::{Deserialize, Serialize};
+    pub use serde_json::json;
+
     pub use crate::capability::{
         ClientCapabilities, ClientInfo, InitializeRequest, InitializeResult, PROTOCOL_VERSION,
         SUPPORTED_PROTOCOL_VERSIONS, ServerCapabilities, ServerInfo, VersionNegotiationResult,

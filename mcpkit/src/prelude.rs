@@ -15,6 +15,10 @@
 //!
 //! ## Included Types
 //!
+//! ### Serde (for convenience)
+//! - `Serialize`, `Deserialize` - common derive traits
+//! - `json!` - JSON value construction macro
+//!
 //! ### Core Types
 //! - Protocol types (Request, Response, Notification, Message)
 //! - Error types (`McpError`, `JsonRpcError`)
