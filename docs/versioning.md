@@ -18,7 +18,7 @@ During the 0.x.y phase, the API is considered unstable:
 - Patch versions (0.0.x) remain backward compatible
 - We aim to minimize churn, but cannot guarantee API stability
 
-**Current Status:** 0.1.x (Alpha)
+**Current Status:** 0.2.x (Beta)
 
 ### Crate Versioning
 
@@ -26,13 +26,15 @@ All crates in the workspace are versioned together:
 
 | Crate | Version |
 |-------|---------|
-| `mcpkit` | 0.1.x |
-| `mcpkit-core` | 0.1.x |
-| `mcpkit-server` | 0.1.x |
-| `mcpkit-client` | 0.1.x |
-| `mcpkit-transport` | 0.1.x |
-| `mcpkit-macros` | 0.1.x |
-| `mcpkit-testing` | 0.1.x |
+| `mcpkit` | 0.2.x |
+| `mcpkit-core` | 0.2.x |
+| `mcpkit-server` | 0.2.x |
+| `mcpkit-client` | 0.2.x |
+| `mcpkit-transport` | 0.2.x |
+| `mcpkit-macros` | 0.2.x |
+| `mcpkit-testing` | 0.2.x |
+| `mcpkit-axum` | 0.2.x |
+| `mcpkit-actix` | 0.2.x |
 
 This simplifies dependency management and ensures compatibility.
 
@@ -127,10 +129,10 @@ Before declaring 1.0 stable, we will:
 
 | Milestone | Target | Status |
 |-----------|--------|--------|
-| 0.1.0 Alpha | Q4 2024 | In progress |
-| 0.2.0 Beta | Q1 2025 | Planned |
-| 0.3.0 RC | Q2 2025 | Planned |
-| 1.0.0 Stable | Q3 2025 | Planned |
+| 0.1.0 Alpha | Q4 2024 | Released |
+| 0.2.0 Beta | Q4 2024 | Released |
+| 0.3.0 RC | Q1 2025 | Planned |
+| 1.0.0 Stable | Q2 2025 | Planned |
 
 Note: Dates are estimates and subject to change based on feedback and testing.
 
@@ -138,7 +140,7 @@ Note: Dates are estimates and subject to change based on feedback and testing.
 
 ### Minimum Supported Rust Version (MSRV)
 
-The current MSRV is **Rust 1.75**.
+The current MSRV is **Rust 1.85**.
 
 MSRV policy:
 - MSRV increases are treated as minor version bumps
@@ -195,7 +197,7 @@ experimental = []  # Experimental features
 Enable experimental features at your own risk:
 
 ```toml
-mcpkit = { version = "0.1", features = ["experimental"] }
+mcpkit = { version = "0.2", features = ["experimental"] }
 ```
 
 ### Optional Transports
