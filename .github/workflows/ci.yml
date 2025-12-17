@@ -45,6 +45,53 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo check --all-features --all-targets
 
+  version-sync:
+    name: Version Sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check documentation versions match Cargo.toml
+        run: |
+          VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "mcpkit") | .version')
+          MAJOR_MINOR=$(echo "$VERSION" | cut -d. -f1,2)
+
+          echo "Checking documentation references mcpkit version $MAJOR_MINOR..."
+
+          # Check README.md
+          if ! grep -q "mcpkit = \"$MAJOR_MINOR\"" README.md; then
+            echo "ERROR: README.md does not reference mcpkit = \"$MAJOR_MINOR\""
+            exit 1
+          fi
+
+          # Check getting-started.md
+          if ! grep -q "mcpkit = \"$MAJOR_MINOR\"" docs/getting-started.md; then
+            echo "ERROR: docs/getting-started.md does not reference mcpkit = \"$MAJOR_MINOR\""
+            exit 1
+          fi
+
+          echo "All version references are correct!"
+
+  link-check:
+    name: Link Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check markdown links
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: >
+            --verbose
+            --no-progress
+            --accept 200,204,206
+            --exclude-mail
+            --exclude "^https://crates.io"
+            --exclude "^https://docs.rs"
+            './docs/**/*.md'
+            './README.md'
+            './CONTRIBUTING.md'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   # ==========================================================================
   # Core tests - run after fast checks pass
   # ==========================================================================
