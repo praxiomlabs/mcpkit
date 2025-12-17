@@ -5,6 +5,7 @@
 [![Documentation](https://docs.rs/mcpkit/badge.svg)](https://docs.rs/mcpkit)
 [![License](https://img.shields.io/crates/l/mcpkit.svg)](LICENSE-MIT)
 [![MSRV](https://img.shields.io/badge/MSRV-1.85-blue.svg)](https://blog.rust-lang.org/2025/02/20/Rust-1.85.0.html)
+[![MCP Protocol](https://img.shields.io/badge/MCP-2025--11--25-green.svg)](https://modelcontextprotocol.io/specification/2025-11-25)
 
 A Rust SDK for the Model Context Protocol (MCP) that simplifies server development through a unified `#[mcp_server]` macro.
 
@@ -17,14 +18,28 @@ A Rust SDK for the Model Context Protocol (MCP) that simplifies server developme
 - **Full MCP 2025-11-25 protocol coverage** including Tasks
 - **First-class middleware** via Tower-compatible Layer pattern
 
+## Why mcpkit?
+
+mcpkit implements **MCP 2025-11-25** — the latest protocol specification — while the official `rmcp` SDK still uses 2024-11-05. This means mcpkit supports features not available in the official SDK:
+
+| Feature | Added In | Description |
+|---------|----------|-------------|
+| **Tasks** | 2025-11-25 | Long-running operations with progress tracking and cancellation |
+| **Elicitation** | 2025-06-18 | Server-initiated requests for user input |
+| **OAuth 2.1** | 2025-03-26 | Modern authentication with mandatory PKCE |
+| **Tool Annotations** | 2025-03-26 | `readOnly`, `destructive`, `idempotent` hints for tools |
+| **Structured Output** | 2025-06-18 | Type-safe JSON responses with schema validation |
+
+If you need these features in Rust, mcpkit is currently the most complete implementation.
+
 ## Quick Start
 
 Add the dependency to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-mcpkit = "0.1"
-tokio = { version = "1.0", features = ["full"] }
+mcpkit = "0.2"
+tokio = { version = "1", features = ["full"] }
 serde_json = "1"
 ```
 
@@ -32,8 +47,7 @@ Create a simple MCP server:
 
 ```rust
 use mcpkit::prelude::*;
-use mcpkit_server::ServerBuilder;
-use mcpkit_transport::stdio::StdioTransport;
+use mcpkit::transport::stdio::StdioTransport;
 
 struct Calculator;
 
@@ -73,11 +87,14 @@ async fn main() -> Result<(), McpError> {
 
 | Aspect | rmcp | This SDK |
 |--------|------|----------|
+| **Protocol Version** | 2024-11-05 | **2025-11-25** (latest) |
 | Macros | 4 interdependent | 1 unified `#[mcp_server]` |
 | Boilerplate | Manual router wiring | Automatic wiring |
 | Parameters | `Parameters<T>` wrapper | Direct from signature |
 | Error types | 3 nested layers | 1 unified `McpError` |
-| Tasks | Limited | Full support |
+| Tasks | Not in 2024-11-05 | Full support |
+| Elicitation | Not in 2024-11-05 | Full support |
+| OAuth 2.1 | Not in 2024-11-05 | Full support |
 | WebSocket | Custom implementation | Built-in |
 | Middleware | Manual/Tower separate | Built-in Layer system |
 | Runtime | Tokio-only | Runtime-agnostic |
