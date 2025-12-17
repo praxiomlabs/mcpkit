@@ -11,9 +11,9 @@ categories = ["development-tools::testing"]
 
 [dependencies]
 # Internal crates - path takes precedence locally, version used for publishing
-mcpkit-core = { version = "0.2.1", path = "../mcpkit-core" }
-mcpkit-transport = { version = "0.2.1", path = "../mcpkit-transport" }
-mcpkit-server = { version = "0.2.1", path = "../mcpkit-server" }
+mcpkit-core = { version = "0.2.2", path = "../mcpkit-core" }
+mcpkit-transport = { version = "0.2.2", path = "../mcpkit-transport" }
+mcpkit-server = { version = "0.2.2", path = "../mcpkit-server" }
 
 # Serialization
 serde = { workspace = true }

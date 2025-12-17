@@ -12,8 +12,8 @@ readme = "README.md"
 
 [dependencies]
 # Internal crates - path takes precedence locally, version used for publishing
-mcpkit-core = { version = "0.2.1", path = "../mcpkit-core" }
-mcpkit-transport = { version = "0.2.1", path = "../mcpkit-transport" }
+mcpkit-core = { version = "0.2.2", path = "../mcpkit-core" }
+mcpkit-transport = { version = "0.2.2", path = "../mcpkit-transport" }
 
 # Serialization
 serde = { workspace = true }

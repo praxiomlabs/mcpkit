@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2025-12-17
+
+### Fixed
+
+- Eliminated panic path in rate limiter when sliding window exceeds process uptime
+
+### Added
+
+- Troubleshooting guide documentation
+- Release checklist for systematic release validation
+- Justfile recipes for release workflow (`wip-check`, `panic-audit`, `metadata-check`)
+- Code coverage CI job with Codecov integration
+
+### Changed
+
+- Documentation version references updated from 0.1 to 0.2
+- Architecture diagram crate names corrected (`mcp-*` to `mcpkit-*`)
+- MSRV reference updated in CONTRIBUTING.md (1.75 to 1.85)
+- Dockerfile base image updated to `rust:1.85-bookworm`
+- Codecov configuration paths updated to current crate structure
+- Advisory ignore documented in deny.toml (RUSTSEC-2025-0052)
+
 ## [0.2.1] - 2025-12-13
 
 ### Added
