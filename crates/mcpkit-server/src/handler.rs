@@ -39,7 +39,8 @@
 use mcpkit_core::capability::{ServerCapabilities, ServerInfo};
 use mcpkit_core::error::McpError;
 use mcpkit_core::types::{
-    GetPromptResult, Prompt, Resource, ResourceContents, Task, TaskId, Tool, ToolOutput,
+    GetPromptResult, Prompt, Resource, ResourceContents, ResourceTemplate, Task, TaskId, Tool,
+    ToolOutput,
     elicitation::{ElicitRequest, ElicitResult},
     sampling::{CreateMessageRequest, CreateMessageResult},
 };
@@ -129,11 +130,28 @@ pub trait ToolHandler: Send + Sync {
 ///
 /// Implement this trait to expose resources that AI assistants can read.
 pub trait ResourceHandler: Send + Sync {
-    /// List all available resources.
+    /// List all available static resources.
+    ///
+    /// This returns resources with fixed URIs. For dynamic resources with
+    /// parameterized URIs (e.g., `file://{path}`), use `list_resource_templates()`.
     fn list_resources(
         &self,
         ctx: &Context<'_>,
     ) -> impl Future<Output = Result<Vec<Resource>, McpError>> + Send;
+
+    /// List all available resource templates.
+    ///
+    /// Resource templates describe dynamic resources with parameterized URIs.
+    /// For example, a template with URI `file://{path}` allows clients to
+    /// construct URIs like `file:///etc/hosts` to read specific files.
+    ///
+    /// The default implementation returns an empty list.
+    fn list_resource_templates(
+        &self,
+        _ctx: &Context<'_>,
+    ) -> impl Future<Output = Result<Vec<ResourceTemplate>, McpError>> + Send {
+        async { Ok(vec![]) }
+    }
 
     /// Read a resource by URI.
     fn read_resource(
@@ -447,6 +465,13 @@ impl<T: ResourceHandler> ResourceHandler for Arc<T> {
         ctx: &Context<'_>,
     ) -> impl Future<Output = Result<Vec<Resource>, McpError>> + Send {
         (**self).list_resources(ctx)
+    }
+
+    fn list_resource_templates(
+        &self,
+        ctx: &Context<'_>,
+    ) -> impl Future<Output = Result<Vec<ResourceTemplate>, McpError>> + Send {
+        (**self).list_resource_templates(ctx)
     }
 
     fn read_resource(

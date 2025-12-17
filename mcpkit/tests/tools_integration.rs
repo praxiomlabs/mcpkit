@@ -5,9 +5,11 @@ use mcpkit::protocol::RequestId;
 use mcpkit::protocol_version::ProtocolVersion;
 use mcpkit::types::ToolOutput;
 use mcpkit::types::tool::CallToolResult;
+use mcpkit::ToolInput;
 use mcpkit_server::capability::tools::{ToolBuilder, ToolService};
 use mcpkit_server::context::{Context, NoOpPeer};
 use mcpkit_server::handler::ToolHandler;
+use serde::{Deserialize, Serialize};
 
 fn make_test_context() -> (
     RequestId,
@@ -296,4 +298,80 @@ async fn test_tool_service_preserves_annotations() {
     assert!(tool.annotations.is_some());
     let annotations = tool.annotations.as_ref().unwrap();
     assert_eq!(annotations.destructive_hint, Some(true));
+}
+
+/// A nested struct for testing schema generation.
+#[derive(Debug, Clone, Serialize, Deserialize, ToolInput)]
+struct Address {
+    /// The street address
+    street: String,
+    /// The city name
+    city: String,
+    /// Optional zip code
+    zip: Option<String>,
+}
+
+/// A parent struct containing a nested struct.
+#[derive(Debug, Clone, Serialize, Deserialize, ToolInput)]
+struct Person {
+    /// The person's name
+    name: String,
+    /// The person's age
+    age: u32,
+    /// The person's address
+    address: Address,
+}
+
+#[test]
+fn test_nested_struct_schema_generation() {
+    // Generate schema for the nested Address struct
+    let address_schema = Address::tool_input_schema();
+
+    // Verify Address schema has proper structure
+    assert_eq!(address_schema["type"], "object");
+    assert_eq!(address_schema["title"], "Address");
+
+    let addr_props = &address_schema["properties"];
+    assert!(addr_props["street"].is_object());
+    assert_eq!(addr_props["street"]["type"], "string");
+    assert!(addr_props["city"].is_object());
+    assert_eq!(addr_props["city"]["type"], "string");
+    assert!(addr_props["zip"].is_object());
+
+    // Check required fields (street and city are required, zip is optional)
+    let addr_required = address_schema["required"].as_array().unwrap();
+    assert!(addr_required.contains(&serde_json::json!("street")));
+    assert!(addr_required.contains(&serde_json::json!("city")));
+    assert!(!addr_required.contains(&serde_json::json!("zip")));
+
+    // Generate schema for the parent Person struct
+    let person_schema = Person::tool_input_schema();
+
+    // Verify Person schema has proper structure
+    assert_eq!(person_schema["type"], "object");
+    assert_eq!(person_schema["title"], "Person");
+
+    let person_props = &person_schema["properties"];
+    assert!(person_props["name"].is_object());
+    assert_eq!(person_props["name"]["type"], "string");
+    assert!(person_props["age"].is_object());
+    assert_eq!(person_props["age"]["type"], "integer");
+
+    // The nested Address field should have full schema, not just "object"
+    let nested_addr = &person_props["address"];
+    assert!(nested_addr.is_object());
+    assert_eq!(nested_addr["type"], "object");
+    assert_eq!(nested_addr["title"], "Address");
+
+    // Verify nested schema includes properties from Address
+    let nested_props = &nested_addr["properties"];
+    assert!(nested_props["street"].is_object());
+    assert!(nested_props["city"].is_object());
+    assert!(nested_props["zip"].is_object());
+
+    // Check Person required fields
+    let person_required = person_schema["required"].as_array().unwrap();
+    assert!(person_required.contains(&serde_json::json!("name")));
+    assert!(person_required.contains(&serde_json::json!("age")));
+    assert!(person_required.contains(&serde_json::json!("address")));
 }

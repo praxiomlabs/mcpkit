@@ -589,22 +589,20 @@ fn generate_tool_handler(tools: &[ToolMethod], self_ty: &syn::Type) -> TokenStre
 
 /// Generate the `ResourceHandler` implementation.
 fn generate_resource_handler(resources: &[ResourceMethod], self_ty: &syn::Type) -> TokenStream {
-    // Generate resource definitions
+    // Generate static resource definitions (non-template URIs)
     let resource_defs: Vec<_> = resources
         .iter()
-        .map(|resource| {
+        .filter_map(|resource| {
             let uri = &resource.uri_pattern;
             let name = &resource.resource_name;
             let description = &resource.description;
             let mime_type = &resource.mime_type;
 
-            // Check if this is a template (contains {param})
+            // Only include non-template resources in list_resources
             if uri.contains('{') {
-                // For templates, we don't include them in list_resources
-                // They're handled by list_resource_templates (not implemented yet)
-                quote!()
+                None
             } else {
-                quote! {
+                Some(quote! {
                     ::mcpkit::types::Resource {
                         uri: #uri.to_string(),
                         name: #name.to_string(),
@@ -613,7 +611,33 @@ fn generate_resource_handler(resources: &[ResourceMethod], self_ty: &syn::Type) 
                         size: None,
                         annotations: None,
                     },
-                }
+                })
+            }
+        })
+        .collect();
+
+    // Generate template definitions (URIs with {param} placeholders)
+    let template_defs: Vec<_> = resources
+        .iter()
+        .filter_map(|resource| {
+            let uri = &resource.uri_pattern;
+            let name = &resource.resource_name;
+            let description = &resource.description;
+            let mime_type = &resource.mime_type;
+
+            // Only include template resources in list_resource_templates
+            if uri.contains('{') {
+                Some(quote! {
+                    ::mcpkit::types::ResourceTemplate {
+                        uri_template: #uri.to_string(),
+                        name: #name.to_string(),
+                        description: if #description.is_empty() { None } else { Some(#description.to_string()) },
+                        mime_type: Some(#mime_type.to_string()),
+                        annotations: None,
+                    },
+                })
+            } else {
+                None
             }
         })
         .collect();
@@ -687,6 +711,17 @@ fn generate_resource_handler(resources: &[ResourceMethod], self_ty: &syn::Type) 
                 async move {
                     Ok(vec![
                         #(#resource_defs)*
+                    ])
+                }
+            }
+
+            fn list_resource_templates(
+                &self,
+                _ctx: &::mcpkit::Context,
+            ) -> impl std::future::Future<Output = Result<Vec<::mcpkit::types::ResourceTemplate>, ::mcpkit::error::McpError>> + Send {
+                async move {
+                    Ok(vec![
+                        #(#template_defs)*
                     ])
                 }
             }

@@ -566,6 +566,15 @@ async fn route_resources<RH: ResourceHandler + Send + Sync>(
             }
             Some(result.map(|resources| serde_json::json!({ "resources": resources })))
         }
+        "resources/templates/list" => {
+            tracing::debug!("Listing available resource templates");
+            let result = handler.list_resource_templates(ctx).await;
+            match &result {
+                Ok(templates) => tracing::debug!(count = templates.len(), "Listed resource templates"),
+                Err(e) => tracing::warn!(error = %e, "Failed to list resource templates"),
+            }
+            Some(result.map(|templates| serde_json::json!({ "resourceTemplates": templates })))
+        }
         "resources/read" => {
             let result = async {
                 let params = params.ok_or_else(|| {

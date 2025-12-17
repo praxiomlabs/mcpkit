@@ -192,3 +192,53 @@ async fn test_binary_resource() {
     let result = service.read("file:///image.png", &ctx).await;
     assert!(result.is_ok());
 }
+
+#[tokio::test]
+async fn test_list_resource_templates() {
+    let mut service = ResourceService::new();
+
+    // Register a static resource
+    let resource = ResourceBuilder::new("config://server", "Server Config")
+        .description("Static configuration")
+        .mime_type("application/json")
+        .build();
+
+    service.register(resource, |uri, _ctx| async move {
+        Ok(ResourceContents::text(uri, r#"{"port": 8080}"#))
+    });
+
+    // Register a template resource
+    let template = ResourceTemplateBuilder::new("file://{path}", "File Contents")
+        .description("Read any file by path")
+        .mime_type("text/plain")
+        .build();
+
+    service.register_template(template, |uri, _ctx| async move {
+        Ok(ResourceContents::text(uri, "file contents"))
+    });
+
+    // Register another template
+    let template2 = ResourceTemplateBuilder::new("db://users/{id}", "User Record")
+        .description("User data by ID")
+        .mime_type("application/json")
+        .build();
+
+    service.register_template(template2, |uri, _ctx| async move {
+        let id = uri.strip_prefix("db://users/").unwrap_or("unknown");
+        Ok(ResourceContents::text(uri, format!(r#"{{"id": "{}"}}"#, id)))
+    });
+
+    let (req_id, client_caps, server_caps, protocol_version, peer) = make_test_context();
+    let ctx = Context::new(&req_id, None, &client_caps, &server_caps, protocol_version, &peer);
+
+    // list_resources should only return static resources
+    let resources = service.list_resources(&ctx).await.unwrap();
+    assert_eq!(resources.len(), 1);
+    assert_eq!(resources[0].uri, "config://server");
+
+    // list_resource_templates should return the template resources
+    let templates = service.list_resource_templates(&ctx).await.unwrap();
+    assert_eq!(templates.len(), 2);
+    assert!(templates.iter().any(|t| t.uri_template == "file://{path}"));
+    assert!(templates.iter().any(|t| t.uri_template == "db://users/{id}"));
+}

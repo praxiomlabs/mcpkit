@@ -184,6 +184,12 @@ fn get_option_inner_type(ty: &Type) -> Option<&Type> {
 }
 
 /// Convert a Rust type to a JSON Schema representation.
+///
+/// For primitive types (String, integers, floats, bool), this returns a static schema.
+/// For container types (Option, Vec, `HashMap`), it recurses into the inner type.
+/// For custom struct types, it attempts to call `Type::tool_input_schema()`, which
+/// requires the type to derive `ToolInput`. If the type doesn't have this method,
+/// compilation will fail with a clear error message.
 fn type_to_json_schema(ty: &Type) -> TokenStream {
     if let Type::Path(path) = ty {
         let path_str = quote!(#path).to_string().replace(' ', "");
@@ -227,9 +233,15 @@ fn type_to_json_schema(ty: &Type) -> TokenStream {
                     "additionalProperties": true
                 }))
             }
+            "serde_json::Value" | "Value" => {
+                // JSON Value can be any type
+                quote!(serde_json::json!({}))
+            }
             _ => {
-                // Default to object for unknown types
-                quote!(serde_json::json!({"type": "object"}))
+                // For custom struct types, call their tool_input_schema() method.
+                // This requires the type to derive ToolInput.
+                // If it doesn't, the user gets a compile error with a helpful message.
+                quote!(#path::tool_input_schema())
             }
         }
     } else {
