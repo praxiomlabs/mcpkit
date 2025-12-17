@@ -228,8 +228,7 @@ impl EventStore {
         let start_idx = events
             .iter()
             .position(|e| e.id == last_event_id)
-            .map(|i| i + 1)
-            .unwrap_or(0);
+            .map_or(0, |i| i + 1);
 
         events.iter().skip(start_idx).cloned().collect()
     }

@@ -239,11 +239,11 @@ impl EventStore {
         let events = self.events.read().await;
 
         // Find the index of the last event ID
+        // Start from the next event after last_event_id, or 0 if not found
         let start_idx = events
             .iter()
             .position(|e| e.id == last_event_id)
-            .map(|i| i + 1) // Start from the next event
-            .unwrap_or(0); // If not found, return all events
+            .map_or(0, |i| i + 1);
 
         events.iter().skip(start_idx).cloned().collect()
     }

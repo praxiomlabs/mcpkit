@@ -313,8 +313,7 @@ fn create_sse_stream_with_replay(
         // to prime the client for reconnection
         let connected_event_id = event_store
             .as_ref()
-            .map(|store| store.next_event_id())
-            .unwrap_or_else(|| "evt-connected".to_string());
+            .map_or_else(|| "evt-connected".to_string(), |store| store.next_event_id());
 
         yield Ok(Event::default()
             .id(&connected_event_id)
@@ -328,8 +327,7 @@ fn create_sse_stream_with_replay(
                     // Generate event ID for the new message
                     let event_id = event_store
                         .as_ref()
-                        .map(|store| store.next_event_id())
-                        .unwrap_or_else(|| format!("evt-{}", uuid::Uuid::new_v4()));
+                        .map_or_else(|| format!("evt-{}", uuid::Uuid::new_v4()), |store| store.next_event_id());
 
                     yield Ok(Event::default()
                         .id(&event_id)
