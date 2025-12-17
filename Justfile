@@ -28,7 +28,7 @@
 project_name := "mcpkit"
 version := "0.2.0"
 msrv := "1.85"
-edition := "2021"
+edition := "2024"
 docker_image := project_name
 docker_tag := version
 
@@ -260,11 +260,11 @@ fmt-check:
     printf '{{green}}[OK]{{reset}}   Format check passed\n'
 
 [group('lint')]
-[doc("Run clippy lints (workspace-configured)")]
+[doc("Run clippy lints (matches CI configuration)")]
 clippy:
     #!/usr/bin/env bash
     printf '{{cyan}}[INFO]{{reset}} Running clippy...\n'
-    {{cargo}} clippy --all-targets --all-features
+    {{cargo}} clippy --all-features --all-targets -- -D warnings
     printf '{{green}}[OK]{{reset}}   Clippy passed\n'
 
 [group('lint')]
@@ -398,6 +398,23 @@ doc-check:
     printf '{{cyan}}[INFO]{{reset}} Checking documentation...\n'
     RUSTDOCFLAGS="-D warnings" {{cargo}} doc --workspace --all-features --no-deps
     printf '{{green}}[OK]{{reset}}   Documentation check passed\n'
+
+[group('docs')]
+[doc("Check markdown links (requires lychee)")]
+link-check:
+    #!/usr/bin/env bash
+    printf '{{cyan}}[INFO]{{reset}} Checking markdown links...\n'
+    if ! command -v lychee &> /dev/null; then
+        printf '{{yellow}}[WARN]{{reset}} lychee not installed (cargo install lychee)\n'
+        printf '{{yellow}}[WARN]{{reset}} Skipping link check\n'
+        exit 0
+    fi
+    lychee --verbose --no-progress --accept 200,204,206 \
+        --exclude-mail \
+        --exclude '^https://crates.io' \
+        --exclude '^https://docs.rs' \
+        './docs/**/*.md' './README.md' './CONTRIBUTING.md'
+    printf '{{green}}[OK]{{reset}}   Link check passed\n'
 
 # ============================================================================
 # COVERAGE RECIPES
