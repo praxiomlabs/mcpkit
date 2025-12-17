@@ -17,8 +17,8 @@
 //! ```bash
 //! curl -X POST http://127.0.0.1:3000/mcp \
 //!   -H "Content-Type: application/json" \
-//!   -H "mcp-protocol-version: 2025-06-18" \
-//!   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","clientInfo":{"name":"curl","version":"1.0"}}}'
+//!   -H "mcp-protocol-version: 2025-11-25" \
+//!   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","clientInfo":{"name":"curl","version":"1.0"}}}'
 //! ```
 
 use axum::{
@@ -45,7 +45,7 @@ use tokio::sync::{RwLock, broadcast};
 use tracing::{info, warn};
 
 /// MCP Protocol version.
-const MCP_PROTOCOL_VERSION: &str = "2025-06-18";
+const MCP_PROTOCOL_VERSION: &str = "2025-11-25";
 
 /// Session ID header name (lowercase for HTTP/2 compatibility).
 const MCP_SESSION_ID_HEADER: &str = "mcp-session-id";

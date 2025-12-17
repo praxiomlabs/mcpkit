@@ -3,7 +3,9 @@
 use std::time::Duration;
 
 /// MCP Protocol version for the HTTP transport.
-pub const MCP_PROTOCOL_VERSION: &str = "2025-06-18";
+///
+/// This matches `ProtocolVersion::LATEST` from mcpkit-core.
+pub const MCP_PROTOCOL_VERSION: &str = "2025-11-25";
 
 /// Header name for MCP protocol version.
 ///

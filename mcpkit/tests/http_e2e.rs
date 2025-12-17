@@ -22,7 +22,7 @@ use tokio::time::timeout;
 
 /// MCP Protocol version header (lowercase for HTTP/2 compatibility).
 const MCP_PROTOCOL_VERSION_HEADER: &str = "mcp-protocol-version";
-const MCP_PROTOCOL_VERSION: &str = "2025-06-18";
+const MCP_PROTOCOL_VERSION: &str = "2025-11-25";
 const MCP_SESSION_ID_HEADER: &str = "mcp-session-id";
 
 /// Simple server state

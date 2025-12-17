@@ -30,7 +30,7 @@ use tokio::{
 use tracing::info;
 
 /// MCP Protocol version.
-const MCP_PROTOCOL_VERSION: &str = "2025-06-18";
+const MCP_PROTOCOL_VERSION: &str = "2025-11-25";
 
 /// Simple MCP client for demonstration purposes.
 struct McpClient {

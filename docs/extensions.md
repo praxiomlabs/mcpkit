@@ -9,7 +9,7 @@ The SDK provides official extension crates for popular web frameworks:
 | Crate | Framework | Features |
 |-------|-----------|----------|
 | `mcpkit-axum` | [Axum](https://github.com/tokio-rs/axum) | McpRouter, session management, SSE streaming, CORS support |
-| `mcpkit-actix` | [Actix-web](https://actix.rs/) | McpConfig, session management, SSE streaming |
+| `mcpkit-actix` | [Actix-web](https://actix.rs/) | McpRouter, session management, SSE streaming, CORS support |
 
 These crates serve as reference implementations and can be used directly or as patterns for custom integrations.
 
@@ -513,7 +513,7 @@ mod integration_tests {
 Always validate the `mcp-protocol-version` header:
 
 ```rust
-const SUPPORTED_VERSIONS: &[&str] = &["2024-11-05", "2025-03-26", "2025-06-18"];
+const SUPPORTED_VERSIONS: &[&str] = &["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"];
 
 fn is_supported_version(version: Option<&str>) -> bool {
     version.map(|v| SUPPORTED_VERSIONS.contains(&v)).unwrap_or(false)

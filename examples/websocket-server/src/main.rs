@@ -16,7 +16,7 @@
 //!
 //! ```bash
 //! websocat ws://127.0.0.1:3001
-//! {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","clientInfo":{"name":"websocat","version":"1.0"}}}
+//! {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","clientInfo":{"name":"websocat","version":"1.0"}}}
 //! ```
 
 use futures::{SinkExt, StreamExt};
@@ -38,7 +38,7 @@ use tokio_tungstenite::{accept_async, tungstenite::Message as WsMessage};
 use tracing::{error, info, warn};
 
 /// MCP Protocol version.
-const MCP_PROTOCOL_VERSION: &str = "2025-06-18";
+const MCP_PROTOCOL_VERSION: &str = "2025-11-25";
 
 /// Connection state.
 #[derive(Debug, Default)]

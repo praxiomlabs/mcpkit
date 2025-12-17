@@ -36,7 +36,7 @@ use std::time::Duration;
 use tracing::{Level, info};
 
 /// MCP Protocol version.
-const MCP_PROTOCOL_VERSION: &str = "2025-06-18";
+const MCP_PROTOCOL_VERSION: &str = "2025-11-25";
 
 /// Get available tools.
 fn get_tools() -> Vec<Tool> {
