@@ -52,7 +52,6 @@ where
         + HasServerInfo
         + Send
         + Sync
-        + Clone
         + 'static,
 {
     /// Create a new MCP router with the given handler.
@@ -99,10 +98,7 @@ where
     /// Configure an Actix App with MCP routes.
     ///
     /// This is useful when you need to integrate MCP routes with an existing Actix application.
-    pub fn configure_app(&self) -> impl Fn(&mut web::ServiceConfig) + Clone + 'static
-    where
-        H: Clone,
-    {
+    pub fn configure_app(&self) -> impl Fn(&mut web::ServiceConfig) + Clone + 'static {
         let state = self.state.clone();
         let post_path = self.post_path.clone();
         let sse_path = self.sse_path.clone();
@@ -127,10 +123,7 @@ where
     /// ```
     ///
     /// For more control over the server, use [`Self::configure_app`] instead.
-    pub async fn serve(self, addr: &str) -> std::io::Result<()>
-    where
-        H: Clone,
-    {
+    pub async fn serve(self, addr: &str) -> std::io::Result<()> {
         let state = self.state.clone();
         let post_path = self.post_path.clone();
         let sse_path = self.sse_path.clone();
@@ -202,8 +195,7 @@ mod tests {
     use mcpkit_server::ServerHandler;
     use mcpkit_server::context::Context;
 
-    // Note: Clone IS required for actix due to HttpServer::new closure requirements
-    #[derive(Clone)]
+    // Note: Clone is NOT required - the handler is wrapped in Arc internally
     struct TestHandler;
 
     impl ServerHandler for TestHandler {
