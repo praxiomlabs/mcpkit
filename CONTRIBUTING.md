@@ -12,6 +12,7 @@ This project follows the [Rust Code of Conduct](https://www.rust-lang.org/polici
 
 - Rust 1.85 or later (see [MSRV policy](docs/versioning.md#minimum-supported-rust-version))
 - Git
+- [Just](https://github.com/casey/just) command runner (recommended)
 
 ### Setup
 
@@ -25,14 +26,43 @@ This project follows the [Rust Code of Conduct](https://www.rust-lang.org/polici
    ```bash
    git remote add upstream https://github.com/praxiomlabs/mcpkit.git
    ```
-4. Build the project:
+4. Install Just (if not already installed):
    ```bash
-   cargo build
+   cargo install just
+   # or: brew install just / apt install just
    ```
-5. Run tests:
+5. Install development tools:
    ```bash
-   cargo test
+   just install-tools
+   # or for minimal setup:
+   just install-tools-minimal
    ```
+6. Build the project:
+   ```bash
+   just build
+   # or: cargo build
+   ```
+7. Run tests:
+   ```bash
+   just test
+   # or: cargo test
+   ```
+
+### Development Tools
+
+The following tools are used for development and CI:
+
+| Tool | Purpose | Install |
+|------|---------|---------|
+| `cargo-audit` | Security vulnerability scanning | Required |
+| `cargo-deny` | License and advisory checks | Required |
+| `cargo-outdated` | Dependency freshness | Recommended |
+| `cargo-nextest` | Faster test runner | Recommended |
+| `cargo-llvm-cov` | Code coverage | Recommended |
+| `cargo-semver-checks` | Semver compliance | Required for releases |
+| `cargo-watch` | File watching | Optional |
+
+Run `just check-tools` to see which tools are installed.
 
 ## Development Workflow
 

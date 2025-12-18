@@ -1050,6 +1050,37 @@ check-tools:
     printf '\n'
 
 [group('help')]
+[doc("Install all recommended development tools")]
+install-tools:
+    #!/usr/bin/env bash
+    printf '\n{{bold}}Installing Development Tools{{reset}}\n'
+    printf '═══════════════════════════════════════\n'
+
+    # Core cargo extensions (required for CI)
+    printf '\n{{cyan}}[INFO]{{reset}} Installing required tools...\n'
+    {{cargo}} install cargo-audit cargo-deny cargo-outdated cargo-nextest cargo-llvm-cov
+
+    # Recommended tools
+    printf '\n{{cyan}}[INFO]{{reset}} Installing recommended tools...\n'
+    {{cargo}} install cargo-watch cargo-semver-checks cargo-machete
+
+    # Optional but useful tools
+    printf '\n{{cyan}}[INFO]{{reset}} Installing optional tools...\n'
+    {{cargo}} install cargo-expand cargo-bloat || true
+
+    printf '\n{{green}}[OK]{{reset}}   Development tools installed\n'
+    printf '{{cyan}}[INFO]{{reset}} Run "just check-tools" to verify installation\n'
+
+[group('help')]
+[doc("Install minimal tools for CI/release checks")]
+install-tools-minimal:
+    #!/usr/bin/env bash
+    printf '\n{{bold}}Installing Minimal Development Tools{{reset}}\n'
+    printf '═══════════════════════════════════════\n'
+    {{cargo}} install cargo-audit cargo-deny cargo-semver-checks
+    printf '\n{{green}}[OK]{{reset}}   Minimal tools installed\n'
+
+[group('help')]
 [doc("Show all available recipes grouped by category")]
 help:
     #!/usr/bin/env bash
