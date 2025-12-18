@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Zero-copy message handling** with `bytes` crate for improved parsing performance
+  - New `BufReader::read_line_bytes()` method returns `Bytes` directly
+  - `StdioTransport` now uses `serde_json::from_slice` to avoid String allocations
+  - Re-exported `Bytes` and `BytesMut` types from mcpkit-transport
+- **Filesystem server example** (`examples/filesystem-server/`) demonstrating:
+  - Sandboxed file operations with path traversal protection
+  - Tools: read_file, write_file, list_directory, search_files, and more
+- **Stress testing CI workflow** (`.github/workflows/stress-test.yml`)
+  - Criterion benchmarks with performance regression detection
+  - Long-running stability tests on schedule
+- **Fuzz target** for protocol version parsing (`fuzz_protocol_version`)
+- **Developer tooling improvements**:
+  - `just install-tools` recipe for automated dev environment setup
+  - `just install-tools-minimal` for CI-only tools
+  - Updated CONTRIBUTING.md with development tools documentation
+- **Integration test script** (`scripts/integration-test.sh`) for comprehensive testing
+- **Performance baseline documentation** (`docs/performance-baseline.md`) with Criterion benchmark results
+- **Claude Desktop WSL2 guide** (`docs/claude-desktop-wsl2.md`) with verified configuration
+- **Client-example improvements**:
+  - Now uses filesystem-server for real MCP protocol testing
+  - Gracefully handles unsupported methods (resources, prompts)
+  - Updated documentation
+
+### Changed
+
+- **Rate limiter optimization**: Replaced manual CAS loop with `fetch_update` for cleaner, more idiomatic code
+- **async-std deprecation notice**: Updated `docs/runtimes.md` with RUSTSEC-2025-0052 advisory warning
+- **Security advisory handling**: Updated `deny.toml` with documented ignores for:
+  - RUSTSEC-2023-0071 (rsa via sqlx-mysql - not used, sqlite only)
+  - RUSTSEC-2024-0436 (paste via rmcp - dev-dependency only)
+
+### Fixed
+
+- **Filesystem server stdout pollution**: Changed `println!` and tracing to use stderr, keeping stdout clean for JSON-RPC messages
+- Various clippy warnings (`map_unwrap_or`, `items_after_statements`, `collapsible_if`)
+- cfg-gated imports in websocket server to avoid unused import warnings
+
 ## [0.2.5] - 2025-12-17
 
 ### Added
