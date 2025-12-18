@@ -334,16 +334,21 @@ impl std::error::Error for TimeoutError {}
 // BufReader/BufWriter Abstraction
 // =============================================================================
 
-/// A runtime-agnostic buffered reader.
+use bytes::{Bytes, BytesMut};
+
+/// A runtime-agnostic buffered reader with zero-copy support.
+///
+/// This implementation uses `BytesMut` internally for efficient buffer management
+/// and provides both `String`-based and `Bytes`-based reading methods for
+/// flexibility between convenience and performance.
 pub struct BufReader<R> {
     inner: R,
-    buffer: Vec<u8>,
-    pos: usize,
-    filled: usize,
+    buffer: BytesMut,
+    capacity: usize,
 }
 
 impl<R> BufReader<R> {
-    /// Create a new buffered reader with the default buffer size.
+    /// Create a new buffered reader with the default buffer size (8KB).
     pub fn new(inner: R) -> Self {
         Self::with_capacity(8192, inner)
     }
@@ -352,9 +357,8 @@ impl<R> BufReader<R> {
     pub fn with_capacity(capacity: usize, inner: R) -> Self {
         Self {
             inner,
-            buffer: vec![0; capacity],
-            pos: 0,
-            filled: 0,
+            buffer: BytesMut::with_capacity(capacity),
+            capacity,
         }
     }
 
@@ -367,54 +371,103 @@ impl<R> BufReader<R> {
     pub fn get_mut(&mut self) -> &mut R {
         &mut self.inner
     }
+
+    /// Returns the number of bytes currently buffered.
+    #[must_use]
+    pub fn buffered(&self) -> usize {
+        self.buffer.len()
+    }
 }
 
 impl<R: AsyncRead + Unpin> BufReader<R> {
-    /// Read a line from the reader.
+    /// Read a line from the reader into a `String`.
     ///
     /// Returns the number of bytes read (including the newline).
     /// Returns 0 on EOF.
+    ///
+    /// For zero-copy scenarios, consider using [`read_line_bytes`](Self::read_line_bytes)
+    /// which returns `Bytes` directly without UTF-8 conversion overhead.
     pub async fn read_line(&mut self, line: &mut String) -> io::Result<usize> {
+        let bytes = self.read_line_bytes().await?;
+        let len = bytes.len();
+        if len > 0 {
+            // Convert to string, using lossy conversion for robustness
+            line.push_str(&String::from_utf8_lossy(&bytes));
+        }
+        Ok(len)
+    }
+
+    /// Read a line from the reader as `Bytes` (zero-copy when possible).
+    ///
+    /// This method is more efficient than [`read_line`](Self::read_line) when:
+    /// - You need to parse the line as JSON directly (using `serde_json::from_slice`)
+    /// - You're processing binary protocols
+    /// - You want to avoid UTF-8 validation overhead
+    ///
+    /// Returns an empty `Bytes` on EOF.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use mcpkit_transport::runtime::BufReader;
+    ///
+    /// let mut reader = BufReader::new(some_reader);
+    /// let line_bytes = reader.read_line_bytes().await?;
+    /// if !line_bytes.is_empty() {
+    ///     // Parse JSON directly from bytes - no intermediate String allocation
+    ///     let message: Message = serde_json::from_slice(&line_bytes)?;
+    /// }
+    /// ```
+    pub async fn read_line_bytes(&mut self) -> io::Result<Bytes> {
         use futures::io::AsyncReadExt;
 
-        let mut total_read = 0;
+        // Accumulator for lines that span multiple buffer reads
+        let mut line_buf: Option<BytesMut> = None;
 
         loop {
-            // Check if we have buffered data
-            if self.pos < self.filled {
-                // Look for newline in buffer
-                if let Some(newline_pos) = self.buffer[self.pos..self.filled]
-                    .iter()
-                    .position(|&b| b == b'\n')
-                {
-                    let end = self.pos + newline_pos + 1;
-                    let bytes = &self.buffer[self.pos..end];
-                    line.push_str(&String::from_utf8_lossy(bytes));
-                    total_read += bytes.len();
-                    self.pos = end;
-                    return Ok(total_read);
+            // Look for newline in current buffer
+            if let Some(newline_pos) = self.buffer.iter().position(|&b| b == b'\n') {
+                // Found a newline - split the buffer at this position
+                let line_with_newline = self.buffer.split_to(newline_pos + 1);
+
+                // If we had accumulated data from previous reads, append to it
+                if let Some(mut accumulated) = line_buf.take() {
+                    accumulated.extend_from_slice(&line_with_newline);
+                    return Ok(accumulated.freeze());
                 }
 
-                // No newline, consume all buffered data
-                let bytes = &self.buffer[self.pos..self.filled];
-                line.push_str(&String::from_utf8_lossy(bytes));
-                total_read += bytes.len();
-                self.pos = self.filled;
+                // Otherwise return the line directly (zero-copy path)
+                return Ok(line_with_newline.freeze());
             }
 
-            // Refill buffer
-            // IMPORTANT: Mark buffer as empty BEFORE the await to ensure cancellation safety.
-            // If the future is cancelled by tokio::select! during the read, the next call
-            // will see an empty buffer (pos=0, filled=0) and refill it, avoiding data duplication.
-            self.filled = 0;
-            self.pos = 0;
-            let n = self.inner.read(&mut self.buffer).await?;
-            self.filled = n;
+            // No newline found - save current buffer contents and read more
+            if !self.buffer.is_empty() {
+                let current = self.buffer.split();
+                match &mut line_buf {
+                    Some(accumulated) => accumulated.extend_from_slice(&current),
+                    None => line_buf = Some(current),
+                }
+            }
+
+            // IMPORTANT: Clear buffer state BEFORE the await for cancellation safety.
+            // If cancelled during read, next call sees empty buffer and refills cleanly.
+            self.buffer.clear();
+            self.buffer.reserve(self.capacity);
+
+            // Read more data into the buffer
+            // SAFETY: We just reserved capacity, so this won't reallocate
+            let spare = self.buffer.spare_capacity_mut();
+            // SAFETY: spare_capacity_mut returns uninitialized memory, but read() will
+            // initialize it. We use a temporary buffer and then extend.
+            let mut temp_buf = vec![0u8; spare.len().min(self.capacity)];
+            let n = self.inner.read(&mut temp_buf).await?;
 
             if n == 0 {
-                // EOF
-                return Ok(total_read);
+                // EOF - return any accumulated data
+                return Ok(line_buf.map_or_else(Bytes::new, BytesMut::freeze));
             }
+
+            self.buffer.extend_from_slice(&temp_buf[..n]);
         }
     }
 }
@@ -515,5 +568,83 @@ mod tests {
         let mut line3 = String::new();
         reader.read_line(&mut line3).await.unwrap();
         assert_eq!(line3, "second\n");
+    }
+
+    /// Test `read_line_bytes` returns `Bytes` directly.
+    #[cfg(feature = "tokio-runtime")]
+    #[tokio::test]
+    async fn test_bufreader_read_line_bytes() {
+        use futures::io::Cursor;
+
+        let data = b"hello\nworld\n";
+        let cursor = Cursor::new(data.to_vec());
+        let mut reader = BufReader::new(cursor);
+
+        let line1 = reader.read_line_bytes().await.unwrap();
+        assert_eq!(&line1[..], b"hello\n");
+
+        let line2 = reader.read_line_bytes().await.unwrap();
+        assert_eq!(&line2[..], b"world\n");
+
+        // EOF returns empty bytes
+        let eof = reader.read_line_bytes().await.unwrap();
+        assert!(eof.is_empty());
+    }
+
+    /// Test that JSON can be parsed directly from `Bytes` without intermediate String.
+    #[cfg(feature = "tokio-runtime")]
+    #[tokio::test]
+    async fn test_bufreader_json_from_bytes() {
+        use futures::io::Cursor;
+
+        // Parse JSON directly from bytes - zero-copy path
+        #[derive(serde::Deserialize, Debug, PartialEq)]
+        struct TestData {
+            name: String,
+            value: i32,
+        }
+
+        let json_data = b"{\"name\":\"test\",\"value\":42}\n";
+        let cursor = Cursor::new(json_data.to_vec());
+        let mut reader = BufReader::new(cursor);
+
+        let line_bytes = reader.read_line_bytes().await.unwrap();
+
+        // Trim the newline for JSON parsing
+        let trimmed = line_bytes.strip_suffix(b"\n").unwrap_or(&line_bytes);
+        let parsed: TestData = serde_json::from_slice(trimmed).unwrap();
+
+        assert_eq!(
+            parsed,
+            TestData {
+                name: "test".to_string(),
+                value: 42
+            }
+        );
+    }
+
+    /// Test `buffered()` returns correct count.
+    #[cfg(feature = "tokio-runtime")]
+    #[tokio::test]
+    async fn test_bufreader_buffered() {
+        use futures::io::Cursor;
+
+        let data = b"line1\nline2\n";
+        let cursor = Cursor::new(data.to_vec());
+        let mut reader = BufReader::new(cursor);
+
+        // Initially empty
+        assert_eq!(reader.buffered(), 0);
+
+        // After reading first line, buffer may contain remaining data (line2\n)
+        let mut line1 = String::new();
+        reader.read_line(&mut line1).await.unwrap();
+        // After reading "line1\n", the buffer should contain "line2\n" (6 bytes)
+        assert_eq!(reader.buffered(), 6);
+
+        // After reading second line, buffer should be empty
+        let mut line2 = String::new();
+        reader.read_line(&mut line2).await.unwrap();
+        assert_eq!(reader.buffered(), 0);
     }
 }

@@ -2,8 +2,6 @@
 //!
 //! This module provides the server-side HTTP transport with axum integration.
 
-#![cfg(feature = "http")]
-
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
@@ -316,10 +314,12 @@ impl HttpServerConfig {
 }
 
 /// Validate origin header for DNS rebinding protection.
+///
+/// Returns a boxed Response on error to minimize stack usage (Response is 128 bytes).
 fn validate_origin(
     headers: &axum::http::HeaderMap,
     config: &HttpServerConfig,
-) -> Result<(), axum::response::Response> {
+) -> Result<(), Box<axum::response::Response>> {
     use axum::{http::StatusCode, response::IntoResponse};
 
     // If no origins configured, skip validation
@@ -338,7 +338,9 @@ fn validate_origin(
                 Ok(())
             } else {
                 tracing::warn!(origin = %origin_str, "Rejecting request from disallowed origin");
-                Err((StatusCode::FORBIDDEN, "Origin not allowed").into_response())
+                Err(Box::new(
+                    (StatusCode::FORBIDDEN, "Origin not allowed").into_response(),
+                ))
             }
         }
         None => {
@@ -359,7 +361,7 @@ async fn handle_mcp_post_with_state(
 
     // Validate origin
     if let Err(response) = validate_origin(&headers, &config) {
-        return response;
+        return *response;
     }
 
     // Check message size
@@ -437,7 +439,7 @@ async fn handle_mcp_sse_with_state(
 
     // Validate origin
     if let Err(response) = validate_origin(&headers, &config) {
-        return response;
+        return *response;
     }
 
     // Check Accept header
@@ -477,7 +479,7 @@ async fn handle_mcp_delete_with_state(
 
     // Validate origin
     if let Err(response) = validate_origin(&headers, &config) {
-        return response;
+        return *response;
     }
 
     let session_id = headers

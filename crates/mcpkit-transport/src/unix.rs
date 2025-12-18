@@ -27,8 +27,6 @@
 //! }
 //! ```
 
-#![cfg(unix)]
-
 use crate::error::TransportError;
 use crate::runtime::AsyncMutex;
 use crate::traits::{Transport, TransportListener, TransportMetadata};

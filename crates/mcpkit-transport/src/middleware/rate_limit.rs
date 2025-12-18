@@ -262,21 +262,17 @@ impl RateLimiter {
         }
 
         // Try to consume a token (1000 units = 1 token)
-        loop {
-            let current = self.state.tokens.load(Ordering::Relaxed);
-            if current < 1000 {
-                return false;
-            }
-            match self.state.tokens.compare_exchange(
-                current,
-                current - 1000,
-                Ordering::SeqCst,
-                Ordering::Relaxed,
-            ) {
-                Ok(_) => return true,
-                Err(_) => {} // Retry - loop continues naturally
-            }
-        }
+        // Use fetch_update for more idiomatic CAS loop with built-in retry
+        self.state
+            .tokens
+            .fetch_update(Ordering::SeqCst, Ordering::Relaxed, |current| {
+                if current >= 1000 {
+                    Some(current - 1000)
+                } else {
+                    None
+                }
+            })
+            .is_ok()
     }
 
     /// Sliding window algorithm implementation.

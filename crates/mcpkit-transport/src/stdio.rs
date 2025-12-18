@@ -241,30 +241,35 @@ where
         let mut stdin = self.stdin.lock().await;
 
         loop {
-            let mut line = String::new();
-            let bytes_read = stdin.read_line(&mut line).await?;
+            // Use zero-copy read_line_bytes for efficiency
+            let line_bytes = stdin.read_line_bytes().await?;
 
-            if bytes_read == 0 {
+            if line_bytes.is_empty() {
                 // EOF - connection closed
                 self.connected.store(false, Ordering::SeqCst);
                 return Ok(None);
             }
 
-            if line.len() > MAX_MESSAGE_SIZE {
+            if line_bytes.len() > MAX_MESSAGE_SIZE {
                 return Err(TransportError::MessageTooLarge {
-                    size: line.len(),
+                    size: line_bytes.len(),
                     max: MAX_MESSAGE_SIZE,
                 });
             }
 
-            // Trim the trailing newline
-            let trimmed = line.trim();
+            // Trim trailing whitespace (newline, carriage return, etc.)
+            let trimmed = line_bytes
+                .iter()
+                .rposition(|&b| !b.is_ascii_whitespace())
+                .map_or(&[][..], |end| &line_bytes[..=end]);
+
             if trimmed.is_empty() {
                 // Empty line, continue reading
                 continue;
             }
 
-            let msg: Message = serde_json::from_str(trimmed)?;
+            // Parse JSON directly from bytes - avoids String allocation
+            let msg: Message = serde_json::from_slice(trimmed)?;
             return Ok(Some(msg));
         }
     }

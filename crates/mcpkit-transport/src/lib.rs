@@ -107,6 +107,9 @@ pub mod unix;
 pub use error::TransportError;
 pub use traits::{Transport, TransportExt, TransportListener, TransportMetadata};
 
+// Re-export bytes types for zero-copy message handling
+pub use bytes::{Bytes, BytesMut};
+
 // Runtime-agnostic transports - available when ANY runtime is enabled
 #[cfg(any(
     feature = "tokio-runtime",
