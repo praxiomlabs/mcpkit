@@ -17,6 +17,7 @@ members = [
     "examples/client-example",
     "examples/with-middleware",
     "examples/database-server",
+    "examples/filesystem-server",
     "benches",
 ]
 
