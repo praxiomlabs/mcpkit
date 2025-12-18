@@ -536,7 +536,7 @@ examples:
     # Examples are workspace packages, not --examples targets
     {{cargo}} build -p minimal-server -p full-server -p http-server-example \
         -p client-example -p database-server-example -p websocket-server-example \
-        -p with-middleware-example
+        -p with-middleware-example -p filesystem-server
     printf '{{green}}[OK]{{reset}}   Examples built\n'
 
 [group('examples')]
@@ -587,6 +587,14 @@ example-database:
     #!/usr/bin/env bash
     printf '{{cyan}}[INFO]{{reset}} Running database-server example...\n'
     RUST_LOG={{rust_log}} {{cargo}} run -p database-server
+
+[group('examples')]
+[doc("Run filesystem server example")]
+example-filesystem sandbox="/tmp/mcpkit-sandbox":
+    #!/usr/bin/env bash
+    printf '{{cyan}}[INFO]{{reset}} Running filesystem-server example...\n'
+    mkdir -p {{sandbox}}
+    RUST_LOG={{rust_log}} {{cargo}} run -p filesystem-server -- {{sandbox}}
 
 # ============================================================================
 # BENCHMARK RECIPES
