@@ -5,17 +5,13 @@
 //!
 //! # Running
 //!
-//! First, start the minimal-server or full-server example in another terminal:
-//!
-//! ```bash
-//! cargo run -p minimal-server-example
-//! ```
-//!
-//! Then run this client:
+//! This client automatically builds and spawns the filesystem-server:
 //!
 //! ```bash
 //! cargo run -p client-example
 //! ```
+//!
+//! You can also test with any other MCP server that runs on stdio.
 
 use mcpkit_core::protocol::{Message, Notification, Request, RequestId};
 use serde_json::{Value, json};
@@ -292,24 +288,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and_then(|p| p.parent())
         .expect("Failed to get workspace root");
 
-    // Build the minimal-server first
-    println!("Building minimal-server example...");
+    // Build the filesystem-server first (a real MCP server that serves on stdio)
+    println!("Building filesystem-server example...");
     let status = std::process::Command::new("cargo")
         .arg("build")
         .arg("-p")
-        .arg("minimal-server-example")
+        .arg("filesystem-server")
         .current_dir(workspace_root)
         .status()?;
 
     if !status.success() {
-        return Err("Failed to build minimal-server".into());
+        return Err("Failed to build filesystem-server".into());
     }
 
     // Find the built binary
     let server_binary = workspace_root
         .join("target")
         .join("debug")
-        .join("minimal-server-example");
+        .join("filesystem-server");
 
     println!("Starting MCP server: {:?}", server_binary);
     println!();
@@ -340,60 +336,73 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Call some tools
     println!("--- Calling Tools ---");
 
-    // Add
-    let result = client.call_tool("add", json!({ "a": 10, "b": 5 })).await?;
-    println!("add(10, 5) = {:?}", extract_text_content(&result));
+    // Get the sandbox root
+    let result = client.call_tool("get_root", json!({})).await?;
+    println!("get_root() = {:?}", extract_text_content(&result));
 
-    // Multiply
+    // List directory
+    let result = client.call_tool("list_directory", json!({})).await?;
+    println!("list_directory() = {:?}", extract_text_content(&result));
+
+    // Search for Rust files
     let result = client
-        .call_tool("multiply", json!({ "a": 7, "b": 6 }))
+        .call_tool(
+            "search_files",
+            json!({ "pattern": "*.rs", "max_results": 5 }),
+        )
         .await?;
-    println!("multiply(7, 6) = {:?}", extract_text_content(&result));
+    println!("search_files(*.rs) = {:?}", extract_text_content(&result));
 
-    // Divide
-    let result = client
-        .call_tool("divide", json!({ "a": 100, "b": 4 }))
-        .await?;
-    println!("divide(100, 4) = {:?}", extract_text_content(&result));
-
-    // Test error handling - divide by zero
+    // Test error handling - read non-existent file
     println!();
     println!("--- Testing Error Handling ---");
     let result = client
-        .call_tool("divide", json!({ "a": 10, "b": 0 }))
+        .call_tool("read_file", json!({ "path": "nonexistent_file_12345.txt" }))
         .await?;
     let is_error = result["isError"].as_bool().unwrap_or(false);
     println!(
-        "divide(10, 0) = {:?} (isError: {})",
+        "read_file(nonexistent) = {:?} (isError: {})",
         extract_text_content(&result),
         is_error
     );
 
-    // List resources (if supported)
+    // List resources (if supported by the server)
     println!();
     println!("--- Available Resources ---");
-    let resources = client.list_resources().await?;
-    if resources.is_empty() {
-        println!("  (no resources available)");
-    } else {
-        for resource in &resources {
-            let uri = resource["uri"].as_str().unwrap_or("unknown");
-            let name = resource["name"].as_str().unwrap_or("unknown");
-            println!("  {}: {}", uri, name);
+    match client.list_resources().await {
+        Ok(resources) => {
+            if resources.is_empty() {
+                println!("  (no resources available)");
+            } else {
+                for resource in &resources {
+                    let uri = resource["uri"].as_str().unwrap_or("unknown");
+                    let name = resource["name"].as_str().unwrap_or("unknown");
+                    println!("  {}: {}", uri, name);
+                }
+            }
+        }
+        Err(_) => {
+            println!("  (resources not supported by this server)");
         }
     }
 
-    // List prompts (if supported)
+    // List prompts (if supported by the server)
     println!();
     println!("--- Available Prompts ---");
-    let prompts = client.list_prompts().await?;
-    if prompts.is_empty() {
-        println!("  (no prompts available)");
-    } else {
-        for prompt in &prompts {
-            let name = prompt["name"].as_str().unwrap_or("unknown");
-            let description = prompt["description"].as_str().unwrap_or("no description");
-            println!("  {}: {}", name, description);
+    match client.list_prompts().await {
+        Ok(prompts) => {
+            if prompts.is_empty() {
+                println!("  (no prompts available)");
+            } else {
+                for prompt in &prompts {
+                    let name = prompt["name"].as_str().unwrap_or("unknown");
+                    let description = prompt["description"].as_str().unwrap_or("no description");
+                    println!("  {}: {}", name, description);
+                }
+            }
+        }
+        Err(_) => {
+            println!("  (prompts not supported by this server)");
         }
     }
 
