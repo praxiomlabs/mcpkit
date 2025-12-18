@@ -10,7 +10,7 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 arbitrary = { version = "1", features = ["derive"] }
-rust-mcp-core = { path = "../crates/mcp-core" }
+mcpkit-core = { path = "../crates/mcpkit-core" }
 serde_json = "1.0"
 
 # Prevent this from interfering with workspaces
@@ -48,6 +48,13 @@ bench = false
 [[bin]]
 name = "fuzz_jsonrpc_structured"
 path = "fuzz_targets/fuzz_jsonrpc_structured.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_protocol_version"
+path = "fuzz_targets/fuzz_protocol_version.rs"
 test = false
 doc = false
 bench = false

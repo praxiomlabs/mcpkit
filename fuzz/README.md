@@ -25,6 +25,7 @@ rustup install nightly
 | `fuzz_jsonrpc_response` | Fuzzes parsing of JSON-RPC `Response` messages |
 | `fuzz_progress_token` | Fuzzes parsing of `ProgressToken` values |
 | `fuzz_jsonrpc_structured` | Structure-aware fuzzing with `arbitrary` crate |
+| `fuzz_protocol_version` | Fuzzes `ProtocolVersion` parsing and negotiation |
 
 ## Running Fuzzers
 
@@ -110,7 +111,7 @@ To simulate CI fuzzing locally:
 
 ```bash
 # Run all targets for 60 seconds each
-for target in fuzz_jsonrpc_message fuzz_jsonrpc_request fuzz_jsonrpc_response fuzz_progress_token fuzz_jsonrpc_structured; do
+for target in fuzz_jsonrpc_message fuzz_jsonrpc_request fuzz_jsonrpc_response fuzz_progress_token fuzz_jsonrpc_structured fuzz_protocol_version; do
     cargo +nightly fuzz run $target -- -max_total_time=60
 done
 ```

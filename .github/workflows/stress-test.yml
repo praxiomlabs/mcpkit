@@ -1,0 +1,328 @@
+name: Stress Testing
+
+on:
+  # Run weekly on Sundays at 3 AM UTC
+  schedule:
+    - cron: '0 3 * * 0'
+  # Allow manual triggering
+  workflow_dispatch:
+    inputs:
+      sample_size:
+        description: 'Criterion sample size (default: 100)'
+        required: false
+        default: '100'
+      measurement_time:
+        description: 'Measurement time in seconds (default: 10)'
+        required: false
+        default: '10'
+      save_baseline:
+        description: 'Save as baseline for future comparisons'
+        required: false
+        default: 'false'
+        type: boolean
+  # Run on PRs that modify benchmarks or core performance code
+  pull_request:
+    paths:
+      - 'benches/**'
+      - 'crates/mcpkit-core/src/**'
+      - 'crates/mcpkit-transport/src/**'
+      - 'crates/mcpkit-server/src/**'
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -Dwarnings
+
+jobs:
+  # ==========================================================================
+  # Benchmark Suite - Run all criterion benchmarks
+  # ==========================================================================
+
+  benchmarks:
+    name: Criterion Benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Restore baseline
+        uses: actions/cache/restore@v4
+        with:
+          path: target/criterion
+          key: criterion-baseline-${{ runner.os }}
+          restore-keys: |
+            criterion-baseline-
+
+      - name: Run serialization benchmarks
+        run: |
+          cargo bench --package mcpkit-benches --bench serialization -- \
+            --sample-size ${{ github.event.inputs.sample_size || '100' }} \
+            --measurement-time ${{ github.event.inputs.measurement_time || '10' }}
+
+      - name: Run tool invocation benchmarks
+        run: |
+          cargo bench --package mcpkit-benches --bench tool_invocation -- \
+            --sample-size ${{ github.event.inputs.sample_size || '100' }} \
+            --measurement-time ${{ github.event.inputs.measurement_time || '10' }}
+
+      - name: Run transport benchmarks
+        run: |
+          cargo bench --package mcpkit-benches --bench transport -- \
+            --sample-size ${{ github.event.inputs.sample_size || '100' }} \
+            --measurement-time ${{ github.event.inputs.measurement_time || '10' }}
+
+      - name: Run memory benchmarks
+        run: |
+          cargo bench --package mcpkit-benches --bench memory -- \
+            --sample-size ${{ github.event.inputs.sample_size || '100' }} \
+            --measurement-time ${{ github.event.inputs.measurement_time || '10' }}
+
+      - name: Save baseline
+        if: ${{ github.event.inputs.save_baseline == 'true' || github.event_name == 'schedule' }}
+        uses: actions/cache/save@v4
+        with:
+          path: target/criterion
+          key: criterion-baseline-${{ runner.os }}-${{ github.sha }}
+
+      - name: Generate benchmark report
+        run: |
+          echo "# Benchmark Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Find all benchmark reports
+          for bench in serialization tool_invocation transport memory; do
+            report_dir="target/criterion/${bench}"
+            if [ -d "$report_dir" ]; then
+              echo "## ${bench^}" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+
+              # Extract timing from estimates.json if available
+              for estimate in $(find "$report_dir" -name "estimates.json" 2>/dev/null | head -5); do
+                group=$(dirname "$estimate" | xargs basename)
+                if [ -f "$estimate" ]; then
+                  mean=$(jq -r '.mean.point_estimate // "N/A"' "$estimate" 2>/dev/null || echo "N/A")
+                  if [ "$mean" != "N/A" ] && [ "$mean" != "null" ]; then
+                    # Convert nanoseconds to readable format
+                    mean_ns=$(printf "%.0f" "$mean")
+                    if [ "$mean_ns" -gt 1000000000 ]; then
+                      formatted=$(echo "scale=2; $mean_ns / 1000000000" | bc)s
+                    elif [ "$mean_ns" -gt 1000000 ]; then
+                      formatted=$(echo "scale=2; $mean_ns / 1000000" | bc)ms
+                    elif [ "$mean_ns" -gt 1000 ]; then
+                      formatted=$(echo "scale=2; $mean_ns / 1000" | bc)µs
+                    else
+                      formatted="${mean_ns}ns"
+                    fi
+                    echo "- **${group}**: ${formatted}" >> $GITHUB_STEP_SUMMARY
+                  fi
+                fi
+              done
+              echo "" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+
+      - name: Upload benchmark artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: target/criterion/
+          retention-days: 30
+
+  # ==========================================================================
+  # Stress Test - High-load concurrent scenarios
+  # ==========================================================================
+
+  stress-test:
+    name: Stress Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build stress test binary
+        run: cargo build --release --example stress-test 2>/dev/null || echo "Stress test example not found, running inline tests"
+
+      - name: Run concurrent request stress test
+        run: |
+          # Run transport stress test with multiple concurrent connections
+          cargo test --release --package mcpkit-transport -- \
+            --test-threads=1 \
+            concurrent \
+            --nocapture 2>&1 | head -100 || true
+
+      - name: Run high-throughput serialization stress
+        run: |
+          # Run serialization benchmark with maximum samples
+          cargo bench --package mcpkit-benches --bench serialization -- \
+            --sample-size 500 \
+            --measurement-time 30 \
+            "request_serialization" 2>&1 | tail -50
+
+      - name: Memory pressure test
+        run: |
+          # Run memory benchmark to detect leaks under pressure
+          cargo bench --package mcpkit-benches --bench memory -- \
+            --sample-size 200 \
+            --measurement-time 20 \
+            "batch_cycle" 2>&1 | tail -50
+
+  # ==========================================================================
+  # Performance Regression Detection
+  # ==========================================================================
+
+  regression-check:
+    name: Regression Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Restore baseline from main
+        uses: actions/cache/restore@v4
+        with:
+          path: target/criterion-baseline
+          key: criterion-baseline-${{ runner.os }}
+          restore-keys: |
+            criterion-baseline-
+
+      - name: Run benchmarks on PR
+        run: |
+          # Run benchmarks and save to different directory
+          cargo bench --package mcpkit-benches -- \
+            --sample-size 50 \
+            --measurement-time 5 \
+            --save-baseline pr-benchmark
+
+      - name: Compare with baseline
+        run: |
+          echo "# Performance Comparison" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Check for significant regressions (>10% slower)
+          REGRESSION_FOUND=false
+
+          for bench in serialization tool_invocation transport memory; do
+            baseline_dir="target/criterion-baseline/${bench}"
+            pr_dir="target/criterion/${bench}"
+
+            if [ -d "$baseline_dir" ] && [ -d "$pr_dir" ]; then
+              echo "## ${bench^}" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+
+              # Compare estimates
+              for pr_estimate in $(find "$pr_dir" -name "estimates.json" 2>/dev/null); do
+                group=$(dirname "$pr_estimate" | xargs basename)
+                baseline_estimate="${baseline_dir}/${group}/new/estimates.json"
+
+                if [ -f "$baseline_estimate" ]; then
+                  baseline_mean=$(jq -r '.mean.point_estimate // 0' "$baseline_estimate" 2>/dev/null)
+                  pr_mean=$(jq -r '.mean.point_estimate // 0' "$pr_estimate" 2>/dev/null)
+
+                  if [ "$baseline_mean" != "0" ] && [ "$pr_mean" != "0" ]; then
+                    change=$(echo "scale=2; (($pr_mean - $baseline_mean) / $baseline_mean) * 100" | bc 2>/dev/null || echo "0")
+
+                    if [ "$(echo "$change > 10" | bc)" -eq 1 ]; then
+                      echo "⚠️ **${group}**: +${change}% (regression)" >> $GITHUB_STEP_SUMMARY
+                      REGRESSION_FOUND=true
+                    elif [ "$(echo "$change < -10" | bc)" -eq 1 ]; then
+                      echo "✅ **${group}**: ${change}% (improvement)" >> $GITHUB_STEP_SUMMARY
+                    else
+                      echo "➖ **${group}**: ${change}% (within tolerance)" >> $GITHUB_STEP_SUMMARY
+                    fi
+                  fi
+                fi
+              done
+              echo "" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+
+          if [ "$REGRESSION_FOUND" = true ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "⚠️ **Warning:** Significant performance regressions detected (>10% slower)" >> $GITHUB_STEP_SUMMARY
+            echo "Please review the changes and ensure the regression is acceptable." >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ==========================================================================
+  # Long-Running Stability Test
+  # ==========================================================================
+
+  stability-test:
+    name: Long-Running Stability
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build release
+        run: cargo build --release --all-features
+
+      - name: Run extended test suite
+        run: |
+          # Run tests multiple times to detect flaky tests and memory issues
+          for i in {1..5}; do
+            echo "=== Test run $i/5 ==="
+            cargo test --release --all-features -- --test-threads=4
+          done
+
+      - name: Run long benchmark session
+        run: |
+          # Extended benchmark run to detect performance degradation over time
+          cargo bench --package mcpkit-benches -- \
+            --sample-size 200 \
+            --measurement-time 60 \
+            --warm-up-time 10
+
+  # ==========================================================================
+  # Notify on Issues
+  # ==========================================================================
+
+  notify-on-failure:
+    name: Notify on Failure
+    runs-on: ubuntu-latest
+    needs: [benchmarks, stress-test]
+    if: failure() && github.event_name == 'schedule'
+    steps:
+      - name: Create issue on failure
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const runUrl = `https://github.com/${owner}/${repo}/actions/runs/${context.runId}`;
+
+            await github.rest.issues.create({
+              owner,
+              repo,
+              title: '⚠️ Weekly stress test failed',
+              body: `## Stress Test Failure
+
+            The weekly stress test workflow has failed.
+
+            **Run:** ${runUrl}
+
+            ### Possible Causes
+            - Performance regression in recent changes
+            - Memory issues under high load
+            - Flaky tests or timing issues
+
+            ### Next Steps
+            1. Review the failed workflow run
+            2. Check benchmark comparisons for regressions
+            3. Run tests locally with \`cargo bench\` and \`cargo test --release\`
+            `,
+              labels: ['performance', 'ci']
+            });

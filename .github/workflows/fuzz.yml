@@ -38,6 +38,7 @@ jobs:
           - fuzz_jsonrpc_response
           - fuzz_progress_token
           - fuzz_jsonrpc_structured
+          - fuzz_protocol_version
     steps:
       - uses: actions/checkout@v4
 
@@ -114,7 +115,7 @@ jobs:
 
       - name: Restore all corpus caches
         run: |
-          for target in fuzz_jsonrpc_message fuzz_jsonrpc_request fuzz_jsonrpc_response fuzz_progress_token fuzz_jsonrpc_structured; do
+          for target in fuzz_jsonrpc_message fuzz_jsonrpc_request fuzz_jsonrpc_response fuzz_progress_token fuzz_jsonrpc_structured fuzz_protocol_version; do
             echo "Restoring corpus for $target"
           done
 
@@ -125,7 +126,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Target | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|--------|--------|" >> $GITHUB_STEP_SUMMARY
-          for target in fuzz_jsonrpc_message fuzz_jsonrpc_request fuzz_jsonrpc_response fuzz_progress_token fuzz_jsonrpc_structured; do
+          for target in fuzz_jsonrpc_message fuzz_jsonrpc_request fuzz_jsonrpc_response fuzz_progress_token fuzz_jsonrpc_structured fuzz_protocol_version; do
             if [ -d "corpus/$target" ]; then
               count=$(find corpus/$target -type f 2>/dev/null | wc -l)
               echo "| $target | ${count} corpus entries |" >> $GITHUB_STEP_SUMMARY
