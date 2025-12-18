@@ -15,7 +15,7 @@
 //! use mcpkit_testing::{MockServer, MockTool};
 //! use mcpkit_core::types::ToolOutput;
 //!
-//! let server = MockServer::new()
+//! let server = MockServer::builder()
 //!     .tool(MockTool::new("add")
 //!         .description("Add two numbers")
 //!         .handler(|args| Ok(ToolOutput::text("42"))))

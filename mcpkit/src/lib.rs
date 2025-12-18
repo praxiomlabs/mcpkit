@@ -97,22 +97,25 @@ pub use mcpkit_macros::{ToolInput, mcp_server, prompt, resource, tool};
 
 pub mod prelude;
 
-/// Server module re-exports
+/// Server module re-exports.
+///
+/// Re-exports all types from [`mcpkit_server`].
 pub mod server {
-    //! Server implementation types.
     pub use mcpkit_server::*;
 }
 
-/// Transport module re-exports
+/// Transport module re-exports.
+///
+/// Re-exports all types from [`mcpkit_transport`].
 pub mod transport {
-    //! Transport layer types.
     pub use mcpkit_transport::*;
 }
 
-/// Client module re-exports
+/// Client module re-exports.
+///
+/// Re-exports all types from [`mcpkit_client`].
 #[cfg(feature = "client")]
 pub mod client {
-    //! Client implementation types.
     pub use mcpkit_client::*;
 }
 

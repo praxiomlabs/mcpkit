@@ -350,15 +350,20 @@ pub struct MockServer {
 }
 
 impl MockServer {
-    /// Create a new builder.
+    /// Create a new builder for constructing a [`MockServer`].
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use mcpkit_testing::MockServer;
+    ///
+    /// let server = MockServer::builder()
+    ///     .name("test-server")
+    ///     .version("1.0.0")
+    ///     .build();
+    /// ```
     #[must_use]
     pub fn builder() -> MockServerBuilder {
-        MockServerBuilder::new()
-    }
-
-    /// Create a simple mock server.
-    #[must_use]
-    pub fn new() -> MockServerBuilder {
         MockServerBuilder::new()
     }
 
@@ -537,7 +542,7 @@ mod tests {
 
     #[test]
     fn test_mock_server_builder() {
-        let server = MockServer::new()
+        let server = MockServer::builder()
             .name("test-server")
             .version("2.0.0")
             .tool(MockTool::new("test").returns_text("ok"))

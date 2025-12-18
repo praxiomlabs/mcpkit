@@ -93,7 +93,6 @@ where
     }
 
     /// Build the router.
-    #[must_use]
     pub fn into_router(self) -> Router {
         let mut router = Router::new()
             .route(&self.post_path, post(handle_mcp_post::<H>))

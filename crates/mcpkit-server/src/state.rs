@@ -23,7 +23,7 @@ use std::sync::Arc;
 ///
 /// These types represent different states in the connection lifecycle.
 /// They contain no data and are used purely for type-level state tracking.
-pub mod state {
+pub mod markers {
     /// Connection is disconnected (initial state).
     #[derive(Debug, Clone, Copy)]
     pub struct Disconnected;
@@ -84,11 +84,11 @@ impl ConnectionData {
 /// # Example
 ///
 /// ```rust
-/// use mcpkit_server::state::{Connection, state};
+/// use mcpkit_server::state::{Connection, markers};
 /// use mcpkit_core::capability::{ServerInfo, ServerCapabilities};
 ///
 /// // Start disconnected
-/// let conn: Connection<state::Disconnected> = Connection::new(
+/// let conn: Connection<markers::Disconnected> = Connection::new(
 ///     ServerInfo::new("my-server", "1.0.0"),
 ///     ServerCapabilities::new().with_tools(),
 /// );
@@ -123,7 +123,7 @@ impl<S> std::fmt::Debug for Connection<S> {
     }
 }
 
-impl Connection<state::Disconnected> {
+impl Connection<markers::Disconnected> {
     /// Create a new disconnected connection.
     #[must_use]
     pub fn new(server_info: ServerInfo, server_capabilities: ServerCapabilities) -> Self {
@@ -136,7 +136,7 @@ impl Connection<state::Disconnected> {
     /// Connect to establish a transport connection.
     ///
     /// This transitions from `Disconnected` to `Connected` state.
-    pub async fn connect(self) -> Result<Connection<state::Connected>, McpError> {
+    pub async fn connect(self) -> Result<Connection<markers::Connected>, McpError> {
         // In a real implementation, this would establish the transport
         Ok(Connection {
             inner: self.inner,
@@ -145,14 +145,14 @@ impl Connection<state::Disconnected> {
     }
 }
 
-impl Connection<state::Connected> {
+impl Connection<markers::Connected> {
     /// Start the initialization handshake.
     ///
     /// This transitions from `Connected` to `Initializing` state.
     pub async fn initialize(
         self,
         _protocol_version: ProtocolVersion,
-    ) -> Result<Connection<state::Initializing>, McpError> {
+    ) -> Result<Connection<markers::Initializing>, McpError> {
         // In a real implementation, this would send the initialize request
         Ok(Connection {
             inner: self.inner,
@@ -167,7 +167,7 @@ impl Connection<state::Connected> {
     }
 }
 
-impl Connection<state::Initializing> {
+impl Connection<markers::Initializing> {
     /// Complete the initialization handshake.
     ///
     /// This transitions from `Initializing` to `Ready` state.
@@ -175,7 +175,7 @@ impl Connection<state::Initializing> {
         self,
         client_capabilities: ClientCapabilities,
         protocol_version: ProtocolVersion,
-    ) -> Result<Connection<state::Ready>, McpError> {
+    ) -> Result<Connection<markers::Ready>, McpError> {
         // Update the connection data with negotiated values
         // In a real implementation, we'd use interior mutability
         let mut data = ConnectionData::new(
@@ -192,7 +192,7 @@ impl Connection<state::Initializing> {
     }
 
     /// Abort initialization.
-    pub async fn abort(self) -> Result<Connection<state::Disconnected>, McpError> {
+    pub async fn abort(self) -> Result<Connection<markers::Disconnected>, McpError> {
         Ok(Connection {
             inner: self.inner,
             _state: PhantomData,
@@ -200,7 +200,7 @@ impl Connection<state::Initializing> {
     }
 }
 
-impl Connection<state::Ready> {
+impl Connection<markers::Ready> {
     /// Get the client capabilities.
     ///
     /// # Panics
@@ -261,7 +261,7 @@ impl Connection<state::Ready> {
     /// Start graceful shutdown.
     ///
     /// This transitions from `Ready` to `Closing` state.
-    pub async fn shutdown(self) -> Result<Connection<state::Closing>, McpError> {
+    pub async fn shutdown(self) -> Result<Connection<markers::Closing>, McpError> {
         Ok(Connection {
             inner: self.inner,
             _state: PhantomData,
@@ -269,7 +269,7 @@ impl Connection<state::Ready> {
     }
 }
 
-impl Connection<state::Closing> {
+impl Connection<markers::Closing> {
     /// Complete the shutdown and disconnect.
     pub async fn disconnect(self) -> Result<(), McpError> {
         // Clean up resources
@@ -284,15 +284,15 @@ impl Connection<state::Closing> {
 #[derive(Debug)]
 pub enum ConnectionState {
     /// Not connected.
-    Disconnected(Connection<state::Disconnected>),
+    Disconnected(Connection<markers::Disconnected>),
     /// Connected but not initialized.
-    Connected(Connection<state::Connected>),
+    Connected(Connection<markers::Connected>),
     /// In initialization handshake.
-    Initializing(Connection<state::Initializing>),
+    Initializing(Connection<markers::Initializing>),
     /// Ready for requests.
-    Ready(Connection<state::Ready>),
+    Ready(Connection<markers::Ready>),
     /// Closing down.
-    Closing(Connection<state::Closing>),
+    Closing(Connection<markers::Closing>),
 }
 
 impl ConnectionState {
@@ -360,7 +360,7 @@ mod tests {
     fn test_connection_creation() {
         let info = ServerInfo::new("test", "1.0.0");
         let caps = ServerCapabilities::default();
-        let conn: Connection<state::Disconnected> = Connection::new(info, caps);
+        let conn: Connection<markers::Disconnected> = Connection::new(info, caps);
 
         assert!(std::any::type_name_of_val(&conn._state).contains("Disconnected"));
     }
