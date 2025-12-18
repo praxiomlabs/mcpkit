@@ -239,8 +239,65 @@ impl Drop for MyHandler {
 2. Review idle timeout settings
 3. Monitor connection error rates
 
+## JSON Parser Alternatives
+
+### Default: serde_json
+
+The SDK uses `serde_json` by default, which provides excellent performance for typical MCP message sizes (small to medium JSON-RPC payloads).
+
+**Benchmark results (MCP-typical messages):**
+- Request serialization: ~60-330ns
+- Response serialization: ~90ns-7µs
+- Round-trip: ~1.5-30µs
+
+### Alternative: simd-json
+
+For high-throughput scenarios with large JSON payloads, [simd-json](https://github.com/simd-lite/simd-json) can provide 1.5-2.5x speedup on large documents. However, **serde_json is 1.6x faster for small objects**, which are typical in MCP.
+
+**When to consider simd-json:**
+- Processing large tool outputs (>100KB JSON)
+- Batch processing many requests
+- Latency-sensitive applications with large payloads
+
+**Trade-offs:**
+- More `unsafe` code in dependencies
+- SIMD instruction requirements (AVX2/SSE4.2)
+- Less portable optimal binaries
+- Smaller ecosystem support (66 vs 26,916 dependents)
+
+**Recommendation:** For most MCP use cases, stick with the default `serde_json`. Only consider `simd-json` after profiling shows JSON parsing is a bottleneck with large payloads.
+
+### Alternative: sonic-rs
+
+[sonic-rs](https://github.com/cloudwego/sonic-rs) is even faster than simd-json (parsing directly to structs without intermediate representation) but has similar trade-offs regarding `unsafe` code and portability.
+
+**Benchmark comparison (twitter.json):**
+| Parser | Time |
+|--------|------|
+| serde_json | 2.26ms |
+| simd-json | 1.08ms |
+| sonic-rs | 0.83ms |
+
+### Custom Parser Integration
+
+If you need a different JSON parser, you can implement custom serialization:
+
+```rust
+// Example: Using a custom parser for specific tools
+#[tool(description = "Process large JSON data")]
+async fn process_large_json(&self, data: String) -> ToolOutput {
+    // Use simd-json for large payloads
+    let value: serde_json::Value = simd_json::serde::from_str(&data)
+        .map_err(|e| McpError::invalid_params("data", e.to_string()))?;
+
+    // Process...
+    ToolOutput::json(&result)
+}
+```
+
 ## See Also
 
 - [Architecture](architecture.md) - System design overview
 - [Transports](transports.md) - Transport configuration
 - [Security](security.md) - Security best practices
+- [Production Deployment](production-deployment.md) - Deployment guidance

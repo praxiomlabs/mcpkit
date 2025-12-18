@@ -7,8 +7,17 @@ The Rust MCP SDK is designed to be runtime-agnostic, allowing you to choose the 
 | Runtime | Feature Flag | Status | Binary Size | Best For |
 |---------|--------------|--------|-------------|----------|
 | **Tokio** | `tokio-runtime` (default) | Fully supported | Larger | Production servers, full feature set |
-| **async-std** | `async-std-runtime` | Supported | Medium | Simple API, std-like interface |
+| **async-std** | `async-std-runtime` | ⚠️ Deprecated | Medium | Legacy codebases only |
 | **smol** | `smol-runtime` | Supported | Smallest | Embedded, minimal deployments |
+
+> **⚠️ async-std Deprecation Notice**
+>
+> async-std has been marked as discontinued ([RUSTSEC-2025-0052](https://rustsec.org/advisories/RUSTSEC-2025-0052.html)).
+> While the SDK still supports it for existing codebases, **new projects should use Tokio or smol**.
+>
+> - For production servers: Use **Tokio** (default)
+> - For minimal binary size: Use **smol**
+> - For existing async-std codebases: Migration to Tokio or smol is recommended
 
 ## Configuration
 
@@ -23,9 +32,11 @@ mcpkit-server = "0.2"
 tokio = { version = "1", features = ["full"] }
 ```
 
-### async-std
+### async-std (Deprecated)
 
-To use async-std, disable default features and enable `async-std-runtime`:
+> **⚠️ Deprecated:** async-std is discontinued. Consider migrating to Tokio or smol for new projects.
+
+For existing async-std codebases, disable default features and enable `async-std-runtime`:
 
 ```toml
 [dependencies]
@@ -48,6 +59,8 @@ async fn main() -> Result<(), mcpkit_core::error::McpError> {
     server.serve(transport).await
 }
 ```
+
+**Migration recommendation:** Replace `async-std` with `tokio` using the same API patterns. Most code changes are minimal (change `#[async_std::main]` to `#[tokio::main]`).
 
 ### smol
 
