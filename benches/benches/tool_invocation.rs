@@ -1,6 +1,6 @@
 //! Benchmarks for tool invocation latency.
 //!
-//! Run with: `cargo bench --package rust-mcp-benches --bench tool_invocation`
+//! Run with: `cargo bench --package mcpkit-benches --bench tool_invocation`
 
 // Allow missing docs for criterion_group! macro generated functions
 #![allow(missing_docs)]

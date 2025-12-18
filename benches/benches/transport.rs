@@ -1,6 +1,6 @@
 //! Benchmarks for transport operations.
 //!
-//! Run with: `cargo bench --package rust-mcp-benches --bench transport`
+//! Run with: `cargo bench --package mcpkit-benches --bench transport`
 
 // Allow missing docs for criterion_group! macro generated functions
 #![allow(missing_docs)]

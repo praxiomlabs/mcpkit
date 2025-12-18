@@ -1,6 +1,6 @@
 //! Benchmarks for JSON-RPC message serialization and deserialization.
 //!
-//! Run with: `cargo bench --package rust-mcp-benches --bench serialization`
+//! Run with: `cargo bench --package mcpkit-benches --bench serialization`
 
 // Allow missing docs for criterion_group! macro generated functions
 #![allow(missing_docs)]

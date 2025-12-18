@@ -1,6 +1,6 @@
 //! Memory allocation benchmarks for long-running servers.
 //!
-//! Run with: `cargo bench --package rust-mcp-benches --bench memory`
+//! Run with: `cargo bench --package mcpkit-benches --bench memory`
 //!
 //! This benchmark measures memory allocation patterns and helps identify
 //! potential memory leaks in long-running server scenarios.
