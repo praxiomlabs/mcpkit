@@ -901,8 +901,20 @@ metadata-check:
     printf '{{green}}[OK]{{reset}}   Metadata check passed\n'
 
 [group('release')]
+[doc("Run typos spell checker")]
+typos:
+    #!/usr/bin/env bash
+    printf '{{cyan}}[INFO]{{reset}} Running typos spell checker...\n'
+    if ! command -v typos &> /dev/null; then
+        printf '{{yellow}}[WARN]{{reset}} typos not installed (cargo install typos-cli)\n'
+        exit 0
+    fi
+    typos crates/ docs/ README.md CHANGELOG.md RELEASING.md
+    printf '{{green}}[OK]{{reset}}   Typos check passed\n'
+
+[group('release')]
 [doc("Prepare for release (full validation)")]
-release-check: ci-release wip-check panic-audit metadata-check
+release-check: ci-release wip-check panic-audit version-sync typos machete metadata-check
     #!/usr/bin/env bash
     printf '\n{{bold}}{{blue}}══════ Release Validation ══════{{reset}}\n\n'
     printf '{{cyan}}[INFO]{{reset}} Checking for uncommitted changes...\n'
@@ -932,6 +944,45 @@ publish-dry:
     {{cargo}} publish --dry-run -p mcpkit-actix
     {{cargo}} publish --dry-run -p mcpkit
     printf '{{green}}[OK]{{reset}}   Dry run complete\n'
+
+[group('release')]
+[confirm("This will publish to crates.io. This action is IRREVERSIBLE. Continue?")]
+[doc("Publish all crates to crates.io in dependency order")]
+publish:
+    #!/usr/bin/env bash
+    printf '\n{{bold}}{{blue}}══════ Publishing to crates.io ══════{{reset}}\n\n'
+    printf '{{yellow}}[WARN]{{reset}} This action is IRREVERSIBLE!\n'
+
+    # Tier 0: Core crates
+    printf '{{cyan}}[INFO]{{reset}} Publishing core crates...\n'
+    {{cargo}} publish -p mcpkit-core
+    {{cargo}} publish -p mcpkit-macros
+    printf '{{cyan}}[INFO]{{reset}} Waiting for crates.io index propagation...\n'
+    sleep 30
+
+    # Tier 1: Transport and framework crates
+    printf '{{cyan}}[INFO]{{reset}} Publishing transport and framework crates...\n'
+    {{cargo}} publish -p mcpkit-transport
+    {{cargo}} publish -p mcpkit-server
+    {{cargo}} publish -p mcpkit-client
+    {{cargo}} publish -p mcpkit-testing
+    sleep 30
+
+    # Tier 2: Integration crates
+    printf '{{cyan}}[INFO]{{reset}} Publishing integration crates...\n'
+    {{cargo}} publish -p mcpkit-axum
+    {{cargo}} publish -p mcpkit-actix
+    sleep 30
+
+    # Tier 3: Umbrella crate
+    printf '{{cyan}}[INFO]{{reset}} Publishing umbrella crate...\n'
+    {{cargo}} publish -p mcpkit
+
+    printf '\n{{green}}[OK]{{reset}}   All crates published successfully!\n'
+    printf '{{cyan}}[INFO]{{reset}} Next steps:\n'
+    printf '  1. Verify: cargo search mcpkit\n'
+    printf '  2. Check docs.rs in ~15 minutes\n'
+    printf '  3. Update CHANGELOG.md [Unreleased] section\n'
 
 [group('release')]
 [doc("Create git tag for release")]
