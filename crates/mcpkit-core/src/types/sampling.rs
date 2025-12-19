@@ -276,11 +276,12 @@ mod tests {
     }
 
     #[test]
-    fn test_model_preferences() {
+    fn test_model_preferences() -> Result<(), Box<dyn std::error::Error>> {
         let prefs = ModelPreferences::smart().hint(ModelHint::name("claude-3-opus"));
 
         assert_eq!(prefs.intelligence_priority, Some(1.0));
-        assert_eq!(prefs.hints.as_ref().unwrap().len(), 1);
+        assert_eq!(prefs.hints.as_ref().ok_or("Expected hints")?.len(), 1);
+        Ok(())
     }
 
     #[test]
@@ -305,9 +306,10 @@ mod tests {
     }
 
     #[test]
-    fn test_serialization() {
+    fn test_serialization() -> Result<(), Box<dyn std::error::Error>> {
         let request = CreateMessageRequest::simple("Hello", 100);
-        let json = serde_json::to_string(&request).unwrap();
+        let json = serde_json::to_string(&request)?;
         assert!(json.contains("\"maxTokens\":100"));
+        Ok(())
     }
 }

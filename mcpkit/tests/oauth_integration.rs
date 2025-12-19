@@ -47,14 +47,15 @@ fn test_protected_resource_metadata_multiple_auth_servers() {
 }
 
 #[test]
-fn test_protected_resource_metadata_with_scopes() {
+fn test_protected_resource_metadata_with_scopes() -> Result<(), Box<dyn std::error::Error>> {
     let metadata = ProtectedResourceMetadata::new("https://mcp.example.com")
         .with_authorization_server("https://auth.example.com")
         .with_scopes(["mcp:read", "mcp:write", "mcp:admin"]);
 
-    let scopes = metadata.scopes_supported.as_ref().unwrap();
+    let scopes = metadata.scopes_supported.as_ref().ok_or("Expected value")?;
     assert_eq!(scopes.len(), 3);
     assert!(scopes.contains(&"mcp:read".to_string()));
+    Ok(())
 }
 
 #[test]
@@ -81,22 +82,23 @@ fn test_protected_resource_metadata_validation_empty_resource() {
 }
 
 #[test]
-fn test_protected_resource_metadata_serialization() {
+fn test_protected_resource_metadata_serialization() -> Result<(), Box<dyn std::error::Error>> {
     let metadata = ProtectedResourceMetadata::new("https://mcp.example.com")
         .with_authorization_server("https://auth.example.com")
         .with_scopes(["mcp:read"])
         .with_documentation("https://docs.example.com");
 
-    let json = serde_json::to_value(&metadata).unwrap();
+    let json = serde_json::to_value(&metadata)?;
 
     assert_eq!(json["resource"], "https://mcp.example.com");
     assert!(json["authorization_servers"].is_array());
     assert!(json["scopes_supported"].is_array());
     assert_eq!(json["resource_documentation"], "https://docs.example.com");
+    Ok(())
 }
 
 #[test]
-fn test_protected_resource_metadata_deserialization() {
+fn test_protected_resource_metadata_deserialization() -> Result<(), Box<dyn std::error::Error>> {
     let json = json!({
         "resource": "https://mcp.example.com",
         "authorization_servers": ["https://auth.example.com"],
@@ -104,22 +106,24 @@ fn test_protected_resource_metadata_deserialization() {
         "bearer_methods_supported": ["header"]
     });
 
-    let metadata: ProtectedResourceMetadata = serde_json::from_value(json).unwrap();
+    let metadata: ProtectedResourceMetadata = serde_json::from_value(json)?;
 
     assert_eq!(metadata.resource, "https://mcp.example.com");
     assert_eq!(metadata.authorization_servers.len(), 1);
     assert!(metadata.validate().is_ok());
+    Ok(())
 }
 
 #[test]
-fn test_protected_resource_metadata_well_known_url() {
+fn test_protected_resource_metadata_well_known_url() -> Result<(), Box<dyn std::error::Error>> {
     let url = ProtectedResourceMetadata::well_known_url("https://mcp.example.com");
 
     assert!(url.is_some());
     assert_eq!(
-        url.unwrap(),
+        url.ok_or("Expected URL")?,
         "https://mcp.example.com/.well-known/oauth-protected-resource"
     );
+    Ok(())
 }
 
 // =============================================================================
@@ -165,30 +169,40 @@ fn test_authorization_server_metadata_with_extras() {
 }
 
 #[test]
-fn test_authorization_server_metadata_default_values() {
+fn test_authorization_server_metadata_default_values() -> Result<(), Box<dyn std::error::Error>> {
     let metadata = AuthorizationServerMetadata::from_issuer("https://auth.example.com");
 
     // Check default response types
-    let response_types = metadata.response_types_supported.as_ref().unwrap();
+    let response_types = metadata
+        .response_types_supported
+        .as_ref()
+        .ok_or("Expected value")?;
     assert!(response_types.contains(&"code".to_string()));
 
     // Check default grant types
-    let grant_types = metadata.grant_types_supported.as_ref().unwrap();
+    let grant_types = metadata
+        .grant_types_supported
+        .as_ref()
+        .ok_or("Expected value")?;
     assert!(grant_types.contains(&"authorization_code".to_string()));
     assert!(grant_types.contains(&"client_credentials".to_string()));
     assert!(grant_types.contains(&"refresh_token".to_string()));
 
     // Check PKCE support
-    let code_challenge_methods = metadata.code_challenge_methods_supported.as_ref().unwrap();
+    let code_challenge_methods = metadata
+        .code_challenge_methods_supported
+        .as_ref()
+        .ok_or("Expected value")?;
     assert!(code_challenge_methods.contains(&"S256".to_string()));
+    Ok(())
 }
 
 #[test]
-fn test_authorization_server_metadata_serialization() {
+fn test_authorization_server_metadata_serialization() -> Result<(), Box<dyn std::error::Error>> {
     let metadata = AuthorizationServerMetadata::from_issuer("https://auth.example.com")
         .with_jwks_uri("https://auth.example.com/.well-known/jwks.json");
 
-    let json = serde_json::to_value(&metadata).unwrap();
+    let json = serde_json::to_value(&metadata)?;
 
     assert_eq!(json["issuer"], "https://auth.example.com");
     assert_eq!(
@@ -196,10 +210,11 @@ fn test_authorization_server_metadata_serialization() {
         "https://auth.example.com/authorize"
     );
     assert!(json["grant_types_supported"].is_array());
+    Ok(())
 }
 
 #[test]
-fn test_authorization_server_metadata_deserialization() {
+fn test_authorization_server_metadata_deserialization() -> Result<(), Box<dyn std::error::Error>> {
     let json = json!({
         "issuer": "https://auth.example.com",
         "authorization_endpoint": "https://auth.example.com/authorize",
@@ -209,20 +224,22 @@ fn test_authorization_server_metadata_deserialization() {
         "code_challenge_methods_supported": ["S256"]
     });
 
-    let metadata: AuthorizationServerMetadata = serde_json::from_value(json).unwrap();
+    let metadata: AuthorizationServerMetadata = serde_json::from_value(json)?;
 
     assert_eq!(metadata.issuer, "https://auth.example.com");
+    Ok(())
 }
 
 #[test]
-fn test_authorization_server_metadata_well_known_url() {
+fn test_authorization_server_metadata_well_known_url() -> Result<(), Box<dyn std::error::Error>> {
     let url = AuthorizationServerMetadata::well_known_url("https://auth.example.com");
 
     assert!(url.is_some());
     assert_eq!(
-        url.unwrap(),
+        url.ok_or("Expected URL")?,
         "https://auth.example.com/.well-known/oauth-authorization-server"
     );
+    Ok(())
 }
 
 // =============================================================================
@@ -343,7 +360,7 @@ fn test_authorization_request_with_options() {
 }
 
 #[test]
-fn test_authorization_request_build_url() {
+fn test_authorization_request_build_url() -> Result<(), Box<dyn std::error::Error>> {
     let pkce = PkceChallenge::new();
     let request = AuthorizationRequest::new("client123", &pkce, "https://mcp.example.com")
         .with_redirect_uri("http://localhost:8080/callback")
@@ -352,7 +369,7 @@ fn test_authorization_request_build_url() {
 
     let url = request
         .build_url("https://auth.example.com/authorize")
-        .unwrap();
+        .ok_or("Build URL failed")?;
 
     assert!(url.starts_with("https://auth.example.com/authorize?"));
     assert!(url.contains("response_type=code"));
@@ -363,18 +380,20 @@ fn test_authorization_request_build_url() {
     assert!(url.contains("redirect_uri="));
     assert!(url.contains("scope=mcp%3Aread")); // URL-encoded
     assert!(url.contains("state=state123"));
+    Ok(())
 }
 
 #[test]
-fn test_authorization_request_serialization() {
+fn test_authorization_request_serialization() -> Result<(), Box<dyn std::error::Error>> {
     let pkce = PkceChallenge::new();
     let request = AuthorizationRequest::new("client123", &pkce, "https://mcp.example.com");
 
-    let json = serde_json::to_value(&request).unwrap();
+    let json = serde_json::to_value(&request)?;
 
     assert_eq!(json["response_type"], "code");
     assert_eq!(json["client_id"], "client123");
     assert_eq!(json["code_challenge_method"], "S256");
+    Ok(())
 }
 
 // =============================================================================
@@ -435,7 +454,7 @@ fn test_token_request_with_options() {
 }
 
 #[test]
-fn test_token_request_serialization() {
+fn test_token_request_serialization() -> Result<(), Box<dyn std::error::Error>> {
     let request = TokenRequest::authorization_code(
         "code123",
         "client123",
@@ -443,11 +462,12 @@ fn test_token_request_serialization() {
         "https://mcp.example.com",
     );
 
-    let json = serde_json::to_value(&request).unwrap();
+    let json = serde_json::to_value(&request)?;
 
     assert_eq!(json["grant_type"], "authorization_code");
     assert_eq!(json["code"], "code123");
     assert_eq!(json["code_verifier"], "verifier456");
+    Ok(())
 }
 
 // =============================================================================
@@ -503,7 +523,7 @@ fn test_token_response_no_expiration() {
 }
 
 #[test]
-fn test_token_response_deserialization() {
+fn test_token_response_deserialization() -> Result<(), Box<dyn std::error::Error>> {
     let json = json!({
         "access_token": "access123",
         "token_type": "Bearer",
@@ -512,10 +532,11 @@ fn test_token_response_deserialization() {
         "scope": "mcp:read mcp:write"
     });
 
-    let response: TokenResponse = serde_json::from_value(json).unwrap();
+    let response: TokenResponse = serde_json::from_value(json)?;
 
     assert_eq!(response.access_token, "access123");
     assert_eq!(response.expires_in, Some(3600));
+    Ok(())
 }
 
 // =============================================================================
@@ -602,31 +623,33 @@ fn test_www_authenticate_with_options() {
 }
 
 #[test]
-fn test_www_authenticate_parse() {
+fn test_www_authenticate_parse() -> Result<(), Box<dyn std::error::Error>> {
     let header_value = "Bearer resource_metadata=\"https://mcp.example.com/.well-known/oauth-protected-resource\", realm=\"MCP\"";
 
     let parsed = WwwAuthenticate::parse(header_value);
 
     assert!(parsed.is_some());
-    let parsed = parsed.unwrap();
+    let parsed = parsed.ok_or("Expected parse result")?;
     assert!(
         parsed
             .resource_metadata
             .contains("oauth-protected-resource")
     );
     assert_eq!(parsed.realm, Some("MCP".to_string()));
+    Ok(())
 }
 
 #[test]
-fn test_www_authenticate_parse_with_error() {
+fn test_www_authenticate_parse_with_error() -> Result<(), Box<dyn std::error::Error>> {
     let header_value = "Bearer resource_metadata=\"https://example.com\", error=\"invalid_token\", error_description=\"Token expired\"";
 
     let parsed = WwwAuthenticate::parse(header_value);
 
     assert!(parsed.is_some());
-    let parsed = parsed.unwrap();
+    let parsed = parsed.ok_or("Expected parse result")?;
     assert_eq!(parsed.error, Some(OAuthError::InvalidToken));
     assert_eq!(parsed.error_description, Some("Token expired".to_string()));
+    Ok(())
 }
 
 #[test]
@@ -669,27 +692,34 @@ fn test_oauth_error_response() {
 }
 
 #[test]
-fn test_oauth_error_serialization() {
+fn test_oauth_error_serialization() -> Result<(), Box<dyn std::error::Error>> {
     let response =
         OAuthErrorResponse::new(OAuthError::InvalidRequest).with_description("Missing parameter");
 
-    let json = serde_json::to_value(&response).unwrap();
+    let json = serde_json::to_value(&response)?;
 
     assert_eq!(json["error"], "invalid_request");
     assert_eq!(json["error_description"], "Missing parameter");
+    Ok(())
 }
 
 #[test]
-fn test_oauth_error_deserialization() {
+fn test_oauth_error_deserialization() -> Result<(), Box<dyn std::error::Error>> {
     let json = json!({
         "error": "invalid_grant",
         "error_description": "The authorization code has expired"
     });
 
-    let response: OAuthErrorResponse = serde_json::from_value(json).unwrap();
+    let response: OAuthErrorResponse = serde_json::from_value(json)?;
 
     assert_eq!(response.error, OAuthError::InvalidGrant);
-    assert!(response.error_description.unwrap().contains("expired"));
+    assert!(
+        response
+            .error_description
+            .ok_or("Expected error description")?
+            .contains("expired")
+    );
+    Ok(())
 }
 
 // =============================================================================
@@ -710,9 +740,10 @@ fn test_grant_type_display() {
 }
 
 #[test]
-fn test_grant_type_serialization() {
-    let json = serde_json::to_value(GrantType::AuthorizationCode).unwrap();
+fn test_grant_type_serialization() -> Result<(), Box<dyn std::error::Error>> {
+    let json = serde_json::to_value(GrantType::AuthorizationCode)?;
     assert_eq!(json, "authorization_code");
+    Ok(())
 }
 
 // =============================================================================
@@ -756,7 +787,7 @@ fn test_authorization_config_with_scopes() {
 // =============================================================================
 
 #[test]
-fn test_client_registration_request_basic() {
+fn test_client_registration_request_basic() -> Result<(), Box<dyn std::error::Error>> {
     let request = ClientRegistrationRequest::new();
 
     // Defaults for public client
@@ -765,13 +796,14 @@ fn test_client_registration_request_basic() {
         request
             .grant_types
             .as_ref()
-            .unwrap()
+            .ok_or("Expected grant_types")?
             .contains(&"authorization_code".to_string())
     );
+    Ok(())
 }
 
 #[test]
-fn test_client_registration_request_with_options() {
+fn test_client_registration_request_with_options() -> Result<(), Box<dyn std::error::Error>> {
     let request = ClientRegistrationRequest::new()
         .with_client_name("My MCP Client")
         .with_redirect_uris([
@@ -781,22 +813,31 @@ fn test_client_registration_request_with_options() {
         .with_software_id("mcp-client-123");
 
     assert_eq!(request.client_name, Some("My MCP Client".to_string()));
-    assert_eq!(request.redirect_uris.as_ref().unwrap().len(), 2);
+    assert_eq!(
+        request
+            .redirect_uris
+            .as_ref()
+            .ok_or("Expected value")?
+            .len(),
+        2
+    );
     assert_eq!(request.software_id, Some("mcp-client-123".to_string()));
+    Ok(())
 }
 
 #[test]
-fn test_client_registration_request_serialization() {
+fn test_client_registration_request_serialization() -> Result<(), Box<dyn std::error::Error>> {
     let request = ClientRegistrationRequest::new().with_client_name("Test Client");
 
-    let json = serde_json::to_value(&request).unwrap();
+    let json = serde_json::to_value(&request)?;
 
     assert_eq!(json["client_name"], "Test Client");
     assert_eq!(json["token_endpoint_auth_method"], "none");
+    Ok(())
 }
 
 #[test]
-fn test_client_registration_response_deserialization() {
+fn test_client_registration_response_deserialization() -> Result<(), Box<dyn std::error::Error>> {
     let json = json!({
         "client_id": "generated_client_id_123",
         "client_secret": "generated_secret_456",
@@ -804,13 +845,14 @@ fn test_client_registration_response_deserialization() {
         "client_id_issued_at": 1234567890
     });
 
-    let response: ClientRegistrationResponse = serde_json::from_value(json).unwrap();
+    let response: ClientRegistrationResponse = serde_json::from_value(json)?;
 
     assert_eq!(response.client_id, "generated_client_id_123");
     assert_eq!(
         response.client_secret,
         Some("generated_secret_456".to_string())
     );
+    Ok(())
 }
 
 // =============================================================================
@@ -818,7 +860,7 @@ fn test_client_registration_response_deserialization() {
 // =============================================================================
 
 #[test]
-fn test_authorization_code_flow_simulation() {
+fn test_authorization_code_flow_simulation() -> Result<(), Box<dyn std::error::Error>> {
     // Step 1: Generate PKCE challenge
     let pkce = PkceChallenge::new();
 
@@ -830,7 +872,7 @@ fn test_authorization_code_flow_simulation() {
 
     let auth_url = auth_request
         .build_url("https://auth.example.com/authorize")
-        .unwrap();
+        .ok_or("Build URL failed")?;
     assert!(auth_url.contains("code_challenge="));
 
     // Step 3: Simulate receiving authorization code
@@ -847,7 +889,10 @@ fn test_authorization_code_flow_simulation() {
 
     assert_eq!(token_request.grant_type, "authorization_code");
     assert_eq!(
-        token_request.code_verifier.as_ref().unwrap(),
+        token_request
+            .code_verifier
+            .as_ref()
+            .ok_or("Expected value")?,
         &pkce.verifier
     );
 
@@ -867,6 +912,7 @@ fn test_authorization_code_flow_simulation() {
         stored.authorization_header(),
         "Bearer access_token_from_server"
     );
+    Ok(())
 }
 
 #[test]
@@ -896,7 +942,7 @@ fn test_client_credentials_flow_simulation() {
 }
 
 #[test]
-fn test_token_refresh_flow_simulation() {
+fn test_token_refresh_flow_simulation() -> Result<(), Box<dyn std::error::Error>> {
     // Simulate having an existing refresh token
     let refresh_token = "existing_refresh_token";
 
@@ -904,7 +950,13 @@ fn test_token_refresh_flow_simulation() {
     let token_request = TokenRequest::refresh(refresh_token, "test-client");
 
     assert_eq!(token_request.grant_type, "refresh_token");
-    assert_eq!(token_request.refresh_token.as_ref().unwrap(), refresh_token);
+    assert_eq!(
+        token_request
+            .refresh_token
+            .as_ref()
+            .ok_or("Expected value")?,
+        refresh_token
+    );
 
     // Simulate new token response
     let new_token = TokenResponse {
@@ -917,6 +969,7 @@ fn test_token_refresh_flow_simulation() {
 
     let stored = StoredToken::new(new_token, "https://mcp.example.com");
     assert_eq!(stored.authorization_header(), "Bearer new_access_token");
+    Ok(())
 }
 
 // =============================================================================
@@ -924,7 +977,7 @@ fn test_token_refresh_flow_simulation() {
 // =============================================================================
 
 #[test]
-fn test_mcp_401_response_handling() {
+fn test_mcp_401_response_handling() -> Result<(), Box<dyn std::error::Error>> {
     // Simulate receiving a 401 with WWW-Authenticate header
     let www_authenticate =
         WwwAuthenticate::new("https://mcp.example.com/.well-known/oauth-protected-resource")
@@ -934,7 +987,7 @@ fn test_mcp_401_response_handling() {
     let header_value = www_authenticate.to_header_value();
 
     // Parse the header
-    let parsed = WwwAuthenticate::parse(&header_value).unwrap();
+    let parsed = WwwAuthenticate::parse(&header_value).ok_or("Parse failed")?;
 
     // Client should discover the resource metadata URL
     assert!(
@@ -945,10 +998,11 @@ fn test_mcp_401_response_handling() {
 
     // And understand the error
     assert_eq!(parsed.error, Some(OAuthError::InvalidToken));
+    Ok(())
 }
 
 #[test]
-fn test_resource_indicator_required() {
+fn test_resource_indicator_required() -> Result<(), Box<dyn std::error::Error>> {
     // MCP requires resource indicator in authorization requests
     let pkce = PkceChallenge::new();
     let request = AuthorizationRequest::new("client", &pkce, "https://mcp.example.com");
@@ -958,6 +1012,7 @@ fn test_resource_indicator_required() {
 
     let url = request
         .build_url("https://auth.example.com/authorize")
-        .unwrap();
+        .ok_or("Build URL failed")?;
     assert!(url.contains("resource="));
+    Ok(())
 }

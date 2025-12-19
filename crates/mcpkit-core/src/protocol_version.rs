@@ -498,24 +498,25 @@ mod tests {
     }
 
     #[test]
-    fn test_version_parse() {
+    fn test_version_parse() -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(
-            "2024-11-05".parse::<ProtocolVersion>().unwrap(),
+            "2024-11-05".parse::<ProtocolVersion>()?,
             ProtocolVersion::V2024_11_05
         );
         assert_eq!(
-            "2025-03-26".parse::<ProtocolVersion>().unwrap(),
+            "2025-03-26".parse::<ProtocolVersion>()?,
             ProtocolVersion::V2025_03_26
         );
         assert_eq!(
-            "2025-06-18".parse::<ProtocolVersion>().unwrap(),
+            "2025-06-18".parse::<ProtocolVersion>()?,
             ProtocolVersion::V2025_06_18
         );
         assert_eq!(
-            "2025-11-25".parse::<ProtocolVersion>().unwrap(),
+            "2025-11-25".parse::<ProtocolVersion>()?,
             ProtocolVersion::V2025_11_25
         );
         assert!("unknown".parse::<ProtocolVersion>().is_err());
+        Ok(())
     }
 
     #[test]
@@ -607,15 +608,16 @@ mod tests {
     }
 
     #[test]
-    fn test_serde() {
+    fn test_serde() -> Result<(), Box<dyn std::error::Error>> {
         let v = ProtocolVersion::V2025_11_25;
 
         // Serialize to string
-        let json = serde_json::to_string(&v).unwrap();
+        let json = serde_json::to_string(&v)?;
         assert_eq!(json, "\"2025-11-25\"");
 
         // Deserialize from string
-        let parsed: ProtocolVersion = serde_json::from_str("\"2024-11-05\"").unwrap();
+        let parsed: ProtocolVersion = serde_json::from_str("\"2024-11-05\"")?;
         assert_eq!(parsed, ProtocolVersion::V2024_11_05);
+        Ok(())
     }
 }

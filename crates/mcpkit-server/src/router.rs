@@ -739,21 +739,25 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_ping() {
+    fn test_parse_ping() -> Result<(), Box<dyn std::error::Error>> {
         let request = make_request("ping", None);
-        let parsed = parse_request(&request).unwrap();
+        let parsed = parse_request(&request)?;
         assert!(matches!(parsed, ParsedRequest::Ping));
+
+        Ok(())
     }
 
     #[test]
-    fn test_parse_tools_list() {
+    fn test_parse_tools_list() -> Result<(), Box<dyn std::error::Error>> {
         let request = make_request("tools/list", None);
-        let parsed = parse_request(&request).unwrap();
+        let parsed = parse_request(&request)?;
         assert!(matches!(parsed, ParsedRequest::ToolsList(_)));
+
+        Ok(())
     }
 
     #[test]
-    fn test_parse_tools_call() {
+    fn test_parse_tools_call() -> Result<(), Box<dyn std::error::Error>> {
         let request = make_request(
             "tools/call",
             Some(serde_json::json!({
@@ -761,29 +765,33 @@ mod tests {
                 "arguments": {"query": "test"}
             })),
         );
-        let parsed = parse_request(&request).unwrap();
+        let parsed = parse_request(&request)?;
 
         if let ParsedRequest::ToolsCall(params) = parsed {
             assert_eq!(params.name, "search");
         } else {
             panic!("Expected ToolsCall");
         }
+
+        Ok(())
     }
 
     #[test]
-    fn test_parse_unknown_method() {
+    fn test_parse_unknown_method() -> Result<(), Box<dyn std::error::Error>> {
         let request = make_request("unknown/method", None);
-        let parsed = parse_request(&request).unwrap();
+        let parsed = parse_request(&request)?;
 
         if let ParsedRequest::Unknown(method) = parsed {
             assert_eq!(method, "unknown/method");
         } else {
             panic!("Expected Unknown");
         }
+
+        Ok(())
     }
 
     #[test]
-    fn test_parse_initialize() {
+    fn test_parse_initialize() -> Result<(), Box<dyn std::error::Error>> {
         let request = make_request(
             "initialize",
             Some(serde_json::json!({
@@ -795,7 +803,7 @@ mod tests {
                 "capabilities": {}
             })),
         );
-        let parsed = parse_request(&request).unwrap();
+        let parsed = parse_request(&request)?;
 
         if let ParsedRequest::Initialize(params) = parsed {
             assert_eq!(params.protocol_version, "2025-11-25");
@@ -803,5 +811,7 @@ mod tests {
         } else {
             panic!("Expected Initialize");
         }
+
+        Ok(())
     }
 }

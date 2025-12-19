@@ -231,26 +231,35 @@ mod tests {
     }
 
     #[test]
-    fn test_content_serialization() {
+    fn test_content_serialization() -> Result<(), Box<dyn std::error::Error>> {
         let content = Content::text("Test");
-        let json = serde_json::to_string(&content).unwrap();
+        let json = serde_json::to_string(&content)?;
         assert!(json.contains("\"type\":\"text\""));
         assert!(json.contains("\"text\":\"Test\""));
+        Ok(())
     }
 
     #[test]
-    fn test_image_content() {
+    fn test_image_content() -> Result<(), Box<dyn std::error::Error>> {
         let content = Content::image("base64data", "image/png");
         assert!(content.is_image());
-        let json = serde_json::to_string(&content).unwrap();
+        let json = serde_json::to_string(&content)?;
         assert!(json.contains("\"type\":\"image\""));
         assert!(json.contains("\"mimeType\":\"image/png\""));
+        Ok(())
     }
 
     #[test]
-    fn test_annotations() {
+    fn test_annotations() -> Result<(), Box<dyn std::error::Error>> {
         let annotations = ContentAnnotations::for_user().with_priority(0.8);
         assert_eq!(annotations.priority, Some(0.8));
-        assert!(annotations.audience.as_ref().unwrap().contains(&Role::User));
+        assert!(
+            annotations
+                .audience
+                .as_ref()
+                .ok_or("Expected audience")?
+                .contains(&Role::User)
+        );
+        Ok(())
     }
 }

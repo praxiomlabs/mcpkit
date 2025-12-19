@@ -1012,10 +1012,11 @@ mod tests {
     use quote::quote;
 
     #[test]
-    fn test_parse_server_attrs() {
+    fn test_parse_server_attrs() -> std::result::Result<(), Box<dyn std::error::Error>> {
         let tokens = quote!(name = "test", version = "1.0.0");
-        let attrs = ServerAttrs::parse(tokens).unwrap();
+        let attrs = ServerAttrs::parse(tokens)?;
         assert_eq!(attrs.name, "test");
         assert_eq!(attrs.version, "1.0.0");
+        Ok(())
     }
 }

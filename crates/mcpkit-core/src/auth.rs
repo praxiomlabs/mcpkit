@@ -1056,7 +1056,7 @@ mod tests {
     }
 
     #[test]
-    fn test_authorization_request() {
+    fn test_authorization_request() -> Result<(), Box<dyn std::error::Error>> {
         let pkce = PkceChallenge::new();
         let request = AuthorizationRequest::new("client123", &pkce, "https://mcp.example.com")
             .with_redirect_uri("http://localhost:8080/callback")
@@ -1068,10 +1068,11 @@ mod tests {
 
         let url = request.build_url("https://auth.example.com/authorize");
         assert!(url.is_some());
-        let url = url.unwrap();
+        let url = url.ok_or("Expected URL")?;
         assert!(url.contains("response_type=code"));
         assert!(url.contains("client_id=client123"));
         assert!(url.contains("resource="));
+        Ok(())
     }
 
     #[test]
@@ -1112,17 +1113,18 @@ mod tests {
     }
 
     #[test]
-    fn test_www_authenticate_parse() {
+    fn test_www_authenticate_parse() -> Result<(), Box<dyn std::error::Error>> {
         let header_value = "Bearer resource_metadata=\"https://example.com/.well-known/oauth-protected-resource\", realm=\"mcp\"";
         let parsed = WwwAuthenticate::parse(header_value);
 
         assert!(parsed.is_some());
-        let parsed = parsed.unwrap();
+        let parsed = parsed.ok_or("Expected parsed header")?;
         assert_eq!(
             parsed.resource_metadata,
             "https://example.com/.well-known/oauth-protected-resource"
         );
         assert_eq!(parsed.realm, Some("mcp".to_string()));
+        Ok(())
     }
 
     #[test]

@@ -25,13 +25,14 @@ fn test_empty_json_object_parsing() {
 }
 
 #[test]
-fn test_null_values_in_message() {
+fn test_null_values_in_message() -> Result<(), Box<dyn std::error::Error>> {
     // Request with null params should be valid
     let json = r#"{"jsonrpc":"2.0","id":1,"method":"test","params":null}"#;
     let result: Result<Request, _> = serde_json::from_str(json);
     assert!(result.is_ok());
-    let request = result.unwrap();
+    let request = result?;
     assert!(request.params.is_none() || request.params == Some(serde_json::Value::Null));
+    Ok(())
 }
 
 #[test]
@@ -50,11 +51,12 @@ fn test_extra_fields_ignored() {
 }
 
 #[test]
-fn test_unicode_in_method_name() {
+fn test_unicode_in_method_name() -> Result<(), Box<dyn std::error::Error>> {
     let json = r#"{"jsonrpc":"2.0","id":1,"method":"工具/列表","params":{}}"#;
     let result: Result<Request, _> = serde_json::from_str(json);
     assert!(result.is_ok());
-    assert_eq!(result.unwrap().method, "工具/列表");
+    assert_eq!(result?.method, "工具/列表");
+    Ok(())
 }
 
 #[test]
@@ -76,13 +78,14 @@ fn test_emoji_in_params() {
 // =============================================================================
 
 #[test]
-fn test_request_id_zero() {
+fn test_request_id_zero() -> Result<(), Box<dyn std::error::Error>> {
     let id = RequestId::Number(0);
-    let json = serde_json::to_string(&id).unwrap();
+    let json = serde_json::to_string(&id)?;
     assert_eq!(json, "0");
 
-    let parsed: RequestId = serde_json::from_str(&json).unwrap();
+    let parsed: RequestId = serde_json::from_str(&json)?;
     assert_eq!(parsed, RequestId::Number(0));
+    Ok(())
 }
 
 #[test]
@@ -96,39 +99,43 @@ fn test_request_id_negative() {
 }
 
 #[test]
-fn test_request_id_large_number() {
+fn test_request_id_large_number() -> Result<(), Box<dyn std::error::Error>> {
     // Test with a large number that fits in u64
     let id = RequestId::Number(u64::MAX);
-    let json = serde_json::to_string(&id).unwrap();
-    let parsed: RequestId = serde_json::from_str(&json).unwrap();
+    let json = serde_json::to_string(&id)?;
+    let parsed: RequestId = serde_json::from_str(&json)?;
     assert_eq!(parsed, RequestId::Number(u64::MAX));
+    Ok(())
 }
 
 #[test]
-fn test_request_id_empty_string() {
+fn test_request_id_empty_string() -> Result<(), Box<dyn std::error::Error>> {
     let id = RequestId::String(String::new());
-    let json = serde_json::to_string(&id).unwrap();
+    let json = serde_json::to_string(&id)?;
     assert_eq!(json, r#""""#);
 
-    let parsed: RequestId = serde_json::from_str(&json).unwrap();
+    let parsed: RequestId = serde_json::from_str(&json)?;
     assert_eq!(parsed, RequestId::String(String::new()));
+    Ok(())
 }
 
 #[test]
-fn test_request_id_very_long_string() {
+fn test_request_id_very_long_string() -> Result<(), Box<dyn std::error::Error>> {
     let long_string: String = "x".repeat(10000);
     let id = RequestId::String(long_string.clone());
-    let json = serde_json::to_string(&id).unwrap();
-    let parsed: RequestId = serde_json::from_str(&json).unwrap();
+    let json = serde_json::to_string(&id)?;
+    let parsed: RequestId = serde_json::from_str(&json)?;
     assert_eq!(parsed, RequestId::String(long_string));
+    Ok(())
 }
 
 #[test]
-fn test_request_id_special_chars() {
+fn test_request_id_special_chars() -> Result<(), Box<dyn std::error::Error>> {
     let id = RequestId::String(r#"test\"with'special/chars"#.to_string());
-    let json = serde_json::to_string(&id).unwrap();
-    let parsed: RequestId = serde_json::from_str(&json).unwrap();
+    let json = serde_json::to_string(&id)?;
+    let parsed: RequestId = serde_json::from_str(&json)?;
     assert_eq!(parsed, id);
+    Ok(())
 }
 
 // =============================================================================
@@ -136,21 +143,22 @@ fn test_request_id_special_chars() {
 // =============================================================================
 
 #[test]
-fn test_response_with_null_result() {
+fn test_response_with_null_result() -> Result<(), Box<dyn std::error::Error>> {
     let response = Response::success(RequestId::Number(1), serde_json::Value::Null);
-    let json = serde_json::to_string(&response).unwrap();
-    let parsed: Response = serde_json::from_str(&json).unwrap();
+    let json = serde_json::to_string(&response)?;
+    let parsed: Response = serde_json::from_str(&json)?;
     // When result is null, it may be serialized as "result": null (present but null)
     // or omitted entirely (None). Either is valid JSON-RPC behavior.
     // Test that we can round-trip the response correctly
     assert!(parsed.error.is_none());
     // The original response should round-trip correctly
-    let roundtrip = serde_json::to_string(&parsed).unwrap();
+    let roundtrip = serde_json::to_string(&parsed)?;
     assert!(!roundtrip.contains("\"error\""));
+    Ok(())
 }
 
 #[test]
-fn test_response_with_nested_error_data() {
+fn test_response_with_nested_error_data() -> Result<(), Box<dyn std::error::Error>> {
     let error = JsonRpcError {
         code: -32600,
         message: "Invalid Request".to_string(),
@@ -167,10 +175,11 @@ fn test_response_with_nested_error_data() {
         })),
     };
     let response = Response::error(RequestId::Number(1), error);
-    let json = serde_json::to_string(&response).unwrap();
-    let parsed: Response = serde_json::from_str(&json).unwrap();
+    let json = serde_json::to_string(&response)?;
+    let parsed: Response = serde_json::from_str(&json)?;
     assert!(parsed.error.is_some());
-    assert!(parsed.error.unwrap().data.is_some());
+    assert!(parsed.error.ok_or("Expected error")?.data.is_some());
+    Ok(())
 }
 
 // =============================================================================
@@ -178,22 +187,24 @@ fn test_response_with_nested_error_data() {
 // =============================================================================
 
 #[test]
-fn test_notification_without_params() {
+fn test_notification_without_params() -> Result<(), Box<dyn std::error::Error>> {
     let notification = Notification::new("test/event");
-    let json = serde_json::to_string(&notification).unwrap();
+    let json = serde_json::to_string(&notification)?;
 
     // Should not have an id field
     assert!(!json.contains("\"id\""));
     // Should have method
     assert!(json.contains("\"method\":\"test/event\""));
+    Ok(())
 }
 
 #[test]
-fn test_notification_with_empty_params() {
+fn test_notification_with_empty_params() -> Result<(), Box<dyn std::error::Error>> {
     let notification = Notification::with_params("test/event", json!({}));
-    let json = serde_json::to_string(&notification).unwrap();
-    let parsed: Notification = serde_json::from_str(&json).unwrap();
+    let json = serde_json::to_string(&notification)?;
+    let parsed: Notification = serde_json::from_str(&json)?;
     assert!(parsed.params.is_some());
+    Ok(())
 }
 
 // =============================================================================
@@ -201,7 +212,7 @@ fn test_notification_with_empty_params() {
 // =============================================================================
 
 #[test]
-fn test_large_params_object() {
+fn test_large_params_object() -> Result<(), Box<dyn std::error::Error>> {
     // Create a large params object
     let mut params = serde_json::Map::new();
     for i in 0..1000 {
@@ -216,16 +227,17 @@ fn test_large_params_object() {
 
     let request = Request::with_params("test", RequestId::Number(1), json!(params));
 
-    let json = serde_json::to_string(&request).unwrap();
+    let json = serde_json::to_string(&request)?;
     // Verify the payload is reasonably large (over 50KB)
     assert!(json.len() > 50000, "JSON length: {} bytes", json.len());
 
-    let parsed: Request = serde_json::from_str(&json).unwrap();
+    let parsed: Request = serde_json::from_str(&json)?;
     assert_eq!(parsed.method, "test");
+    Ok(())
 }
 
 #[test]
-fn test_deeply_nested_json() {
+fn test_deeply_nested_json() -> Result<(), Box<dyn std::error::Error>> {
     // Create deeply nested JSON
     fn create_nested(depth: usize) -> serde_json::Value {
         if depth == 0 {
@@ -238,13 +250,14 @@ fn test_deeply_nested_json() {
     let deep_value = create_nested(50);
     let request = Request::with_params("test", RequestId::Number(1), deep_value);
 
-    let json = serde_json::to_string(&request).unwrap();
-    let parsed: Request = serde_json::from_str(&json).unwrap();
+    let json = serde_json::to_string(&request)?;
+    let parsed: Request = serde_json::from_str(&json)?;
     assert!(parsed.params.is_some());
+    Ok(())
 }
 
 #[test]
-fn test_large_array_in_params() {
+fn test_large_array_in_params() -> Result<(), Box<dyn std::error::Error>> {
     let large_array: Vec<i32> = (0..10000).collect();
     let request = Request::with_params(
         "test",
@@ -252,9 +265,10 @@ fn test_large_array_in_params() {
         json!({ "items": large_array }),
     );
 
-    let json = serde_json::to_string(&request).unwrap();
-    let parsed: Request = serde_json::from_str(&json).unwrap();
+    let json = serde_json::to_string(&request)?;
+    let parsed: Request = serde_json::from_str(&json)?;
     assert!(parsed.params.is_some());
+    Ok(())
 }
 
 // =============================================================================
@@ -314,7 +328,7 @@ fn test_error_context_preserves_code() {
         Ok(())
     }
 
-    let err = outermost().unwrap_err();
+    let err = outermost().expect_err("Expected error");
     // Code should propagate through context layers
     assert_eq!(err.code(), codes::RESOURCE_NOT_FOUND);
 }
@@ -412,7 +426,7 @@ fn test_message_send_sync() {
 // =============================================================================
 
 #[test]
-fn test_very_large_string_content() {
+fn test_very_large_string_content() -> Result<(), Box<dyn std::error::Error>> {
     // Test 1MB string content
     let large_content: String = "x".repeat(1_000_000);
     let request = Request::with_params(
@@ -421,16 +435,19 @@ fn test_very_large_string_content() {
         json!({ "content": large_content }),
     );
 
-    let json = serde_json::to_string(&request).unwrap();
+    let json = serde_json::to_string(&request)?;
     assert!(json.len() > 1_000_000, "JSON length: {} bytes", json.len());
 
-    let parsed: Request = serde_json::from_str(&json).unwrap();
-    let content = parsed.params.as_ref().unwrap()["content"].as_str().unwrap();
+    let parsed: Request = serde_json::from_str(&json)?;
+    let content = parsed.params.as_ref().ok_or("Expected params")?["content"]
+        .as_str()
+        .ok_or("Expected string")?;
     assert_eq!(content.len(), 1_000_000);
+    Ok(())
 }
 
 #[test]
-fn test_large_response_result() {
+fn test_large_response_result() -> Result<(), Box<dyn std::error::Error>> {
     // Test large response payload
     let large_data: Vec<String> = (0..1000)
         .map(|i| format!("Item {}: {}", i, "data".repeat(100)))
@@ -438,35 +455,38 @@ fn test_large_response_result() {
 
     let response = Response::success(RequestId::Number(1), json!({ "items": large_data }));
 
-    let json = serde_json::to_string(&response).unwrap();
-    let parsed: Response = serde_json::from_str(&json).unwrap();
+    let json = serde_json::to_string(&response)?;
+    let parsed: Response = serde_json::from_str(&json)?;
     assert!(parsed.is_success());
+    Ok(())
 }
 
 #[test]
-fn test_many_concurrent_request_ids() {
+fn test_many_concurrent_request_ids() -> Result<(), Box<dyn std::error::Error>> {
     // Verify we can handle many unique request IDs
     let ids: Vec<RequestId> = (0..10000).map(RequestId::Number).collect();
 
     for id in &ids {
         let request = Request::new("test", id.clone());
-        let json = serde_json::to_string(&request).unwrap();
-        let parsed: Request = serde_json::from_str(&json).unwrap();
+        let json = serde_json::to_string(&request)?;
+        let parsed: Request = serde_json::from_str(&json)?;
         assert_eq!(parsed.id, *id);
     }
+    Ok(())
 }
 
 #[test]
-fn test_message_with_binary_like_content() {
+fn test_message_with_binary_like_content() -> Result<(), Box<dyn std::error::Error>> {
     // Test that non-UTF8-like content in strings is handled
     // (Base64 encoded binary data, for instance)
     let binary_like = base64_like_content(10000);
     let request =
         Request::with_params("test", RequestId::Number(1), json!({ "blob": binary_like }));
 
-    let json = serde_json::to_string(&request).unwrap();
-    let parsed: Request = serde_json::from_str(&json).unwrap();
+    let json = serde_json::to_string(&request)?;
+    let parsed: Request = serde_json::from_str(&json)?;
     assert!(parsed.params.is_some());
+    Ok(())
 }
 
 fn base64_like_content(len: usize) -> String {

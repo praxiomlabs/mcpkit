@@ -20,7 +20,7 @@ fn make_test_context() -> (RequestId, ClientCapabilities, ServerCapabilities, Pr
 }
 
 #[tokio::test]
-async fn test_prompt_service_basic() {
+async fn test_prompt_service_basic() -> Result<(), Box<dyn std::error::Error>> {
     let mut service = PromptService::new();
 
     let prompt = PromptBuilder::new("greeting")
@@ -40,10 +40,11 @@ async fn test_prompt_service_basic() {
 
     assert!(service.contains("greeting"));
     assert_eq!(service.len(), 1);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_prompt_render() {
+async fn test_prompt_render() -> Result<(), Box<dyn std::error::Error>> {
     let mut service = PromptService::new();
 
     let prompt = PromptBuilder::new("code_review")
@@ -80,12 +81,13 @@ async fn test_prompt_render() {
         .await;
 
     assert!(result.is_ok());
-    let prompt_result = result.unwrap();
+    let prompt_result = result?;
     assert!(!prompt_result.messages.is_empty());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_prompt_not_found() {
+async fn test_prompt_not_found() -> Result<(), Box<dyn std::error::Error>> {
     let service = PromptService::new();
 
     let (req_id, client_caps, server_caps, protocol_version, peer) = make_test_context();
@@ -93,10 +95,11 @@ async fn test_prompt_not_found() {
 
     let result = service.render("nonexistent", None, &ctx).await;
     assert!(result.is_err());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_prompt_handler_trait() {
+async fn test_prompt_handler_trait() -> Result<(), Box<dyn std::error::Error>> {
     let mut service = PromptService::new();
 
     let prompt = PromptBuilder::new("summarize")
@@ -118,7 +121,7 @@ async fn test_prompt_handler_trait() {
     let ctx = Context::new(&req_id, None, &client_caps, &server_caps, protocol_version, &peer);
 
     // Use the PromptHandler trait
-    let prompts = service.list_prompts(&ctx).await.unwrap();
+    let prompts = service.list_prompts(&ctx).await?;
     assert_eq!(prompts.len(), 1);
 
     let mut args = serde_json::Map::new();
@@ -126,10 +129,11 @@ async fn test_prompt_handler_trait() {
 
     let result = service.get_prompt("summarize", Some(args), &ctx).await;
     assert!(result.is_ok());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_prompt_builder() {
+async fn test_prompt_builder() -> Result<(), Box<dyn std::error::Error>> {
     let prompt = PromptBuilder::new("test_prompt")
         .description("A test prompt")
         .required_arg("input", "Required input")
@@ -139,18 +143,19 @@ async fn test_prompt_builder() {
     assert_eq!(prompt.name, "test_prompt");
     assert_eq!(prompt.description.as_deref(), Some("A test prompt"));
 
-    let args = prompt.arguments.unwrap();
+    let args = prompt.arguments.ok_or("Arguments should be present")?;
     assert_eq!(args.len(), 2);
 
-    let required_arg = args.iter().find(|a| a.name == "input").unwrap();
+    let required_arg = args.iter().find(|a| a.name == "input").ok_or("Required arg 'input' not found")?;
     assert_eq!(required_arg.required, Some(true));
 
-    let optional_arg = args.iter().find(|a| a.name == "format").unwrap();
+    let optional_arg = args.iter().find(|a| a.name == "format").ok_or("Optional arg 'format' not found")?;
     assert_eq!(optional_arg.required, Some(false));
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_prompt_result_builder() {
+async fn test_prompt_result_builder() -> Result<(), Box<dyn std::error::Error>> {
     let result = PromptResultBuilder::new()
         .description("Test result")
         .user_text("User message")
@@ -159,10 +164,11 @@ async fn test_prompt_result_builder() {
 
     assert_eq!(result.description.as_deref(), Some("Test result"));
     assert_eq!(result.messages.len(), 2);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_multiple_prompts() {
+async fn test_multiple_prompts() -> Result<(), Box<dyn std::error::Error>> {
     let mut service = PromptService::new();
 
     for name in ["analyze", "translate", "explain", "debug"] {
@@ -182,12 +188,13 @@ async fn test_multiple_prompts() {
     let (req_id, client_caps, server_caps, protocol_version, peer) = make_test_context();
     let ctx = Context::new(&req_id, None, &client_caps, &server_caps, protocol_version, &peer);
 
-    let prompts = service.list_prompts(&ctx).await.unwrap();
+    let prompts = service.list_prompts(&ctx).await?;
     assert_eq!(prompts.len(), 4);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_prompt_with_no_args() {
+async fn test_prompt_with_no_args() -> Result<(), Box<dyn std::error::Error>> {
     let mut service = PromptService::new();
 
     let prompt = PromptBuilder::new("help")
@@ -205,10 +212,11 @@ async fn test_prompt_with_no_args() {
 
     let result = service.render("help", None, &ctx).await;
     assert!(result.is_ok());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_prompt_messages() {
+async fn test_prompt_messages() -> Result<(), Box<dyn std::error::Error>> {
     // Test PromptMessage creation
     let user_msg = PromptMessage::user("User content".to_string());
     let assistant_msg = PromptMessage::assistant("Assistant content".to_string());
@@ -216,4 +224,5 @@ async fn test_prompt_messages() {
     // Both messages should be valid
     assert!(!user_msg.content.content.is_empty());
     assert!(!assistant_msg.content.content.is_empty());
+    Ok(())
 }

@@ -32,9 +32,9 @@ struct TestServerState {
 }
 
 /// Helper to find an available port
-async fn get_available_addr() -> SocketAddr {
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    listener.local_addr().unwrap()
+async fn get_available_addr() -> Result<SocketAddr, Box<dyn std::error::Error>> {
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    Ok(listener.local_addr()?)
 }
 
 /// Handle MCP POST requests
@@ -156,8 +156,8 @@ async fn spawn_test_server(addr: SocketAddr) -> tokio::task::JoinHandle<()> {
 }
 
 #[tokio::test]
-async fn test_http_basic_request() {
-    let addr = get_available_addr().await;
+async fn test_http_basic_request() -> Result<(), Box<dyn std::error::Error>> {
+    let addr = get_available_addr().await?;
     let _server = spawn_test_server(addr).await;
 
     // Give server time to start
@@ -169,7 +169,7 @@ async fn test_http_basic_request() {
 
     // Send ping request
     let request = Request::new("ping", 1u64);
-    let body = serde_json::to_string(&Message::Request(request)).unwrap();
+    let body = serde_json::to_string(&Message::Request(request))?;
 
     let result = timeout(
         Duration::from_secs(5),
@@ -183,18 +183,19 @@ async fn test_http_basic_request() {
     .await;
 
     assert!(result.is_ok());
-    let response = result.unwrap().unwrap();
+    let response = result??;
     assert_eq!(response.status(), 200);
 
-    let body = response.text().await.unwrap();
-    let msg: Message = serde_json::from_str(&body).unwrap();
+    let body = response.text().await?;
+    let msg: Message = serde_json::from_str(&body)?;
     assert!(msg.is_response());
-    assert!(msg.as_response().unwrap().is_success());
+    assert!(msg.as_response().ok_or("Expected response")?.is_success());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_http_initialize_handshake() {
-    let addr = get_available_addr().await;
+async fn test_http_initialize_handshake() -> Result<(), Box<dyn std::error::Error>> {
+    let addr = get_available_addr().await?;
     let _server = spawn_test_server(addr).await;
     tokio::time::sleep(Duration::from_millis(50)).await;
 
@@ -214,7 +215,7 @@ async fn test_http_initialize_handshake() {
             }
         }),
     );
-    let body = serde_json::to_string(&Message::Request(init_request)).unwrap();
+    let body = serde_json::to_string(&Message::Request(init_request))?;
 
     let response = client
         .post(&url)
@@ -222,8 +223,7 @@ async fn test_http_initialize_handshake() {
         .header(MCP_PROTOCOL_VERSION_HEADER, MCP_PROTOCOL_VERSION)
         .body(body)
         .send()
-        .await
-        .unwrap();
+        .await?;
 
     assert_eq!(response.status(), 200);
 
@@ -231,20 +231,21 @@ async fn test_http_initialize_handshake() {
     let session_id = response.headers().get(MCP_SESSION_ID_HEADER);
     assert!(session_id.is_some());
 
-    let body = response.text().await.unwrap();
-    let msg: Message = serde_json::from_str(&body).unwrap();
-    let resp = msg.as_response().unwrap();
+    let body = response.text().await?;
+    let msg: Message = serde_json::from_str(&body)?;
+    let resp = msg.as_response().ok_or("Expected response")?;
     assert!(resp.is_success());
     assert_eq!(resp.id, RequestId::Number(1));
     assert_eq!(
-        resp.result.as_ref().unwrap()["protocolVersion"],
+        resp.result.as_ref().ok_or("Expected result")?["protocolVersion"],
         MCP_PROTOCOL_VERSION
     );
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_http_tools_list() {
-    let addr = get_available_addr().await;
+async fn test_http_tools_list() -> Result<(), Box<dyn std::error::Error>> {
+    let addr = get_available_addr().await?;
     let _server = spawn_test_server(addr).await;
     tokio::time::sleep(Duration::from_millis(50)).await;
 
@@ -252,7 +253,7 @@ async fn test_http_tools_list() {
     let url = format!("http://{addr}/mcp");
 
     let request = Request::new("tools/list", 1u64);
-    let body = serde_json::to_string(&Message::Request(request)).unwrap();
+    let body = serde_json::to_string(&Message::Request(request))?;
 
     let response = client
         .post(&url)
@@ -260,22 +261,24 @@ async fn test_http_tools_list() {
         .header(MCP_PROTOCOL_VERSION_HEADER, MCP_PROTOCOL_VERSION)
         .body(body)
         .send()
-        .await
-        .unwrap();
+        .await?;
 
     assert_eq!(response.status(), 200);
 
-    let body = response.text().await.unwrap();
-    let msg: Message = serde_json::from_str(&body).unwrap();
-    let resp = msg.as_response().unwrap();
+    let body = response.text().await?;
+    let msg: Message = serde_json::from_str(&body)?;
+    let resp = msg.as_response().ok_or("Expected response")?;
     assert!(resp.is_success());
-    let tools = resp.result.as_ref().unwrap()["tools"].as_array().unwrap();
+    let tools = resp.result.as_ref().ok_or("Expected result")?["tools"]
+        .as_array()
+        .ok_or("Expected array")?;
     assert!(tools.is_empty()); // Test server returns empty list
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_http_method_not_found() {
-    let addr = get_available_addr().await;
+async fn test_http_method_not_found() -> Result<(), Box<dyn std::error::Error>> {
+    let addr = get_available_addr().await?;
     let _server = spawn_test_server(addr).await;
     tokio::time::sleep(Duration::from_millis(50)).await;
 
@@ -283,7 +286,7 @@ async fn test_http_method_not_found() {
     let url = format!("http://{addr}/mcp");
 
     let request = Request::new("unknown/method", 1u64);
-    let body = serde_json::to_string(&Message::Request(request)).unwrap();
+    let body = serde_json::to_string(&Message::Request(request))?;
 
     let response = client
         .post(&url)
@@ -291,21 +294,21 @@ async fn test_http_method_not_found() {
         .header(MCP_PROTOCOL_VERSION_HEADER, MCP_PROTOCOL_VERSION)
         .body(body)
         .send()
-        .await
-        .unwrap();
+        .await?;
 
     assert_eq!(response.status(), 200);
 
-    let body = response.text().await.unwrap();
-    let msg: Message = serde_json::from_str(&body).unwrap();
-    let resp = msg.as_response().unwrap();
+    let body = response.text().await?;
+    let msg: Message = serde_json::from_str(&body)?;
+    let resp = msg.as_response().ok_or("Expected response")?;
     assert!(resp.is_error());
-    assert_eq!(resp.error.as_ref().unwrap().code, -32601);
+    assert_eq!(resp.error.as_ref().ok_or("Expected value")?.code, -32601);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_http_parse_error() {
-    let addr = get_available_addr().await;
+async fn test_http_parse_error() -> Result<(), Box<dyn std::error::Error>> {
+    let addr = get_available_addr().await?;
     let _server = spawn_test_server(addr).await;
     tokio::time::sleep(Duration::from_millis(50)).await;
 
@@ -319,19 +322,19 @@ async fn test_http_parse_error() {
         .header(MCP_PROTOCOL_VERSION_HEADER, MCP_PROTOCOL_VERSION)
         .body("not valid json")
         .send()
-        .await
-        .unwrap();
+        .await?;
 
     assert_eq!(response.status(), 200);
 
-    let body = response.text().await.unwrap();
-    let json: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let body = response.text().await?;
+    let json: serde_json::Value = serde_json::from_str(&body)?;
     assert_eq!(json["error"]["code"], -32700);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_http_multiple_requests() {
-    let addr = get_available_addr().await;
+async fn test_http_multiple_requests() -> Result<(), Box<dyn std::error::Error>> {
+    let addr = get_available_addr().await?;
     let _server = spawn_test_server(addr).await;
     tokio::time::sleep(Duration::from_millis(50)).await;
 
@@ -341,7 +344,7 @@ async fn test_http_multiple_requests() {
     // Send multiple sequential requests
     for i in 1..=5 {
         let request = Request::new("ping", i);
-        let body = serde_json::to_string(&Message::Request(request)).unwrap();
+        let body = serde_json::to_string(&Message::Request(request))?;
 
         let response = client
             .post(&url)
@@ -349,22 +352,22 @@ async fn test_http_multiple_requests() {
             .header(MCP_PROTOCOL_VERSION_HEADER, MCP_PROTOCOL_VERSION)
             .body(body)
             .send()
-            .await
-            .unwrap();
+            .await?;
 
         assert_eq!(response.status(), 200);
 
-        let body = response.text().await.unwrap();
-        let msg: Message = serde_json::from_str(&body).unwrap();
-        let resp = msg.as_response().unwrap();
+        let body = response.text().await?;
+        let msg: Message = serde_json::from_str(&body)?;
+        let resp = msg.as_response().ok_or("Expected response")?;
         assert!(resp.is_success());
         assert_eq!(resp.id, RequestId::Number(i));
     }
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_http_notification() {
-    let addr = get_available_addr().await;
+async fn test_http_notification() -> Result<(), Box<dyn std::error::Error>> {
+    let addr = get_available_addr().await?;
     let _server = spawn_test_server(addr).await;
     tokio::time::sleep(Duration::from_millis(50)).await;
 
@@ -373,7 +376,7 @@ async fn test_http_notification() {
 
     // Send a notification (no response expected)
     let notification = mcpkit::protocol::Notification::new("notifications/initialized");
-    let body = serde_json::to_string(&Message::Notification(notification)).unwrap();
+    let body = serde_json::to_string(&Message::Notification(notification))?;
 
     let response = client
         .post(&url)
@@ -381,16 +384,16 @@ async fn test_http_notification() {
         .header(MCP_PROTOCOL_VERSION_HEADER, MCP_PROTOCOL_VERSION)
         .body(body)
         .send()
-        .await
-        .unwrap();
+        .await?;
 
     // Notifications get 202 Accepted with empty body
     assert_eq!(response.status(), 202);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_http_session_id_persistence() {
-    let addr = get_available_addr().await;
+async fn test_http_session_id_persistence() -> Result<(), Box<dyn std::error::Error>> {
+    let addr = get_available_addr().await?;
     let _server = spawn_test_server(addr).await;
     tokio::time::sleep(Duration::from_millis(50)).await;
 
@@ -399,7 +402,7 @@ async fn test_http_session_id_persistence() {
 
     // First request - get session ID
     let request = Request::new("ping", 1u64);
-    let body = serde_json::to_string(&Message::Request(request)).unwrap();
+    let body = serde_json::to_string(&Message::Request(request))?;
 
     let response = client
         .post(&url)
@@ -407,21 +410,19 @@ async fn test_http_session_id_persistence() {
         .header(MCP_PROTOCOL_VERSION_HEADER, MCP_PROTOCOL_VERSION)
         .body(body)
         .send()
-        .await
-        .unwrap();
+        .await?;
 
     assert_eq!(response.status(), 200);
     let session_id = response
         .headers()
         .get(MCP_SESSION_ID_HEADER)
-        .unwrap()
-        .to_str()
-        .unwrap()
+        .ok_or("Expected header")?
+        .to_str()?
         .to_string();
 
     // Second request - include session ID
     let request = Request::new("ping", 2u64);
-    let body = serde_json::to_string(&Message::Request(request)).unwrap();
+    let body = serde_json::to_string(&Message::Request(request))?;
 
     let response = client
         .post(&url)
@@ -430,8 +431,7 @@ async fn test_http_session_id_persistence() {
         .header(MCP_SESSION_ID_HEADER, &session_id)
         .body(body)
         .send()
-        .await
-        .unwrap();
+        .await?;
 
     assert_eq!(response.status(), 200);
 
@@ -439,15 +439,15 @@ async fn test_http_session_id_persistence() {
     let response_session_id = response
         .headers()
         .get(MCP_SESSION_ID_HEADER)
-        .unwrap()
-        .to_str()
-        .unwrap();
+        .ok_or("Expected header")?
+        .to_str()?;
     assert_eq!(session_id, response_session_id);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_http_concurrent_requests() {
-    let addr = get_available_addr().await;
+async fn test_http_concurrent_requests() -> Result<(), Box<dyn std::error::Error>> {
+    let addr = get_available_addr().await?;
     let _server = spawn_test_server(addr).await;
     tokio::time::sleep(Duration::from_millis(50)).await;
 
@@ -484,8 +484,9 @@ async fn test_http_concurrent_requests() {
     // Wait for all requests to complete
     let mut completed = Vec::new();
     for handle in handles {
-        completed.push(handle.await.unwrap());
+        completed.push(handle.await?);
     }
 
     assert_eq!(completed.len(), 10);
+    Ok(())
 }

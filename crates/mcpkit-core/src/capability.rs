@@ -571,7 +571,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_server_capabilities_builder() {
+    fn test_server_capabilities_builder() -> Result<(), Box<dyn std::error::Error>> {
         let caps = ServerCapabilities::new()
             .with_tools()
             .with_resources_and_subscriptions()
@@ -582,11 +582,17 @@ mod tests {
         assert!(caps.has_resources());
         assert!(caps.has_prompts());
         assert!(caps.has_tasks());
-        assert!(caps.resources.unwrap().subscribe.unwrap());
+        assert!(
+            caps.resources
+                .ok_or("Expected resources")?
+                .subscribe
+                .ok_or("Expected subscribe")?
+        );
+        Ok(())
     }
 
     #[test]
-    fn test_client_capabilities_builder() {
+    fn test_client_capabilities_builder() -> Result<(), Box<dyn std::error::Error>> {
         let caps = ClientCapabilities::new()
             .with_roots_and_changes()
             .with_sampling()
@@ -595,7 +601,13 @@ mod tests {
         assert!(caps.has_roots());
         assert!(caps.has_sampling());
         assert!(caps.has_elicitation());
-        assert!(caps.roots.unwrap().list_changed.unwrap());
+        assert!(
+            caps.roots
+                .ok_or("Expected roots")?
+                .list_changed
+                .ok_or("Expected list_changed")?
+        );
+        Ok(())
     }
 
     #[test]
@@ -620,13 +632,14 @@ mod tests {
     }
 
     #[test]
-    fn test_serialization() {
+    fn test_serialization() -> Result<(), Box<dyn std::error::Error>> {
         let caps = ServerCapabilities::new()
             .with_tools_and_changes()
             .with_resources();
 
-        let json = serde_json::to_string(&caps).unwrap();
+        let json = serde_json::to_string(&caps)?;
         assert!(json.contains("\"tools\""));
         assert!(json.contains("\"listChanged\":true"));
+        Ok(())
     }
 }

@@ -488,7 +488,7 @@ mod tests {
     }
 
     #[test]
-    fn test_tool_output_conversion() {
+    fn test_tool_output_conversion() -> Result<(), Box<dyn std::error::Error>> {
         let output = ToolOutput::text("Success");
         let result: CallToolResult = output.into();
         assert!(!result.is_error());
@@ -499,32 +499,46 @@ mod tests {
         );
         let result: CallToolResult = output.into();
         assert!(result.is_error());
-        assert!(result.content[0].as_text().unwrap().contains("Suggestion"));
+        assert!(
+            result.content[0]
+                .as_text()
+                .ok_or("Expected text")?
+                .contains("Suggestion")
+        );
+        Ok(())
     }
 
     #[test]
-    fn test_tool_output_from_string() {
+    fn test_tool_output_from_string() -> Result<(), Box<dyn std::error::Error>> {
         // From<String>
         let output: ToolOutput = "Hello, world!".to_string().into();
         let result: CallToolResult = output.into();
         assert!(!result.is_error());
-        assert_eq!(result.content[0].as_text().unwrap(), "Hello, world!");
+        assert_eq!(
+            result.content[0].as_text().ok_or("Expected text")?,
+            "Hello, world!"
+        );
 
         // From<&str>
         let output: ToolOutput = "Hello again!".into();
         let result: CallToolResult = output.into();
         assert!(!result.is_error());
-        assert_eq!(result.content[0].as_text().unwrap(), "Hello again!");
+        assert_eq!(
+            result.content[0].as_text().ok_or("Expected text")?,
+            "Hello again!"
+        );
+        Ok(())
     }
 
     #[test]
-    fn test_tool_serialization() {
+    fn test_tool_serialization() -> Result<(), Box<dyn std::error::Error>> {
         let tool = Tool::new("test")
             .description("A test tool")
             .input_schema(serde_json::json!({"type": "object"}));
 
-        let json = serde_json::to_string(&tool).unwrap();
+        let json = serde_json::to_string(&tool)?;
         assert!(json.contains("\"name\":\"test\""));
         assert!(json.contains("\"inputSchema\""));
+        Ok(())
     }
 }

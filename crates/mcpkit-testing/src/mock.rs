@@ -492,31 +492,33 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_mock_tool_text() {
+    fn test_mock_tool_text() -> Result<(), Box<dyn std::error::Error>> {
         let tool = MockTool::new("greet").returns_text("Hello!");
-        let result = tool.call(serde_json::json!({})).unwrap();
+        let result = tool.call(serde_json::json!({}))?;
         match result {
             ToolOutput::Success(r) => {
                 assert!(!r.is_error());
             }
             ToolOutput::RecoverableError { .. } => panic!("Expected success"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_mock_tool_error() {
+    fn test_mock_tool_error() -> Result<(), Box<dyn std::error::Error>> {
         let tool = MockTool::new("fail").returns_error("Something went wrong");
-        let result = tool.call(serde_json::json!({})).unwrap();
+        let result = tool.call(serde_json::json!({}))?;
         match result {
             ToolOutput::RecoverableError { message, .. } => {
                 assert!(message.contains("went wrong"));
             }
             ToolOutput::Success(_) => panic!("Expected error"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_mock_tool_dynamic() {
+    fn test_mock_tool_dynamic() -> Result<(), Box<dyn std::error::Error>> {
         let tool = MockTool::new("add").handler(|args| {
             let a = args
                 .get("a")
@@ -529,7 +531,7 @@ mod tests {
             Ok(ToolOutput::text(format!("{}", a + b)))
         });
 
-        let result = tool.call(serde_json::json!({"a": 1, "b": 2})).unwrap();
+        let result = tool.call(serde_json::json!({"a": 1, "b": 2}))?;
         match result {
             ToolOutput::Success(r) => {
                 if let Content::Text(tc) = &r.content[0] {
@@ -538,6 +540,7 @@ mod tests {
             }
             ToolOutput::RecoverableError { .. } => panic!("Expected success"),
         }
+        Ok(())
     }
 
     #[test]

@@ -317,18 +317,19 @@ mod tests {
     }
 
     #[test]
-    fn test_resource_contents_blob() {
+    fn test_resource_contents_blob() -> Result<(), Box<dyn std::error::Error>> {
         let data = b"binary data";
         let contents = ResourceContents::blob("test://binary", data, "application/octet-stream");
         assert!(contents.is_blob());
         assert!(!contents.is_text());
 
-        let decoded = contents.decode_blob().unwrap().unwrap();
+        let decoded = contents.decode_blob()?.ok_or("Expected blob data")?;
         assert_eq!(decoded, data);
+        Ok(())
     }
 
     #[test]
-    fn test_resource_contents_json() {
+    fn test_resource_contents_json() -> Result<(), Box<dyn std::error::Error>> {
         #[derive(Serialize)]
         struct Data {
             name: String,
@@ -339,8 +340,14 @@ mod tests {
             name: "test".to_string(),
             value: 42,
         };
-        let contents = ResourceContents::json("test://json", &data).unwrap();
+        let contents = ResourceContents::json("test://json", &data)?;
         assert!(contents.is_text());
-        assert!(contents.as_text().unwrap().contains("\"name\""));
+        assert!(
+            contents
+                .as_text()
+                .ok_or("Expected text")?
+                .contains("\"name\"")
+        );
+        Ok(())
     }
 }

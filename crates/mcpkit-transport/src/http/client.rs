@@ -409,23 +409,22 @@ mod tests {
     }
 
     #[test]
-    fn test_transport_builder() {
+    fn test_transport_builder() -> Result<(), Box<dyn std::error::Error>> {
         let transport = HttpTransportBuilder::new("http://example.com/mcp")
             .session_id("test-session")
             .connect_timeout(Duration::from_secs(5))
             .header("Authorization", "Bearer token")
-            .build()
-            .unwrap();
+            .build()?;
 
         assert!(!transport.is_connected());
         assert_eq!(transport.messages_sent(), 0);
         assert_eq!(transport.messages_received(), 0);
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_transport_metadata() {
-        let transport =
-            HttpTransport::new(HttpTransportConfig::new("http://localhost:8080")).unwrap();
+    async fn test_transport_metadata() -> Result<(), Box<dyn std::error::Error>> {
+        let transport = HttpTransport::new(HttpTransportConfig::new("http://localhost:8080"))?;
         let metadata = transport.metadata();
 
         assert_eq!(metadata.transport_type, "http");
@@ -433,12 +432,12 @@ mod tests {
             metadata.remote_addr,
             Some("http://localhost:8080".to_string())
         );
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_session_id_management() {
-        let transport =
-            HttpTransport::new(HttpTransportConfig::new("http://localhost:8080")).unwrap();
+    async fn test_session_id_management() -> Result<(), Box<dyn std::error::Error>> {
+        let transport = HttpTransport::new(HttpTransportConfig::new("http://localhost:8080"))?;
 
         assert!(transport.session_id().await.is_none());
 
@@ -447,5 +446,6 @@ mod tests {
             transport.session_id().await,
             Some("test-session-123".to_string())
         );
+        Ok(())
     }
 }

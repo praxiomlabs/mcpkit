@@ -49,7 +49,7 @@ async fn test_prompt_service_basic() {
 }
 
 #[tokio::test]
-async fn test_prompt_render() {
+async fn test_prompt_render() -> Result<(), Box<dyn std::error::Error>> {
     let mut service = PromptService::new();
 
     let prompt = PromptBuilder::new("code_review")
@@ -98,8 +98,9 @@ async fn test_prompt_render() {
         .await;
 
     assert!(result.is_ok());
-    let prompt_result = result.unwrap();
+    let prompt_result = result?;
     assert!(!prompt_result.messages.is_empty());
+    Ok(())
 }
 
 #[tokio::test]
@@ -121,7 +122,7 @@ async fn test_prompt_not_found() {
 }
 
 #[tokio::test]
-async fn test_prompt_handler_trait() {
+async fn test_prompt_handler_trait() -> Result<(), Box<dyn std::error::Error>> {
     let mut service = PromptService::new();
 
     let prompt = PromptBuilder::new("summarize")
@@ -150,7 +151,7 @@ async fn test_prompt_handler_trait() {
     );
 
     // Use the PromptHandler trait
-    let prompts = service.list_prompts(&ctx).await.unwrap();
+    let prompts = service.list_prompts(&ctx).await?;
     assert_eq!(prompts.len(), 1);
 
     let mut args = serde_json::Map::new();
@@ -161,10 +162,11 @@ async fn test_prompt_handler_trait() {
 
     let result = service.get_prompt("summarize", Some(args), &ctx).await;
     assert!(result.is_ok());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_prompt_builder() {
+async fn test_prompt_builder() -> Result<(), Box<dyn std::error::Error>> {
     let prompt = PromptBuilder::new("test_prompt")
         .description("A test prompt")
         .required_arg("input", "Required input")
@@ -174,14 +176,21 @@ async fn test_prompt_builder() {
     assert_eq!(prompt.name, "test_prompt");
     assert_eq!(prompt.description.as_deref(), Some("A test prompt"));
 
-    let args = prompt.arguments.unwrap();
+    let args = prompt.arguments.ok_or("Expected arguments")?;
     assert_eq!(args.len(), 2);
 
-    let required_arg = args.iter().find(|a| a.name == "input").unwrap();
+    let required_arg = args
+        .iter()
+        .find(|a| a.name == "input")
+        .ok_or("Expected required arg")?;
     assert_eq!(required_arg.required, Some(true));
 
-    let optional_arg = args.iter().find(|a| a.name == "format").unwrap();
+    let optional_arg = args
+        .iter()
+        .find(|a| a.name == "format")
+        .ok_or("Expected optional arg")?;
     assert_eq!(optional_arg.required, Some(false));
+    Ok(())
 }
 
 #[tokio::test]
@@ -197,7 +206,7 @@ async fn test_prompt_result_builder() {
 }
 
 #[tokio::test]
-async fn test_multiple_prompts() {
+async fn test_multiple_prompts() -> Result<(), Box<dyn std::error::Error>> {
     let mut service = PromptService::new();
 
     for name in ["analyze", "translate", "explain", "debug"] {
@@ -222,8 +231,9 @@ async fn test_multiple_prompts() {
         &peer,
     );
 
-    let prompts = service.list_prompts(&ctx).await.unwrap();
+    let prompts = service.list_prompts(&ctx).await?;
     assert_eq!(prompts.len(), 4);
+    Ok(())
 }
 
 #[tokio::test]
@@ -253,16 +263,17 @@ async fn test_prompt_with_no_args() {
 }
 
 #[tokio::test]
-async fn test_prompt_messages() {
+async fn test_prompt_messages() -> Result<(), Box<dyn std::error::Error>> {
     // Test PromptMessage creation
     let user_msg = PromptMessage::user("User content");
     let assistant_msg = PromptMessage::assistant("Assistant content");
 
     // Messages should have valid roles
     // Just verify they're created successfully and are different
-    let user_json = serde_json::to_value(&user_msg).unwrap();
-    let assistant_json = serde_json::to_value(&assistant_msg).unwrap();
+    let user_json = serde_json::to_value(&user_msg)?;
+    let assistant_json = serde_json::to_value(&assistant_msg)?;
 
     assert_eq!(user_json["role"], "user");
     assert_eq!(assistant_json["role"], "assistant");
+    Ok(())
 }

@@ -488,7 +488,7 @@ mod tests {
     /// during buffer refill would cause the same data to be read twice.
     #[cfg(feature = "tokio-runtime")]
     #[tokio::test]
-    async fn test_bufreader_cancellation_safety() {
+    async fn test_bufreader_cancellation_safety() -> Result<(), Box<dyn std::error::Error>> {
         use futures::io::Cursor;
 
         // Create test data with multiple lines
@@ -498,7 +498,7 @@ mod tests {
 
         // Read first line normally
         let mut line1 = String::new();
-        let n1 = reader.read_line(&mut line1).await.unwrap();
+        let n1 = reader.read_line(&mut line1).await?;
         assert_eq!(n1, 6);
         assert_eq!(line1, "line1\n");
 
@@ -506,27 +506,28 @@ mod tests {
         // We can't perfectly simulate cancellation mid-await, but we can verify
         // that consecutive reads work correctly
         let mut line2 = String::new();
-        let n2 = reader.read_line(&mut line2).await.unwrap();
+        let n2 = reader.read_line(&mut line2).await?;
         assert_eq!(n2, 6);
         assert_eq!(line2, "line2\n");
 
         // Verify no duplication - third line should be "line3", not "line2" again
         let mut line3 = String::new();
-        let n3 = reader.read_line(&mut line3).await.unwrap();
+        let n3 = reader.read_line(&mut line3).await?;
         assert_eq!(n3, 6);
         assert_eq!(line3, "line3\n");
 
         // EOF should return 0
         let mut eof = String::new();
-        let n4 = reader.read_line(&mut eof).await.unwrap();
+        let n4 = reader.read_line(&mut eof).await?;
         assert_eq!(n4, 0);
         assert_eq!(eof, "");
+        Ok(())
     }
 
     /// Test `BufReader` handles partial buffer consumption correctly.
     #[cfg(feature = "tokio-runtime")]
     #[tokio::test]
-    async fn test_bufreader_partial_buffer() {
+    async fn test_bufreader_partial_buffer() -> Result<(), Box<dyn std::error::Error>> {
         use futures::io::Cursor;
 
         // Create data where multiple lines fit in one buffer read
@@ -535,22 +536,23 @@ mod tests {
         let mut reader = BufReader::new(cursor);
 
         let mut line1 = String::new();
-        reader.read_line(&mut line1).await.unwrap();
+        reader.read_line(&mut line1).await?;
         assert_eq!(line1, "short\n");
 
         let mut line2 = String::new();
-        reader.read_line(&mut line2).await.unwrap();
+        reader.read_line(&mut line2).await?;
         assert_eq!(line2, "longer line here\n");
 
         let mut line3 = String::new();
-        reader.read_line(&mut line3).await.unwrap();
+        reader.read_line(&mut line3).await?;
         assert_eq!(line3, "x\n");
+        Ok(())
     }
 
     /// Test that `BufReader` handles empty lines correctly.
     #[cfg(feature = "tokio-runtime")]
     #[tokio::test]
-    async fn test_bufreader_empty_lines() {
+    async fn test_bufreader_empty_lines() -> Result<(), Box<dyn std::error::Error>> {
         use futures::io::Cursor;
 
         let data = b"first\n\nsecond\n";
@@ -558,43 +560,45 @@ mod tests {
         let mut reader = BufReader::new(cursor);
 
         let mut line1 = String::new();
-        reader.read_line(&mut line1).await.unwrap();
+        reader.read_line(&mut line1).await?;
         assert_eq!(line1, "first\n");
 
         let mut line2 = String::new();
-        reader.read_line(&mut line2).await.unwrap();
+        reader.read_line(&mut line2).await?;
         assert_eq!(line2, "\n"); // Empty line (just newline)
 
         let mut line3 = String::new();
-        reader.read_line(&mut line3).await.unwrap();
+        reader.read_line(&mut line3).await?;
         assert_eq!(line3, "second\n");
+        Ok(())
     }
 
     /// Test `read_line_bytes` returns `Bytes` directly.
     #[cfg(feature = "tokio-runtime")]
     #[tokio::test]
-    async fn test_bufreader_read_line_bytes() {
+    async fn test_bufreader_read_line_bytes() -> Result<(), Box<dyn std::error::Error>> {
         use futures::io::Cursor;
 
         let data = b"hello\nworld\n";
         let cursor = Cursor::new(data.to_vec());
         let mut reader = BufReader::new(cursor);
 
-        let line1 = reader.read_line_bytes().await.unwrap();
+        let line1 = reader.read_line_bytes().await?;
         assert_eq!(&line1[..], b"hello\n");
 
-        let line2 = reader.read_line_bytes().await.unwrap();
+        let line2 = reader.read_line_bytes().await?;
         assert_eq!(&line2[..], b"world\n");
 
         // EOF returns empty bytes
-        let eof = reader.read_line_bytes().await.unwrap();
+        let eof = reader.read_line_bytes().await?;
         assert!(eof.is_empty());
+        Ok(())
     }
 
     /// Test that JSON can be parsed directly from `Bytes` without intermediate String.
     #[cfg(feature = "tokio-runtime")]
     #[tokio::test]
-    async fn test_bufreader_json_from_bytes() {
+    async fn test_bufreader_json_from_bytes() -> Result<(), Box<dyn std::error::Error>> {
         use futures::io::Cursor;
 
         // Parse JSON directly from bytes - zero-copy path
@@ -608,11 +612,11 @@ mod tests {
         let cursor = Cursor::new(json_data.to_vec());
         let mut reader = BufReader::new(cursor);
 
-        let line_bytes = reader.read_line_bytes().await.unwrap();
+        let line_bytes = reader.read_line_bytes().await?;
 
         // Trim the newline for JSON parsing
         let trimmed = line_bytes.strip_suffix(b"\n").unwrap_or(&line_bytes);
-        let parsed: TestData = serde_json::from_slice(trimmed).unwrap();
+        let parsed: TestData = serde_json::from_slice(trimmed)?;
 
         assert_eq!(
             parsed,
@@ -621,12 +625,13 @@ mod tests {
                 value: 42
             }
         );
+        Ok(())
     }
 
     /// Test `buffered()` returns correct count.
     #[cfg(feature = "tokio-runtime")]
     #[tokio::test]
-    async fn test_bufreader_buffered() {
+    async fn test_bufreader_buffered() -> Result<(), Box<dyn std::error::Error>> {
         use futures::io::Cursor;
 
         let data = b"line1\nline2\n";
@@ -638,13 +643,14 @@ mod tests {
 
         // After reading first line, buffer may contain remaining data (line2\n)
         let mut line1 = String::new();
-        reader.read_line(&mut line1).await.unwrap();
+        reader.read_line(&mut line1).await?;
         // After reading "line1\n", the buffer should contain "line2\n" (6 bytes)
         assert_eq!(reader.buffered(), 6);
 
         // After reading second line, buffer should be empty
         let mut line2 = String::new();
-        reader.read_line(&mut line2).await.unwrap();
+        reader.read_line(&mut line2).await?;
         assert_eq!(reader.buffered(), 0);
+        Ok(())
     }
 }

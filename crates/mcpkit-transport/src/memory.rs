@@ -187,7 +187,7 @@ mod tests {
 
         #[cfg(feature = "tokio-runtime")]
         #[tokio::test]
-        async fn test_send_receive() {
+        async fn test_send_receive() -> Result<(), Box<dyn std::error::Error>> {
             let (client, server) = MemoryTransport::pair();
 
             // Create a request message
@@ -195,10 +195,10 @@ mod tests {
             let msg = Message::Request(request);
 
             // Send from client
-            client.send(msg.clone()).await.unwrap();
+            client.send(msg.clone()).await?;
 
             // Receive on server
-            let received = server.recv().await.unwrap().unwrap();
+            let received = server.recv().await?.unwrap();
 
             match received {
                 Message::Request(req) => {
@@ -206,24 +206,25 @@ mod tests {
                 }
                 _ => panic!("Expected request"),
             }
+            Ok(())
         }
 
         #[cfg(feature = "tokio-runtime")]
         #[tokio::test]
-        async fn test_bidirectional() {
+        async fn test_bidirectional() -> Result<(), Box<dyn std::error::Error>> {
             let (client, server) = MemoryTransport::pair();
 
             // Client -> Server
             let client_msg = Message::Notification(Notification::new("client/ping"));
-            client.send(client_msg).await.unwrap();
+            client.send(client_msg).await?;
 
             // Server -> Client
             let server_msg = Message::Notification(Notification::new("server/pong"));
-            server.send(server_msg).await.unwrap();
+            server.send(server_msg).await?;
 
             // Receive on both sides
-            let from_client = server.recv().await.unwrap().unwrap();
-            let from_server = client.recv().await.unwrap().unwrap();
+            let from_client = server.recv().await?.unwrap();
+            let from_server = client.recv().await?.unwrap();
 
             match from_client {
                 Message::Notification(n) => assert_eq!(n.method.as_ref(), "client/ping"),
@@ -234,30 +235,33 @@ mod tests {
                 Message::Notification(n) => assert_eq!(n.method.as_ref(), "server/pong"),
                 _ => panic!("Expected notification"),
             }
+            Ok(())
         }
 
         #[cfg(feature = "tokio-runtime")]
         #[tokio::test]
-        async fn test_close() {
+        async fn test_close() -> Result<(), Box<dyn std::error::Error>> {
             let (client, server) = MemoryTransport::pair();
 
-            client.close().await.unwrap();
+            client.close().await?;
             assert!(!client.is_connected());
             // Server should also be disconnected since they share state
             assert!(!server.is_connected());
+            Ok(())
         }
 
         #[cfg(feature = "tokio-runtime")]
         #[tokio::test]
-        async fn test_send_after_close() {
+        async fn test_send_after_close() -> Result<(), Box<dyn std::error::Error>> {
             let (client, _server) = MemoryTransport::pair();
 
-            client.close().await.unwrap();
+            client.close().await?;
 
             let msg = Message::Notification(Notification::new("test"));
             let result = client.send(msg).await;
 
             assert!(matches!(result, Err(TransportError::NotConnected)));
+            Ok(())
         }
     }
 }

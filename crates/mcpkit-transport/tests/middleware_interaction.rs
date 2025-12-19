@@ -75,7 +75,7 @@ async fn test_metrics_layer_applies() {
 // =============================================================================
 
 #[tokio::test]
-async fn test_layer_order_preserved() {
+async fn test_layer_order_preserved() -> Result<(), Box<dyn std::error::Error>> {
     let (client, server) = MemoryTransport::pair();
 
     // Stack: metrics -> timeout -> transport
@@ -88,13 +88,14 @@ async fn test_layer_order_preserved() {
 
     // Send a message
     let msg = Message::Notification(Notification::new("test"));
-    transport.send(msg).await.unwrap();
+    transport.send(msg).await?;
 
     // Receive on server side
-    let _ = server.recv().await.unwrap();
+    let _ = server.recv().await?;
 
     // Metrics should have recorded the send
     assert_eq!(handle.messages_sent(), 1);
+    Ok(())
 }
 
 // =============================================================================
@@ -127,7 +128,7 @@ async fn test_timeout_on_slow_receive() {
 }
 
 #[tokio::test]
-async fn test_send_without_timeout_succeeds() {
+async fn test_send_without_timeout_succeeds() -> Result<(), Box<dyn std::error::Error>> {
     let (client, server) = MemoryTransport::pair();
 
     // No timeout layer
@@ -139,8 +140,9 @@ async fn test_send_without_timeout_succeeds() {
     assert!(result.is_ok());
 
     // Verify message was received
-    let received = server.recv().await.unwrap();
+    let received = server.recv().await?;
     assert!(received.is_some());
+    Ok(())
 }
 
 // =============================================================================
@@ -148,7 +150,7 @@ async fn test_send_without_timeout_succeeds() {
 // =============================================================================
 
 #[tokio::test]
-async fn test_metrics_track_sends_and_receives() {
+async fn test_metrics_track_sends_and_receives() -> Result<(), Box<dyn std::error::Error>> {
     let (client, server) = MemoryTransport::pair_with_capacity(100);
 
     let (client_metrics_layer, client_handle) = MetricsLayer::new_with_handle();
@@ -166,7 +168,7 @@ async fn test_metrics_track_sends_and_receives() {
             "test",
             serde_json::json!({"seq": i}),
         ));
-        client_transport.send(msg).await.unwrap();
+        client_transport.send(msg).await?;
     }
 
     // Client should show 5 sent
@@ -175,16 +177,17 @@ async fn test_metrics_track_sends_and_receives() {
 
     // Receive all on server
     for _ in 0..5 {
-        let _ = server_transport.recv().await.unwrap();
+        let _ = server_transport.recv().await?;
     }
 
     // Server should show 5 received
     assert_eq!(server_handle.messages_received(), 5);
     assert_eq!(server_handle.messages_sent(), 0);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_metrics_track_errors() {
+async fn test_metrics_track_errors() -> Result<(), Box<dyn std::error::Error>> {
     let (client, server) = MemoryTransport::pair();
 
     let (metrics_layer, handle) = MetricsLayer::new_with_handle();
@@ -192,7 +195,7 @@ async fn test_metrics_track_errors() {
     let transport = stack.into_inner();
 
     // Close server to cause send errors
-    server.close().await.unwrap();
+    server.close().await?;
 
     // Attempt to send (may fail)
     let msg = Message::Notification(Notification::new("test"));
@@ -205,6 +208,7 @@ async fn test_metrics_track_errors() {
         sent > 0 || errors > 0,
         "Should have recorded either send or error"
     );
+    Ok(())
 }
 
 // =============================================================================
@@ -212,7 +216,7 @@ async fn test_metrics_track_errors() {
 // =============================================================================
 
 #[tokio::test]
-async fn test_full_middleware_stack() {
+async fn test_full_middleware_stack() -> Result<(), Box<dyn std::error::Error>> {
     let (client, server) = MemoryTransport::pair_with_capacity(100);
 
     // Full stack: logging -> metrics -> timeout -> transport
@@ -231,17 +235,18 @@ async fn test_full_middleware_stack() {
             "full_stack_test",
             serde_json::json!({"iteration": i}),
         ));
-        transport.send(msg).await.unwrap();
+        transport.send(msg).await?;
     }
 
     // Receive on server
     for _ in 0..3 {
-        let result = server.recv().await.unwrap();
+        let result = server.recv().await?;
         assert!(result.is_some());
     }
 
     // Verify metrics through handle
     assert_eq!(handle.messages_sent(), 3);
+    Ok(())
 }
 
 // =============================================================================
@@ -249,7 +254,7 @@ async fn test_full_middleware_stack() {
 // =============================================================================
 
 #[tokio::test]
-async fn test_close_propagates_through_layers() {
+async fn test_close_propagates_through_layers() -> Result<(), Box<dyn std::error::Error>> {
     let (client, _server) = MemoryTransport::pair();
 
     let (metrics_layer, _handle) = MetricsLayer::new_with_handle();
@@ -261,12 +266,13 @@ async fn test_close_propagates_through_layers() {
     assert!(transport.is_connected());
 
     // Close through the stack
-    transport.close().await.unwrap();
+    transport.close().await?;
     assert!(!transport.is_connected());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_double_close_through_layers() {
+async fn test_double_close_through_layers() -> Result<(), Box<dyn std::error::Error>> {
     let (client, _server) = MemoryTransport::pair();
 
     let stack = LayerStack::new(client).with(TimeoutLayer::new(Duration::from_secs(30)));
@@ -274,9 +280,10 @@ async fn test_double_close_through_layers() {
     let transport = stack.into_inner();
 
     // Close multiple times should be safe
-    transport.close().await.unwrap();
-    transport.close().await.unwrap();
-    transport.close().await.unwrap();
+    transport.close().await?;
+    transport.close().await?;
+    transport.close().await?;
+    Ok(())
 }
 
 // =============================================================================
@@ -305,7 +312,7 @@ async fn test_metadata_propagates_through_layers() {
 // =============================================================================
 
 #[tokio::test]
-async fn test_concurrent_sends_through_layers() {
+async fn test_concurrent_sends_through_layers() -> Result<(), Box<dyn std::error::Error>> {
     let (client, server) = MemoryTransport::pair_with_capacity(200);
 
     let (metrics_layer, handle) = MetricsLayer::new_with_handle();
@@ -342,18 +349,19 @@ async fn test_concurrent_sends_through_layers() {
 
     // Wait for senders
     for h in handles_vec {
-        h.await.unwrap();
+        h.await?;
     }
 
     // Give receiver time
     tokio::time::sleep(Duration::from_millis(500)).await;
-    client.close().await.unwrap();
+    client.close().await?;
 
-    let received = receiver.await.unwrap();
+    let received = receiver.await?;
     assert!(received > 0, "Should have received some messages");
 
     // Check metrics
     assert_eq!(handle.messages_sent(), 50); // 5 tasks * 10 messages
+    Ok(())
 }
 
 // =============================================================================
@@ -361,7 +369,7 @@ async fn test_concurrent_sends_through_layers() {
 // =============================================================================
 
 #[tokio::test]
-async fn test_error_propagates_through_layers() {
+async fn test_error_propagates_through_layers() -> Result<(), Box<dyn std::error::Error>> {
     let (client, server) = MemoryTransport::pair();
 
     let (metrics_layer, _handle) = MetricsLayer::new_with_handle();
@@ -372,7 +380,7 @@ async fn test_error_propagates_through_layers() {
     let transport = stack.into_inner();
 
     // Close server to cause errors
-    server.close().await.unwrap();
+    server.close().await?;
 
     // Send should fail
     let msg = Message::Notification(Notification::new("test"));
@@ -380,6 +388,7 @@ async fn test_error_propagates_through_layers() {
 
     // Error should propagate up
     assert!(result.is_err());
+    Ok(())
 }
 
 // =============================================================================
@@ -416,7 +425,7 @@ fn test_layer_stack_inner_reference() {
 // =============================================================================
 
 #[tokio::test]
-async fn test_metrics_track_bytes() {
+async fn test_metrics_track_bytes() -> Result<(), Box<dyn std::error::Error>> {
     let (client, server) = MemoryTransport::pair();
 
     let (metrics_layer, handle) = MetricsLayer::new_with_handle();
@@ -428,13 +437,14 @@ async fn test_metrics_track_bytes() {
         "test",
         serde_json::json!({"data": "some content"}),
     ));
-    transport.send(msg).await.unwrap();
+    transport.send(msg).await?;
 
     // Bytes sent should be > 0
     assert!(handle.bytes_sent() > 0, "Should have tracked bytes sent");
 
     // Receive on server
-    let _ = server.recv().await.unwrap();
+    let _ = server.recv().await?;
+    Ok(())
 }
 
 // =============================================================================

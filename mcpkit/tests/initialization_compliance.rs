@@ -135,7 +135,7 @@ fn test_server_capabilities_all() {
 }
 
 #[test]
-fn test_initialize_request_deserialization() {
+fn test_initialize_request_deserialization() -> Result<(), Box<dyn std::error::Error>> {
     let json = json!({
         "protocolVersion": "2025-11-25",
         "capabilities": {},
@@ -145,13 +145,14 @@ fn test_initialize_request_deserialization() {
         }
     });
 
-    let request: InitializeRequest = serde_json::from_value(json).unwrap();
+    let request: InitializeRequest = serde_json::from_value(json)?;
     assert_eq!(request.protocol_version, "2025-11-25");
     assert_eq!(request.client_info.name, "test");
+    Ok(())
 }
 
 #[test]
-fn test_initialize_result_deserialization() {
+fn test_initialize_result_deserialization() -> Result<(), Box<dyn std::error::Error>> {
     let json = json!({
         "protocolVersion": "2025-11-25",
         "capabilities": {
@@ -163,13 +164,14 @@ fn test_initialize_result_deserialization() {
         }
     });
 
-    let result: InitializeResult = serde_json::from_value(json).unwrap();
+    let result: InitializeResult = serde_json::from_value(json)?;
     assert_eq!(result.protocol_version, "2025-11-25");
     assert_eq!(result.server_info.name, "test-server");
+    Ok(())
 }
 
 #[test]
-fn test_initialize_result_optional_instructions() {
+fn test_initialize_result_optional_instructions() -> Result<(), Box<dyn std::error::Error>> {
     // Without instructions
     let json = json!({
         "protocolVersion": "2025-11-25",
@@ -180,38 +182,42 @@ fn test_initialize_result_optional_instructions() {
         }
     });
 
-    let result: InitializeResult = serde_json::from_value(json).unwrap();
+    let result: InitializeResult = serde_json::from_value(json)?;
     assert!(result.instructions.is_none());
+    Ok(())
 }
 
 #[test]
-fn test_client_capabilities_with_sampling() {
+fn test_client_capabilities_with_sampling() -> Result<(), Box<dyn std::error::Error>> {
     let caps = ClientCapabilities::default().with_sampling();
 
     assert!(caps.has_sampling());
 
-    let json = serde_json::to_value(&caps).unwrap();
+    let json = serde_json::to_value(&caps)?;
     assert!(json["sampling"].is_object());
+    Ok(())
 }
 
 #[test]
-fn test_client_capabilities_with_elicitation() {
+fn test_client_capabilities_with_elicitation() -> Result<(), Box<dyn std::error::Error>> {
     let caps = ClientCapabilities::default().with_elicitation();
 
     assert!(caps.has_elicitation());
 
-    let json = serde_json::to_value(&caps).unwrap();
+    let json = serde_json::to_value(&caps)?;
     assert!(json["elicitation"].is_object());
+    Ok(())
 }
 
 #[test]
-fn test_client_capabilities_with_roots() {
+fn test_client_capabilities_with_roots() -> Result<(), Box<dyn std::error::Error>> {
     let caps = ClientCapabilities::default().with_roots();
 
     assert!(caps.has_roots());
 
-    let json = serde_json::to_value(&caps).unwrap();
+    let json = serde_json::to_value(&caps)?;
     assert!(json["roots"].is_object());
+    Ok(())
 }
 
 // =============================================================================

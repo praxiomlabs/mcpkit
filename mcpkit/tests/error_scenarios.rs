@@ -143,7 +143,7 @@ fn test_non_recoverable_errors() {
 // =============================================================================
 
 #[test]
-fn test_context_preserves_error_code() {
+fn test_context_preserves_error_code() -> Result<(), Box<dyn std::error::Error>> {
     // Context is a trait method on Result, not on McpError directly
     fn inner() -> Result<(), McpError> {
         Err(McpError::resource_not_found("test://resource"))
@@ -154,14 +154,15 @@ fn test_context_preserves_error_code() {
         Ok(())
     }
 
-    let err = outer().unwrap_err();
+    let err = outer().err().ok_or("Expected error")?;
 
     // Original error code should be preserved
     assert_eq!(err.code(), codes::RESOURCE_NOT_FOUND);
+    Ok(())
 }
 
 #[test]
-fn test_context_chain() {
+fn test_context_chain() -> Result<(), Box<dyn std::error::Error>> {
     fn level3() -> Result<(), McpError> {
         Err(McpError::resource_not_found("deep://resource"))
     }
@@ -176,7 +177,7 @@ fn test_context_chain() {
         Ok(())
     }
 
-    let err = level1().unwrap_err();
+    let err = level1().err().ok_or("Expected error")?;
 
     // Original error code should be preserved through all layers
     assert_eq!(err.code(), codes::RESOURCE_NOT_FOUND);
@@ -184,6 +185,7 @@ fn test_context_chain() {
     // Context should be in the message
     let msg = err.to_string();
     assert!(msg.contains("level1") || msg.contains("level2"));
+    Ok(())
 }
 
 // =============================================================================
@@ -203,14 +205,17 @@ fn test_io_error_converts_to_server_error() {
 }
 
 #[test]
-fn test_json_error_converts_to_parse() {
+fn test_json_error_converts_to_parse() -> Result<(), Box<dyn std::error::Error>> {
     let json_str = "{ invalid json }";
-    let json_err = serde_json::from_str::<serde_json::Value>(json_str).unwrap_err();
+    let json_err = serde_json::from_str::<serde_json::Value>(json_str)
+        .err()
+        .ok_or("Expected parse error")?;
 
     let mcp_err: McpError = json_err.into();
 
     // JSON errors become parse errors
     assert_eq!(mcp_err.code(), codes::PARSE_ERROR);
+    Ok(())
 }
 
 // =============================================================================
@@ -350,7 +355,7 @@ fn test_retry_with_modified_params() {
 // =============================================================================
 
 #[tokio::test]
-async fn test_concurrent_errors_are_isolated() {
+async fn test_concurrent_errors_are_isolated() -> Result<(), Box<dyn std::error::Error>> {
     use std::sync::Arc;
     use tokio::sync::Barrier;
 
@@ -382,6 +387,7 @@ async fn test_concurrent_errors_are_isolated() {
     for result in results {
         assert!(result.is_ok());
     }
+    Ok(())
 }
 
 // =============================================================================

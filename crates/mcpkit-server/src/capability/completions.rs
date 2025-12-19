@@ -334,7 +334,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_completion_service() {
+    async fn test_completion_service() -> Result<(), Box<dyn std::error::Error>> {
         let mut service = CompletionService::new();
 
         let languages = vec![
@@ -366,7 +366,9 @@ mod tests {
             .value("py")
             .build();
 
-        let result = service.complete(&request, &ctx).await.unwrap();
+        let result = service.complete(&request, &ctx).await?;
         assert_eq!(result.completion.values, vec!["python"]);
+
+        Ok(())
     }
 }

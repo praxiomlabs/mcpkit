@@ -15,9 +15,10 @@ use tokio::time::timeout;
 use tokio_tungstenite::{accept_async, connect_async, tungstenite::Message as WsMessage};
 
 /// Helper to find an available port
-async fn get_available_addr() -> SocketAddr {
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    listener.local_addr().unwrap()
+async fn get_available_addr() -> Result<SocketAddr, Box<dyn std::error::Error>> {
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let addr = listener.local_addr()?;
+    Ok(addr)
 }
 
 /// Helper to send a text message over WebSocket
@@ -76,9 +77,10 @@ async fn spawn_test_server(listener: TcpListener) -> tokio::task::JoinHandle<()>
                             };
 
                             if let Some(resp) = response {
-                                let json = serde_json::to_string(&resp).unwrap();
-                                if tx.send(ws_text(json)).await.is_err() {
-                                    break;
+                                if let Ok(json) = serde_json::to_string(&resp) {
+                                    if tx.send(ws_text(json)).await.is_err() {
+                                        break;
+                                    }
                                 }
                             }
                         }
@@ -92,30 +94,30 @@ async fn spawn_test_server(listener: TcpListener) -> tokio::task::JoinHandle<()>
 }
 
 #[tokio::test]
-async fn test_websocket_connect() {
-    let addr = get_available_addr().await;
-    let listener = TcpListener::bind(addr).await.unwrap();
+async fn test_websocket_connect() -> Result<(), Box<dyn std::error::Error>> {
+    let addr = get_available_addr().await?;
+    let listener = TcpListener::bind(addr).await?;
     let _server = spawn_test_server(listener).await;
 
     // Connect as client
     let url = format!("ws://{addr}");
-    let result = timeout(Duration::from_secs(5), connect_async(&url)).await;
+    let result = timeout(Duration::from_secs(5), connect_async(&url)).await??;
 
-    assert!(result.is_ok(), "WebSocket connection should succeed");
-    let (ws_stream, _) = result.unwrap().unwrap();
+    let (ws_stream, _) = result;
     // Stream is connected - just verify the stream exists
     let _ = ws_stream;
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_websocket_initialize_handshake() {
-    let addr = get_available_addr().await;
-    let listener = TcpListener::bind(addr).await.unwrap();
+async fn test_websocket_initialize_handshake() -> Result<(), Box<dyn std::error::Error>> {
+    let addr = get_available_addr().await?;
+    let listener = TcpListener::bind(addr).await?;
     let _server = spawn_test_server(listener).await;
 
     // Connect
     let url = format!("ws://{addr}");
-    let (ws_stream, _) = connect_async(&url).await.unwrap();
+    let (ws_stream, _) = connect_async(&url).await?;
     let (mut tx, mut rx) = ws_stream.split();
 
     // Send initialize request
@@ -131,168 +133,166 @@ async fn test_websocket_initialize_handshake() {
             }
         }),
     );
-    let json = serde_json::to_string(&Message::Request(init_request)).unwrap();
-    tx.send(ws_text(json)).await.unwrap();
+    let json = serde_json::to_string(&Message::Request(init_request))?;
+    tx.send(ws_text(json)).await?;
 
     // Receive response
     let response = timeout(Duration::from_secs(5), rx.next())
-        .await
-        .expect("Timeout waiting for response")
-        .expect("Stream ended")
-        .expect("WebSocket error");
+        .await?
+        .ok_or("Stream ended")?
+        .map_err(|e| format!("WebSocket error: {e}"))?;
 
-    let text = extract_text(response).expect("Expected text message");
-    let msg: Message = serde_json::from_str(&text).unwrap();
+    let text = extract_text(response).ok_or("Expected text message")?;
+    let msg: Message = serde_json::from_str(&text)?;
     assert!(msg.is_response());
-    let resp = msg.as_response().unwrap();
+    let resp = msg.as_response().ok_or("Expected response")?;
     assert!(resp.is_success());
     assert_eq!(resp.id, RequestId::Number(1));
     assert_eq!(
-        resp.result.as_ref().unwrap()["protocolVersion"],
+        resp.result.as_ref().ok_or("Expected result")?["protocolVersion"],
         "2025-11-25"
     );
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_websocket_request_response_cycle() {
-    let addr = get_available_addr().await;
-    let listener = TcpListener::bind(addr).await.unwrap();
+async fn test_websocket_request_response_cycle() -> Result<(), Box<dyn std::error::Error>> {
+    let addr = get_available_addr().await?;
+    let listener = TcpListener::bind(addr).await?;
     let _server = spawn_test_server(listener).await;
 
     // Connect
     let url = format!("ws://{addr}");
-    let (ws_stream, _) = connect_async(&url).await.unwrap();
+    let (ws_stream, _) = connect_async(&url).await?;
     let (mut tx, mut rx) = ws_stream.split();
 
     // Send multiple requests
     for i in 1..=3 {
         let request = Request::new("ping", i as u64);
-        let json = serde_json::to_string(&Message::Request(request)).unwrap();
-        tx.send(ws_text(json)).await.unwrap();
+        let json = serde_json::to_string(&Message::Request(request))?;
+        tx.send(ws_text(json)).await?;
     }
 
     // Receive all responses
     for i in 1..=3 {
         let response = timeout(Duration::from_secs(5), rx.next())
-            .await
-            .expect("Timeout")
-            .expect("Stream ended")
-            .expect("WebSocket error");
+            .await?
+            .ok_or("Stream ended")?
+            .map_err(|e| format!("WebSocket error: {e}"))?;
 
-        let text = extract_text(response).expect("Expected text");
-        let msg: Message = serde_json::from_str(&text).unwrap();
-        let resp = msg.as_response().unwrap();
+        let text = extract_text(response).ok_or("Expected text")?;
+        let msg: Message = serde_json::from_str(&text)?;
+        let resp = msg.as_response().ok_or("Expected response")?;
         assert!(resp.is_success());
         assert_eq!(resp.id, RequestId::Number(i));
     }
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_websocket_tools_list() {
-    let addr = get_available_addr().await;
-    let listener = TcpListener::bind(addr).await.unwrap();
+async fn test_websocket_tools_list() -> Result<(), Box<dyn std::error::Error>> {
+    let addr = get_available_addr().await?;
+    let listener = TcpListener::bind(addr).await?;
     let _server = spawn_test_server(listener).await;
 
     // Connect
     let url = format!("ws://{addr}");
-    let (ws_stream, _) = connect_async(&url).await.unwrap();
+    let (ws_stream, _) = connect_async(&url).await?;
     let (mut tx, mut rx) = ws_stream.split();
 
     // Send tools/list request
     let request = Request::new("tools/list", 1u64);
-    let json = serde_json::to_string(&Message::Request(request)).unwrap();
-    tx.send(ws_text(json)).await.unwrap();
+    let json = serde_json::to_string(&Message::Request(request))?;
+    tx.send(ws_text(json)).await?;
 
     // Receive response
     let response = timeout(Duration::from_secs(5), rx.next())
-        .await
-        .expect("Timeout")
-        .expect("Stream ended")
-        .expect("WebSocket error");
+        .await?
+        .ok_or("Stream ended")?
+        .map_err(|e| format!("WebSocket error: {e}"))?;
 
-    let text = extract_text(response).expect("Expected text");
-    let msg: Message = serde_json::from_str(&text).unwrap();
-    let resp = msg.as_response().unwrap();
+    let text = extract_text(response).ok_or("Expected text")?;
+    let msg: Message = serde_json::from_str(&text)?;
+    let resp = msg.as_response().ok_or("Expected response")?;
     assert!(resp.is_success());
-    let tools = resp.result.as_ref().unwrap()["tools"].as_array().unwrap();
+    let tools = resp.result.as_ref().ok_or("Expected result")?["tools"]
+        .as_array()
+        .ok_or("Expected array")?;
     assert!(tools.is_empty()); // Test server returns empty tools list
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_websocket_method_not_found() {
-    let addr = get_available_addr().await;
-    let listener = TcpListener::bind(addr).await.unwrap();
+async fn test_websocket_method_not_found() -> Result<(), Box<dyn std::error::Error>> {
+    let addr = get_available_addr().await?;
+    let listener = TcpListener::bind(addr).await?;
     let _server = spawn_test_server(listener).await;
 
     // Connect
     let url = format!("ws://{addr}");
-    let (ws_stream, _) = connect_async(&url).await.unwrap();
+    let (ws_stream, _) = connect_async(&url).await?;
     let (mut tx, mut rx) = ws_stream.split();
 
     // Send request for unknown method
     let request = Request::new("unknown/method", 1u64);
-    let json = serde_json::to_string(&Message::Request(request)).unwrap();
-    tx.send(ws_text(json)).await.unwrap();
+    let json = serde_json::to_string(&Message::Request(request))?;
+    tx.send(ws_text(json)).await?;
 
     // Receive error response
     let response = timeout(Duration::from_secs(5), rx.next())
-        .await
-        .expect("Timeout")
-        .expect("Stream ended")
-        .expect("WebSocket error");
+        .await?
+        .ok_or("Stream ended")?
+        .map_err(|e| format!("WebSocket error: {e}"))?;
 
-    let text = extract_text(response).expect("Expected text");
-    let msg: Message = serde_json::from_str(&text).unwrap();
-    let resp = msg.as_response().unwrap();
+    let text = extract_text(response).ok_or("Expected text")?;
+    let msg: Message = serde_json::from_str(&text)?;
+    let resp = msg.as_response().ok_or("Expected response")?;
     assert!(resp.is_error());
-    assert_eq!(resp.error.as_ref().unwrap().code, -32601);
+    assert_eq!(resp.error.as_ref().ok_or("Expected error")?.code, -32601);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_websocket_bidirectional() {
-    let addr = get_available_addr().await;
-    let listener = TcpListener::bind(addr).await.unwrap();
+async fn test_websocket_bidirectional() -> Result<(), Box<dyn std::error::Error>> {
+    let addr = get_available_addr().await?;
+    let listener = TcpListener::bind(addr).await?;
     let _server = spawn_test_server(listener).await;
 
     // Connect
     let url = format!("ws://{addr}");
-    let (ws_stream, _) = connect_async(&url).await.unwrap();
+    let (ws_stream, _) = connect_async(&url).await?;
     let (mut tx, mut rx) = ws_stream.split();
 
     // Send and receive interleaved
     let request1 = Request::new("ping", 1u64);
-    tx.send(ws_text(
-        serde_json::to_string(&Message::Request(request1)).unwrap(),
-    ))
-    .await
-    .unwrap();
+    tx.send(ws_text(serde_json::to_string(&Message::Request(request1))?))
+        .await?;
 
     let resp1 = timeout(Duration::from_secs(5), rx.next()).await;
     assert!(resp1.is_ok());
 
     let request2 = Request::new("tools/list", 2u64);
-    tx.send(ws_text(
-        serde_json::to_string(&Message::Request(request2)).unwrap(),
-    ))
-    .await
-    .unwrap();
+    tx.send(ws_text(serde_json::to_string(&Message::Request(request2))?))
+        .await?;
 
     let resp2 = timeout(Duration::from_secs(5), rx.next()).await;
     assert!(resp2.is_ok());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_websocket_graceful_close() {
-    let addr = get_available_addr().await;
-    let listener = TcpListener::bind(addr).await.unwrap();
+async fn test_websocket_graceful_close() -> Result<(), Box<dyn std::error::Error>> {
+    let addr = get_available_addr().await?;
+    let listener = TcpListener::bind(addr).await?;
     let _server = spawn_test_server(listener).await;
 
     // Connect
     let url = format!("ws://{addr}");
-    let (ws_stream, _) = connect_async(&url).await.unwrap();
+    let (ws_stream, _) = connect_async(&url).await?;
     let (mut tx, _rx) = ws_stream.split();
 
     // Send close frame
     let result = tx.send(WsMessage::Close(None)).await;
     assert!(result.is_ok());
+    Ok(())
 }

@@ -22,7 +22,7 @@ use tokio::time::timeout;
 // =============================================================================
 
 #[tokio::test]
-async fn test_graceful_close_and_reconnect() {
+async fn test_graceful_close_and_reconnect() -> Result<(), Box<dyn std::error::Error>> {
     let (client, server) = MemoryTransport::pair();
 
     // Verify initial connection
@@ -30,7 +30,7 @@ async fn test_graceful_close_and_reconnect() {
     assert!(server.is_connected());
 
     // Close client side
-    client.close().await.unwrap();
+    client.close().await?;
     assert!(!client.is_connected());
 
     // Send should fail gracefully after close
@@ -43,37 +43,40 @@ async fn test_graceful_close_and_reconnect() {
     // After closing, send may succeed (if channel still open) or fail
     // The important thing is it doesn't panic
     let _ = result;
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_double_close_is_safe() {
+async fn test_double_close_is_safe() -> Result<(), Box<dyn std::error::Error>> {
     let (client, server) = MemoryTransport::pair();
 
     // Close multiple times should not panic
-    client.close().await.unwrap();
-    client.close().await.unwrap();
-    client.close().await.unwrap();
+    client.close().await?;
+    client.close().await?;
+    client.close().await?;
 
     // Server should also handle double close
-    server.close().await.unwrap();
-    server.close().await.unwrap();
+    server.close().await?;
+    server.close().await?;
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_receive_after_close() {
+async fn test_receive_after_close() -> Result<(), Box<dyn std::error::Error>> {
     let (client, server) = MemoryTransport::pair();
 
     // Send a message first
     let msg = Message::Notification(Notification::new("test"));
-    client.send(msg).await.unwrap();
+    client.send(msg).await?;
 
     // Close the transport
-    server.close().await.unwrap();
+    server.close().await?;
 
     // Receive should return None or error gracefully, not panic
     let result = server.recv().await;
     // After close, receive should either return error or None
-    assert!(result.is_err() || result.unwrap().is_none());
+    assert!(result.is_err() || result.as_ref().is_ok_and(Option::is_none));
+    Ok(())
 }
 
 // =============================================================================
@@ -81,7 +84,7 @@ async fn test_receive_after_close() {
 // =============================================================================
 
 #[tokio::test]
-async fn test_concurrent_sends() {
+async fn test_concurrent_sends() -> Result<(), Box<dyn std::error::Error>> {
     // Use a larger buffer to handle concurrent sends
     let (client, server) = MemoryTransport::pair_with_capacity(200);
     let client: Arc<MemoryTransport> = Arc::new(client);
@@ -123,7 +126,7 @@ async fn test_concurrent_sends() {
 
     // Wait for all senders
     for handle in handles {
-        handle.await.unwrap();
+        handle.await?;
     }
 
     // Should have sent all messages (100 total)
@@ -133,7 +136,7 @@ async fn test_concurrent_sends() {
     tokio::time::sleep(Duration::from_millis(500)).await;
 
     // Close to signal receiver to stop
-    client.close().await.unwrap();
+    client.close().await?;
     let _ = receiver.await;
 
     assert_eq!(
@@ -141,10 +144,11 @@ async fn test_concurrent_sends() {
         100,
         "Should receive all 100 messages"
     );
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_concurrent_send_and_receive() {
+async fn test_concurrent_send_and_receive() -> Result<(), Box<dyn std::error::Error>> {
     let (client, server) = MemoryTransport::pair();
     let client: Arc<MemoryTransport> = Arc::new(client);
     let server: Arc<MemoryTransport> = Arc::new(server);
@@ -182,13 +186,14 @@ async fn test_concurrent_send_and_receive() {
         }
     });
 
-    sender.await.unwrap();
-    let received = receiver.await.unwrap();
+    sender.await?;
+    let received = receiver.await?;
 
     assert_eq!(
         received, messages_to_send,
         "All messages should be received"
     );
+    Ok(())
 }
 
 // =============================================================================
@@ -211,13 +216,13 @@ async fn test_recv_timeout_behavior() {
 // =============================================================================
 
 #[tokio::test]
-async fn test_partial_close_behavior() {
+async fn test_partial_close_behavior() -> Result<(), Box<dyn std::error::Error>> {
     let (client, server) = MemoryTransport::pair();
 
     // Send some messages first, before closing
     for i in 0..5 {
         let msg = Message::Notification(Notification::with_params("test", json!({"seq": i})));
-        client.send(msg).await.unwrap();
+        client.send(msg).await?;
     }
 
     // Receive messages while client is still open
@@ -230,7 +235,7 @@ async fn test_partial_close_behavior() {
     }
 
     // Close client side
-    client.close().await.unwrap();
+    client.close().await?;
 
     // We should have received the messages
     assert_eq!(
@@ -247,6 +252,7 @@ async fn test_partial_close_behavior() {
         Ok(Err(_)) => {}      // Expected - error on closed channel
         Err(_) => {}          // Expected - timeout
     }
+    Ok(())
 }
 
 // =============================================================================
@@ -254,11 +260,11 @@ async fn test_partial_close_behavior() {
 // =============================================================================
 
 #[tokio::test]
-async fn test_send_error_does_not_corrupt_state() {
+async fn test_send_error_does_not_corrupt_state() -> Result<(), Box<dyn std::error::Error>> {
     let (client, server) = MemoryTransport::pair();
 
     // Close server to cause send errors
-    server.close().await.unwrap();
+    server.close().await?;
 
     // Multiple failed sends should not corrupt client state
     for _ in 0..10 {
@@ -267,7 +273,8 @@ async fn test_send_error_does_not_corrupt_state() {
     }
 
     // Client should be in a consistent state (can still close cleanly)
-    client.close().await.unwrap();
+    client.close().await?;
+    Ok(())
 }
 
 // =============================================================================
@@ -275,7 +282,7 @@ async fn test_send_error_does_not_corrupt_state() {
 // =============================================================================
 
 #[tokio::test]
-async fn test_large_message_handling() {
+async fn test_large_message_handling() -> Result<(), Box<dyn std::error::Error>> {
     let (client, server) = MemoryTransport::pair_with_capacity(100);
 
     // Create a large payload
@@ -286,17 +293,18 @@ async fn test_large_message_handling() {
     ));
 
     // Send should succeed
-    client.send(msg).await.unwrap();
+    client.send(msg).await?;
 
     // Receive should get the full message
-    let received = server.recv().await.unwrap().unwrap();
+    let received = server.recv().await?.ok_or("Expected message")?;
     if let Message::Notification(n) = received {
-        let params = n.params.unwrap();
-        let data = params["data"].as_str().unwrap();
+        let params = n.params.ok_or("Expected params")?;
+        let data = params["data"].as_str().ok_or("Expected string data")?;
         assert_eq!(data.len(), 100_000);
     } else {
         panic!("Expected notification");
     }
+    Ok(())
 }
 
 // =============================================================================
@@ -319,7 +327,7 @@ async fn test_pool_basic_creation() {
 }
 
 #[tokio::test]
-async fn test_pool_acquire_and_release() {
+async fn test_pool_acquire_and_release() -> Result<(), Box<dyn std::error::Error>> {
     let config = PoolConfig::default();
 
     let pool = Pool::new(config, || async {
@@ -328,7 +336,7 @@ async fn test_pool_acquire_and_release() {
     });
 
     // Acquire a connection
-    let conn = pool.acquire().await.unwrap();
+    let conn = pool.acquire().await?;
 
     // Connection should work - access inner connection
     assert!(conn.connection.is_connected());
@@ -339,6 +347,7 @@ async fn test_pool_acquire_and_release() {
     let stats = pool.stats().await;
     // After release, connection should be available
     assert!(stats.connections_created >= 1);
+    Ok(())
 }
 
 // =============================================================================
@@ -346,7 +355,7 @@ async fn test_pool_acquire_and_release() {
 // =============================================================================
 
 #[tokio::test]
-async fn test_metadata_consistent_through_lifecycle() {
+async fn test_metadata_consistent_through_lifecycle() -> Result<(), Box<dyn std::error::Error>> {
     let (client, _server) = MemoryTransport::pair();
 
     // Get metadata before operations
@@ -354,13 +363,14 @@ async fn test_metadata_consistent_through_lifecycle() {
 
     // Send some messages
     let msg = Message::Notification(Notification::new("test"));
-    client.send(msg).await.unwrap();
+    client.send(msg).await?;
 
     // Get metadata after operations
     let meta_after = client.metadata();
 
     // Transport type should remain consistent
     assert_eq!(meta_before.transport_type, meta_after.transport_type);
+    Ok(())
 }
 
 // =============================================================================
@@ -368,7 +378,7 @@ async fn test_metadata_consistent_through_lifecycle() {
 // =============================================================================
 
 #[tokio::test]
-async fn test_message_counters_accurate() {
+async fn test_message_counters_accurate() -> Result<(), Box<dyn std::error::Error>> {
     let (client, server) = MemoryTransport::pair();
 
     // Send specific number of messages
@@ -379,7 +389,7 @@ async fn test_message_counters_accurate() {
             RequestId::Number(i),
             json!({}),
         ));
-        client.send(msg).await.unwrap();
+        client.send(msg).await?;
     }
 
     // Receive all messages
@@ -393,6 +403,7 @@ async fn test_message_counters_accurate() {
 
     // Verify we received all messages
     assert_eq!(recv_count, send_count as usize);
+    Ok(())
 }
 
 // =============================================================================
@@ -400,7 +411,7 @@ async fn test_message_counters_accurate() {
 // =============================================================================
 
 #[tokio::test]
-async fn test_high_throughput_messages() {
+async fn test_high_throughput_messages() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (client, server) = MemoryTransport::pair();
     let client: Arc<MemoryTransport> = Arc::new(client);
     let server: Arc<MemoryTransport> = Arc::new(server);
@@ -412,8 +423,9 @@ async fn test_high_throughput_messages() {
     let sender = tokio::spawn(async move {
         for i in 0..message_count {
             let msg = Message::Notification(Notification::with_params("stress", json!({"id": i})));
-            client_clone.send(msg).await.unwrap();
+            client_clone.send(msg).await?;
         }
+        Ok::<_, mcpkit_transport::error::TransportError>(())
     });
 
     // Receiver task with backpressure simulation
@@ -438,10 +450,11 @@ async fn test_high_throughput_messages() {
         count
     });
 
-    sender.await.unwrap();
-    let received = receiver.await.unwrap();
+    sender.await??;
+    let received = receiver.await?;
 
     assert_eq!(received, message_count, "Should handle high throughput");
+    Ok(())
 }
 
 // =============================================================================
@@ -449,15 +462,18 @@ async fn test_high_throughput_messages() {
 // =============================================================================
 
 #[tokio::test]
-async fn test_error_messages_are_descriptive() {
+async fn test_error_messages_are_descriptive() -> Result<(), Box<dyn std::error::Error>> {
     let (client, server) = MemoryTransport::pair();
 
     // Close server
-    server.close().await.unwrap();
+    server.close().await?;
 
     // Force an error
     let msg = Message::Notification(Notification::new("test"));
-    let err = client.send(msg).await.unwrap_err();
+    let err = client
+        .send(msg)
+        .await
+        .expect_err("Expected send to fail after server close");
 
     // Error should have meaningful message
     let err_msg = format!("{err}");
@@ -469,6 +485,7 @@ async fn test_error_messages_are_descriptive() {
         debug_msg.len() > 10,
         "Debug message should have details: {debug_msg}"
     );
+    Ok(())
 }
 
 // =============================================================================
@@ -476,11 +493,11 @@ async fn test_error_messages_are_descriptive() {
 // =============================================================================
 
 #[tokio::test]
-async fn test_operations_on_closed_transport() {
+async fn test_operations_on_closed_transport() -> Result<(), Box<dyn std::error::Error>> {
     let (client, _server) = MemoryTransport::pair();
 
     // Close transport
-    client.close().await.unwrap();
+    client.close().await?;
 
     // All operations should handle closed state gracefully
     assert!(!client.is_connected());
@@ -493,13 +510,14 @@ async fn test_operations_on_closed_transport() {
 
     // Recv should fail or return None, not panic
     let recv_result = client.recv().await;
-    assert!(recv_result.is_err() || recv_result.unwrap().is_none());
+    assert!(recv_result.is_err() || recv_result.as_ref().is_ok_and(Option::is_none));
 
     // Metadata should still work
     let _meta = client.metadata();
 
     // Close again should be idempotent
-    client.close().await.unwrap();
+    client.close().await?;
+    Ok(())
 }
 
 // =============================================================================
@@ -507,23 +525,24 @@ async fn test_operations_on_closed_transport() {
 // =============================================================================
 
 #[tokio::test]
-async fn test_buffer_backpressure() {
+async fn test_buffer_backpressure() -> Result<(), Box<dyn std::error::Error>> {
     // Create transport with small buffer to test backpressure
     let (client, server) = MemoryTransport::pair_with_capacity(2);
 
     // Fill the buffer
     for i in 0..2 {
         let msg = Message::Notification(Notification::with_params("fill", json!({"seq": i})));
-        client.send(msg).await.unwrap();
+        client.send(msg).await?;
     }
 
     // Drain one message to make room
-    let _ = server.recv().await.unwrap();
+    let _ = server.recv().await?;
 
     // Should be able to send another
     let msg = Message::Notification(Notification::new("after_drain"));
     let result = client.send(msg).await;
     assert!(result.is_ok(), "Should succeed after draining buffer");
+    Ok(())
 }
 
 // =============================================================================
@@ -531,7 +550,7 @@ async fn test_buffer_backpressure() {
 // =============================================================================
 
 #[tokio::test]
-async fn test_concurrent_close() {
+async fn test_concurrent_close() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (client, server) = MemoryTransport::pair();
     let client = Arc::new(client);
     let server = Arc::new(server);
@@ -541,18 +560,21 @@ async fn test_concurrent_close() {
     for _ in 0..5 {
         let c = client.clone();
         handles.push(tokio::spawn(async move {
-            c.close().await.unwrap();
+            c.close().await?;
+            Ok::<_, mcpkit_transport::error::TransportError>(())
         }));
         let s = server.clone();
         handles.push(tokio::spawn(async move {
-            s.close().await.unwrap();
+            s.close().await?;
+            Ok::<_, mcpkit_transport::error::TransportError>(())
         }));
     }
 
     // All should complete without panic
     for handle in handles {
-        handle.await.unwrap();
+        handle.await??;
     }
+    Ok(())
 }
 
 // =============================================================================
@@ -560,25 +582,26 @@ async fn test_concurrent_close() {
 // =============================================================================
 
 #[tokio::test]
-async fn test_message_ordering_preserved() {
+async fn test_message_ordering_preserved() -> Result<(), Box<dyn std::error::Error>> {
     // Use large buffer to avoid blocking
     let (client, server) = MemoryTransport::pair_with_capacity(200);
 
     // Send messages in order
     for i in 0..100 {
         let msg = Message::Notification(Notification::with_params("order", json!({"seq": i})));
-        client.send(msg).await.unwrap();
+        client.send(msg).await?;
     }
 
     // Receive and verify order
     for expected in 0..100i64 {
         match timeout(Duration::from_secs(2), server.recv()).await {
             Ok(Ok(Some(Message::Notification(n)))) => {
-                let params = n.params.unwrap();
-                let seq = params["seq"].as_i64().unwrap();
+                let params = n.params.ok_or("Expected params")?;
+                let seq = params["seq"].as_i64().ok_or("Expected i64")?;
                 assert_eq!(seq, expected, "Messages should be in order");
             }
             other => panic!("Expected notification, got {other:?}"),
         }
     }
+    Ok(())
 }

@@ -27,7 +27,7 @@ fn make_test_context() -> (
 }
 
 #[tokio::test]
-async fn test_resource_service_basic() {
+async fn test_resource_service_basic() -> Result<(), Box<dyn std::error::Error>> {
     let mut service = ResourceService::new();
 
     let resource = ResourceBuilder::new("file:///config.json", "Config")
@@ -42,10 +42,11 @@ async fn test_resource_service_basic() {
 
     assert!(!service.is_empty());
     assert_eq!(service.len(), 1);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_resource_read() {
+async fn test_resource_read() -> Result<(), Box<dyn std::error::Error>> {
     let mut service = ResourceService::new();
 
     let resource = ResourceBuilder::new("file:///data.txt", "Data File")
@@ -71,12 +72,13 @@ async fn test_resource_read() {
     let result = service.read("file:///data.txt", &ctx).await;
     assert!(result.is_ok());
 
-    let contents = result.unwrap();
+    let contents = result?;
     assert_eq!(contents.uri, "file:///data.txt");
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_resource_not_found() {
+async fn test_resource_not_found() -> Result<(), Box<dyn std::error::Error>> {
     let service = ResourceService::new();
 
     let (req_id, client_caps, server_caps, protocol_version, peer) = make_test_context();
@@ -91,10 +93,11 @@ async fn test_resource_not_found() {
 
     let result = service.read("file:///nonexistent.txt", &ctx).await;
     assert!(result.is_err());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_resource_template() {
+async fn test_resource_template() -> Result<(), Box<dyn std::error::Error>> {
     let mut service = ResourceService::new();
 
     let template = ResourceTemplateBuilder::new("db://users/{id}", "User Record")
@@ -128,10 +131,11 @@ async fn test_resource_template() {
 
     let result = service.read("db://users/123", &ctx).await;
     assert!(result.is_ok());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_resource_handler_trait() {
+async fn test_resource_handler_trait() -> Result<(), Box<dyn std::error::Error>> {
     let mut service = ResourceService::new();
 
     let resource = ResourceBuilder::new("mem://test", "Test Resource")
@@ -154,15 +158,16 @@ async fn test_resource_handler_trait() {
     );
 
     // Use the ResourceHandler trait
-    let resources = service.list_resources(&ctx).await.unwrap();
+    let resources = service.list_resources(&ctx).await?;
     assert_eq!(resources.len(), 1);
 
-    let contents = service.read_resource("mem://test", &ctx).await.unwrap();
+    let contents = service.read_resource("mem://test", &ctx).await?;
     assert_eq!(contents.len(), 1);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_resource_builder() {
+async fn test_resource_builder() -> Result<(), Box<dyn std::error::Error>> {
     let resource = ResourceBuilder::new("file:///example.md", "Example")
         .description("An example file")
         .mime_type("text/markdown")
@@ -172,10 +177,11 @@ async fn test_resource_builder() {
     assert_eq!(resource.name, "Example");
     assert_eq!(resource.description.as_deref(), Some("An example file"));
     assert_eq!(resource.mime_type.as_deref(), Some("text/markdown"));
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_resource_template_builder() {
+async fn test_resource_template_builder() -> Result<(), Box<dyn std::error::Error>> {
     let template = ResourceTemplateBuilder::new("api://data/{category}/{id}", "API Data")
         .description("Fetch data from API")
         .mime_type("application/json")
@@ -184,10 +190,11 @@ async fn test_resource_template_builder() {
     assert_eq!(template.uri_template, "api://data/{category}/{id}");
     assert_eq!(template.name, "API Data");
     assert_eq!(template.description.as_deref(), Some("Fetch data from API"));
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_multiple_resources() {
+async fn test_multiple_resources() -> Result<(), Box<dyn std::error::Error>> {
     let mut service = ResourceService::new();
 
     for i in 1..=5 {
@@ -212,12 +219,13 @@ async fn test_multiple_resources() {
         &peer,
     );
 
-    let resources = service.list_resources(&ctx).await.unwrap();
+    let resources = service.list_resources(&ctx).await?;
     assert_eq!(resources.len(), 5);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_binary_resource() {
+async fn test_binary_resource() -> Result<(), Box<dyn std::error::Error>> {
     let mut service = ResourceService::new();
 
     let resource = ResourceBuilder::new("file:///image.png", "Image")
@@ -248,10 +256,11 @@ async fn test_binary_resource() {
 
     let result = service.read("file:///image.png", &ctx).await;
     assert!(result.is_ok());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_resource_template_uri_matching() {
+async fn test_resource_template_uri_matching() -> Result<(), Box<dyn std::error::Error>> {
     let mut service = ResourceService::new();
 
     // Register a template with multiple path segments
@@ -288,10 +297,12 @@ async fn test_resource_template_uri_matching() {
     // Should also match with different values
     let result = service.read("db://prod/tables/orders/rows/456", &ctx).await;
     assert!(result.is_ok());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_resource_template_with_special_characters() {
+async fn test_resource_template_with_special_characters() -> Result<(), Box<dyn std::error::Error>>
+{
     let mut service = ResourceService::new();
 
     // Template that might receive URL-encoded values
@@ -326,10 +337,11 @@ async fn test_resource_template_with_special_characters() {
     // Should work with query containing special chars (URL encoded)
     let result = service.read("search://hello%20world", &ctx).await;
     assert!(result.is_ok());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_resource_template_priority_over_exact() {
+async fn test_resource_template_priority_over_exact() -> Result<(), Box<dyn std::error::Error>> {
     let mut service = ResourceService::new();
 
     // Register an exact resource
@@ -361,18 +373,19 @@ async fn test_resource_template_priority_over_exact() {
     // Exact match should take priority
     let result = service.read("file:///exact.txt", &ctx).await;
     assert!(result.is_ok());
-    let contents = result.unwrap();
+    let contents = result?;
     // The exact resource handler returns "Exact content"
-    let text = contents.text.as_ref().unwrap();
+    let text = contents.text.as_ref().ok_or("Expected text content")?;
     assert!(text.contains("Exact") || text.contains("exact"));
 
     // Non-exact should fall through to template
     let result = service.read("file:///other.txt", &ctx).await;
     assert!(result.is_ok());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_list_resource_templates() {
+async fn test_list_resource_templates() -> Result<(), Box<dyn std::error::Error>> {
     let mut service = ResourceService::new();
 
     // Register multiple templates
@@ -401,4 +414,5 @@ async fn test_list_resource_templates() {
     let names: Vec<_> = templates.iter().map(|t| t.name.as_str()).collect();
     assert!(names.contains(&"API v1"));
     assert!(names.contains(&"API v2"));
+    Ok(())
 }

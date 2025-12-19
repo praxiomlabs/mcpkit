@@ -638,7 +638,7 @@ mod tests {
     /// Integration test: Test Unix socket client-server communication.
     #[cfg(feature = "tokio-runtime")]
     #[tokio::test]
-    async fn test_unix_socket_communication() {
+    async fn test_unix_socket_communication() -> Result<(), Box<dyn std::error::Error>> {
         use mcpkit_core::protocol::Request;
         use std::sync::Arc;
         use tokio::sync::Barrier;
@@ -649,7 +649,7 @@ mod tests {
         let _ = std::fs::remove_file(&socket_path);
 
         // Create server listener
-        let listener = UnixListener::bind(&socket_path).await.unwrap();
+        let listener = UnixListener::bind(&socket_path).await?;
         assert!(listener.is_running());
 
         // Use a barrier to synchronize
@@ -704,10 +704,11 @@ mod tests {
 
         // Wait for both tasks
         let (server_result, client_result) = tokio::join!(server_handle, client_handle);
-        server_result.unwrap();
-        client_result.unwrap();
+        server_result?;
+        client_result?;
 
         // Clean up socket file
         let _ = std::fs::remove_file(&socket_path);
+        Ok(())
     }
 }

@@ -16,7 +16,7 @@ use tokio::sync::Mutex;
 /// This test previously failed due to warnings about "Received response for unknown request"
 /// because responses weren't being properly correlated with pending requests.
 #[tokio::test]
-async fn test_client_request_response_correlation() {
+async fn test_client_request_response_correlation() -> Result<(), Box<dyn std::error::Error>> {
     // Create a memory transport pair
     let (client_transport, server_transport) = MemoryTransport::pair();
 
@@ -29,8 +29,8 @@ async fn test_client_request_response_correlation() {
         let transport = server_clone.lock().await;
 
         // 1. Handle initialize request
-        let msg = transport.recv().await.unwrap().unwrap();
-        let request = msg.as_request().unwrap();
+        let msg = transport.recv().await?.ok_or("No message received")?;
+        let request = msg.as_request().ok_or("Expected request")?;
         assert_eq!(request.method, "initialize");
 
         let init_response = Response::success(
@@ -41,18 +41,15 @@ async fn test_client_request_response_correlation() {
                 "serverInfo": {"name": "test-server", "version": "1.0.0"}
             }),
         );
-        transport
-            .send(Message::Response(init_response))
-            .await
-            .unwrap();
+        transport.send(Message::Response(init_response)).await?;
 
         // 2. Handle initialized notification
-        let msg = transport.recv().await.unwrap().unwrap();
+        let msg = transport.recv().await?.ok_or("No message received")?;
         assert!(msg.is_notification());
 
         // 3. Handle tools/list request
-        let msg = transport.recv().await.unwrap().unwrap();
-        let request = msg.as_request().unwrap();
+        let msg = transport.recv().await?.ok_or("No message received")?;
+        let request = msg.as_request().ok_or("Expected request")?;
         assert_eq!(request.method, "tools/list");
 
         let tools_response = Response::success(
@@ -61,14 +58,11 @@ async fn test_client_request_response_correlation() {
                 "tools": [{"name": "test_tool", "description": "A test tool", "inputSchema": {"type": "object"}}]
             }),
         );
-        transport
-            .send(Message::Response(tools_response))
-            .await
-            .unwrap();
+        transport.send(Message::Response(tools_response)).await?;
 
         // 4. Handle tools/call request
-        let msg = transport.recv().await.unwrap().unwrap();
-        let request = msg.as_request().unwrap();
+        let msg = transport.recv().await?.ok_or("No message received")?;
+        let request = msg.as_request().ok_or("Expected request")?;
         assert_eq!(request.method, "tools/call");
 
         let call_response = Response::success(
@@ -78,14 +72,11 @@ async fn test_client_request_response_correlation() {
                 "isError": false
             }),
         );
-        transport
-            .send(Message::Response(call_response))
-            .await
-            .unwrap();
+        transport.send(Message::Response(call_response)).await?;
 
         // 5. Handle another tools/call request
-        let msg = transport.recv().await.unwrap().unwrap();
-        let request = msg.as_request().unwrap();
+        let msg = transport.recv().await?.ok_or("No message received")?;
+        let request = msg.as_request().ok_or("Expected request")?;
         assert_eq!(request.method, "tools/call");
 
         let call_response2 = Response::success(
@@ -95,10 +86,9 @@ async fn test_client_request_response_correlation() {
                 "isError": false
             }),
         );
-        transport
-            .send(Message::Response(call_response2))
-            .await
-            .unwrap();
+        transport.send(Message::Response(call_response2)).await?;
+
+        Ok::<_, Box<dyn std::error::Error + Send + Sync>>(())
     });
 
     // Build client and make requests
@@ -130,12 +120,16 @@ async fn test_client_request_response_correlation() {
     assert!(!result2.is_error.unwrap_or(false));
 
     // Wait for server to finish
-    server_handle.await.unwrap();
+    match server_handle.await {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(e)) => Err(format!("Server error: {e}").into()),
+        Err(e) => Err(format!("Server task panicked: {e}").into()),
+    }
 }
 
 /// Test that multiple sequential requests work without warnings
 #[tokio::test]
-async fn test_sequential_requests() {
+async fn test_sequential_requests() -> Result<(), Box<dyn std::error::Error>> {
     let (client_transport, server_transport) = MemoryTransport::pair();
     let server_transport = Arc::new(Mutex::new(server_transport));
     let server_clone = Arc::clone(&server_transport);
@@ -144,8 +138,8 @@ async fn test_sequential_requests() {
         let transport = server_clone.lock().await;
 
         // Handle initialize
-        let msg = transport.recv().await.unwrap().unwrap();
-        let request = msg.as_request().unwrap();
+        let msg = transport.recv().await?.ok_or("No message received")?;
+        let request = msg.as_request().ok_or("Expected request")?;
         transport
             .send(Message::Response(Response::success(
                 request.id.clone(),
@@ -155,32 +149,31 @@ async fn test_sequential_requests() {
                     "serverInfo": {"name": "test", "version": "1.0"}
                 }),
             )))
-            .await
-            .unwrap();
+            .await?;
 
         // Handle initialized
-        let _ = transport.recv().await.unwrap().unwrap();
+        let _ = transport.recv().await?.ok_or("No message received")?;
 
         // Handle 10 sequential requests
         for _ in 0..10 {
-            let msg = transport.recv().await.unwrap().unwrap();
-            let request = msg.as_request().unwrap();
+            let msg = transport.recv().await?.ok_or("No message received")?;
+            let request = msg.as_request().ok_or("Expected request")?;
             transport
                 .send(Message::Response(Response::success(
                     request.id.clone(),
                     json!({"tools": []}),
                 )))
-                .await
-                .unwrap();
+                .await?;
         }
+
+        Ok::<_, Box<dyn std::error::Error + Send + Sync>>(())
     });
 
     let client = ClientBuilder::new()
         .name("test")
         .version("1.0")
         .build(client_transport)
-        .await
-        .unwrap();
+        .await?;
 
     // Make 10 sequential requests
     for _ in 0..10 {
@@ -188,5 +181,9 @@ async fn test_sequential_requests() {
         assert!(tools.is_empty());
     }
 
-    server_handle.await.unwrap();
+    match server_handle.await {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(e)) => Err(format!("Server error: {e}").into()),
+        Err(e) => Err(format!("Server task panicked: {e}").into()),
+    }
 }

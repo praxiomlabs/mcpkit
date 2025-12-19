@@ -15,31 +15,33 @@ fn test_protocol_version() {
 }
 
 #[test]
-fn test_client_info() {
+fn test_client_info() -> Result<(), Box<dyn std::error::Error>> {
     let info = ClientInfo {
         name: "test-client".to_string(),
         version: "1.0.0".to_string(),
     };
 
-    let json = serde_json::to_value(&info).unwrap();
+    let json = serde_json::to_value(&info)?;
     assert_eq!(json["name"], "test-client");
     assert_eq!(json["version"], "1.0.0");
+    Ok(())
 }
 
 #[test]
-fn test_server_info() {
+fn test_server_info() -> Result<(), Box<dyn std::error::Error>> {
     let info = ServerInfo::new("test-server", "2.0.0");
 
     assert_eq!(info.name, "test-server");
     assert_eq!(info.version, "2.0.0");
 
-    let json = serde_json::to_value(&info).unwrap();
+    let json = serde_json::to_value(&info)?;
     assert_eq!(json["name"], "test-server");
     assert_eq!(json["version"], "2.0.0");
+    Ok(())
 }
 
 #[test]
-fn test_initialize_request() {
+fn test_initialize_request() -> Result<(), Box<dyn std::error::Error>> {
     let client_info = ClientInfo {
         name: "my-client".to_string(),
         version: "1.0.0".to_string(),
@@ -51,14 +53,15 @@ fn test_initialize_request() {
         client_info,
     };
 
-    let json = serde_json::to_value(&request).unwrap();
+    let json = serde_json::to_value(&request)?;
     assert_eq!(json["protocolVersion"], PROTOCOL_VERSION);
     assert!(json["capabilities"].is_object());
     assert_eq!(json["clientInfo"]["name"], "my-client");
+    Ok(())
 }
 
 #[test]
-fn test_initialize_result() {
+fn test_initialize_result() -> Result<(), Box<dyn std::error::Error>> {
     let server_info = ServerInfo::new("my-server", "1.0.0");
     let capabilities = ServerCapabilities::new().with_tools();
 
@@ -69,72 +72,79 @@ fn test_initialize_result() {
         instructions: Some("Usage instructions".to_string()),
     };
 
-    let json = serde_json::to_value(&result).unwrap();
+    let json = serde_json::to_value(&result)?;
     assert_eq!(json["protocolVersion"], PROTOCOL_VERSION);
     assert!(json["capabilities"]["tools"].is_object());
     assert_eq!(json["serverInfo"]["name"], "my-server");
     assert_eq!(json["instructions"], "Usage instructions");
+    Ok(())
 }
 
 #[test]
-fn test_client_capabilities_default() {
+fn test_client_capabilities_default() -> Result<(), Box<dyn std::error::Error>> {
     let caps = ClientCapabilities::default();
-    let json = serde_json::to_value(&caps).unwrap();
+    let json = serde_json::to_value(&caps)?;
 
     // Default capabilities should be an empty or minimal object
     assert!(json.is_object());
+    Ok(())
 }
 
 #[test]
-fn test_server_capabilities_tools() {
+fn test_server_capabilities_tools() -> Result<(), Box<dyn std::error::Error>> {
     let caps = ServerCapabilities::new().with_tools();
-    let json = serde_json::to_value(&caps).unwrap();
+    let json = serde_json::to_value(&caps)?;
 
     assert!(json["tools"].is_object());
+    Ok(())
 }
 
 #[test]
-fn test_server_capabilities_resources() {
+fn test_server_capabilities_resources() -> Result<(), Box<dyn std::error::Error>> {
     let caps = ServerCapabilities::new().with_resources();
-    let json = serde_json::to_value(&caps).unwrap();
+    let json = serde_json::to_value(&caps)?;
 
     assert!(json["resources"].is_object());
+    Ok(())
 }
 
 #[test]
-fn test_server_capabilities_prompts() {
+fn test_server_capabilities_prompts() -> Result<(), Box<dyn std::error::Error>> {
     let caps = ServerCapabilities::new().with_prompts();
-    let json = serde_json::to_value(&caps).unwrap();
+    let json = serde_json::to_value(&caps)?;
 
     assert!(json["prompts"].is_object());
+    Ok(())
 }
 
 #[test]
-fn test_server_capabilities_tasks() {
+fn test_server_capabilities_tasks() -> Result<(), Box<dyn std::error::Error>> {
     let caps = ServerCapabilities::new().with_tasks();
-    let json = serde_json::to_value(&caps).unwrap();
+    let json = serde_json::to_value(&caps)?;
 
     assert!(json["tasks"].is_object());
+    Ok(())
 }
 
 #[test]
-fn test_server_capabilities_all() {
+fn test_server_capabilities_all() -> Result<(), Box<dyn std::error::Error>> {
     let caps = ServerCapabilities::new()
         .with_tools()
         .with_resources()
         .with_prompts()
         .with_tasks();
 
-    let json = serde_json::to_value(&caps).unwrap();
+    let json = serde_json::to_value(&caps)?;
 
     assert!(json["tools"].is_object());
     assert!(json["resources"].is_object());
     assert!(json["prompts"].is_object());
     assert!(json["tasks"].is_object());
+    Ok(())
 }
 
 #[test]
-fn test_initialize_request_deserialization() {
+fn test_initialize_request_deserialization() -> Result<(), Box<dyn std::error::Error>> {
     let json = json!({
         "protocolVersion": "2025-11-25",
         "capabilities": {},
@@ -144,13 +154,14 @@ fn test_initialize_request_deserialization() {
         }
     });
 
-    let request: InitializeRequest = serde_json::from_value(json).unwrap();
+    let request: InitializeRequest = serde_json::from_value(json)?;
     assert_eq!(request.protocol_version, "2025-11-25");
     assert_eq!(request.client_info.name, "test");
+    Ok(())
 }
 
 #[test]
-fn test_initialize_result_deserialization() {
+fn test_initialize_result_deserialization() -> Result<(), Box<dyn std::error::Error>> {
     let json = json!({
         "protocolVersion": "2025-11-25",
         "capabilities": {
@@ -162,13 +173,14 @@ fn test_initialize_result_deserialization() {
         }
     });
 
-    let result: InitializeResult = serde_json::from_value(json).unwrap();
+    let result: InitializeResult = serde_json::from_value(json)?;
     assert_eq!(result.protocol_version, "2025-11-25");
     assert_eq!(result.server_info.name, "test-server");
+    Ok(())
 }
 
 #[test]
-fn test_initialize_result_optional_instructions() {
+fn test_initialize_result_optional_instructions() -> Result<(), Box<dyn std::error::Error>> {
     // Without instructions
     let json = json!({
         "protocolVersion": "2025-11-25",
@@ -179,8 +191,9 @@ fn test_initialize_result_optional_instructions() {
         }
     });
 
-    let result: InitializeResult = serde_json::from_value(json).unwrap();
+    let result: InitializeResult = serde_json::from_value(json)?;
     assert!(result.instructions.is_none());
+    Ok(())
 }
 
 // Protocol version edge case tests
@@ -188,12 +201,13 @@ mod protocol_version_tests {
     use mcpkit_core::protocol_version::{ProtocolVersion, VersionParseError};
 
     #[test]
-    fn test_version_parse_error_message() {
+    fn test_version_parse_error_message() -> Result<(), Box<dyn std::error::Error>> {
         let err = "invalid-version".parse::<ProtocolVersion>().unwrap_err();
         let msg = err.to_string();
         assert!(msg.contains("invalid-version"));
         assert!(msg.contains("2024-11-05"));
         assert!(msg.contains("2025-11-25"));
+        Ok(())
     }
 
     #[test]

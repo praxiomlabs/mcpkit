@@ -699,7 +699,7 @@ mod tests {
     }
 
     #[test]
-    fn test_trace_context_extraction() {
+    fn test_trace_context_extraction() -> Result<(), Box<dyn std::error::Error>> {
         let mut headers = std::collections::HashMap::new();
         headers.insert(
             "traceparent".to_string(),
@@ -709,15 +709,16 @@ mod tests {
         let context = propagation::extract_context(&headers);
         assert!(context.is_some());
 
-        let ctx = context.unwrap();
+        let ctx = context.ok_or("Context extraction failed")?;
         assert_eq!(ctx.version, "00");
         assert_eq!(ctx.trace_id, "4bf92f3577b34da6a3ce929d0e0e4736");
         assert_eq!(ctx.parent_id, "00f067aa0ba902b7");
         assert!(ctx.is_sampled());
+        Ok(())
     }
 
     #[test]
-    fn test_trace_context_injection() {
+    fn test_trace_context_injection() -> Result<(), Box<dyn std::error::Error>> {
         let context = propagation::TraceContext {
             version: "00".to_string(),
             trace_id: "abc123".to_string(),
@@ -729,7 +730,14 @@ mod tests {
         let mut headers = std::collections::HashMap::new();
         propagation::inject_context(&context, &mut headers);
 
-        assert_eq!(headers.get("traceparent").unwrap(), "00-abc123-def456-01");
-        assert_eq!(headers.get("tracestate").unwrap(), "vendor=value");
+        assert_eq!(
+            headers.get("traceparent").ok_or("traceparent not found")?,
+            "00-abc123-def456-01"
+        );
+        assert_eq!(
+            headers.get("tracestate").ok_or("tracestate not found")?,
+            "vendor=value"
+        );
+        Ok(())
     }
 }

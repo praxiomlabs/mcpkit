@@ -292,7 +292,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_tool_service() {
+    async fn test_tool_service() -> Result<(), Box<dyn std::error::Error>> {
         let mut service = ToolService::new();
 
         let tool = ToolBuilder::new("echo")
@@ -318,11 +318,12 @@ mod tests {
 
         let result = service
             .call("echo", serde_json::json!({"hello": "world"}), &ctx)
-            .await
-            .unwrap();
+            .await?;
 
         // Convert to CallToolResult to check content
         let call_result: CallToolResult = result.into();
         assert!(!call_result.content.is_empty());
+
+        Ok(())
     }
 }

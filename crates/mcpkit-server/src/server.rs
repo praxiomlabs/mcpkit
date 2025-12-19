@@ -970,7 +970,7 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_progress_token_string() {
+    fn test_extract_progress_token_string() -> Result<(), Box<dyn std::error::Error>> {
         let params = serde_json::json!({
             "_meta": {
                 "progressToken": "my-token-123"
@@ -980,13 +980,15 @@ mod tests {
         let token = extract_progress_token(Some(&params));
         assert!(token.is_some());
         assert_eq!(
-            token.unwrap(),
+            token.ok_or("Token not found")?,
             ProgressToken::String("my-token-123".to_string())
         );
+
+        Ok(())
     }
 
     #[test]
-    fn test_extract_progress_token_number() {
+    fn test_extract_progress_token_number() -> Result<(), Box<dyn std::error::Error>> {
         let params = serde_json::json!({
             "_meta": {
                 "progressToken": 42
@@ -995,7 +997,9 @@ mod tests {
         });
         let token = extract_progress_token(Some(&params));
         assert!(token.is_some());
-        assert_eq!(token.unwrap(), ProgressToken::Number(42));
+        assert_eq!(token.ok_or("Token not found")?, ProgressToken::Number(42));
+
+        Ok(())
     }
 
     #[test]

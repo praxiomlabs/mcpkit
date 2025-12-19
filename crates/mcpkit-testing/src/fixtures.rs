@@ -266,13 +266,16 @@ mod tests {
     }
 
     #[test]
-    fn test_calculator_tools() {
+    fn test_calculator_tools() -> Result<(), Box<dyn std::error::Error>> {
         let tools = calculator_tools();
         assert_eq!(tools.len(), 4);
 
         // Test the add tool
-        let add = tools.iter().find(|t| t.name == "add").unwrap();
-        let result = add.call(serde_json::json!({"a": 5, "b": 3})).unwrap();
+        let add = tools
+            .iter()
+            .find(|t| t.name == "add")
+            .ok_or("add tool not found")?;
+        let result = add.call(serde_json::json!({"a": 5, "b": 3}))?;
         match result {
             ToolOutput::Success(r) => {
                 if let mcpkit_core::types::Content::Text(tc) = &r.content[0] {
@@ -283,18 +286,22 @@ mod tests {
         }
 
         // Test the divide tool with zero
-        let divide = tools.iter().find(|t| t.name == "divide").unwrap();
-        let result = divide.call(serde_json::json!({"a": 5, "b": 0})).unwrap();
+        let divide = tools
+            .iter()
+            .find(|t| t.name == "divide")
+            .ok_or("divide tool not found")?;
+        let result = divide.call(serde_json::json!({"a": 5, "b": 0}))?;
         match result {
             ToolOutput::RecoverableError { message, .. } => {
                 assert!(message.contains("zero"));
             }
             _ => panic!("Expected error"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_prompt_with_args() {
+    fn test_prompt_with_args() -> Result<(), Box<dyn std::error::Error>> {
         let prompt = prompt_with_args(
             "test",
             "A test prompt",
@@ -305,9 +312,10 @@ mod tests {
         );
 
         assert_eq!(prompt.name, "test");
-        let args = prompt.arguments.unwrap();
+        let args = prompt.arguments.ok_or("arguments not found")?;
         assert_eq!(args.len(), 2);
-        assert!(args[0].required.unwrap());
-        assert!(!args[1].required.unwrap());
+        assert!(args[0].required.ok_or("required field not found")?);
+        assert!(!args[1].required.ok_or("required field not found")?);
+        Ok(())
     }
 }

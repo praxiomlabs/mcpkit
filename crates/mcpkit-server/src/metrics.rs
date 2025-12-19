@@ -324,7 +324,7 @@ mod tests {
     }
 
     #[test]
-    fn test_per_method_stats() {
+    fn test_per_method_stats() -> Result<(), Box<dyn std::error::Error>> {
         let metrics = ServerMetrics::new();
 
         metrics.record_success("tools/call", Duration::from_millis(100));
@@ -332,11 +332,13 @@ mod tests {
         metrics.record_failure("tools/call", Duration::from_millis(100));
 
         let snapshot = metrics.snapshot();
-        let tools_stats = snapshot.method("tools/call").unwrap();
+        let tools_stats = snapshot.method("tools/call").ok_or("Method not found")?;
 
         assert_eq!(tools_stats.requests, 3);
         assert_eq!(tools_stats.errors, 1);
         assert!((tools_stats.avg_latency_ms - 100.0).abs() < 1.0);
+
+        Ok(())
     }
 
     #[test]

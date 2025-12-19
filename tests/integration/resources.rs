@@ -19,7 +19,7 @@ fn make_test_context() -> (RequestId, ClientCapabilities, ServerCapabilities, Pr
 }
 
 #[tokio::test]
-async fn test_resource_service_basic() {
+async fn test_resource_service_basic() -> Result<(), Box<dyn std::error::Error>> {
     let mut service = ResourceService::new();
 
     let resource = ResourceBuilder::new("file:///config.json", "Config")
@@ -36,10 +36,11 @@ async fn test_resource_service_basic() {
 
     assert!(!service.is_empty());
     assert_eq!(service.len(), 1);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_resource_read() {
+async fn test_resource_read() -> Result<(), Box<dyn std::error::Error>> {
     let mut service = ResourceService::new();
 
     let resource = ResourceBuilder::new("file:///data.txt", "Data File")
@@ -57,12 +58,13 @@ async fn test_resource_read() {
     let result = service.read("file:///data.txt", &ctx).await;
     assert!(result.is_ok());
 
-    let contents = result.unwrap();
+    let contents = result?;
     assert_eq!(contents.uri, "file:///data.txt");
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_resource_not_found() {
+async fn test_resource_not_found() -> Result<(), Box<dyn std::error::Error>> {
     let service = ResourceService::new();
 
     let (req_id, client_caps, server_caps, protocol_version, peer) = make_test_context();
@@ -70,10 +72,11 @@ async fn test_resource_not_found() {
 
     let result = service.read("file:///nonexistent.txt", &ctx).await;
     assert!(result.is_err());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_resource_template() {
+async fn test_resource_template() -> Result<(), Box<dyn std::error::Error>> {
     let mut service = ResourceService::new();
 
     let template = ResourceTemplateBuilder::new("db://users/{id}", "User Record")
@@ -97,10 +100,11 @@ async fn test_resource_template() {
 
     let result = service.read("db://users/123", &ctx).await;
     assert!(result.is_ok());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_resource_handler_trait() {
+async fn test_resource_handler_trait() -> Result<(), Box<dyn std::error::Error>> {
     let mut service = ResourceService::new();
 
     let resource = ResourceBuilder::new("mem://test", "Test Resource")
@@ -115,15 +119,16 @@ async fn test_resource_handler_trait() {
     let ctx = Context::new(&req_id, None, &client_caps, &server_caps, protocol_version, &peer);
 
     // Use the ResourceHandler trait
-    let resources = service.list_resources(&ctx).await.unwrap();
+    let resources = service.list_resources(&ctx).await?;
     assert_eq!(resources.len(), 1);
 
-    let contents = service.read_resource("mem://test", &ctx).await.unwrap();
+    let contents = service.read_resource("mem://test", &ctx).await?;
     assert_eq!(contents.len(), 1);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_resource_builder() {
+async fn test_resource_builder() -> Result<(), Box<dyn std::error::Error>> {
     let resource = ResourceBuilder::new("file:///example.md", "Example")
         .description("An example file")
         .mime_type("text/markdown")
@@ -133,10 +138,11 @@ async fn test_resource_builder() {
     assert_eq!(resource.name, "Example");
     assert_eq!(resource.description.as_deref(), Some("An example file"));
     assert_eq!(resource.mime_type.as_deref(), Some("text/markdown"));
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_resource_template_builder() {
+async fn test_resource_template_builder() -> Result<(), Box<dyn std::error::Error>> {
     let template = ResourceTemplateBuilder::new("api://data/{category}/{id}", "API Data")
         .description("Fetch data from API")
         .mime_type("application/json")
@@ -145,10 +151,11 @@ async fn test_resource_template_builder() {
     assert_eq!(template.uri_template, "api://data/{category}/{id}");
     assert_eq!(template.name, "API Data");
     assert_eq!(template.description.as_deref(), Some("Fetch data from API"));
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_multiple_resources() {
+async fn test_multiple_resources() -> Result<(), Box<dyn std::error::Error>> {
     let mut service = ResourceService::new();
 
     for i in 1..=5 {
@@ -169,12 +176,13 @@ async fn test_multiple_resources() {
     let (req_id, client_caps, server_caps, protocol_version, peer) = make_test_context();
     let ctx = Context::new(&req_id, None, &client_caps, &server_caps, protocol_version, &peer);
 
-    let resources = service.list_resources(&ctx).await.unwrap();
+    let resources = service.list_resources(&ctx).await?;
     assert_eq!(resources.len(), 5);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_binary_resource() {
+async fn test_binary_resource() -> Result<(), Box<dyn std::error::Error>> {
     let mut service = ResourceService::new();
 
     let resource = ResourceBuilder::new("file:///image.png", "Image")
@@ -191,10 +199,11 @@ async fn test_binary_resource() {
 
     let result = service.read("file:///image.png", &ctx).await;
     assert!(result.is_ok());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_list_resource_templates() {
+async fn test_list_resource_templates() -> Result<(), Box<dyn std::error::Error>> {
     let mut service = ResourceService::new();
 
     // Register a static resource
@@ -232,13 +241,14 @@ async fn test_list_resource_templates() {
     let ctx = Context::new(&req_id, None, &client_caps, &server_caps, protocol_version, &peer);
 
     // list_resources should only return static resources
-    let resources = service.list_resources(&ctx).await.unwrap();
+    let resources = service.list_resources(&ctx).await?;
     assert_eq!(resources.len(), 1);
     assert_eq!(resources[0].uri, "config://server");
 
     // list_resource_templates should return the template resources
-    let templates = service.list_resource_templates(&ctx).await.unwrap();
+    let templates = service.list_resource_templates(&ctx).await?;
     assert_eq!(templates.len(), 2);
     assert!(templates.iter().any(|t| t.uri_template == "file://{path}"));
     assert!(templates.iter().any(|t| t.uri_template == "db://users/{id}"));
+    Ok(())
 }

@@ -154,21 +154,23 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_server_attrs_parse() {
+    fn test_server_attrs_parse() -> std::result::Result<(), Box<dyn std::error::Error>> {
         let tokens = quote::quote!(name = "test-server", version = "1.0.0");
-        let attrs = ServerAttrs::parse(tokens).unwrap();
+        let attrs = ServerAttrs::parse(tokens)?;
         assert_eq!(attrs.name, "test-server");
         assert_eq!(attrs.version, "1.0.0");
         assert!(attrs.instructions.is_none());
         assert!(!attrs.debug_expand);
+        Ok(())
     }
 
     #[test]
-    fn test_tool_attrs_parse() {
+    fn test_tool_attrs_parse() -> std::result::Result<(), Box<dyn std::error::Error>> {
         let tokens = quote::quote!(description = "Test tool", destructive = true);
-        let attrs = ToolAttrs::parse(tokens).unwrap();
+        let attrs = ToolAttrs::parse(tokens)?;
         assert_eq!(attrs.description, "Test tool");
         assert!(attrs.destructive);
         assert!(!attrs.idempotent);
+        Ok(())
     }
 }

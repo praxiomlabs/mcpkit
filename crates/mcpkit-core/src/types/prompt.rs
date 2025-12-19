@@ -257,16 +257,28 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_prompt_builder() {
+    fn test_prompt_builder() -> Result<(), Box<dyn std::error::Error>> {
         let prompt = Prompt::new("summarize")
             .description("Summarize a document")
             .required_arg("document", "The document to summarize")
             .optional_arg("length", "Target length (short, medium, long)");
 
         assert_eq!(prompt.name, "summarize");
-        assert_eq!(prompt.arguments.as_ref().unwrap().len(), 2);
-        assert!(prompt.arguments.as_ref().unwrap()[0].required.unwrap());
-        assert!(!prompt.arguments.as_ref().unwrap()[1].required.unwrap());
+        assert_eq!(
+            prompt.arguments.as_ref().ok_or("Expected arguments")?.len(),
+            2
+        );
+        assert!(
+            prompt.arguments.as_ref().ok_or("Expected arguments")?[0]
+                .required
+                .ok_or("Expected required field")?
+        );
+        assert!(
+            !prompt.arguments.as_ref().ok_or("Expected arguments")?[1]
+                .required
+                .ok_or("Expected required field")?
+        );
+        Ok(())
     }
 
     #[test]

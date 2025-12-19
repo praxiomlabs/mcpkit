@@ -433,7 +433,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_task_lifecycle() {
+    fn test_task_lifecycle() -> Result<(), Box<dyn std::error::Error>> {
         let mut task = Task::create().tool("analyze").description("Analyzing data");
 
         assert_eq!(task.status, TaskStatus::Pending);
@@ -444,12 +444,19 @@ mod tests {
         assert!(task.status.is_running());
 
         task.update_progress(TaskProgress::new(50).total(100).message("Halfway done"));
-        assert_eq!(task.progress.as_ref().unwrap().percentage(), Some(0.5));
+        assert_eq!(
+            task.progress
+                .as_ref()
+                .ok_or("Expected progress")?
+                .percentage(),
+            Some(0.5)
+        );
 
         task.complete(serde_json::json!({"result": "success"}));
         assert_eq!(task.status, TaskStatus::Completed);
         assert!(task.status.is_terminal());
         assert!(task.result.is_some());
+        Ok(())
     }
 
     #[test]

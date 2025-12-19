@@ -705,19 +705,20 @@ mod tests {
     }
 
     #[test]
-    fn test_to_value() {
+    fn test_to_value() -> Result<(), Box<dyn std::error::Error>> {
         let schema = SchemaBuilder::object()
             .property("query", SchemaBuilder::string())
             .required(["query"])
             .to_value();
 
         assert!(schema.is_object());
-        let obj = schema.as_object().unwrap();
+        let obj = schema.as_object().ok_or("Expected object")?;
         assert_eq!(obj.get("type").and_then(|v| v.as_str()), Some("object"));
+        Ok(())
     }
 
     #[test]
-    fn test_tool_input_schema() {
+    fn test_tool_input_schema() -> Result<(), Box<dyn std::error::Error>> {
         // Example: Schema for a search tool
         let schema = SchemaBuilder::object()
             .title("SearchInput")
@@ -750,11 +751,12 @@ mod tests {
         assert!(value.is_object());
 
         // Verify structure
-        let obj = value.as_object().unwrap();
+        let obj = value.as_object().ok_or("Expected object")?;
         assert_eq!(obj.get("type").and_then(|v| v.as_str()), Some("object"));
         assert_eq!(
             obj.get("title").and_then(|v| v.as_str()),
             Some("SearchInput")
         );
+        Ok(())
     }
 }

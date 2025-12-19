@@ -98,22 +98,23 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_sse_buffer_parsing() {
+    fn test_sse_buffer_parsing() -> Result<(), Box<dyn std::error::Error>> {
         let messages_received = AtomicU64::new(0);
         let mut state = HttpTransportState::new(None);
         state.sse_buffer =
             String::from("id: evt-001\ndata: {\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{}}\n\n");
 
-        process_sse_buffer(&mut state, &messages_received, 16 * 1024 * 1024).unwrap();
+        process_sse_buffer(&mut state, &messages_received, 16 * 1024 * 1024)?;
 
         assert_eq!(state.last_event_id, Some("evt-001".to_string()));
         assert_eq!(state.message_queue.len(), 1);
         assert!(state.sse_buffer.is_empty());
         assert_eq!(messages_received.load(Ordering::Relaxed), 1);
+        Ok(())
     }
 
     #[test]
-    fn test_sse_buffer_multiple_events() {
+    fn test_sse_buffer_multiple_events() -> Result<(), Box<dyn std::error::Error>> {
         let messages_received = AtomicU64::new(0);
         let mut state = HttpTransportState::new(None);
         state.sse_buffer = String::from(
@@ -121,11 +122,12 @@ mod tests {
              id: 2\ndata: {\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{}}\n\n",
         );
 
-        process_sse_buffer(&mut state, &messages_received, 16 * 1024 * 1024).unwrap();
+        process_sse_buffer(&mut state, &messages_received, 16 * 1024 * 1024)?;
 
         assert_eq!(state.last_event_id, Some("2".to_string()));
         assert_eq!(state.message_queue.len(), 2);
         assert_eq!(messages_received.load(Ordering::Relaxed), 2);
+        Ok(())
     }
 
     #[test]
@@ -143,16 +145,17 @@ mod tests {
     }
 
     #[test]
-    fn test_sse_buffer_incomplete_event() {
+    fn test_sse_buffer_incomplete_event() -> Result<(), Box<dyn std::error::Error>> {
         let messages_received = AtomicU64::new(0);
         let mut state = HttpTransportState::new(None);
         state.sse_buffer = String::from("id: evt-001\ndata: {\"jsonrpc\":\"2.0\""); // No double newline
 
-        process_sse_buffer(&mut state, &messages_received, 16 * 1024 * 1024).unwrap();
+        process_sse_buffer(&mut state, &messages_received, 16 * 1024 * 1024)?;
 
         // Should not process incomplete event
         assert!(state.last_event_id.is_none());
         assert!(state.message_queue.is_empty());
         assert!(!state.sse_buffer.is_empty());
+        Ok(())
     }
 }

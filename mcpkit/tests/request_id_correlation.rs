@@ -83,7 +83,7 @@ impl Transport for DiagnosticTransport {
 }
 
 #[tokio::test]
-async fn test_request_id_correlation_with_diagnostics() {
+async fn test_request_id_correlation_with_diagnostics() -> Result<(), Box<dyn std::error::Error>> {
     use mcpkit_client::ClientBuilder;
     use serde_json::json;
 
@@ -96,8 +96,8 @@ async fn test_request_id_correlation_with_diagnostics() {
         println!("\n=== SERVER: Waiting for initialize ===");
 
         // Handle initialize
-        let msg = server_clone.recv().await.unwrap().unwrap();
-        let req = msg.as_request().unwrap();
+        let msg = server_clone.recv().await?.ok_or("No message received")?;
+        let req = msg.as_request().ok_or("Expected request")?;
         println!("SERVER: Got initialize request id={:?}", req.id);
 
         let resp = Response::success(
@@ -109,23 +109,25 @@ async fn test_request_id_correlation_with_diagnostics() {
             }),
         );
         println!("SERVER: Sending initialize response id={:?}", resp.id);
-        server_clone.send(Message::Response(resp)).await.unwrap();
+        server_clone.send(Message::Response(resp)).await?;
 
         // Handle initialized notification
-        let msg = server_clone.recv().await.unwrap().unwrap();
+        let msg = server_clone.recv().await?.ok_or("No message received")?;
         println!(
             "SERVER: Got notification: {:?}",
             msg.as_notification().map(|n| &n.method)
         );
 
         // Handle tools/list
-        let msg = server_clone.recv().await.unwrap().unwrap();
-        let req = msg.as_request().unwrap();
+        let msg = server_clone.recv().await?.ok_or("No message received")?;
+        let req = msg.as_request().ok_or("Expected request")?;
         println!("SERVER: Got tools/list request id={:?}", req.id);
 
         let resp = Response::success(req.id.clone(), json!({"tools": []}));
         println!("SERVER: Sending tools/list response id={:?}", resp.id);
-        server_clone.send(Message::Response(resp)).await.unwrap();
+        server_clone.send(Message::Response(resp)).await?;
+
+        Ok::<_, Box<dyn std::error::Error + Send + Sync>>(())
     });
 
     println!("\n=== CLIENT: Building client ===");
@@ -135,48 +137,52 @@ async fn test_request_id_correlation_with_diagnostics() {
         .name("diagnostic-client")
         .version("1.0")
         .build(client_transport)
-        .await
-        .expect("Should connect");
+        .await?;
 
     println!("\n=== CLIENT: Calling list_tools ===");
 
     // Make a request
-    let tools = client.list_tools().await.expect("Should list tools");
+    let tools = client.list_tools().await?;
     println!("\n=== CLIENT: Got tools: {tools:?} ===");
 
-    server_handle.await.unwrap();
+    match server_handle.await {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(e)) => Err(e.to_string().into()),
+        Err(e) => Err(format!("Join error: {e}").into()),
+    }
 }
 
 /// Test that `RequestId` equality works correctly after JSON serialization
 #[test]
-fn test_request_id_json_roundtrip() {
+fn test_request_id_json_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
     use serde_json::{from_str, to_string};
 
     // Test numeric ID
     let original = RequestId::Number(42);
-    let json = to_string(&original).unwrap();
+    let json = to_string(&original)?;
     println!("Number ID JSON: {json}");
-    let roundtrip: RequestId = from_str(&json).unwrap();
+    let roundtrip: RequestId = from_str(&json)?;
     assert_eq!(original, roundtrip, "Number ID should roundtrip");
 
     // Test string ID
     let original = RequestId::String("req-001".to_string());
-    let json = to_string(&original).unwrap();
+    let json = to_string(&original)?;
     println!("String ID JSON: {json}");
-    let roundtrip: RequestId = from_str(&json).unwrap();
+    let roundtrip: RequestId = from_str(&json)?;
     assert_eq!(original, roundtrip, "String ID should roundtrip");
 
     // Test within Response
     let response = Response::success(RequestId::Number(5), serde_json::json!({"foo": "bar"}));
-    let json = to_string(&response).unwrap();
+    let json = to_string(&response)?;
     println!("Response JSON: {json}");
-    let roundtrip: Response = from_str(&json).unwrap();
+    let roundtrip: Response = from_str(&json)?;
     assert_eq!(response.id, roundtrip.id, "Response ID should roundtrip");
+    Ok(())
 }
 
 /// Test that `HashMap` lookup works with `RequestId`
 #[test]
-fn test_request_id_hashmap_lookup() {
+fn test_request_id_hashmap_lookup() -> Result<(), Box<dyn std::error::Error>> {
     use std::collections::HashMap;
 
     let mut map: HashMap<RequestId, &str> = HashMap::new();
@@ -192,11 +198,12 @@ fn test_request_id_hashmap_lookup() {
 
     // After JSON roundtrip
     let key = RequestId::Number(1);
-    let json = serde_json::to_string(&key).unwrap();
-    let roundtrip: RequestId = serde_json::from_str(&json).unwrap();
+    let json = serde_json::to_string(&key)?;
+    let roundtrip: RequestId = serde_json::from_str(&json)?;
     assert_eq!(
         map.get(&roundtrip),
         Some(&"first"),
         "Lookup after roundtrip should work"
     );
+    Ok(())
 }

@@ -291,13 +291,14 @@ mod tests {
     }
 
     #[test]
-    fn test_transport_serialization() {
+    fn test_transport_serialization() -> Result<(), Box<dyn std::error::Error>> {
         let server = DiscoveredServer::stdio("test", "test-cmd");
-        let json = serde_json::to_string(&server).unwrap();
+        let json = serde_json::to_string(&server)?;
         assert!(json.contains("\"type\":\"stdio\""));
 
         let server = DiscoveredServer::http("test", "http://localhost");
-        let json = serde_json::to_string(&server).unwrap();
+        let json = serde_json::to_string(&server)?;
         assert!(json.contains("\"type\":\"http\""));
+        Ok(())
     }
 }

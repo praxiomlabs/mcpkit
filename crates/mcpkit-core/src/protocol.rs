@@ -424,34 +424,39 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_request_serialization() {
+    fn test_request_serialization() -> Result<(), Box<dyn std::error::Error>> {
         let request = Request::new("tools/list", 1u64);
-        let json = serde_json::to_string(&request).unwrap();
+        let json = serde_json::to_string(&request)?;
         assert!(json.contains("\"jsonrpc\":\"2.0\""));
         assert!(json.contains("\"method\":\"tools/list\""));
         assert!(json.contains("\"id\":1"));
+        Ok(())
     }
 
     #[test]
-    fn test_request_with_params() {
+    fn test_request_with_params() -> Result<(), Box<dyn std::error::Error>> {
         let request = Request::with_params(
             "tools/call",
             1u64,
             serde_json::json!({"name": "search", "arguments": {"query": "test"}}),
         );
-        let json = serde_json::to_string(&request).unwrap();
+        let json = serde_json::to_string(&request)?;
         assert!(json.contains("\"params\""));
         assert!(json.contains("\"name\":\"search\""));
+        Ok(())
     }
 
     #[test]
-    fn test_response_success() {
+    fn test_response_success() -> Result<(), Box<dyn std::error::Error>> {
         let response = Response::success(1u64, serde_json::json!({"tools": []}));
         assert!(response.is_success());
         assert!(!response.is_error());
 
-        let result = response.into_result().unwrap();
+        let result = response
+            .into_result()
+            .map_err(|e| format!("Error: {}", e.message))?;
         assert!(result.get("tools").is_some());
+        Ok(())
     }
 
     #[test]
@@ -465,50 +470,54 @@ mod tests {
         assert!(!response.is_success());
         assert!(response.is_error());
 
+        // unwrap_err is intentional - we're testing the error path
         let err = response.into_result().unwrap_err();
         assert_eq!(err.code, -32601);
     }
 
     #[test]
-    fn test_notification() {
+    fn test_notification() -> Result<(), Box<dyn std::error::Error>> {
         let notification = Notification::with_params(
             "notifications/progress",
             serde_json::json!({"progress": 50, "total": 100}),
         );
-        let json = serde_json::to_string(&notification).unwrap();
+        let json = serde_json::to_string(&notification)?;
         assert!(json.contains("\"method\":\"notifications/progress\""));
         assert!(!json.contains("\"id\"")); // Notifications have no ID
+        Ok(())
     }
 
     #[test]
-    fn test_message_parsing() {
+    fn test_message_parsing() -> Result<(), Box<dyn std::error::Error>> {
         // Request
         let json = r#"{"jsonrpc":"2.0","id":1,"method":"test"}"#;
-        let msg: Message = serde_json::from_str(json).unwrap();
+        let msg: Message = serde_json::from_str(json)?;
         assert!(msg.is_request());
         assert_eq!(msg.method(), Some("test"));
 
         // Response
         let json = r#"{"jsonrpc":"2.0","id":1,"result":{}}"#;
-        let msg: Message = serde_json::from_str(json).unwrap();
+        let msg: Message = serde_json::from_str(json)?;
         assert!(msg.is_response());
 
         // Notification
         let json = r#"{"jsonrpc":"2.0","method":"notify"}"#;
-        let msg: Message = serde_json::from_str(json).unwrap();
+        let msg: Message = serde_json::from_str(json)?;
         assert!(msg.is_notification());
+        Ok(())
     }
 
     #[test]
-    fn test_request_id_types() {
+    fn test_request_id_types() -> Result<(), Box<dyn std::error::Error>> {
         // Number ID
         let request = Request::new("test", 42u64);
-        let json = serde_json::to_string(&request).unwrap();
+        let json = serde_json::to_string(&request)?;
         assert!(json.contains("\"id\":42"));
 
         // String ID
         let request = Request::new("test", "req-001");
-        let json = serde_json::to_string(&request).unwrap();
+        let json = serde_json::to_string(&request)?;
         assert!(json.contains("\"id\":\"req-001\""));
+        Ok(())
     }
 }

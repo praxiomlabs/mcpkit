@@ -19,7 +19,7 @@ fn make_test_context() -> (RequestId, ClientCapabilities, ServerCapabilities, Pr
 }
 
 #[tokio::test]
-async fn test_tool_service_basic() {
+async fn test_tool_service_basic() -> Result<(), Box<dyn std::error::Error>> {
     // Create a tool service
     let mut service = ToolService::new();
 
@@ -41,10 +41,11 @@ async fn test_tool_service_basic() {
     let tools = service.list();
     assert_eq!(tools.len(), 1);
     assert_eq!(tools[0].name, "add");
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_tool_call() {
+async fn test_tool_call() -> Result<(), Box<dyn std::error::Error>> {
     let mut service = ToolService::new();
 
     let tool = ToolBuilder::new("multiply")
@@ -64,14 +65,15 @@ async fn test_tool_call() {
     let result = service.call("multiply", serde_json::json!({"a": 3.0, "b": 4.0}), &ctx).await;
     assert!(result.is_ok());
 
-    let output = result.unwrap();
+    let output = result?;
     let call_result = output.into_call_result();
     assert!(!call_result.is_error.unwrap_or(false));
     assert!(!call_result.content.is_empty());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_tool_not_found() {
+async fn test_tool_not_found() -> Result<(), Box<dyn std::error::Error>> {
     let service = ToolService::new();
 
     let (req_id, client_caps, server_caps, protocol_version, peer) = make_test_context();
@@ -79,10 +81,11 @@ async fn test_tool_not_found() {
 
     let result = service.call("nonexistent", serde_json::json!({}), &ctx).await;
     assert!(result.is_err());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_tool_handler_trait() {
+async fn test_tool_handler_trait() -> Result<(), Box<dyn std::error::Error>> {
     let mut service = ToolService::new();
 
     let tool = ToolBuilder::new("greet")
@@ -98,15 +101,16 @@ async fn test_tool_handler_trait() {
     let ctx = Context::new(&req_id, None, &client_caps, &server_caps, protocol_version, &peer);
 
     // Use the ToolHandler trait
-    let tools = service.list_tools(&ctx).await.unwrap();
+    let tools = service.list_tools(&ctx).await?;
     assert_eq!(tools.len(), 1);
 
     let result = service.call_tool("greet", serde_json::json!({"name": "Alice"}), &ctx).await;
     assert!(result.is_ok());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_multiple_tools() {
+async fn test_multiple_tools() -> Result<(), Box<dyn std::error::Error>> {
     let mut service = ToolService::new();
 
     // Register multiple tools
@@ -126,24 +130,26 @@ async fn test_multiple_tools() {
     let (req_id, client_caps, server_caps, protocol_version, peer) = make_test_context();
     let ctx = Context::new(&req_id, None, &client_caps, &server_caps, protocol_version, &peer);
 
-    let tools = service.list_tools(&ctx).await.unwrap();
+    let tools = service.list_tools(&ctx).await?;
     assert_eq!(tools.len(), 4);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_tool_builder_annotations() {
+async fn test_tool_builder_annotations() -> Result<(), Box<dyn std::error::Error>> {
     let tool = ToolBuilder::new("delete_file")
         .description("Delete a file")
         .destructive(true)
         .build();
 
     assert!(tool.annotations.is_some());
-    let annotations = tool.annotations.unwrap();
+    let annotations = tool.annotations.ok_or("Annotations should be present")?;
     assert_eq!(annotations.destructive_hint, Some(true));
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_tool_output_variants() {
+async fn test_tool_output_variants() -> Result<(), Box<dyn std::error::Error>> {
     // Test text output
     let text_output = ToolOutput::text("Hello");
     let result = text_output.into_call_result();
@@ -153,4 +159,5 @@ async fn test_tool_output_variants() {
     let error_output = ToolOutput::error("Something went wrong");
     let result = error_output.into_call_result();
     assert!(result.is_error.unwrap_or(false));
+    Ok(())
 }

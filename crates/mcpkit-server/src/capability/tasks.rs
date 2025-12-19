@@ -363,36 +363,34 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_task_lifecycle() {
+    async fn test_task_lifecycle() -> Result<(), Box<dyn std::error::Error>> {
         let manager = Arc::new(TaskManager::new());
 
         let handle = manager.create(Some("processor"));
         let task_id = handle.id().clone();
 
         // Start running
-        handle.running().await.unwrap();
-        let state = manager.get(&task_id).unwrap();
+        handle.running().await?;
+        let state = manager.get(&task_id).ok_or("Task not found")?;
         assert_eq!(state.task.status, TaskStatus::Running);
 
         // Report progress
-        handle
-            .progress(50, Some(100), Some("Halfway done"))
-            .await
-            .unwrap();
-        let state = manager.get(&task_id).unwrap();
+        handle.progress(50, Some(100), Some("Halfway done")).await?;
+        let state = manager.get(&task_id).ok_or("Task not found")?;
         assert_eq!(state.task.progress.as_ref().map(|p| p.current), Some(50));
 
         // Complete
         handle
             .complete(serde_json::json!({"result": "success"}))
-            .await
-            .unwrap();
-        let state = manager.get(&task_id).unwrap();
+            .await?;
+        let state = manager.get(&task_id).ok_or("Task not found")?;
         assert_eq!(state.task.status, TaskStatus::Completed);
+
+        Ok(())
     }
 
     #[test]
-    fn test_task_cancellation() {
+    fn test_task_cancellation() -> Result<(), Box<dyn std::error::Error>> {
         let manager = Arc::new(TaskManager::new());
 
         let handle = manager.create(None);
@@ -400,21 +398,25 @@ mod tests {
 
         assert!(!handle.is_cancelled());
 
-        manager.cancel(&task_id).unwrap();
+        manager.cancel(&task_id)?;
 
         assert!(handle.is_cancelled());
-        let state = manager.get(&task_id).unwrap();
+        let state = manager.get(&task_id).ok_or("Task not found")?;
         assert_eq!(state.task.status, TaskStatus::Cancelled);
+
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_task_service() {
+    async fn test_task_service() -> Result<(), Box<dyn std::error::Error>> {
         let service = TaskService::new();
 
         let handle = service.create(Some("service-task"));
-        handle.running().await.unwrap();
+        handle.running().await?;
 
         let tasks = service.manager.list();
         assert_eq!(tasks.len(), 1);
+
+        Ok(())
     }
 }

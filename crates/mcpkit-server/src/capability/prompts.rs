@@ -307,7 +307,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_prompt_service() {
+    async fn test_prompt_service() -> Result<(), Box<dyn std::error::Error>> {
         let mut service = PromptService::new();
 
         let prompt = PromptBuilder::new("greeting")
@@ -340,9 +340,10 @@ mod tests {
 
         let result = service
             .render("greeting", Some(serde_json::json!({"name": "Alice"})), &ctx)
-            .await
-            .unwrap();
+            .await?;
 
         assert!(!result.messages.is_empty());
+
+        Ok(())
     }
 }

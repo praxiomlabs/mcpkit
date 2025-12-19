@@ -117,7 +117,7 @@ mod tests {
     }
 
     #[test]
-    fn test_complete_request_serialization() {
+    fn test_complete_request_serialization() -> Result<(), Box<dyn std::error::Error>> {
         let request = CompleteRequest {
             ref_: CompletionRef::prompt("test"),
             argument: CompletionArgument {
@@ -126,10 +126,11 @@ mod tests {
             },
         };
 
-        let json = serde_json::to_string(&request).unwrap();
+        let json = serde_json::to_string(&request)?;
         assert!(json.contains("ref/prompt"));
 
-        let parsed: CompleteRequest = serde_json::from_str(&json).unwrap();
+        let parsed: CompleteRequest = serde_json::from_str(&json)?;
         assert_eq!(parsed.argument.name, "arg1");
+        Ok(())
     }
 }

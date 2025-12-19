@@ -9,7 +9,7 @@ use serde_json::json;
 
 /// Test that messages can be sent and received over a memory transport
 #[tokio::test]
-async fn test_memory_transport_basic() {
+async fn test_memory_transport_basic() -> Result<(), Box<dyn std::error::Error>> {
     let (client, server) = MemoryTransport::pair();
 
     // Both ends should be connected
@@ -18,24 +18,25 @@ async fn test_memory_transport_basic() {
 
     // Send a request from client
     let request = Request::new("tools/list", 1u64);
-    client.send(Message::Request(request)).await.unwrap();
+    client.send(Message::Request(request)).await?;
 
     // Receive on server
-    let received = server.recv().await.unwrap().unwrap();
+    let received = server.recv().await?.ok_or("Expected message from server")?;
     assert!(matches!(received, Message::Request(_)));
 
     // Send a response from server
     let response = Response::success(1u64, json!({"tools": []}));
-    server.send(Message::Response(response)).await.unwrap();
+    server.send(Message::Response(response)).await?;
 
     // Receive on client
-    let received = client.recv().await.unwrap().unwrap();
+    let received = client.recv().await?.ok_or("Expected message from client")?;
     assert!(matches!(received, Message::Response(_)));
+    Ok(())
 }
 
 /// Test request/response roundtrip
 #[tokio::test]
-async fn test_request_response_roundtrip() {
+async fn test_request_response_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
     let (client, server) = MemoryTransport::pair();
 
     // Client sends initialize request
@@ -51,11 +52,11 @@ async fn test_request_response_roundtrip() {
             }
         }),
     );
-    client.send(Message::Request(init_request)).await.unwrap();
+    client.send(Message::Request(init_request)).await?;
 
     // Server receives
-    let msg = server.recv().await.unwrap().unwrap();
-    let request = msg.as_request().unwrap();
+    let msg = server.recv().await?.ok_or("Expected message from server")?;
+    let request = msg.as_request().ok_or("Expected request message")?;
     assert_eq!(request.method, "initialize");
     assert_eq!(request.id, RequestId::Number(1));
 
@@ -71,110 +72,132 @@ async fn test_request_response_roundtrip() {
             }
         }),
     );
-    server.send(Message::Response(init_response)).await.unwrap();
+    server.send(Message::Response(init_response)).await?;
 
     // Client receives
-    let msg = client.recv().await.unwrap().unwrap();
-    let response = msg.as_response().unwrap();
+    let msg = client.recv().await?.ok_or("Expected message from client")?;
+    let response = msg.as_response().ok_or("Expected response message")?;
     assert!(response.is_success());
 
-    let result = response.result.as_ref().unwrap();
+    let result = response
+        .result
+        .as_ref()
+        .ok_or("Expected result in response")?;
     assert_eq!(result["protocolVersion"], "2025-11-25");
     assert_eq!(result["serverInfo"]["name"], "test-server");
+    Ok(())
 }
 
 /// Test notification (no response expected)
 #[tokio::test]
-async fn test_notification_roundtrip() {
+async fn test_notification_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
     let (client, server) = MemoryTransport::pair();
 
     // Client sends initialized notification
     let notification = Notification::new("notifications/initialized");
-    client
-        .send(Message::Notification(notification))
-        .await
-        .unwrap();
+    client.send(Message::Notification(notification)).await?;
 
     // Server receives
-    let msg = server.recv().await.unwrap().unwrap();
-    let notification = msg.as_notification().unwrap();
+    let msg = server.recv().await?.ok_or("Expected message from server")?;
+    let notification = msg
+        .as_notification()
+        .ok_or("Expected notification message")?;
     assert_eq!(notification.method, "notifications/initialized");
     assert!(msg.id().is_none()); // Notifications have no ID
+    Ok(())
 }
 
 /// Test multiple messages in sequence
 #[tokio::test]
-async fn test_message_sequence() {
+async fn test_message_sequence() -> Result<(), Box<dyn std::error::Error>> {
     let (client, server) = MemoryTransport::pair();
 
     // Send multiple requests
     for i in 1..=5 {
         let request = Request::new("ping", i as u64);
-        client.send(Message::Request(request)).await.unwrap();
+        client.send(Message::Request(request)).await?;
     }
 
     // Receive and respond to each
     for i in 1..=5 {
-        let msg = server.recv().await.unwrap().unwrap();
-        let request = msg.as_request().unwrap();
+        let msg = server.recv().await?.ok_or("Expected message from server")?;
+        let request = msg.as_request().ok_or("Expected request message")?;
         assert_eq!(request.id, RequestId::Number(i));
 
         let response = Response::success(i, json!({"pong": i}));
-        server.send(Message::Response(response)).await.unwrap();
+        server.send(Message::Response(response)).await?;
     }
 
     // Client receives all responses
     for i in 1..=5 {
-        let msg = client.recv().await.unwrap().unwrap();
-        let response = msg.as_response().unwrap();
+        let msg = client.recv().await?.ok_or("Expected message from client")?;
+        let response = msg.as_response().ok_or("Expected response message")?;
         assert_eq!(response.id, RequestId::Number(i));
-        assert_eq!(response.result.as_ref().unwrap()["pong"], i);
+        assert_eq!(
+            response
+                .result
+                .as_ref()
+                .ok_or("Expected result")?
+                .get("pong")
+                .ok_or("Expected pong field")?,
+            i
+        );
     }
+    Ok(())
 }
 
 /// Test transport disconnect
 #[tokio::test]
-async fn test_transport_disconnect() {
+async fn test_transport_disconnect() -> Result<(), Box<dyn std::error::Error>> {
     let (client, server) = MemoryTransport::pair();
 
     assert!(client.is_connected());
     assert!(server.is_connected());
 
     // Close the client
-    client.close().await.unwrap();
+    client.close().await?;
 
     assert!(!client.is_connected());
     // Note: In memory transport, closing one end closes both
     assert!(!server.is_connected());
+    Ok(())
 }
 
 /// Test error response
 #[tokio::test]
-async fn test_error_response() {
+async fn test_error_response() -> Result<(), Box<dyn std::error::Error>> {
     let (client, server) = MemoryTransport::pair();
 
     // Client sends request for unknown method
     let request = Request::new("unknown/method", 1u64);
-    client.send(Message::Request(request)).await.unwrap();
+    client.send(Message::Request(request)).await?;
 
     // Server receives
-    let _ = server.recv().await.unwrap().unwrap();
+    let _ = server.recv().await?.ok_or("Expected message from server")?;
 
     // Server sends error response
     let error = mcpkit::error::JsonRpcError::method_not_found("Method unknown/method not found");
     let response = Response::error(1u64, error);
-    server.send(Message::Response(response)).await.unwrap();
+    server.send(Message::Response(response)).await?;
 
     // Client receives error
-    let msg = client.recv().await.unwrap().unwrap();
-    let response = msg.as_response().unwrap();
+    let msg = client.recv().await?.ok_or("Expected message from client")?;
+    let response = msg.as_response().ok_or("Expected response message")?;
     assert!(response.is_error());
-    assert_eq!(response.error.as_ref().unwrap().code, -32601);
+    assert_eq!(
+        response
+            .error
+            .as_ref()
+            .ok_or("Expected error in response")?
+            .code,
+        -32601
+    );
+    Ok(())
 }
 
 /// Test tool call lifecycle over transport
 #[tokio::test]
-async fn test_tool_call_lifecycle() {
+async fn test_tool_call_lifecycle() -> Result<(), Box<dyn std::error::Error>> {
     let (client, server) = MemoryTransport::pair();
 
     // 1. Initialize
@@ -187,8 +210,8 @@ async fn test_tool_call_lifecycle() {
             "clientInfo": {"name": "test", "version": "1.0"}
         }),
     );
-    client.send(Message::Request(init_request)).await.unwrap();
-    let _ = server.recv().await.unwrap();
+    client.send(Message::Request(init_request)).await?;
+    let _ = server.recv().await?;
 
     let init_response = Response::success(
         1u64,
@@ -198,21 +221,18 @@ async fn test_tool_call_lifecycle() {
             "serverInfo": {"name": "test-server", "version": "1.0"}
         }),
     );
-    server.send(Message::Response(init_response)).await.unwrap();
-    let _ = client.recv().await.unwrap();
+    server.send(Message::Response(init_response)).await?;
+    let _ = client.recv().await?;
 
     // 2. Send initialized notification
     let initialized = Notification::new("notifications/initialized");
-    client
-        .send(Message::Notification(initialized))
-        .await
-        .unwrap();
-    let _ = server.recv().await.unwrap();
+    client.send(Message::Notification(initialized)).await?;
+    let _ = server.recv().await?;
 
     // 3. List tools
     let list_tools = Request::new("tools/list", 2u64);
-    client.send(Message::Request(list_tools)).await.unwrap();
-    let _ = server.recv().await.unwrap();
+    client.send(Message::Request(list_tools)).await?;
+    let _ = server.recv().await?;
 
     let tools_response = Response::success(
         2u64,
@@ -229,16 +249,18 @@ async fn test_tool_call_lifecycle() {
             }]
         }),
     );
-    server
-        .send(Message::Response(tools_response))
-        .await
-        .unwrap();
+    server.send(Message::Response(tools_response)).await?;
 
-    let msg = client.recv().await.unwrap().unwrap();
-    let response = msg.as_response().unwrap();
-    let tools = response.result.as_ref().unwrap()["tools"]
+    let msg = client.recv().await?.ok_or("Expected message from client")?;
+    let response = msg.as_response().ok_or("Expected response message")?;
+    let tools = response
+        .result
+        .as_ref()
+        .ok_or("Expected result")?
+        .get("tools")
+        .ok_or("Expected tools field")?
         .as_array()
-        .unwrap();
+        .ok_or("Expected tools array")?;
     assert_eq!(tools.len(), 1);
     assert_eq!(tools[0]["name"], "echo");
 
@@ -251,10 +273,10 @@ async fn test_tool_call_lifecycle() {
             "arguments": {"message": "Hello, MCP!"}
         }),
     );
-    client.send(Message::Request(call_tool)).await.unwrap();
+    client.send(Message::Request(call_tool)).await?;
 
-    let msg = server.recv().await.unwrap().unwrap();
-    let request = msg.as_request().unwrap();
+    let msg = server.recv().await?.ok_or("Expected message from server")?;
+    let request = msg.as_request().ok_or("Expected request message")?;
     assert_eq!(request.method, "tools/call");
 
     // Server processes and responds
@@ -265,21 +287,22 @@ async fn test_tool_call_lifecycle() {
             "isError": false
         }),
     );
-    server.send(Message::Response(call_response)).await.unwrap();
+    server.send(Message::Response(call_response)).await?;
 
-    let msg = client.recv().await.unwrap().unwrap();
-    let response = msg.as_response().unwrap();
+    let msg = client.recv().await?.ok_or("Expected message from client")?;
+    let response = msg.as_response().ok_or("Expected response message")?;
     assert!(response.is_success());
-    let result = response.result.as_ref().unwrap();
+    let result = response.result.as_ref().ok_or("Expected result")?;
     assert_eq!(result["content"][0]["text"], "Hello, MCP!");
+    Ok(())
 }
 
 /// Test JSON-RPC wire format serialization
 #[tokio::test]
-async fn test_wire_format() {
+async fn test_wire_format() -> Result<(), Box<dyn std::error::Error>> {
     // Verify messages serialize to correct JSON-RPC format
     let request = Request::new("test/method", 1u64);
-    let json = serde_json::to_value(&request).unwrap();
+    let json = serde_json::to_value(&request)?;
 
     assert_eq!(json["jsonrpc"], "2.0");
     assert_eq!(json["method"], "test/method");
@@ -287,7 +310,7 @@ async fn test_wire_format() {
 
     // Response
     let response = Response::success(1u64, json!({"result": "value"}));
-    let json = serde_json::to_value(&response).unwrap();
+    let json = serde_json::to_value(&response)?;
 
     assert_eq!(json["jsonrpc"], "2.0");
     assert_eq!(json["id"], 1);
@@ -296,16 +319,17 @@ async fn test_wire_format() {
 
     // Notification
     let notification = Notification::new("notifications/test");
-    let json = serde_json::to_value(&notification).unwrap();
+    let json = serde_json::to_value(&notification)?;
 
     assert_eq!(json["jsonrpc"], "2.0");
     assert_eq!(json["method"], "notifications/test");
     assert!(json.get("id").is_none());
+    Ok(())
 }
 
 /// Test message parsing from JSON
 #[tokio::test]
-async fn test_wire_format_parsing() {
+async fn test_wire_format_parsing() -> Result<(), Box<dyn std::error::Error>> {
     // Parse request
     let request_json = json!({
         "jsonrpc": "2.0",
@@ -313,7 +337,7 @@ async fn test_wire_format_parsing() {
         "method": "test/method",
         "params": {"key": "value"}
     });
-    let msg: Message = serde_json::from_value(request_json).unwrap();
+    let msg: Message = serde_json::from_value(request_json)?;
     assert!(msg.is_request());
     assert_eq!(msg.method(), Some("test/method"));
     assert_eq!(msg.id(), Some(&RequestId::Number(42)));
@@ -324,7 +348,7 @@ async fn test_wire_format_parsing() {
         "id": 42,
         "result": {"data": "test"}
     });
-    let msg: Message = serde_json::from_value(response_json).unwrap();
+    let msg: Message = serde_json::from_value(response_json)?;
     assert!(msg.is_response());
 
     // Parse notification
@@ -332,7 +356,8 @@ async fn test_wire_format_parsing() {
         "jsonrpc": "2.0",
         "method": "notifications/test"
     });
-    let msg: Message = serde_json::from_value(notification_json).unwrap();
+    let msg: Message = serde_json::from_value(notification_json)?;
     assert!(msg.is_notification());
     assert!(msg.id().is_none());
+    Ok(())
 }

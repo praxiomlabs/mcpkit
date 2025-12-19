@@ -600,7 +600,7 @@ mod tests {
     }
 
     #[test]
-    fn test_fallible_accessors() {
+    fn test_fallible_accessors() -> Result<(), Box<dyn std::error::Error>> {
         let client = ClientInfo::new("test-client", "1.0.0");
         let server = ServerInfo::new("test-server", "2.0.0");
         let client_caps = ClientCapabilities::new();
@@ -617,8 +617,19 @@ mod tests {
         assert!(conn.try_server_capabilities().is_some());
 
         // Test values are correct
-        assert_eq!(conn.try_client_info().unwrap().name, "test-client");
-        assert_eq!(conn.try_server_info().unwrap().name, "test-server");
-        assert!(conn.try_server_capabilities().unwrap().has_tools());
+        assert_eq!(
+            conn.try_client_info().ok_or("Expected client info")?.name,
+            "test-client"
+        );
+        assert_eq!(
+            conn.try_server_info().ok_or("Expected server info")?.name,
+            "test-server"
+        );
+        assert!(
+            conn.try_server_capabilities()
+                .ok_or("Expected server capabilities")?
+                .has_tools()
+        );
+        Ok(())
     }
 }

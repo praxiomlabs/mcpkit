@@ -28,7 +28,7 @@ fn make_test_context() -> (
 }
 
 #[tokio::test]
-async fn test_tool_service_basic() {
+async fn test_tool_service_basic() -> Result<(), Box<dyn std::error::Error>> {
     // Create a tool service
     let mut service = ToolService::new();
 
@@ -56,10 +56,11 @@ async fn test_tool_service_basic() {
     let tools = service.list();
     assert_eq!(tools.len(), 1);
     assert_eq!(tools[0].name, "add");
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_tool_call() {
+async fn test_tool_call() -> Result<(), Box<dyn std::error::Error>> {
     let mut service = ToolService::new();
 
     let tool = ToolBuilder::new("multiply")
@@ -94,15 +95,16 @@ async fn test_tool_call() {
         .await;
     assert!(result.is_ok());
 
-    let output = result.unwrap();
+    let output = result?;
     // Convert ToolOutput to CallToolResult via From trait
     let call_result: CallToolResult = output.into();
     assert!(!call_result.is_error.unwrap_or(false));
     assert!(!call_result.content.is_empty());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_tool_not_found() {
+async fn test_tool_not_found() -> Result<(), Box<dyn std::error::Error>> {
     let service = ToolService::new();
 
     let (req_id, client_caps, server_caps, protocol_version, peer) = make_test_context();
@@ -119,10 +121,11 @@ async fn test_tool_not_found() {
         .call("nonexistent", serde_json::json!({}), &ctx)
         .await;
     assert!(result.is_err());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_tool_handler_trait() {
+async fn test_tool_handler_trait() -> Result<(), Box<dyn std::error::Error>> {
     let mut service = ToolService::new();
 
     let tool = ToolBuilder::new("greet")
@@ -145,17 +148,18 @@ async fn test_tool_handler_trait() {
     );
 
     // Use the ToolHandler trait
-    let tools = service.list_tools(&ctx).await.unwrap();
+    let tools = service.list_tools(&ctx).await?;
     assert_eq!(tools.len(), 1);
 
     let result = service
         .call_tool("greet", serde_json::json!({"name": "Alice"}), &ctx)
         .await;
     assert!(result.is_ok());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_multiple_tools() {
+async fn test_multiple_tools() -> Result<(), Box<dyn std::error::Error>> {
     let mut service = ToolService::new();
 
     // Register multiple tools
@@ -182,12 +186,13 @@ async fn test_multiple_tools() {
         &peer,
     );
 
-    let tools = service.list_tools(&ctx).await.unwrap();
+    let tools = service.list_tools(&ctx).await?;
     assert_eq!(tools.len(), 4);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_tool_builder_with_schema() {
+async fn test_tool_builder_with_schema() -> Result<(), Box<dyn std::error::Error>> {
     let tool = ToolBuilder::new("search")
         .description("Search the database")
         .input_schema(serde_json::json!({
@@ -202,10 +207,11 @@ async fn test_tool_builder_with_schema() {
     assert_eq!(tool.name, "search");
     assert_eq!(tool.description.as_deref(), Some("Search the database"));
     assert!(tool.input_schema["properties"]["query"].is_object());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_tool_output_variants() {
+async fn test_tool_output_variants() -> Result<(), Box<dyn std::error::Error>> {
     // Test text output
     let text_output = ToolOutput::text("Hello");
     let result: CallToolResult = text_output.into();
@@ -215,19 +221,21 @@ async fn test_tool_output_variants() {
     let error_output = ToolOutput::error("Something went wrong");
     let result: CallToolResult = error_output.into();
     assert!(result.is_error.unwrap_or(false));
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_tool_output_error_with_suggestion() {
+async fn test_tool_output_error_with_suggestion() -> Result<(), Box<dyn std::error::Error>> {
     let output = ToolOutput::error_with_suggestion("Invalid input", "Try using a valid value");
     let result: CallToolResult = output.into();
     assert!(result.is_error.unwrap_or(false));
     // The suggestion should be appended to the content
     assert!(!result.content.is_empty());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_tool_builder_annotations() {
+async fn test_tool_builder_annotations() -> Result<(), Box<dyn std::error::Error>> {
     // Test destructive tool
     let tool = ToolBuilder::new("delete_file")
         .description("Delete a file from the filesystem")
@@ -235,7 +243,10 @@ async fn test_tool_builder_annotations() {
         .build();
 
     assert!(tool.annotations.is_some());
-    let annotations = tool.annotations.as_ref().unwrap();
+    let annotations = tool
+        .annotations
+        .as_ref()
+        .ok_or("Annotations should be present")?;
     assert_eq!(annotations.destructive_hint, Some(true));
     assert_eq!(annotations.read_only_hint, Some(false));
     assert_eq!(annotations.idempotent_hint, Some(false));
@@ -247,7 +258,10 @@ async fn test_tool_builder_annotations() {
         .build();
 
     assert!(tool.annotations.is_some());
-    let annotations = tool.annotations.as_ref().unwrap();
+    let annotations = tool
+        .annotations
+        .as_ref()
+        .ok_or("Annotations should be present")?;
     assert_eq!(annotations.read_only_hint, Some(true));
     assert_eq!(annotations.destructive_hint, Some(false));
 
@@ -258,7 +272,10 @@ async fn test_tool_builder_annotations() {
         .build();
 
     assert!(tool.annotations.is_some());
-    let annotations = tool.annotations.as_ref().unwrap();
+    let annotations = tool
+        .annotations
+        .as_ref()
+        .ok_or("Annotations should be present")?;
     assert_eq!(annotations.idempotent_hint, Some(true));
 
     // Test all annotations combined
@@ -270,14 +287,18 @@ async fn test_tool_builder_annotations() {
         .build();
 
     assert!(tool.annotations.is_some());
-    let annotations = tool.annotations.as_ref().unwrap();
+    let annotations = tool
+        .annotations
+        .as_ref()
+        .ok_or("Annotations should be present")?;
     assert_eq!(annotations.destructive_hint, Some(false));
     assert_eq!(annotations.read_only_hint, Some(true));
     assert_eq!(annotations.idempotent_hint, Some(true));
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_tool_service_preserves_annotations() {
+async fn test_tool_service_preserves_annotations() -> Result<(), Box<dyn std::error::Error>> {
     let mut service = ToolService::new();
 
     // Register a tool with annotations
@@ -296,8 +317,12 @@ async fn test_tool_service_preserves_annotations() {
     assert_eq!(tools.len(), 1);
     let tool = &tools[0];
     assert!(tool.annotations.is_some());
-    let annotations = tool.annotations.as_ref().unwrap();
+    let annotations = tool
+        .annotations
+        .as_ref()
+        .ok_or("Annotations should be present")?;
     assert_eq!(annotations.destructive_hint, Some(true));
+    Ok(())
 }
 
 /// A nested struct for testing schema generation.
@@ -323,7 +348,7 @@ struct Person {
 }
 
 #[test]
-fn test_nested_struct_schema_generation() {
+fn test_nested_struct_schema_generation() -> Result<(), Box<dyn std::error::Error>> {
     // Generate schema for the nested Address struct
     let address_schema = Address::tool_input_schema();
 
@@ -339,7 +364,9 @@ fn test_nested_struct_schema_generation() {
     assert!(addr_props["zip"].is_object());
 
     // Check required fields (street and city are required, zip is optional)
-    let addr_required = address_schema["required"].as_array().unwrap();
+    let addr_required = address_schema["required"]
+        .as_array()
+        .ok_or("Expected array")?;
     assert!(addr_required.contains(&serde_json::json!("street")));
     assert!(addr_required.contains(&serde_json::json!("city")));
     assert!(!addr_required.contains(&serde_json::json!("zip")));
@@ -370,8 +397,11 @@ fn test_nested_struct_schema_generation() {
     assert!(nested_props["zip"].is_object());
 
     // Check Person required fields
-    let person_required = person_schema["required"].as_array().unwrap();
+    let person_required = person_schema["required"]
+        .as_array()
+        .ok_or("Expected array")?;
     assert!(person_required.contains(&serde_json::json!("name")));
     assert!(person_required.contains(&serde_json::json!("age")));
     assert!(person_required.contains(&serde_json::json!("address")));
+    Ok(())
 }

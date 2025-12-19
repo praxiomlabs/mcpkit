@@ -366,7 +366,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_connection_lifecycle() {
+    async fn test_connection_lifecycle() -> Result<(), Box<dyn std::error::Error>> {
         let info = ServerInfo::new("test", "1.0.0");
         let caps = ServerCapabilities::default();
 
@@ -374,25 +374,26 @@ mod tests {
         let conn = Connection::new(info, caps);
 
         // Connect
-        let conn = conn.connect().await.unwrap();
+        let conn = conn.connect().await?;
 
         // Initialize
-        let conn = conn.initialize(ProtocolVersion::V2025_11_25).await.unwrap();
+        let conn = conn.initialize(ProtocolVersion::V2025_11_25).await?;
 
         // Complete
         let conn = conn
             .complete(ClientCapabilities::default(), ProtocolVersion::V2025_11_25)
-            .await
-            .unwrap();
+            .await?;
 
         // Verify ready state
         assert_eq!(conn.protocol_version(), ProtocolVersion::V2025_11_25);
 
         // Shutdown
-        let conn = conn.shutdown().await.unwrap();
+        let conn = conn.shutdown().await?;
 
         // Disconnect
-        conn.disconnect().await.unwrap();
+        conn.disconnect().await?;
+
+        Ok(())
     }
 
     #[test]

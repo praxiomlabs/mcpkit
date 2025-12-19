@@ -567,15 +567,16 @@ mod tests {
     }
 
     #[test]
-    fn test_session_expiry() {
+    fn test_session_expiry() -> Result<(), Box<dyn std::error::Error>> {
         let mut session = Session::new("test".to_string());
         assert!(!session.is_expired(Duration::from_secs(60)));
 
         // Simulate old session by setting last_active in the past
         session.last_active = Instant::now()
             .checked_sub(Duration::from_secs(120))
-            .unwrap();
+            .ok_or("Failed to subtract duration")?;
         assert!(session.is_expired(Duration::from_secs(60)));
+        Ok(())
     }
 
     #[test]
@@ -591,7 +592,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_session_manager() {
+    async fn test_session_manager() -> Result<(), Box<dyn std::error::Error>> {
         let manager = SessionManager::new();
         let (id, mut rx) = manager.create_session();
 
@@ -599,12 +600,13 @@ mod tests {
         assert!(manager.send_to_session(&id, "test message".to_string()));
 
         // Receive the message
-        let msg = rx.recv().await.expect("Should receive message");
+        let msg = rx.recv().await?;
         assert_eq!(msg, "test message");
 
         // Remove session
         manager.remove_session(&id);
         assert!(!manager.send_to_session(&id, "another".to_string()));
+        Ok(())
     }
 
     #[tokio::test]
@@ -708,7 +710,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_session_manager_with_event_store() {
+    async fn test_session_manager_with_event_store() -> Result<(), Box<dyn std::error::Error>> {
         let manager = SessionManager::new();
         let (id, _rx) = manager.create_session();
 
@@ -716,12 +718,13 @@ mod tests {
         let store = manager.get_event_store(&id);
         assert!(store.is_some());
 
-        let store = store.unwrap();
+        let store = store.ok_or("Event store not found")?;
         assert!(store.is_empty().await);
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_session_manager_send_with_storage() {
+    async fn test_session_manager_send_with_storage() -> Result<(), Box<dyn std::error::Error>> {
         let manager = SessionManager::new();
         let (id, mut rx) = manager.create_session();
 
@@ -731,20 +734,23 @@ mod tests {
         assert!(event_id.is_some());
 
         // Verify message was received
-        let msg = rx.recv().await.expect("Should receive message");
+        let msg = rx.recv().await?;
         assert_eq!(msg, "test data");
 
         // Verify event was stored
-        let store = manager.get_event_store(&id).unwrap();
+        let store = manager
+            .get_event_store(&id)
+            .ok_or("Event store not found")?;
         assert_eq!(store.len().await, 1);
 
         let events = store.get_all_events().await;
         assert_eq!(events[0].data, "test data");
         assert_eq!(events[0].event_type, "message");
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_session_manager_replay() {
+    async fn test_session_manager_replay() -> Result<(), Box<dyn std::error::Error>> {
         let manager = SessionManager::new();
         let (id, _rx) = manager.create_session();
 
@@ -755,13 +761,14 @@ mod tests {
 
         // Simulate reconnection - get events after evt2
         let events = manager
-            .get_events_for_replay(&id, &evt2.unwrap())
+            .get_events_for_replay(&id, &evt2.ok_or("Failed to get event ID")?)
             .await
-            .unwrap();
+            .ok_or("Failed to get events for replay")?;
 
         // Should only get msg3
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].data, "msg3");
+        Ok(())
     }
 
     #[test]

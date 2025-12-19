@@ -82,7 +82,8 @@ fn test_cancellation_token_cancel_via_clone() {
 // =============================================================================
 
 #[tokio::test]
-async fn test_cancelled_future_completes_immediately_when_already_cancelled() {
+async fn test_cancelled_future_completes_immediately_when_already_cancelled()
+-> Result<(), Box<dyn std::error::Error>> {
     let token = CancellationToken::new();
     token.cancel();
 
@@ -93,6 +94,7 @@ async fn test_cancelled_future_completes_immediately_when_already_cancelled() {
         result.is_ok(),
         "Should complete immediately when already cancelled"
     );
+    Ok(())
 }
 
 #[tokio::test]
@@ -165,7 +167,7 @@ async fn test_concurrent_cancellation_check() {
 }
 
 #[tokio::test]
-async fn test_concurrent_cancel_operations() {
+async fn test_concurrent_cancel_operations() -> Result<(), Box<dyn std::error::Error>> {
     let token = CancellationToken::new();
 
     // Spawn multiple tasks trying to cancel
@@ -179,11 +181,12 @@ async fn test_concurrent_cancel_operations() {
 
     // Wait for all tasks
     for handle in handles {
-        handle.await.unwrap();
+        handle.await?;
     }
 
     // Token should be cancelled
     assert!(token.is_cancelled());
+    Ok(())
 }
 
 // =============================================================================
@@ -226,7 +229,7 @@ async fn test_cancellation_stops_work() {
 }
 
 #[tokio::test]
-async fn test_cancellation_with_select() {
+async fn test_cancellation_with_select() -> Result<(), Box<dyn std::error::Error>> {
     let token = CancellationToken::new();
     let completed = Arc::new(AtomicU32::new(0));
     let completed_clone = completed.clone();
@@ -254,14 +257,14 @@ async fn test_cancellation_with_select() {
     token.cancel();
 
     // Worker should complete quickly via cancellation
-    let result = tokio::time::timeout(Duration::from_millis(100), worker).await;
-    assert!(result.is_ok(), "Should complete via cancellation");
-    assert!(!result.unwrap().unwrap(), "Should indicate cancellation");
+    let result = tokio::time::timeout(Duration::from_millis(100), worker).await??;
+    assert!(!result, "Should indicate cancellation");
     assert_eq!(
         completed.load(Ordering::Relaxed),
         0,
         "Work should not have completed"
     );
+    Ok(())
 }
 
 // =============================================================================
@@ -279,7 +282,8 @@ fn test_cancellation_token_is_send_sync() {
 // =============================================================================
 
 #[tokio::test]
-async fn test_multiple_cancelled_futures_from_same_token() {
+async fn test_multiple_cancelled_futures_from_same_token() -> Result<(), Box<dyn std::error::Error>>
+{
     let token = CancellationToken::new();
 
     // Create multiple futures from the same token
@@ -298,6 +302,7 @@ async fn test_multiple_cancelled_futures_from_same_token() {
     assert!(result1.is_ok(), "First future should complete");
     assert!(result2.is_ok(), "Second future should complete");
     assert!(result3.is_ok(), "Third future should complete");
+    Ok(())
 }
 
 // =============================================================================
@@ -414,7 +419,7 @@ async fn test_high_contention_cancellation() {
 // =============================================================================
 
 #[tokio::test]
-async fn test_cancellation_in_nested_async_context() {
+async fn test_cancellation_in_nested_async_context() -> Result<(), Box<dyn std::error::Error>> {
     let token = CancellationToken::new();
     let token_clone = token.clone();
 
@@ -432,8 +437,9 @@ async fn test_cancellation_in_nested_async_context() {
     tokio::time::sleep(Duration::from_millis(25)).await;
     token.cancel();
 
-    let result = handle.await.unwrap();
+    let result = handle.await?;
     assert!(!result, "Work should have been cancelled");
+    Ok(())
 }
 
 #[tokio::test]
@@ -468,7 +474,7 @@ async fn test_cancellation_race_with_completion() {
 }
 
 #[tokio::test]
-async fn test_cancellation_token_in_result_chain() {
+async fn test_cancellation_token_in_result_chain() -> Result<(), Box<dyn std::error::Error>> {
     async fn do_fallible_work(token: &CancellationToken) -> Result<String, &'static str> {
         if token.is_cancelled() {
             return Err("cancelled");
@@ -490,7 +496,8 @@ async fn test_cancellation_token_in_result_chain() {
     token.cancel();
     let result = do_fallible_work(&token).await;
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err(), "cancelled");
+    assert_eq!(result.err().ok_or("Expected error")?, "cancelled");
+    Ok(())
 }
 
 #[tokio::test]

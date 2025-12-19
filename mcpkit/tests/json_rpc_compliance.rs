@@ -8,62 +8,67 @@ use mcpkit::protocol::{Message, Notification, Request, RequestId, Response};
 use serde_json::json;
 
 #[test]
-fn test_request_id_number() {
+fn test_request_id_number() -> Result<(), Box<dyn std::error::Error>> {
     let id = RequestId::Number(42);
-    let json = serde_json::to_value(&id).unwrap();
+    let json = serde_json::to_value(&id)?;
     assert_eq!(json, json!(42));
 
-    let parsed: RequestId = serde_json::from_value(json).unwrap();
+    let parsed: RequestId = serde_json::from_value(json)?;
     assert_eq!(parsed, RequestId::Number(42));
+    Ok(())
 }
 
 #[test]
-fn test_request_id_string() {
+fn test_request_id_string() -> Result<(), Box<dyn std::error::Error>> {
     let id = RequestId::String("request-123".to_string());
-    let json = serde_json::to_value(&id).unwrap();
+    let json = serde_json::to_value(&id)?;
     assert_eq!(json, json!("request-123"));
 
-    let parsed: RequestId = serde_json::from_value(json).unwrap();
+    let parsed: RequestId = serde_json::from_value(json)?;
     assert_eq!(parsed, RequestId::String("request-123".to_string()));
+    Ok(())
 }
 
 #[test]
-fn test_request_serialization() {
+fn test_request_serialization() -> Result<(), Box<dyn std::error::Error>> {
     let request = Request::new("tools/list", 1u64);
 
-    let json = serde_json::to_value(&request).unwrap();
+    let json = serde_json::to_value(&request)?;
 
     assert_eq!(json["jsonrpc"], "2.0");
     assert_eq!(json["id"], 1);
     assert_eq!(json["method"], "tools/list");
+    Ok(())
 }
 
 #[test]
-fn test_request_with_params() {
+fn test_request_with_params() -> Result<(), Box<dyn std::error::Error>> {
     let request = Request::with_params("tools/call", 1u64, json!({"name": "search"}));
 
-    let json = serde_json::to_value(&request).unwrap();
+    let json = serde_json::to_value(&request)?;
 
     assert_eq!(json["jsonrpc"], "2.0");
     assert_eq!(json["id"], 1);
     assert_eq!(json["method"], "tools/call");
     assert!(json["params"].is_object());
+    Ok(())
 }
 
 #[test]
-fn test_response_success() {
+fn test_response_success() -> Result<(), Box<dyn std::error::Error>> {
     let response = Response::success(1u64, json!({"tools": []}));
 
-    let json = serde_json::to_value(&response).unwrap();
+    let json = serde_json::to_value(&response)?;
 
     assert_eq!(json["jsonrpc"], "2.0");
     assert_eq!(json["id"], 1);
     assert!(json["result"].is_object());
     assert!(json.get("error").is_none());
+    Ok(())
 }
 
 #[test]
-fn test_response_error() {
+fn test_response_error() -> Result<(), Box<dyn std::error::Error>> {
     let error = JsonRpcError {
         code: -32600,
         message: "Invalid Request".to_string(),
@@ -71,7 +76,7 @@ fn test_response_error() {
     };
     let response = Response::error(1u64, error);
 
-    let json = serde_json::to_value(&response).unwrap();
+    let json = serde_json::to_value(&response)?;
 
     assert_eq!(json["jsonrpc"], "2.0");
     assert_eq!(json["id"], 1);
@@ -79,33 +84,36 @@ fn test_response_error() {
     assert!(json["error"].is_object());
     assert_eq!(json["error"]["code"], -32600);
     assert_eq!(json["error"]["message"], "Invalid Request");
+    Ok(())
 }
 
 #[test]
-fn test_notification_serialization() {
+fn test_notification_serialization() -> Result<(), Box<dyn std::error::Error>> {
     let notification = Notification::new("notifications/initialized");
 
-    let json = serde_json::to_value(&notification).unwrap();
+    let json = serde_json::to_value(&notification)?;
 
     assert_eq!(json["jsonrpc"], "2.0");
     assert_eq!(json["method"], "notifications/initialized");
     assert!(json.get("id").is_none()); // Notifications have no ID
+    Ok(())
 }
 
 #[test]
-fn test_notification_with_params() {
+fn test_notification_with_params() -> Result<(), Box<dyn std::error::Error>> {
     let notification = Notification::with_params("notifications/progress", json!({"progress": 50}));
 
-    let json = serde_json::to_value(&notification).unwrap();
+    let json = serde_json::to_value(&notification)?;
 
     assert_eq!(json["jsonrpc"], "2.0");
     assert_eq!(json["method"], "notifications/progress");
     assert!(json["params"].is_object());
     assert!(json.get("id").is_none());
+    Ok(())
 }
 
 #[test]
-fn test_message_parsing() {
+fn test_message_parsing() -> Result<(), Box<dyn std::error::Error>> {
     // Request message
     let request_json = json!({
         "jsonrpc": "2.0",
@@ -113,7 +121,7 @@ fn test_message_parsing() {
         "method": "tools/list",
         "params": {}
     });
-    let msg: Message = serde_json::from_value(request_json).unwrap();
+    let msg: Message = serde_json::from_value(request_json)?;
     assert!(matches!(msg, Message::Request(_)));
 
     // Response message (success)
@@ -122,7 +130,7 @@ fn test_message_parsing() {
         "id": 1,
         "result": {"tools": []}
     });
-    let msg: Message = serde_json::from_value(response_json).unwrap();
+    let msg: Message = serde_json::from_value(response_json)?;
     assert!(matches!(msg, Message::Response(_)));
 
     // Notification message
@@ -130,8 +138,9 @@ fn test_message_parsing() {
         "jsonrpc": "2.0",
         "method": "notifications/initialized"
     });
-    let msg: Message = serde_json::from_value(notification_json).unwrap();
+    let msg: Message = serde_json::from_value(notification_json)?;
     assert!(matches!(msg, Message::Notification(_)));
+    Ok(())
 }
 
 #[test]
