@@ -200,22 +200,71 @@ We use a consistent test organization pattern across all crates:
 
 ### Writing Tests
 
+All tests should return `Result` and use the `?` operator instead of `.unwrap()`. This provides better error messages and aligns with Rust best practices.
+
+**Synchronous tests:**
+```rust
+#[test]
+fn test_something() -> Result<(), Box<dyn std::error::Error>> {
+    let value = some_fallible_operation()?;
+    assert_eq!(value, expected);
+    Ok(())
+}
+```
+
+**Asynchronous tests:**
+```rust
+#[tokio::test]
+async fn test_async_something() -> Result<(), Box<dyn std::error::Error>> {
+    let result = async_operation().await?;
+    assert!(result.is_valid());
+    Ok(())
+}
+```
+
+**Handling Option types:**
+```rust
+#[test]
+fn test_with_options() -> Result<(), Box<dyn std::error::Error>> {
+    let value = get_optional_value().ok_or("Expected value to be present")?;
+    assert_eq!(value, "expected");
+    Ok(())
+}
+```
+
+**Spawned tasks with errors:**
+```rust
+#[tokio::test]
+async fn test_with_spawned_task() -> Result<(), Box<dyn std::error::Error>> {
+    let handle = tokio::spawn(async move {
+        some_operation().await?;
+        Ok::<_, SomeError>(())
+    });
+    handle.await??;
+    Ok(())
+}
+```
+
+**Inline unit tests:**
 ```rust
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_something() {
-        // Unit test for internal function
-    }
-
-    #[tokio::test]
-    async fn test_async_something() {
-        // Async unit test
+    fn test_internal_function() -> Result<(), Box<dyn std::error::Error>> {
+        let result = internal_function()?;
+        assert_eq!(result, expected);
+        Ok(())
     }
 }
 ```
+
+**Why Result over `.unwrap()`:**
+- Better error messages showing exactly what failed
+- Consistent with production code patterns
+- Easier to debug test failures
+- More idiomatic Rust
 
 ### Test Utilities
 

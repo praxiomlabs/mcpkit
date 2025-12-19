@@ -1,6 +1,6 @@
-# Release Readiness Checklist
+# Releasing MCPkit
 
-A comprehensive checklist for validating release readiness, derived from systematic repository review. This extracts specific validation steps, consistency checks, and "blast radius" considerations required to bring a repository to release-ready standard.
+Comprehensive guide for releasing new versions of MCPkit to crates.io.
 
 ---
 
@@ -499,11 +499,14 @@ Quick reference: which `just` recipes cover which checklist sections.
 | **0. Pre-flight** | `just ci` | fmt, clippy, test, doc-check, link-check, version-sync |
 | **1. Code Hygiene** | `just wip-check` | TODO/FIXME/XXX/HACK, todo!/unimplemented! |
 | **1. Code Hygiene** | `just panic-audit` | .unwrap()/.expect() in production code |
+| **1. Code Hygiene** | `just typos` | Spell checking |
 | **1. Code Hygiene** | `just clippy` | Linting with warnings-as-errors |
+| **1. Code Hygiene** | `just machete` | Unused dependencies |
 | **2. Version Consistency** | `just version-sync` | README + getting-started version check |
 | **3. Environment** | `just msrv-check` | MSRV compilation verification |
 | **4. Security** | `just deny` | Licenses, bans, advisories |
 | **4. Security** | `just audit` | Security vulnerabilities |
+| **4. Security** | `just vet` | Supply chain audit |
 | **5. Documentation** | `just link-check` | Markdown link validation |
 | **5. Documentation** | `just doc-check` | Documentation builds without warnings |
 | **6. Build Verification** | `just ci-release` | Full CI + coverage + security + semver + msrv |
@@ -511,11 +514,12 @@ Quick reference: which `just` recipes cover which checklist sections.
 | **6. Build Verification** | `just examples` | Example compilation |
 | **7. Semver** | `just semver` | Breaking change detection |
 | **8. Publishing** | `just publish-dry` | Dry-run publish all crates |
+| **8. Publishing** | `just publish` | Publish all crates to crates.io |
 | **8. Publishing** | `just metadata-check` | Cargo.toml metadata verification |
 | **9. Git Protocol** | `just tag` | Create annotated version tag |
 | **9. Git Protocol** | `just release-check` | Full release validation + git state |
 
 **Comprehensive Release Command:**
 ```bash
-just release-check    # Runs: ci-release + wip-check + panic-audit + metadata-check + git checks
+just release-check    # Runs: ci-release + wip-check + panic-audit + version-sync + typos + machete + metadata-check + git checks
 ```
