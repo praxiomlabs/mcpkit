@@ -75,20 +75,22 @@ impl FilesystemServer {
         };
 
         // For non-existent files, canonicalize the parent directory
-        if let Some(parent) = target.parent()
-            && parent.exists()
-        {
-            let canonical_parent = parent
-                .canonicalize()
-                .map_err(|e| format!("Failed to resolve parent directory: {e}"))?;
+        // Note: Nested if is intentional for MSRV 1.85 compatibility (if-let chains are 1.89+)
+        #[allow(clippy::collapsible_if)]
+        if let Some(parent) = target.parent() {
+            if parent.exists() {
+                let canonical_parent = parent
+                    .canonicalize()
+                    .map_err(|e| format!("Failed to resolve parent directory: {e}"))?;
 
-            if !canonical_parent.starts_with(&self.allowed_root) {
-                return Err(format!("Path '{path}' is outside the allowed directory"));
-            }
+                if !canonical_parent.starts_with(&self.allowed_root) {
+                    return Err(format!("Path '{path}' is outside the allowed directory"));
+                }
 
-            // Return the target path with canonicalized parent
-            if let Some(file_name) = target.file_name() {
-                return Ok(canonical_parent.join(file_name));
+                // Return the target path with canonicalized parent
+                if let Some(file_name) = target.file_name() {
+                    return Ok(canonical_parent.join(file_name));
+                }
             }
         }
 
@@ -360,11 +362,12 @@ impl FilesystemServer {
                 }
 
                 // Recurse into directories (but not if pattern doesn't use **)
-                if let Ok(ft) = entry.file_type().await
-                    && ft.is_dir()
-                    && !ft.is_symlink()
-                {
-                    stack.push(path);
+                // Note: Nested if is intentional for MSRV 1.85 compatibility (if-let chains are 1.89+)
+                #[allow(clippy::collapsible_if)]
+                if let Ok(ft) = entry.file_type().await {
+                    if ft.is_dir() && !ft.is_symlink() {
+                        stack.push(path);
+                    }
                 }
             }
         }
