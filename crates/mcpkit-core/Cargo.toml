@@ -52,6 +52,11 @@ workspace = true
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
+[package.metadata.cargo-machete]
+# futures: re-exported for async trait bounds
+# schemars: used via derive macros in type definitions
+ignored = ["futures", "schemars"]
+
 [[bench]]
 name = "protocol"
 harness = false

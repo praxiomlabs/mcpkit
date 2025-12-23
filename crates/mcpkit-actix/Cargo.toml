@@ -46,3 +46,10 @@ workspace = true
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
+
+[package.metadata.cargo-machete]
+# actix-rt: provides runtime for actix-web
+# actix-web-actors: WebSocket actor support
+# mcpkit-transport: re-exported transport types
+# serde: used via derive macros
+ignored = ["actix-rt", "actix-web-actors", "mcpkit-transport", "serde"]

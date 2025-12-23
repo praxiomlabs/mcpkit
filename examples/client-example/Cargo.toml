@@ -17,3 +17,6 @@ serde_json = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 futures = "0.3"
+
+[package.metadata.cargo-machete]
+ignored = ["futures", "mcpkit", "mcpkit-client", "mcpkit-transport", "serde"]

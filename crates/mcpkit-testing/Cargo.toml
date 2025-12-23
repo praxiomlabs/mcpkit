@@ -32,3 +32,10 @@ workspace = true
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
+
+[package.metadata.cargo-machete]
+# futures: used for async stream operations in tests
+# mcpkit-transport: re-exported types used in mock implementations
+# serde: used via derive macros
+# tokio: runtime features used in test setup
+ignored = ["futures", "mcpkit-transport", "serde", "tokio"]

@@ -34,3 +34,9 @@ workspace = true
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
+
+[package.metadata.cargo-machete]
+# futures: used for async traits and Stream types
+# serde: used via derive macros
+# thiserror: used via derive macros
+ignored = ["futures", "serde", "thiserror"]

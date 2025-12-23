@@ -20,3 +20,6 @@ axum = "0.8"
 tower = "0.4"
 uuid = { version = "1", features = ["v4"] }
 async-stream = "0.3"
+
+[package.metadata.cargo-machete]
+ignored = ["mcpkit", "mcpkit-server", "mcpkit-transport", "serde", "tower"]

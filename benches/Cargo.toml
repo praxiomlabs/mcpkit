@@ -35,3 +35,8 @@ criterion.workspace = true
 
 [lints]
 workspace = true
+
+[package.metadata.cargo-machete]
+# mcpkit-server: used in handler benchmarks
+# mcpkit-transport: used in transport benchmarks
+ignored = ["mcpkit-server", "mcpkit-transport"]

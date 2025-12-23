@@ -45,3 +45,9 @@ workspace = true
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
+
+[package.metadata.cargo-machete]
+# mcpkit-transport: re-exported transport types
+# serde: used via derive macros
+# tower: middleware support via axum
+ignored = ["mcpkit-transport", "serde", "tower"]
