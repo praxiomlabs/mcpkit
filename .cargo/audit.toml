@@ -1,0 +1,33 @@
+# cargo-audit configuration
+# https://rustsec.org/
+
+[advisories]
+# Advisories to ignore with documented rationale
+ignore = [
+    # RUSTSEC-2025-0052: async-std project discontinued
+    # - This is NOT a security vulnerability, just a project status notice
+    # - async-std is an optional runtime for users who prefer it over tokio
+    # - The crate remains functional and sound, just no longer actively maintained
+    # - Users who need long-term support should use the default tokio runtime
+    # - See: https://rustsec.org/advisories/RUSTSEC-2025-0052
+    "RUSTSEC-2025-0052",
+
+    # RUSTSEC-2023-0071: rsa crate Marvin Attack timing sidechannel
+    # - Affects RSA decryption via timing analysis, medium severity (5.9)
+    # - Pulled in transitively through sqlx-mysql, even when only using sqlite
+    # - This is a known sqlx issue: https://github.com/launchbadge/sqlx/issues/2911
+    # - Our database-server-example ONLY uses sqlite, not MySQL
+    # - No network-accessible RSA operations are performed in our code
+    # - No fixed version available as of 2025-12
+    # - Monitor: https://rustsec.org/advisories/RUSTSEC-2023-0071
+    "RUSTSEC-2023-0071",
+
+    # RUSTSEC-2024-0436: paste crate no longer maintained
+    # - Only pulled in through rmcp (dev-dependency for comparison benchmarks)
+    # - Not used in production code paths
+    # - See: https://rustsec.org/advisories/RUSTSEC-2024-0436
+    "RUSTSEC-2024-0436",
+]
+
+# Treat unmaintained crates as warnings, not errors
+informational_warnings = ["unmaintained"]

@@ -1,0 +1,25 @@
+# Typos configuration for mcpkit
+# https://github.com/crate-ci/typos
+
+[default]
+extend-ignore-re = [
+    # Hex strings in trace IDs and similar contexts
+    "[0-9a-f]{16,}",
+]
+
+[default.extend-words]
+# OAuth security term: token mis-redemption (incorrect use at wrong resource)
+mis = "mis"
+
+[files]
+# Ignore compile-fail tests (intentional typos for error message testing)
+extend-exclude = [
+    "crates/mcpkit-macros/tests/compile-fail/*.rs",
+    "crates/mcpkit-macros/tests/compile-fail/*.stderr",
+]
+
+[default.extend-identifiers]
+# Test function names and test data
+descripion = "descripion"  # Intentional in error.rs test for levenshtein
+nam = "nam"                # Intentional in error.rs test for find_similar
+abd = "abd"                # Intentional in error.rs test for levenshtein
