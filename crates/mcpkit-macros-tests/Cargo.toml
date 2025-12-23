@@ -1,0 +1,16 @@
+[package]
+name = "mcpkit-macros-tests"
+version = "0.0.0"
+edition.workspace = true
+publish = false
+description = "Integration tests for mcpkit-macros (not published)"
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+mcpkit = { path = "../../mcpkit" }
+mcpkit-macros = { path = "../mcpkit-macros" }
+serde_json.workspace = true
+trybuild = "1.0"
+tokio = { workspace = true, features = ["rt", "macros"] }

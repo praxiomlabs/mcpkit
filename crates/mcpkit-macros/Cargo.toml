@@ -27,9 +27,6 @@ syn = { version = "2", features = ["full", "parsing", "extra-traits"] }
 darling = "0.20"
 
 [dev-dependencies]
-# Note: Path takes precedence locally; version used only during `cargo publish`.
-# Using >=0.2.5 allows both local 0.3.x and published 0.2.5 to satisfy the constraint.
-mcpkit = { version = ">=0.2.5", path = "../../mcpkit" }
-serde_json.workspace = true
+# Only mcpkit-core needed for compile-fail tests (no circular dependency)
+mcpkit-core = { version = "0.3", path = "../mcpkit-core" }
 trybuild = "1.0"
-tokio = { workspace = true, features = ["rt", "macros"] }

@@ -6,6 +6,7 @@ members = [
     "crates/mcpkit-server",
     "crates/mcpkit-client",
     "crates/mcpkit-macros",
+    "crates/mcpkit-macros-tests",
     "crates/mcpkit-testing",
     "crates/mcpkit-axum",
     "crates/mcpkit-actix",

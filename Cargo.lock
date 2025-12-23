@@ -2171,11 +2171,20 @@ name = "mcpkit-macros"
 version = "0.3.0"
 dependencies = [
  "darling 0.20.11",
- "mcpkit",
+ "mcpkit-core",
  "proc-macro2",
  "quote",
- "serde_json",
  "syn",
+ "trybuild",
+]
+
+[[package]]
+name = "mcpkit-macros-tests"
+version = "0.0.0"
+dependencies = [
+ "mcpkit",
+ "mcpkit-macros",
+ "serde_json",
  "tokio",
  "trybuild",
 ]
