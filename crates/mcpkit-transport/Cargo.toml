@@ -22,7 +22,6 @@ tracing = { workspace = true }
 
 # Runtime-specific dependencies
 tokio = { version = "1", features = ["io-util", "io-std", "sync", "rt", "net", "time", "process"], optional = true }
-async-std = { version = "1", optional = true }
 smol = { version = "2", optional = true }
 async-io = { version = "2", optional = true }
 
@@ -47,11 +46,15 @@ tokio = { version = "1", features = ["full", "test-util"] }
 [features]
 default = ["tokio-runtime"]
 tokio-runtime = ["tokio"]
-async-std-runtime = ["async-std", "async-io"]
 smol-runtime = ["smol", "async-io"]
 http = ["reqwest", "axum", "hyper", "tokio-runtime"]
 websocket = ["tokio-tungstenite", "tokio-runtime"]
 full = ["http", "websocket"]
+
+# Deprecated feature aliases for backwards compatibility
+# These map to smol-runtime since async-std was replaced by smol
+async-std = ["smol-runtime"]
+async-std-runtime = ["smol-runtime"]
 
 [lints]
 workspace = true
@@ -61,7 +64,7 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [package.metadata.cargo-machete]
-# async-io: used conditionally in async-std/smol runtimes
+# async-io: used conditionally in smol runtime
 # hyper: used internally by axum for HTTP transport
 # pin-project-lite: used for pin projection in async code
 ignored = ["async-io", "hyper", "pin-project-lite"]

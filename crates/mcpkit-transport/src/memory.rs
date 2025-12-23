@@ -7,8 +7,7 @@
 //! # Runtime Support
 //!
 //! This transport is runtime-agnostic and works with:
-//! - Tokio (`tokio-runtime` feature)
-//! - async-std (`async-std-runtime` feature)
+//! - Tokio (`tokio-runtime` feature, default)
 //! - smol (`smol-runtime` feature)
 //!
 //! # Example
@@ -34,22 +33,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 // Runtime-agnostic implementation using futures channels
 // =============================================================================
 
-#[cfg(any(
-    feature = "tokio-runtime",
-    feature = "async-std-runtime",
-    feature = "smol-runtime"
-))]
+#[cfg(any(feature = "tokio-runtime", feature = "smol-runtime"))]
 use crate::runtime::AsyncMutex;
 
 /// An in-memory transport using channels.
 ///
 /// This is useful for testing MCP implementations without network I/O.
 /// The transport is runtime-agnostic and works with any async runtime.
-#[cfg(any(
-    feature = "tokio-runtime",
-    feature = "async-std-runtime",
-    feature = "smol-runtime"
-))]
+#[cfg(any(feature = "tokio-runtime", feature = "smol-runtime"))]
 pub struct MemoryTransport {
     sender: futures::channel::mpsc::Sender<Message>,
     receiver: AsyncMutex<futures::channel::mpsc::Receiver<Message>>,
@@ -57,11 +48,7 @@ pub struct MemoryTransport {
     metadata: TransportMetadata,
 }
 
-#[cfg(any(
-    feature = "tokio-runtime",
-    feature = "async-std-runtime",
-    feature = "smol-runtime"
-))]
+#[cfg(any(feature = "tokio-runtime", feature = "smol-runtime"))]
 impl MemoryTransport {
     /// Create a connected pair of memory transports.
     ///
@@ -105,11 +92,7 @@ impl MemoryTransport {
     }
 }
 
-#[cfg(any(
-    feature = "tokio-runtime",
-    feature = "async-std-runtime",
-    feature = "smol-runtime"
-))]
+#[cfg(any(feature = "tokio-runtime", feature = "smol-runtime"))]
 impl Transport for MemoryTransport {
     type Error = TransportError;
 
@@ -166,11 +149,7 @@ impl Transport for MemoryTransport {
 mod tests {
     use super::*;
 
-    #[cfg(any(
-        feature = "tokio-runtime",
-        feature = "async-std-runtime",
-        feature = "smol-runtime"
-    ))]
+    #[cfg(any(feature = "tokio-runtime", feature = "smol-runtime"))]
     mod async_tests {
         use super::*;
         use mcpkit_core::protocol::{Notification, Request, RequestId};

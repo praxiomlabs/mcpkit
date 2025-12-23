@@ -12,8 +12,7 @@
 //! # Runtime Support
 //!
 //! This transport is runtime-agnostic and works with:
-//! - Tokio (`tokio-runtime` feature)
-//! - async-std (`async-std-runtime` feature)
+//! - Tokio (`tokio-runtime` feature, default)
 //! - smol (`smol-runtime` feature)
 //!
 //! # Example
@@ -54,13 +53,9 @@ pub const MAX_MESSAGE_SIZE: usize = 16 * 1024 * 1024;
 ///
 /// # Runtime Support
 ///
-/// This transport works with any async runtime (Tokio, async-std, smol)
+/// This transport works with any async runtime (Tokio or smol)
 /// depending on which feature is enabled.
-#[cfg(any(
-    feature = "tokio-runtime",
-    feature = "async-std-runtime",
-    feature = "smol-runtime"
-))]
+#[cfg(any(feature = "tokio-runtime", feature = "smol-runtime"))]
 pub struct StdioTransport<R, W>
 where
     R: AsyncRead + Unpin + Send,
@@ -96,28 +91,7 @@ impl
     }
 }
 
-#[cfg(all(feature = "async-std-runtime", not(feature = "tokio-runtime")))]
-impl StdioTransport<async_std::io::Stdin, async_std::io::Stdout> {
-    /// Create a new stdio transport using process stdin/stdout.
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            stdin: AsyncMutex::new(BufReader::new(async_std::io::stdin())),
-            stdout: AsyncMutex::new(async_std::io::stdout()),
-            connected: AtomicBool::new(true),
-            metadata: TransportMetadata::new("stdio")
-                .remote_addr("stdin")
-                .local_addr("stdout")
-                .connected_now(),
-        }
-    }
-}
-
-#[cfg(all(
-    feature = "smol-runtime",
-    not(feature = "tokio-runtime"),
-    not(feature = "async-std-runtime")
-))]
+#[cfg(all(feature = "smol-runtime", not(feature = "tokio-runtime")))]
 impl StdioTransport<smol::Unblock<std::io::Stdin>, smol::Unblock<std::io::Stdout>> {
     /// Create a new stdio transport using process stdin/stdout.
     #[must_use]
@@ -146,29 +120,14 @@ impl Default
     }
 }
 
-#[cfg(all(feature = "async-std-runtime", not(feature = "tokio-runtime")))]
-impl Default for StdioTransport<async_std::io::Stdin, async_std::io::Stdout> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[cfg(all(
-    feature = "smol-runtime",
-    not(feature = "tokio-runtime"),
-    not(feature = "async-std-runtime")
-))]
+#[cfg(all(feature = "smol-runtime", not(feature = "tokio-runtime")))]
 impl Default for StdioTransport<smol::Unblock<std::io::Stdin>, smol::Unblock<std::io::Stdout>> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-#[cfg(any(
-    feature = "tokio-runtime",
-    feature = "async-std-runtime",
-    feature = "smol-runtime"
-))]
+#[cfg(any(feature = "tokio-runtime", feature = "smol-runtime"))]
 impl<R, W> StdioTransport<R, W>
 where
     R: AsyncRead + Unpin + Send,
@@ -191,11 +150,7 @@ where
     }
 }
 
-#[cfg(any(
-    feature = "tokio-runtime",
-    feature = "async-std-runtime",
-    feature = "smol-runtime"
-))]
+#[cfg(any(feature = "tokio-runtime", feature = "smol-runtime"))]
 impl<R, W> Transport for StdioTransport<R, W>
 where
     R: AsyncRead + Unpin + Send + Sync,

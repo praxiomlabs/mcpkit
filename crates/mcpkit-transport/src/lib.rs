@@ -64,7 +64,7 @@
 //! This crate supports multiple async runtimes through feature flags:
 //!
 //! - `tokio-runtime` (default): Use Tokio for async I/O
-//! - `async-std-runtime`: Use async-std for async I/O
+//! - `smol-runtime`: Use smol for async I/O
 //!
 //! # Example
 //!
@@ -111,11 +111,7 @@ pub use traits::{Transport, TransportExt, TransportListener, TransportMetadata};
 pub use bytes::{Bytes, BytesMut};
 
 // Runtime-agnostic transports - available when ANY runtime is enabled
-#[cfg(any(
-    feature = "tokio-runtime",
-    feature = "async-std-runtime",
-    feature = "smol-runtime"
-))]
+#[cfg(any(feature = "tokio-runtime", feature = "smol-runtime"))]
 pub use memory::MemoryTransport;
 
 // Note: StdioTransport has runtime-specific type parameters, so we re-export
@@ -155,11 +151,7 @@ pub mod prelude {
     pub use crate::error::TransportError;
     pub use crate::traits::{Transport, TransportExt, TransportListener, TransportMetadata};
 
-    #[cfg(any(
-        feature = "tokio-runtime",
-        feature = "async-std-runtime",
-        feature = "smol-runtime"
-    ))]
+    #[cfg(any(feature = "tokio-runtime", feature = "smol-runtime"))]
     pub use crate::memory::MemoryTransport;
 
     pub use crate::stdio::SyncStdioTransport;

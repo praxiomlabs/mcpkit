@@ -1,7 +1,7 @@
 //! Transport traits for the MCP protocol.
 //!
 //! This module defines the core transport abstractions that are runtime-agnostic.
-//! Transports can be implemented for any async runtime (Tokio, async-std, smol).
+//! Transports can be implemented for any async runtime (Tokio or smol).
 //!
 //! # Overview
 //!

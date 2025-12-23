@@ -1,7 +1,7 @@
 //! Runtime abstraction layer for async I/O.
 //!
 //! This module provides runtime-agnostic abstractions over async primitives,
-//! allowing the transport layer to work with Tokio, async-std, or smol.
+//! allowing the transport layer to work with Tokio or smol.
 //!
 //! # Design Philosophy
 //!
@@ -15,7 +15,6 @@
 //!
 //! Enable one of the runtime features:
 //! - `tokio-runtime` (default)
-//! - `async-std-runtime`
 //! - `smol-runtime`
 
 use futures::io::{AsyncRead, AsyncWrite};
@@ -56,15 +55,7 @@ pub use async_lock::SemaphoreGuard as AsyncSemaphoreGuard;
 pub type Sender<T> = tokio::sync::mpsc::Sender<T>;
 
 /// A runtime-agnostic bounded MPSC channel sender.
-#[cfg(all(feature = "async-std-runtime", not(feature = "tokio-runtime")))]
-pub type Sender<T> = async_std::channel::Sender<T>;
-
-/// A runtime-agnostic bounded MPSC channel sender.
-#[cfg(all(
-    feature = "smol-runtime",
-    not(feature = "tokio-runtime"),
-    not(feature = "async-std-runtime")
-))]
+#[cfg(all(feature = "smol-runtime", not(feature = "tokio-runtime")))]
 pub type Sender<T> = smol::channel::Sender<T>;
 
 /// A runtime-agnostic bounded MPSC channel receiver.
@@ -72,15 +63,7 @@ pub type Sender<T> = smol::channel::Sender<T>;
 pub type Receiver<T> = tokio::sync::mpsc::Receiver<T>;
 
 /// A runtime-agnostic bounded MPSC channel receiver.
-#[cfg(all(feature = "async-std-runtime", not(feature = "tokio-runtime")))]
-pub type Receiver<T> = async_std::channel::Receiver<T>;
-
-/// A runtime-agnostic bounded MPSC channel receiver.
-#[cfg(all(
-    feature = "smol-runtime",
-    not(feature = "tokio-runtime"),
-    not(feature = "async-std-runtime")
-))]
+#[cfg(all(feature = "smol-runtime", not(feature = "tokio-runtime")))]
 pub type Receiver<T> = smol::channel::Receiver<T>;
 
 /// Create a bounded channel.
@@ -91,17 +74,7 @@ pub fn channel<T>(capacity: usize) -> (Sender<T>, Receiver<T>) {
 }
 
 /// Create a bounded channel.
-#[cfg(all(feature = "async-std-runtime", not(feature = "tokio-runtime")))]
-pub fn channel<T>(capacity: usize) -> (Sender<T>, Receiver<T>) {
-    async_std::channel::bounded(capacity)
-}
-
-/// Create a bounded channel.
-#[cfg(all(
-    feature = "smol-runtime",
-    not(feature = "tokio-runtime"),
-    not(feature = "async-std-runtime")
-))]
+#[cfg(all(feature = "smol-runtime", not(feature = "tokio-runtime")))]
 pub fn channel<T>(capacity: usize) -> (Sender<T>, Receiver<T>) {
     smol::channel::bounded(capacity)
 }
@@ -118,17 +91,7 @@ pub fn stdin() -> impl AsyncRead + Unpin {
 }
 
 /// Runtime-agnostic stdin.
-#[cfg(all(feature = "async-std-runtime", not(feature = "tokio-runtime")))]
-pub fn stdin() -> impl AsyncRead + Unpin {
-    async_std::io::stdin()
-}
-
-/// Runtime-agnostic stdin.
-#[cfg(all(
-    feature = "smol-runtime",
-    not(feature = "tokio-runtime"),
-    not(feature = "async-std-runtime")
-))]
+#[cfg(all(feature = "smol-runtime", not(feature = "tokio-runtime")))]
 pub fn stdin() -> impl AsyncRead + Unpin {
     smol::Unblock::new(std::io::stdin())
 }
@@ -141,17 +104,7 @@ pub fn stdout() -> impl AsyncWrite + Unpin {
 }
 
 /// Runtime-agnostic stdout.
-#[cfg(all(feature = "async-std-runtime", not(feature = "tokio-runtime")))]
-pub fn stdout() -> impl AsyncWrite + Unpin {
-    async_std::io::stdout()
-}
-
-/// Runtime-agnostic stdout.
-#[cfg(all(
-    feature = "smol-runtime",
-    not(feature = "tokio-runtime"),
-    not(feature = "async-std-runtime")
-))]
+#[cfg(all(feature = "smol-runtime", not(feature = "tokio-runtime")))]
 pub fn stdout() -> impl AsyncWrite + Unpin {
     smol::Unblock::new(std::io::stdout())
 }
@@ -223,23 +176,7 @@ where
 ///
 /// Note: This requires `'static` bound. Use sparingly - prefer passing
 /// futures through channels or letting the caller handle spawning.
-#[cfg(all(feature = "async-std-runtime", not(feature = "tokio-runtime")))]
-pub fn spawn<F>(future: F)
-where
-    F: Future<Output = ()> + Send + 'static,
-{
-    async_std::task::spawn(future);
-}
-
-/// Spawn a future on the runtime.
-///
-/// Note: This requires `'static` bound. Use sparingly - prefer passing
-/// futures through channels or letting the caller handle spawning.
-#[cfg(all(
-    feature = "smol-runtime",
-    not(feature = "tokio-runtime"),
-    not(feature = "async-std-runtime")
-))]
+#[cfg(all(feature = "smol-runtime", not(feature = "tokio-runtime")))]
 pub fn spawn<F>(future: F)
 where
     F: Future<Output = ()> + Send + 'static,
@@ -258,17 +195,7 @@ pub async fn sleep(duration: std::time::Duration) {
 }
 
 /// Sleep for the given duration.
-#[cfg(all(feature = "async-std-runtime", not(feature = "tokio-runtime")))]
-pub async fn sleep(duration: std::time::Duration) {
-    async_std::task::sleep(duration).await;
-}
-
-/// Sleep for the given duration.
-#[cfg(all(
-    feature = "smol-runtime",
-    not(feature = "tokio-runtime"),
-    not(feature = "async-std-runtime")
-))]
+#[cfg(all(feature = "smol-runtime", not(feature = "tokio-runtime")))]
 pub async fn sleep(duration: std::time::Duration) {
     smol::Timer::after(duration).await;
 }
@@ -289,22 +216,7 @@ where
 }
 
 /// Apply a timeout to a future.
-#[cfg(all(feature = "async-std-runtime", not(feature = "tokio-runtime")))]
-pub async fn timeout<F, T>(duration: std::time::Duration, future: F) -> Result<T, TimeoutError>
-where
-    F: Future<Output = T>,
-{
-    async_std::future::timeout(duration, future)
-        .await
-        .map_err(|_| TimeoutError)
-}
-
-/// Apply a timeout to a future.
-#[cfg(all(
-    feature = "smol-runtime",
-    not(feature = "tokio-runtime"),
-    not(feature = "async-std-runtime")
-))]
+#[cfg(all(feature = "smol-runtime", not(feature = "tokio-runtime")))]
 pub async fn timeout<F, T>(duration: std::time::Duration, future: F) -> Result<T, TimeoutError>
 where
     F: Future<Output = T>,

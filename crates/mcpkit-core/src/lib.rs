@@ -11,7 +11,7 @@
 //! - **Typestate connection**: Compile-time enforced connection lifecycle
 //!
 //! This crate is runtime-agnostic and does not depend on any async runtime.
-//! It can be used with Tokio, async-std, smol, or any other executor.
+//! It can be used with Tokio, smol, or any other executor.
 //!
 //! # Protocol Version
 //!

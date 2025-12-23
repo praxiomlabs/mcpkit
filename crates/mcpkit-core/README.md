@@ -13,7 +13,7 @@ This crate provides the foundational building blocks for the MCP SDK:
 
 ## Runtime Agnostic
 
-This crate does not depend on any async runtime. It can be used with Tokio, async-std, smol, or any other executor.
+This crate does not depend on any async runtime. It can be used with Tokio, smol, or any other executor.
 
 ## Protocol Version
 

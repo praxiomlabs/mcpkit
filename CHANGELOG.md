@@ -35,10 +35,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Rate limiter optimization**: Replaced manual CAS loop with `fetch_update` for cleaner, more idiomatic code
-- **async-std deprecation notice**: Updated `docs/runtimes.md` with RUSTSEC-2025-0052 advisory warning
 - **Security advisory handling**: Updated `deny.toml` with documented ignores for:
-  - RUSTSEC-2023-0071 (rsa via sqlx-mysql - not used, sqlite only)
   - RUSTSEC-2024-0436 (paste via rmcp - dev-dependency only)
+- **async-std replaced with smol**: The `async-std-runtime` feature now maps to `smol-runtime`
+  - async-std has been discontinued ([RUSTSEC-2025-0052](https://rustsec.org/advisories/RUSTSEC-2025-0052.html))
+  - Existing code using `async-std-runtime` will continue to compile (maps to smol)
+  - For explicit runtime choice, use `tokio-runtime` (default) or `smol-runtime`
+
+### Removed
+
+- **async-std dependency** removed from mcpkit-transport
+  - Feature aliases preserved for backwards compatibility (`async-std` → `smol-runtime`)
 
 ### Fixed
 

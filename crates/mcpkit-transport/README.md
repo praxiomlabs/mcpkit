@@ -48,7 +48,7 @@ async fn main() -> Result<(), mcpkit_transport::TransportError> {
 | Feature | Description |
 |---------|-------------|
 | `tokio-runtime` (default) | Use Tokio for async I/O |
-| `async-std-runtime` | Use async-std for async I/O |
+| `smol-runtime` | Use smol for async I/O |
 | `http` | Enable HTTP/SSE transport |
 | `websocket` | Enable WebSocket transport |
 
