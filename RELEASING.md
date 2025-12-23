@@ -24,6 +24,26 @@ cargo clippy --all-features --all-targets -- -D warnings
 - [ ] CI is passing on the target branch
 - [ ] Local build/test/lint all pass (`just ci`)
 
+### ⚠️ Critical: CI Parity
+
+**Local checks MUST match CI exactly.** If CI fails after a push, your local tooling is misconfigured.
+
+The following commands are designed to mirror CI exactly:
+
+| Local Command | CI Job | What It Checks |
+|---------------|--------|----------------|
+| `just deny` | `cargo-deny-action@v2 check all` | Advisories, licenses, bans |
+| `just clippy` | `cargo clippy --all-features --all-targets -- -D warnings` | Linting |
+| `just test-locked` | `cargo test --all-features --locked` | Tests with locked deps |
+
+**Before pushing any changes, run:**
+```bash
+just deny        # MUST pass - matches CI cargo-deny exactly
+just release-check   # Full validation
+```
+
+If `just deny` fails locally, it WILL fail in CI. Fix it before pushing.
+
 ---
 
 ## 1. Codebase Hygiene & Safety
@@ -141,14 +161,18 @@ Ensure MSRV is consistent across **all** locations:
 ### Vulnerability Scan
 
 ```bash
-just deny     # Run cargo-deny (licenses, bans, advisories)
+just deny     # Run cargo-deny (licenses, bans, advisories) - MUST MATCH CI
 just audit    # Run cargo-audit (security vulnerabilities)
 ```
 
 - [ ] Run `just deny` (comprehensive: licenses, bans, advisories)
+- [ ] **CRITICAL:** `just deny` runs `cargo deny --all-features check all` to match CI exactly
 - [ ] Review and address all advisories
 - [ ] **Note:** `duplicate` warnings are informational (common in large dependency trees)
 - [ ] **Note:** `license-not-encountered` warnings mean unused license allowances (safe to ignore)
+
+> **Configuration:** Advisory ignores are configured in `deny.toml` with documented rationale.
+> The `.cargo/audit.toml` file is for `cargo audit` only (separate tool).
 
 ### Advisory Documentation
 - [ ] If ignoring an advisory, document rationale in config file

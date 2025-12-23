@@ -299,11 +299,12 @@ audit:
     printf '{{green}}[OK]{{reset}}   Security audit passed\n'
 
 [group('security')]
-[doc("Run cargo-deny checks (licenses, bans, advisories)")]
+[doc("Run cargo-deny checks (licenses, bans, advisories) - matches CI")]
 deny:
     #!/usr/bin/env bash
-    printf '{{cyan}}[INFO]{{reset}} Running cargo-deny...\n'
-    {{cargo}} deny check
+    printf '{{cyan}}[INFO]{{reset}} Running cargo-deny (matches CI)...\n'
+    # Must match CI exactly: cargo-deny-action@v2 with command: check all
+    {{cargo}} deny --all-features check all
     printf '{{green}}[OK]{{reset}}   Deny checks passed\n'
 
 [group('lint')]
