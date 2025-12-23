@@ -367,6 +367,15 @@ impl MockServer {
         MockServerBuilder::new()
     }
 
+    /// Create a new builder for constructing a [`MockServer`].
+    ///
+    /// This is an alias for [`MockServer::builder()`] for backwards compatibility.
+    #[must_use]
+    #[deprecated(since = "0.2.6", note = "Use `MockServer::builder()` instead")]
+    pub fn new() -> MockServerBuilder {
+        MockServerBuilder::new()
+    }
+
     /// Get the server name.
     #[must_use]
     pub fn name(&self) -> &str {

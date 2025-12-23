@@ -24,6 +24,8 @@ use std::sync::Arc;
 /// These types represent different states in the connection lifecycle.
 /// They contain no data and are used purely for type-level state tracking.
 pub mod markers {
+    // Note: The types in this module are also re-exported as `state::state::*`
+    // for backwards compatibility with v0.2.5.
     /// Connection is disconnected (initial state).
     #[derive(Debug, Clone, Copy)]
     pub struct Disconnected;
@@ -43,6 +45,16 @@ pub mod markers {
     /// Connection is closing down.
     #[derive(Debug, Clone, Copy)]
     pub struct Closing;
+}
+
+/// Backwards compatibility alias for the `markers` module.
+///
+/// This module was renamed from `state` to `markers` in v0.2.6.
+/// This alias is provided for backwards compatibility with v0.2.5.
+#[doc(hidden)]
+#[deprecated(since = "0.2.6", note = "Use `markers` module instead")]
+pub mod state {
+    pub use super::markers::*;
 }
 
 /// Internal connection data shared across states.

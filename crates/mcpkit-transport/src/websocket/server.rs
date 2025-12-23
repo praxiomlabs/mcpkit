@@ -117,6 +117,13 @@ pub struct WebSocketListener {
     shutdown_tx: crate::runtime::AsyncMutex<Option<tokio::sync::broadcast::Sender<()>>>,
 }
 
+// SAFETY: WebSocketListener is RefUnwindSafe because:
+// - All fields are either inherently panic-safe or wrapped in Arc/AtomicBool
+// - The AsyncMutex fields only contain types that can safely be dropped after a panic
+// - This maintains backwards compatibility with v0.2.5
+#[cfg(feature = "websocket")]
+impl std::panic::RefUnwindSafe for WebSocketListener {}
+
 /// An accepted WebSocket connection with metadata.
 #[cfg(feature = "websocket")]
 pub struct AcceptedConnection {
