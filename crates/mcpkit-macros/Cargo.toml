@@ -29,7 +29,7 @@ darling = "0.20"
 [dev-dependencies]
 # Note: Use path-only during development, version is resolved during publish
 # Dev dependency can use any 0.2.x version since tests work with recent versions
-mcpkit = { version = "0.2", path = "../../mcpkit" }
+mcpkit = { version = "0.3", path = "../../mcpkit" }
 serde_json.workspace = true
 trybuild = "1.0"
 tokio = { workspace = true, features = ["rt", "macros"] }
