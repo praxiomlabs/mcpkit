@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2025-12-24
+
+### Added
+
+- **`#[mcp_client]` macro** for building MCP clients with handler attributes
+  - `#[sampling]` for sampling/create_message handlers
+  - `#[elicitation]` for user elicitation handlers
+  - `#[roots]` for dynamic root listing
+  - Lifecycle hooks: `#[on_connected]`, `#[on_disconnected]`
+  - Notification handlers: `#[on_task_progress]`, `#[on_resource_updated]`, etc.
+- **Protocol extension infrastructure** (`mcpkit-core::extension`)
+  - Extension registry for MCP protocol extensions
+  - App discovery and templates support
+  - OAuth protected resource discovery endpoints
+- **Debug tooling** for protocol inspection (`mcpkit-core::debug`)
+  - Session recording and playback
+  - Protocol validation utilities
+- **Connection pool improvements** with lifecycle management
+  - Pre-warming, health checks, and graceful shutdown
+  - Configurable idle timeouts and connection limits
+- **OpenTelemetry and Prometheus integration** (`mcpkit-transport::telemetry`)
+  - Distributed tracing with OpenTelemetry
+  - Metrics collection with Prometheus
+- **Windows named pipes transport** for Windows IPC
+- **Message batching middleware** for improved throughput
+- **WASM support** for `wasm32-unknown-unknown` target in mcpkit-core
+- **Health check support** in mcpkit-server
+- **Async test helpers** in mcpkit-testing
+- **Smol runtime example** demonstrating non-Tokio usage
+- **Client guide documentation** (`docs/client-guide.md`)
+- **1.0 release documentation** with migration guides
+
+### Changed
+
+- Updated prometheus dependency from 0.13 to 0.14 (fixes RUSTSEC-2024-0437)
+- Improved test coverage for `#[mcp_client]` macro (18 new tests)
+
+### Removed
+
+- Removed unused `sqlx` dependency from database-server example
+- Removed unused `actix-web-actors` dependency from mcpkit-actix
+
+### Fixed
+
+- Fixed `#[non_exhaustive]` on `PoolConfig` and `PoolStats` for future compatibility
+- Fixed broken doc link for Windows transport
+
 ## [0.3.0] - 2025-12-23
 
 ### Added
@@ -218,7 +265,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mcpkit-testing` crate for test utilities
 - Protocol version detection and capability negotiation
 
-[Unreleased]: https://github.com/praxiomlabs/mcpkit/compare/v0.2.5...HEAD
+[Unreleased]: https://github.com/praxiomlabs/mcpkit/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/praxiomlabs/mcpkit/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/praxiomlabs/mcpkit/compare/v0.2.5...v0.3.0
 [0.2.5]: https://github.com/praxiomlabs/mcpkit/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/praxiomlabs/mcpkit/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/praxiomlabs/mcpkit/compare/v0.2.2...v0.2.3

@@ -31,7 +31,7 @@ schemars = "1"
 
 ```toml
 [dependencies]
-mcpkit = "0.3"
+mcpkit = "0.4"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 # schemars no longer required - schemas are built-in
@@ -335,7 +335,7 @@ Replace `rmcp` with `mcpkit`:
 ```toml
 [dependencies]
 - rmcp = "0.1"
-+ mcpkit = "0.3"
++ mcpkit = "0.4"
 ```
 
 Remove `schemars` if only used for tool schemas.

@@ -59,14 +59,14 @@ For WASM-compatible projects:
 
 ```toml
 [dependencies]
-mcpkit-core = "0.3"
+mcpkit-core = "0.4"
 # Don't include transport or server - they have platform dependencies
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
-web-sys = { version = "0.3", features = ["console"] }
+web-sys = { version = "0.4", features = ["console"] }
 ```
 
 ## Browser Integration
@@ -284,6 +284,6 @@ wasm-opt -Os -o optimized.wasm pkg/my_client_bg.wasm
 
 ## See Also
 
-- [wasm-bindgen Documentation](https://rustwasm.github.io/wasm-bindgen/)
-- [wasm-pack](https://rustwasm.github.io/wasm-pack/)
-- [web-sys API Reference](https://rustwasm.github.io/wasm-bindgen/api/web_sys/)
+- [wasm-bindgen Documentation](https://rustwasm.github.io/docs/wasm-bindgen/)
+- [wasm-pack](https://rustwasm.github.io/docs/wasm-pack/)
+- [web-sys API Reference](https://rustwasm.github.io/docs/wasm-bindgen/web-sys/)

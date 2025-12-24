@@ -97,19 +97,19 @@ pub trait Transport: Send + Sync {
 **With Tokio (default):**
 ```toml
 [dependencies]
-mcpkit-transport = "0.3"  # tokio-runtime is default
+mcpkit-transport = "0.4"  # tokio-runtime is default
 ```
 
 **With async-std:**
 ```toml
 [dependencies]
-mcpkit-transport = { version = "0.3", default-features = false, features = ["async-std-runtime"] }
+mcpkit-transport = { version = "0.4", default-features = false, features = ["async-std-runtime"] }
 ```
 
 **With smol:**
 ```toml
 [dependencies]
-mcpkit-transport = { version = "0.3", default-features = false, features = ["smol-runtime"] }
+mcpkit-transport = { version = "0.4", default-features = false, features = ["smol-runtime"] }
 ```
 
 ### Crate Dependency Graph

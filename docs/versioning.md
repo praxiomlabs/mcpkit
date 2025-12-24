@@ -206,7 +206,7 @@ experimental = []  # Experimental features
 Enable experimental features at your own risk:
 
 ```toml
-mcpkit = { version = "0.3", features = ["experimental"] }
+mcpkit = { version = "0.4", features = ["experimental"] }
 ```
 
 ### Optional Transports

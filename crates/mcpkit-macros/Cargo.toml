@@ -28,5 +28,5 @@ darling = "0.20"
 
 [dev-dependencies]
 # Only mcpkit-core needed for compile-fail tests (no circular dependency)
-mcpkit-core = { version = "0.3", path = "../mcpkit-core" }
+mcpkit-core = { version = "0.4", path = "../mcpkit-core" }
 trybuild = "1.0"

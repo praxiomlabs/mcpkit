@@ -405,13 +405,14 @@ doc-check:
 [doc("Check markdown links (requires lychee)")]
 link-check:
     #!/usr/bin/env bash
+    set -e  # Exit on any error - propagates lychee's non-zero exit on broken links
     printf '{{cyan}}[INFO]{{reset}} Checking markdown links...\n'
     if ! command -v lychee &> /dev/null; then
         printf '{{yellow}}[WARN]{{reset}} lychee not installed (cargo install lychee)\n'
         printf '{{yellow}}[WARN]{{reset}} Skipping link check\n'
         exit 0
     fi
-    lychee --verbose --no-progress --accept 200,204,206 \
+    lychee --no-progress --accept 200,204,206 \
         --exclude '^https://crates.io' \
         --exclude '^https://docs.rs' \
         --exclude '^https://www.reddit.com' \

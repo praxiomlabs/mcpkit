@@ -14,7 +14,7 @@ Add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-mcpkit = "0.3"
+mcpkit = "0.4"
 tokio = { version = "1", features = ["full"] }
 serde_json = "1"
 ```
@@ -23,9 +23,9 @@ For more granular control, use individual crates:
 
 ```toml
 [dependencies]
-mcpkit-client = "0.3"
-mcpkit-transport = "0.3"
-mcpkit-core = "0.3"
+mcpkit-client = "0.4"
+mcpkit-transport = "0.4"
+mcpkit-core = "0.4"
 tokio = { version = "1", features = ["full"] }
 ```
 

@@ -11,7 +11,7 @@ categories.workspace = true
 readme = "README.md"
 
 [dependencies]
-mcpkit-core = { version = "0.3.0", path = "../mcpkit-core" }
+mcpkit-core = { version = "0.4.0", path = "../mcpkit-core" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

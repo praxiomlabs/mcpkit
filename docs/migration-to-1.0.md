@@ -47,7 +47,7 @@ Simply update your dependency:
 
 ```toml
 # Before
-mcpkit = "0.3"
+mcpkit = "0.4"
 
 # After
 mcpkit = "1"
@@ -233,7 +233,7 @@ If migration causes critical issues, you can roll back to your previous version.
 
 ```toml
 # Revert Cargo.toml
-mcpkit = "0.3"
+mcpkit = "0.4"
 ```
 
 ```bash
