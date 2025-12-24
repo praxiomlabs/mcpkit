@@ -12,7 +12,7 @@ A Rust SDK for the Model Context Protocol (MCP) that simplifies server developme
 ## Features
 
 - **Unified `#[mcp_server]` macro** for defining tools, resources, and prompts
-- **Runtime-agnostic** async support (Tokio, async-std, smol)
+- **Runtime-agnostic** async support (Tokio, smol)
 - **Typestate builders** for compile-time validation of server configuration
 - **Context-based error handling** with `McpError` and `.context()` chains
 - **MCP 2025-11-25 protocol** including Tasks, Elicitation, and OAuth 2.1
@@ -80,8 +80,8 @@ async fn main() -> Result<(), McpError> {
 ```
 
 > **Note:** This SDK is runtime-agnostic. You provide the transport, which lets you use
-> Tokio, async-std, smol, or any other async runtime. The examples use Tokio, but the
-> SDK itself doesn't depend on any specific runtime.
+> Tokio, smol, or any other async runtime. The examples use Tokio, but the SDK itself
+> doesn't depend on any specific runtime.
 
 ## mcpkit Highlights
 
@@ -93,7 +93,7 @@ async fn main() -> Result<(), McpError> {
 | **Errors** | Unified `McpError` with `.context()` chains |
 | **Transports** | stdio, WebSocket, HTTP/SSE, Unix sockets |
 | **Middleware** | Built-in Tower-compatible Layer system |
-| **Runtime** | Agnostic (Tokio, async-std, smol) |
+| **Runtime** | Agnostic (Tokio, smol) |
 
 For comparisons with other Rust MCP SDKs (rmcp, rust-mcp-sdk, mcp-protocol-sdk), see the [detailed comparison](docs/comparison.md).
 

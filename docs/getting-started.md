@@ -133,6 +133,7 @@ The server will listen on stdin/stdout for JSON-RPC messages.
 
 ## Next Steps
 
+- [Building MCP Clients](./client-guide.md) - Connect to MCP servers from your applications
 - [Adding Resources](./resources.md) - Expose data to AI assistants
 - [Adding Prompts](./prompts.md) - Create reusable prompt templates
 - [Error Handling](./error-handling.md) - Handle errors gracefully

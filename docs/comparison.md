@@ -173,7 +173,7 @@ Check [rmcp's documentation](https://github.com/modelcontextprotocol/rust-sdk) f
 - Need MCP 2025-11-25 features (Tasks, Elicitation)
 - Want multiple transport options (WebSocket, HTTP, Unix sockets)
 - Prefer a single macro approach for defining servers
-- Need runtime flexibility (async-std, smol support)
+- Need runtime flexibility (smol support)
 
 ### rmcp may be a good fit if you:
 

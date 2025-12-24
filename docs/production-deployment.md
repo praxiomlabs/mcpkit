@@ -347,20 +347,10 @@ mcpkit = { version = "0.3", features = ["tokio-runtime"] }
 - Excellent ecosystem integration
 - Comprehensive debugging tools
 
-### async-std
-
-> **Note:** async-std is marked as discontinued (RUSTSEC-2025-0052). While still functional, new projects should prefer Tokio.
-
-```toml
-[dependencies]
-mcpkit = { version = "0.3", features = ["async-std-runtime"] }
-```
-
-**Use cases:**
-- Existing async-std codebases
-- Simple applications with lower throughput requirements
-
 ### smol
+
+> **Note:** The `async-std-runtime` feature is a backwards-compatibility alias for `smol-runtime`.
+> async-std was [discontinued](https://rustsec.org/advisories/RUSTSEC-2025-0052.html) and replaced by smol.
 
 ```toml
 [dependencies]
