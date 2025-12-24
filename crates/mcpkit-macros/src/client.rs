@@ -557,7 +557,7 @@ mod tests {
             impl SamplingHandler {
                 #[sampling]
                 async fn handle(&self, request: CreateMessageRequest) -> Result<CreateMessageResult, McpError> {
-                    todo!()
+                    Err(McpError::internal("test stub"))
                 }
             }
         };
@@ -579,12 +579,12 @@ mod tests {
             impl FullHandler {
                 #[sampling]
                 async fn sampling(&self, request: CreateMessageRequest) -> Result<CreateMessageResult, McpError> {
-                    todo!()
+                    Err(McpError::internal("test stub"))
                 }
 
                 #[elicitation]
                 async fn elicit(&self, request: ElicitRequest) -> Result<ElicitResult, McpError> {
-                    todo!()
+                    Err(McpError::internal("test stub"))
                 }
 
                 #[roots]
