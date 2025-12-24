@@ -27,6 +27,7 @@ async-io = { version = "2", optional = true }
 
 # Runtime-agnostic sync primitives
 async-lock = "3.4"
+event-listener = "5"
 
 # HTTP transport
 reqwest = { workspace = true, optional = true }
@@ -40,6 +41,16 @@ tokio-tungstenite = { workspace = true, optional = true }
 uuid = { workspace = true }
 url = { workspace = true }
 
+# OpenTelemetry integration (optional)
+opentelemetry = { workspace = true, optional = true }
+opentelemetry_sdk = { workspace = true, optional = true }
+opentelemetry-otlp = { workspace = true, optional = true }
+tracing-opentelemetry = { workspace = true, optional = true }
+tracing-subscriber = { workspace = true, optional = true }
+
+# Prometheus metrics (optional)
+prometheus = { workspace = true, optional = true }
+
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }
 
@@ -49,7 +60,9 @@ tokio-runtime = ["tokio"]
 smol-runtime = ["smol", "async-io"]
 http = ["reqwest", "axum", "hyper", "tokio-runtime"]
 websocket = ["tokio-tungstenite", "tokio-runtime"]
-full = ["http", "websocket"]
+opentelemetry = ["dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-otlp", "dep:tracing-opentelemetry", "dep:tracing-subscriber", "tokio-runtime"]
+prometheus = ["dep:prometheus"]
+full = ["http", "websocket", "opentelemetry", "prometheus"]
 
 # Deprecated feature aliases for backwards compatibility
 # These map to smol-runtime since async-std was replaced by smol

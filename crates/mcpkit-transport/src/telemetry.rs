@@ -635,6 +635,511 @@ pub mod propagation {
     }
 }
 
+/// OpenTelemetry SDK integration.
+///
+/// This module provides integration with the OpenTelemetry SDK for exporting
+/// traces, metrics, and logs to OpenTelemetry-compatible backends.
+///
+/// # Feature Flag
+///
+/// This module requires the `opentelemetry` feature flag to be enabled:
+///
+/// ```toml
+/// mcpkit-transport = { version = "0.3", features = ["opentelemetry"] }
+/// ```
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use mcpkit_transport::telemetry::otel::{init_tracing, OtelConfig};
+///
+/// #[tokio::main]
+/// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+///     // Initialize OpenTelemetry with OTLP exporter
+///     let config = OtelConfig::new("my-mcp-service")
+///         .with_otlp_endpoint("http://localhost:4317");
+///
+///     let _guard = init_tracing(config)?;
+///
+///     // Your MCP service code here...
+///     // Traces will be automatically exported to the OTLP endpoint
+///
+///     Ok(())
+/// }
+/// ```
+#[cfg(feature = "opentelemetry")]
+pub mod otel {
+    use opentelemetry::KeyValue;
+    use opentelemetry::trace::TracerProvider as _;
+    use opentelemetry_otlp::WithExportConfig;
+    use opentelemetry_sdk::{Resource, trace::SdkTracerProvider};
+    use tracing_opentelemetry::OpenTelemetryLayer;
+    use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
+
+    /// Configuration for OpenTelemetry integration.
+    #[derive(Debug, Clone)]
+    pub struct OtelConfig {
+        /// Service name for traces and metrics.
+        pub service_name: String,
+        /// OTLP endpoint URL (e.g., `http://localhost:4317`).
+        pub otlp_endpoint: Option<String>,
+        /// Service version.
+        pub service_version: Option<String>,
+        /// Deployment environment (e.g., "production", "staging").
+        pub environment: Option<String>,
+        /// Enable trace sampling (1.0 = always sample, 0.0 = never sample).
+        pub sample_ratio: f64,
+        /// Log filter directive (e.g., "info,mcpkit=debug").
+        pub log_filter: String,
+    }
+
+    impl OtelConfig {
+        /// Create a new OpenTelemetry configuration.
+        #[must_use]
+        pub fn new(service_name: impl Into<String>) -> Self {
+            Self {
+                service_name: service_name.into(),
+                otlp_endpoint: None,
+                service_version: None,
+                environment: None,
+                sample_ratio: 1.0,
+                log_filter: "info".to_string(),
+            }
+        }
+
+        /// Set the OTLP exporter endpoint.
+        #[must_use]
+        pub fn with_otlp_endpoint(mut self, endpoint: impl Into<String>) -> Self {
+            self.otlp_endpoint = Some(endpoint.into());
+            self
+        }
+
+        /// Set the service version.
+        #[must_use]
+        pub fn with_service_version(mut self, version: impl Into<String>) -> Self {
+            self.service_version = Some(version.into());
+            self
+        }
+
+        /// Set the deployment environment.
+        #[must_use]
+        pub fn with_environment(mut self, env: impl Into<String>) -> Self {
+            self.environment = Some(env.into());
+            self
+        }
+
+        /// Set the trace sample ratio (0.0 to 1.0).
+        #[must_use]
+        pub fn with_sample_ratio(mut self, ratio: f64) -> Self {
+            self.sample_ratio = ratio.clamp(0.0, 1.0);
+            self
+        }
+
+        /// Set the log filter directive.
+        #[must_use]
+        pub fn with_log_filter(mut self, filter: impl Into<String>) -> Self {
+            self.log_filter = filter.into();
+            self
+        }
+    }
+
+    impl Default for OtelConfig {
+        fn default() -> Self {
+            Self::new("mcp-service")
+        }
+    }
+
+    /// Guard that shuts down the tracer provider when dropped.
+    pub struct TracingGuard {
+        provider: SdkTracerProvider,
+    }
+
+    impl Drop for TracingGuard {
+        fn drop(&mut self) {
+            if let Err(e) = self.provider.shutdown() {
+                eprintln!("Failed to shutdown tracer provider: {e:?}");
+            }
+        }
+    }
+
+    /// Initialize OpenTelemetry tracing with the given configuration.
+    ///
+    /// Returns a guard that must be held for the lifetime of the application.
+    /// When dropped, it will flush and shutdown the tracer provider.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the tracer provider fails to initialize.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use mcpkit_transport::telemetry::otel::{init_tracing, OtelConfig};
+    ///
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     let config = OtelConfig::new("my-service")
+    ///         .with_otlp_endpoint("http://localhost:4317")
+    ///         .with_environment("production");
+    ///
+    ///     let _guard = init_tracing(config)?;
+    ///
+    ///     // Traces are now being exported...
+    ///     tracing::info!("Service started");
+    ///
+    ///     Ok(())
+    /// }
+    /// ```
+    pub fn init_tracing(
+        config: OtelConfig,
+    ) -> Result<TracingGuard, Box<dyn std::error::Error + Send + Sync>> {
+        // Build resource attributes
+        let mut attributes = vec![KeyValue::new("service.name", config.service_name.clone())];
+
+        if let Some(version) = &config.service_version {
+            attributes.push(KeyValue::new("service.version", version.clone()));
+        }
+
+        if let Some(env) = &config.environment {
+            attributes.push(KeyValue::new("deployment.environment", env.clone()));
+        }
+
+        let resource = Resource::builder().with_attributes(attributes).build();
+
+        // Build the tracer provider
+        let mut provider_builder = SdkTracerProvider::builder()
+            .with_resource(resource)
+            .with_sampler(opentelemetry_sdk::trace::Sampler::TraceIdRatioBased(
+                config.sample_ratio,
+            ));
+
+        // Add OTLP exporter if endpoint is configured
+        if let Some(endpoint) = &config.otlp_endpoint {
+            let exporter = opentelemetry_otlp::SpanExporter::builder()
+                .with_tonic()
+                .with_endpoint(endpoint.clone())
+                .build()?;
+
+            provider_builder = provider_builder.with_batch_exporter(exporter);
+        }
+
+        let provider = provider_builder.build();
+        let tracer = provider.tracer(config.service_name.clone());
+
+        // Create the OpenTelemetry layer
+        let otel_layer = OpenTelemetryLayer::new(tracer);
+
+        // Build the subscriber with env filter
+        let filter = EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| EnvFilter::new(&config.log_filter));
+
+        tracing_subscriber::registry()
+            .with(filter)
+            .with(otel_layer)
+            .with(tracing_subscriber::fmt::layer())
+            .init();
+
+        Ok(TracingGuard { provider })
+    }
+
+    /// Initialize OpenTelemetry tracing with default configuration.
+    ///
+    /// This uses the service name "mcp-service" and reads the OTLP endpoint
+    /// from the `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the tracer provider fails to initialize.
+    pub fn init_tracing_default() -> Result<TracingGuard, Box<dyn std::error::Error + Send + Sync>>
+    {
+        let mut config = OtelConfig::default();
+
+        if let Ok(endpoint) = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT") {
+            config = config.with_otlp_endpoint(endpoint);
+        }
+
+        if let Ok(service_name) = std::env::var("OTEL_SERVICE_NAME") {
+            config.service_name = service_name;
+        }
+
+        init_tracing(config)
+    }
+}
+
+/// Prometheus metrics integration.
+///
+/// This module provides Prometheus-compatible metrics for MCP transports.
+///
+/// # Feature Flag
+///
+/// This module requires the `prometheus` feature flag to be enabled:
+///
+/// ```toml
+/// mcpkit-transport = { version = "0.3", features = ["prometheus"] }
+/// ```
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use mcpkit_transport::telemetry::prom::{McpMetrics, MetricsExporter};
+///
+/// // Create metrics registry
+/// let metrics = McpMetrics::new();
+///
+/// // Record some operations
+/// metrics.record_request("tools/call");
+/// metrics.record_response_time("tools/call", 0.05);
+///
+/// // Export metrics in Prometheus text format
+/// let exporter = MetricsExporter::new(metrics.registry());
+/// let output = exporter.gather()?;
+/// println!("{}", output);
+/// ```
+#[cfg(feature = "prometheus")]
+pub mod prom {
+    use prometheus::{
+        Counter, CounterVec, Encoder, Gauge, GaugeVec, HistogramOpts, HistogramVec, Opts, Registry,
+        TextEncoder,
+    };
+    use std::sync::Arc;
+
+    /// MCP-specific Prometheus metrics.
+    #[derive(Clone)]
+    pub struct McpMetrics {
+        registry: Arc<Registry>,
+        /// Total messages sent.
+        pub messages_sent: Counter,
+        /// Total messages received.
+        pub messages_received: Counter,
+        /// Total bytes sent.
+        pub bytes_sent: Counter,
+        /// Total bytes received.
+        pub bytes_received: Counter,
+        /// Request count by method.
+        pub requests_total: CounterVec,
+        /// Error count by type.
+        pub errors_total: CounterVec,
+        /// Response time histogram by method.
+        pub response_time_seconds: HistogramVec,
+        /// Active connections gauge.
+        pub active_connections: Gauge,
+        /// Connection state gauge (by state).
+        pub connection_state: GaugeVec,
+    }
+
+    impl McpMetrics {
+        /// Create a new MCP metrics instance with a custom registry.
+        ///
+        /// # Errors
+        ///
+        /// Returns an error if metrics fail to register.
+        pub fn new() -> Result<Self, prometheus::Error> {
+            Self::with_registry(Registry::new())
+        }
+
+        /// Create metrics with a custom registry.
+        ///
+        /// # Errors
+        ///
+        /// Returns an error if metrics fail to register.
+        pub fn with_registry(registry: Registry) -> Result<Self, prometheus::Error> {
+            let messages_sent = Counter::new(
+                "mcp_messages_sent_total",
+                "Total number of MCP messages sent",
+            )?;
+            registry.register(Box::new(messages_sent.clone()))?;
+
+            let messages_received = Counter::new(
+                "mcp_messages_received_total",
+                "Total number of MCP messages received",
+            )?;
+            registry.register(Box::new(messages_received.clone()))?;
+
+            let bytes_sent = Counter::new(
+                "mcp_bytes_sent_total",
+                "Total bytes sent over MCP transport",
+            )?;
+            registry.register(Box::new(bytes_sent.clone()))?;
+
+            let bytes_received = Counter::new(
+                "mcp_bytes_received_total",
+                "Total bytes received over MCP transport",
+            )?;
+            registry.register(Box::new(bytes_received.clone()))?;
+
+            let requests_total = CounterVec::new(
+                Opts::new("mcp_requests_total", "Total MCP requests by method"),
+                &["method"],
+            )?;
+            registry.register(Box::new(requests_total.clone()))?;
+
+            let errors_total = CounterVec::new(
+                Opts::new("mcp_errors_total", "Total MCP errors by type"),
+                &["error_type"],
+            )?;
+            registry.register(Box::new(errors_total.clone()))?;
+
+            let response_time_seconds = HistogramVec::new(
+                HistogramOpts::new("mcp_response_time_seconds", "MCP response time in seconds")
+                    .buckets(vec![
+                        0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
+                    ]),
+                &["method"],
+            )?;
+            registry.register(Box::new(response_time_seconds.clone()))?;
+
+            let active_connections =
+                Gauge::new("mcp_active_connections", "Number of active MCP connections")?;
+            registry.register(Box::new(active_connections.clone()))?;
+
+            let connection_state = GaugeVec::new(
+                Opts::new("mcp_connection_state", "MCP connection state"),
+                &["state"],
+            )?;
+            registry.register(Box::new(connection_state.clone()))?;
+
+            Ok(Self {
+                registry: Arc::new(registry),
+                messages_sent,
+                messages_received,
+                bytes_sent,
+                bytes_received,
+                requests_total,
+                errors_total,
+                response_time_seconds,
+                active_connections,
+                connection_state,
+            })
+        }
+
+        /// Get the metrics registry.
+        #[must_use]
+        pub fn registry(&self) -> &Registry {
+            &self.registry
+        }
+
+        /// Record a message sent.
+        pub fn record_send(&self, size: usize) {
+            self.messages_sent.inc();
+            self.bytes_sent.inc_by(size as f64);
+        }
+
+        /// Record a message received.
+        pub fn record_receive(&self, size: usize) {
+            self.messages_received.inc();
+            self.bytes_received.inc_by(size as f64);
+        }
+
+        /// Record a request by method.
+        pub fn record_request(&self, method: &str) {
+            self.requests_total.with_label_values(&[method]).inc();
+        }
+
+        /// Record response time for a method.
+        pub fn record_response_time(&self, method: &str, seconds: f64) {
+            self.response_time_seconds
+                .with_label_values(&[method])
+                .observe(seconds);
+        }
+
+        /// Record an error by type.
+        pub fn record_error(&self, error_type: &str) {
+            self.errors_total.with_label_values(&[error_type]).inc();
+        }
+
+        /// Set the active connection count.
+        pub fn set_active_connections(&self, count: i64) {
+            self.active_connections.set(count as f64);
+        }
+
+        /// Increment active connections.
+        pub fn connection_opened(&self) {
+            self.active_connections.inc();
+        }
+
+        /// Decrement active connections.
+        pub fn connection_closed(&self) {
+            self.active_connections.dec();
+        }
+
+        /// Set connection state.
+        pub fn set_connection_state(&self, state: &str, value: f64) {
+            self.connection_state.with_label_values(&[state]).set(value);
+        }
+    }
+
+    impl std::fmt::Debug for McpMetrics {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("McpMetrics")
+                .field("registry", &"<Registry>")
+                .finish()
+        }
+    }
+
+    /// Prometheus metrics exporter.
+    ///
+    /// Provides a way to export metrics in Prometheus text format.
+    pub struct MetricsExporter {
+        registry: Arc<Registry>,
+        encoder: TextEncoder,
+    }
+
+    impl MetricsExporter {
+        /// Create a new metrics exporter for the given registry.
+        #[must_use]
+        pub fn new(registry: &Registry) -> Self {
+            Self {
+                registry: Arc::new(registry.clone()),
+                encoder: TextEncoder::new(),
+            }
+        }
+
+        /// Create an exporter from [`McpMetrics`].
+        #[must_use]
+        pub fn from_metrics(metrics: &McpMetrics) -> Self {
+            Self {
+                registry: Arc::clone(&metrics.registry),
+                encoder: TextEncoder::new(),
+            }
+        }
+
+        /// Gather and encode all metrics in Prometheus text format.
+        ///
+        /// # Errors
+        ///
+        /// Returns an error if encoding fails.
+        pub fn gather(&self) -> Result<String, prometheus::Error> {
+            let metric_families = self.registry.gather();
+            let mut buffer = Vec::new();
+            self.encoder.encode(&metric_families, &mut buffer)?;
+            Ok(String::from_utf8_lossy(&buffer).to_string())
+        }
+
+        /// Get the content type for the encoded metrics.
+        #[must_use]
+        pub fn content_type(&self) -> &str {
+            self.encoder.format_type()
+        }
+    }
+
+    impl std::fmt::Debug for MetricsExporter {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("MetricsExporter")
+                .field("registry", &"<Registry>")
+                .finish()
+        }
+    }
+
+    /// Create a default global metrics registry with MCP metrics.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if metrics registration fails.
+    pub fn create_default_metrics() -> Result<McpMetrics, prometheus::Error> {
+        McpMetrics::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
