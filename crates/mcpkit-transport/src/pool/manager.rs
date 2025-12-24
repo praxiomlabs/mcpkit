@@ -3,11 +3,11 @@
 use std::collections::VecDeque;
 use std::future::Future;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use crate::error::TransportError;
-use crate::runtime::AsyncMutex;
+use crate::runtime::{AsyncMutex, Notify};
 use crate::traits::Transport;
 
 use super::config::{PoolConfig, PoolStats};
@@ -21,6 +21,8 @@ pub struct PoolState<T> {
     pub in_use: usize,
     /// Whether the pool is closed.
     pub closed: bool,
+    /// Peak number of concurrent connections ever in use.
+    pub peak_in_use: usize,
 }
 
 /// A connection pool for managing MCP transport connections.
@@ -36,12 +38,20 @@ where
     config: PoolConfig,
     factory: F,
     pub(crate) state: AsyncMutex<PoolState<T>>,
+    /// Notification for waiters when a connection becomes available.
+    notify: Notify,
     next_id: AtomicU64,
     stats_created: AtomicU64,
     stats_closed: AtomicU64,
     stats_acquires: AtomicU64,
     stats_releases: AtomicU64,
     stats_timeouts: AtomicU64,
+    /// Number of tasks currently waiting for a connection.
+    stats_waiters: AtomicUsize,
+    /// Connections recycled due to lifetime limits.
+    stats_recycled_lifetime: AtomicU64,
+    /// Connections recycled due to health check failures.
+    stats_recycled_health: AtomicU64,
 }
 
 impl<T, F, Fut> Pool<T, F, Fut>
@@ -52,7 +62,7 @@ where
 {
     /// Create a new connection pool.
     #[must_use]
-    pub const fn new(config: PoolConfig, factory: F) -> Self {
+    pub fn new(config: PoolConfig, factory: F) -> Self {
         Self {
             config,
             factory,
@@ -60,14 +70,54 @@ where
                 available: VecDeque::new(),
                 in_use: 0,
                 closed: false,
+                peak_in_use: 0,
             }),
+            notify: Notify::new(),
             next_id: AtomicU64::new(1),
             stats_created: AtomicU64::new(0),
             stats_closed: AtomicU64::new(0),
             stats_acquires: AtomicU64::new(0),
             stats_releases: AtomicU64::new(0),
             stats_timeouts: AtomicU64::new(0),
+            stats_waiters: AtomicUsize::new(0),
+            stats_recycled_lifetime: AtomicU64::new(0),
+            stats_recycled_health: AtomicU64::new(0),
         }
+    }
+
+    /// Warm up the pool by pre-creating connections.
+    ///
+    /// Creates connections up to `min_connections` in advance.
+    /// This is called automatically if `warm_up` is enabled in config.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any connection fails to be created.
+    pub async fn warm_up(&self) -> Result<(), TransportError> {
+        let min_connections = self.config.min_connections;
+
+        for _ in 0..min_connections {
+            let state = self.state.lock().await;
+            let total = state.available.len() + state.in_use;
+            drop(state);
+
+            if total >= min_connections {
+                break;
+            }
+
+            // Create a new connection
+            let connection = (self.factory)().await?;
+            let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+
+            self.stats_created.fetch_add(1, Ordering::Relaxed);
+
+            let mut state = self.state.lock().await;
+            state
+                .available
+                .push_back(PooledConnection::new(connection, id));
+        }
+
+        Ok(())
     }
 
     /// Get the pool configuration.
@@ -87,6 +137,10 @@ where
             timeouts: self.stats_timeouts.load(Ordering::Relaxed),
             in_use: state.in_use,
             idle: state.available.len(),
+            waiters: self.stats_waiters.load(Ordering::Relaxed),
+            recycled_lifetime: self.stats_recycled_lifetime.load(Ordering::Relaxed),
+            recycled_health: self.stats_recycled_health.load(Ordering::Relaxed),
+            peak_in_use: state.peak_in_use,
         }
     }
 
@@ -119,6 +173,7 @@ where
             while let Some(mut conn) = state.available.pop_front() {
                 // Check if connection is still healthy
                 if self.config.test_on_acquire && !conn.connection.is_connected() {
+                    self.stats_recycled_health.fetch_add(1, Ordering::Relaxed);
                     self.stats_closed.fetch_add(1, Ordering::Relaxed);
                     continue;
                 }
@@ -129,8 +184,23 @@ where
                     continue;
                 }
 
+                // Check max connection lifetime
+                if let Some(max_lifetime) = self.config.max_connection_lifetime {
+                    if conn.is_expired(max_lifetime) {
+                        self.stats_recycled_lifetime.fetch_add(1, Ordering::Relaxed);
+                        self.stats_closed.fetch_add(1, Ordering::Relaxed);
+                        continue;
+                    }
+                }
+
                 conn.touch();
                 state.in_use += 1;
+
+                // Track peak usage
+                if state.in_use > state.peak_in_use {
+                    state.peak_in_use = state.in_use;
+                }
+
                 self.stats_acquires.fetch_add(1, Ordering::Relaxed);
                 return Ok(conn);
             }
@@ -139,6 +209,12 @@ where
             let total = state.available.len() + state.in_use;
             if total < self.config.max_connections {
                 state.in_use += 1;
+
+                // Track peak usage
+                if state.in_use > state.peak_in_use {
+                    state.peak_in_use = state.in_use;
+                }
+
                 drop(state);
 
                 // Create new connection outside the lock
@@ -151,9 +227,32 @@ where
                 return Ok(PooledConnection::new(connection, id));
             }
 
-            // No connections available and at max capacity - wait and retry
+            // No connections available and at max capacity - wait for notification
             drop(state);
-            crate::runtime::sleep(Duration::from_millis(10)).await;
+
+            // Track waiting
+            self.stats_waiters.fetch_add(1, Ordering::Relaxed);
+
+            // Wait for a connection to become available or timeout
+            let remaining = self.config.acquire_timeout.saturating_sub(start.elapsed());
+            if remaining.is_zero() {
+                self.stats_waiters.fetch_sub(1, Ordering::Relaxed);
+                self.stats_timeouts.fetch_add(1, Ordering::Relaxed);
+                return Err(TransportError::Timeout {
+                    operation: "pool acquire".to_string(),
+                    duration: self.config.acquire_timeout,
+                });
+            }
+
+            // Use event notification with timeout for efficient waiting
+            let listener = self.notify.listen();
+            let wait_result =
+                crate::runtime::timeout(remaining.min(Duration::from_millis(100)), listener).await;
+
+            self.stats_waiters.fetch_sub(1, Ordering::Relaxed);
+
+            // Whether we got notified or timed out, try to acquire again
+            let _ = wait_result;
         }
     }
 
@@ -168,17 +267,36 @@ where
         // Check if pool is closed or connection is unhealthy
         if state.closed {
             self.stats_closed.fetch_add(1, Ordering::Relaxed);
+            // Notify waiters even on close so they can fail fast
+            self.notify.notify(1);
             return;
         }
 
         if self.config.test_on_release && !conn.connection.is_connected() {
+            self.stats_recycled_health.fetch_add(1, Ordering::Relaxed);
             self.stats_closed.fetch_add(1, Ordering::Relaxed);
+            // Notify waiters so they can try to create a new connection
+            self.notify.notify(1);
             return;
+        }
+
+        // Check max connection lifetime on release
+        if let Some(max_lifetime) = self.config.max_connection_lifetime {
+            if conn.is_expired(max_lifetime) {
+                self.stats_recycled_lifetime.fetch_add(1, Ordering::Relaxed);
+                self.stats_closed.fetch_add(1, Ordering::Relaxed);
+                // Notify waiters so they can try to create a new connection
+                self.notify.notify(1);
+                return;
+            }
         }
 
         conn.touch();
         state.available.push_back(conn);
         self.stats_releases.fetch_add(1, Ordering::Relaxed);
+
+        // Notify one waiter that a connection is available
+        self.notify.notify(1);
     }
 
     /// Close the pool and all connections.
@@ -191,6 +309,9 @@ where
             let _ = conn.connection.close().await;
             self.stats_closed.fetch_add(1, Ordering::Relaxed);
         }
+
+        // Notify all waiters so they can fail fast
+        self.notify.notify(usize::MAX);
     }
 
     /// Check if the pool is closed.

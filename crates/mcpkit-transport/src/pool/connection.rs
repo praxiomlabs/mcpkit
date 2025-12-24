@@ -62,6 +62,18 @@ impl<T> PooledConnection<T> {
     pub fn is_idle(&self, timeout: Duration) -> bool {
         self.last_used.elapsed() > timeout
     }
+
+    /// Check if the connection has exceeded its maximum lifetime.
+    #[must_use]
+    pub fn is_expired(&self, max_lifetime: Duration) -> bool {
+        self.created_at.elapsed() > max_lifetime
+    }
+
+    /// Get the age of the connection.
+    #[must_use]
+    pub fn age(&self) -> Duration {
+        self.created_at.elapsed()
+    }
 }
 
 /// A simple wrapper for pools that provides automatic connection release.

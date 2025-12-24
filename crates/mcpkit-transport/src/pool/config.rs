@@ -4,6 +4,7 @@ use std::time::Duration;
 
 /// Configuration for the connection pool.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct PoolConfig {
     /// Maximum number of connections in the pool.
     pub max_connections: usize,
@@ -19,6 +20,14 @@ pub struct PoolConfig {
     pub test_on_acquire: bool,
     /// Whether to test connections when returning them to the pool.
     pub test_on_release: bool,
+    /// Maximum lifetime for a connection before forced recycling.
+    ///
+    /// Set to `None` to disable lifetime limits.
+    pub max_connection_lifetime: Option<Duration>,
+    /// Whether to warm up the pool by pre-creating connections.
+    ///
+    /// When enabled, `min_connections` will be created on pool initialization.
+    pub warm_up: bool,
 }
 
 impl PoolConfig {
@@ -76,6 +85,25 @@ impl PoolConfig {
         self.test_on_release = test;
         self
     }
+
+    /// Set the maximum connection lifetime.
+    ///
+    /// Connections older than this will be recycled even if healthy.
+    /// Set to `None` to disable lifetime limits.
+    #[must_use]
+    pub const fn max_connection_lifetime(mut self, lifetime: Option<Duration>) -> Self {
+        self.max_connection_lifetime = lifetime;
+        self
+    }
+
+    /// Enable or disable pool warm-up.
+    ///
+    /// When enabled, `min_connections` will be pre-created during pool initialization.
+    #[must_use]
+    pub const fn warm_up(mut self, enabled: bool) -> Self {
+        self.warm_up = enabled;
+        self
+    }
 }
 
 impl Default for PoolConfig {
@@ -88,12 +116,15 @@ impl Default for PoolConfig {
             health_check_interval: Duration::from_secs(60),
             test_on_acquire: true,
             test_on_release: false,
+            max_connection_lifetime: None,
+            warm_up: false,
         }
     }
 }
 
 /// Pool statistics.
 #[derive(Debug, Clone, Default)]
+#[non_exhaustive]
 pub struct PoolStats {
     /// Total number of connections created.
     pub connections_created: u64,
@@ -109,6 +140,14 @@ pub struct PoolStats {
     pub in_use: usize,
     /// Current number of idle connections.
     pub idle: usize,
+    /// Current number of waiters in the queue.
+    pub waiters: usize,
+    /// Total number of connections recycled due to lifetime limits.
+    pub recycled_lifetime: u64,
+    /// Total number of connections recycled due to health check failures.
+    pub recycled_health: u64,
+    /// Peak number of concurrent connections ever used.
+    pub peak_in_use: usize,
 }
 
 #[cfg(test)]

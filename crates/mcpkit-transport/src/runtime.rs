@@ -46,6 +46,12 @@ pub use async_lock::Semaphore as AsyncSemaphore;
 /// A runtime-agnostic semaphore guard.
 pub use async_lock::SemaphoreGuard as AsyncSemaphoreGuard;
 
+/// A runtime-agnostic event notification mechanism.
+///
+/// Uses `event-listener` (via `async-lock`) for runtime-agnostic behavior.
+/// This is useful for signaling waiters when a resource becomes available.
+pub use event_listener::Event as Notify;
+
 // =============================================================================
 // Channel Abstraction
 // =============================================================================
