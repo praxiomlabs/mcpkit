@@ -26,12 +26,14 @@
 //! assert!(transport.is_connected());
 //! ```
 
+mod batching;
 mod logging;
 mod metrics;
 mod rate_limit;
 mod retry;
 mod timeout;
 
+pub use batching::{BatchingConfig, BatchingLayer, BatchingStats, BatchingTransport};
 pub use logging::LoggingLayer;
 pub use metrics::MetricsLayer;
 pub use rate_limit::{
