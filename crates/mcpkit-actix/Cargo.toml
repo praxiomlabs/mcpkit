@@ -18,7 +18,6 @@ mcpkit-transport = { version = "0.3.0", path = "../mcpkit-transport", features =
 # Web framework
 actix-web = "4"
 actix-rt = "2"
-actix-web-actors = "4"
 actix-cors = "0.7"
 
 # Async runtime
@@ -49,7 +48,6 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [package.metadata.cargo-machete]
 # actix-rt: provides runtime for actix-web
-# actix-web-actors: WebSocket actor support
 # mcpkit-transport: re-exported transport types
 # serde: used via derive macros
-ignored = ["actix-rt", "actix-web-actors", "mcpkit-transport", "serde"]
+ignored = ["actix-rt", "mcpkit-transport", "serde"]
