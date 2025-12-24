@@ -63,6 +63,7 @@ pub mod builder;
 pub mod capability;
 pub mod context;
 pub mod handler;
+pub mod health;
 pub mod metrics;
 pub mod router;
 pub mod server;
@@ -74,6 +75,9 @@ pub use context::{CancellationToken, CancelledFuture, Context, ContextData, NoOp
 pub use handler::{
     CompletionHandler, ElicitationHandler, LogLevel, LoggingHandler, PromptHandler,
     ResourceHandler, SamplingHandler, ServerHandler, TaskHandler, ToolHandler,
+};
+pub use health::{
+    ComponentHealth, HealthChecker, HealthReport, HealthStatus, LivenessResponse, ReadinessResponse,
 };
 pub use metrics::{MethodStats, MetricsSnapshot, ServerMetrics};
 pub use router::{route_prompts, route_resources, route_tools};
