@@ -33,6 +33,10 @@ url.workspace = true
 rand.workspace = true
 sha2.workspace = true
 
+# WASM support - getrandom needs js feature for wasm32
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.2", features = ["js"] }
+
 [dev-dependencies]
 pretty_assertions.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

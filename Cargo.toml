@@ -19,6 +19,7 @@ members = [
     "examples/with-middleware",
     "examples/database-server",
     "examples/filesystem-server",
+    "examples/smol-server",
     "benches",
 ]
 
@@ -59,7 +60,7 @@ tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
 hyper = { version = "1.0", features = ["full"] }
 
 # Utilities
-uuid = { version = "1.0", features = ["v4", "serde"] }
+uuid = { version = "1.0", features = ["v4", "serde", "js"] }
 chrono = { version = "0.4", features = ["serde"] }
 base64 = "0.22"
 url = { version = "2.5", features = ["serde"] }
@@ -70,6 +71,15 @@ sha2 = "0.10"
 # Tracing/Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# OpenTelemetry (optional observability)
+opentelemetry = "0.28"
+opentelemetry_sdk = { version = "0.28", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "0.28", features = ["grpc-tonic"] }
+tracing-opentelemetry = "0.29"
+
+# Prometheus metrics (optional observability)
+prometheus = "0.14"
 
 # Proc macros
 syn = { version = "2.0", features = ["full", "parsing", "extra-traits"] }
