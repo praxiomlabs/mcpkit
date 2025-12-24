@@ -14,7 +14,7 @@ This guide covers common issues and their solutions when using the Rust MCP SDK.
 
 ```toml
 [dependencies]
-mcpkit = { version = "0.2", features = ["server"] }
+mcpkit = { version = "0.3", features = ["server"] }
 ```
 
 #### "the trait `ServerHandler` is not implemented"

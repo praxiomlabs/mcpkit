@@ -2,6 +2,8 @@
 
 This document describes the versioning policy, deprecation process, and stability guarantees for the Rust MCP SDK.
 
+> **See also:** [API Stability Commitment](api-stability.md) for detailed stability tiers and enforcement.
+
 ## Versioning Policy
 
 The Rust MCP SDK follows [Semantic Versioning 2.0.0](https://semver.org/):
@@ -18,7 +20,7 @@ During the 0.x.y phase, the API is considered unstable:
 - Patch versions (0.0.x) remain backward compatible
 - We aim to minimize churn, but cannot guarantee API stability
 
-**Current Status:** 0.2.x (Beta)
+**Current Status:** 0.3.x (Release Candidate)
 
 ### Crate Versioning
 
@@ -26,28 +28,31 @@ All crates in the workspace are versioned together:
 
 | Crate | Version |
 |-------|---------|
-| `mcpkit` | 0.2.x |
-| `mcpkit-core` | 0.2.x |
-| `mcpkit-server` | 0.2.x |
-| `mcpkit-client` | 0.2.x |
-| `mcpkit-transport` | 0.2.x |
-| `mcpkit-macros` | 0.2.x |
-| `mcpkit-testing` | 0.2.x |
-| `mcpkit-axum` | 0.2.x |
-| `mcpkit-actix` | 0.2.x |
+| `mcpkit` | 0.3.x |
+| `mcpkit-core` | 0.3.x |
+| `mcpkit-server` | 0.3.x |
+| `mcpkit-client` | 0.3.x |
+| `mcpkit-transport` | 0.3.x |
+| `mcpkit-macros` | 0.3.x |
+| `mcpkit-testing` | 0.3.x |
+| `mcpkit-axum` | 0.3.x |
+| `mcpkit-actix` | 0.3.x |
 
 This simplifies dependency management and ensures compatibility.
 
 ## Stability Tiers
 
+The API is organized into three stability tiers. For complete details, see [API Stability Commitment](api-stability.md).
+
 ### Tier 1: Stable (after 1.0)
 
 These APIs are covered by semver guarantees:
 
-- `#[tool]`, `#[resource]`, `#[prompt]` macro syntax
+- `#[mcp_server]`, `#[tool]`, `#[resource]`, `#[prompt]` macro syntax
 - `McpError` error type and variants
-- `ToolOutput` return types
+- `ToolOutput`, `ResourceContents`, `PromptMessage` types
 - `ServerBuilder` and `ClientBuilder` APIs
+- Handler traits (`ToolHandler`, `ResourceHandler`, etc.)
 - Transport trait implementations
 - JSON-RPC wire format
 
@@ -59,14 +64,16 @@ These may change without major version bumps:
 - Feature-gated experimental features
 - Items marked `#[doc(hidden)]`
 - Private modules
+- Metrics types
 
 ### Tier 3: Internal
 
 No stability guarantees:
 
 - Private functions and types
-- Test utilities
+- Test utilities (`mcpkit-testing`)
 - Build scripts
+- Benchmarks
 
 ## Deprecation Process
 
@@ -131,10 +138,10 @@ Before declaring 1.0 stable, we will:
 |-----------|--------|--------|
 | 0.1.0 Alpha | Q4 2024 | Released |
 | 0.2.0 Beta | Q4 2024 | Released |
-| 0.3.0 RC | Q1 2025 | Planned |
-| 1.0.0 Stable | Q2 2025 | Planned |
+| 0.3.0 RC | Q4 2024 | Released |
+| 1.0.0 Stable | 2025 | In Progress |
 
-Note: Dates are estimates and subject to change based on feedback and testing.
+Note: We follow a "release when ready" philosophy. The 1.0 release will occur when all criteria in the [ROADMAP.md](../ROADMAP.md) are met and the API has stabilized through community usage.
 
 ## Supported Rust Versions
 
@@ -161,7 +168,9 @@ When updating MSRV:
 
 | SDK Version | MCP Versions |
 |-------------|--------------|
-| 0.1.x | 2024-11-05, 2025-11-25 |
+| 0.3.x | 2024-11-05, 2025-03-26, 2025-06-18, 2025-11-25 (default) |
+| 0.2.x | 2024-11-05, 2025-03-26, 2025-06-18 |
+| 0.1.x | 2024-11-05 |
 
 ### Protocol Updates
 
@@ -197,7 +206,7 @@ experimental = []  # Experimental features
 Enable experimental features at your own risk:
 
 ```toml
-mcpkit = { version = "0.2", features = ["experimental"] }
+mcpkit = { version = "0.3", features = ["experimental"] }
 ```
 
 ### Optional Transports

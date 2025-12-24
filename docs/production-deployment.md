@@ -338,7 +338,7 @@ tracing::info!(
 
 ```toml
 [dependencies]
-mcpkit = { version = "0.2", features = ["tokio-runtime"] }
+mcpkit = { version = "0.3", features = ["tokio-runtime"] }
 ```
 
 **Advantages:**
@@ -353,7 +353,7 @@ mcpkit = { version = "0.2", features = ["tokio-runtime"] }
 
 ```toml
 [dependencies]
-mcpkit = { version = "0.2", features = ["async-std-runtime"] }
+mcpkit = { version = "0.3", features = ["async-std-runtime"] }
 ```
 
 **Use cases:**
@@ -364,7 +364,7 @@ mcpkit = { version = "0.2", features = ["async-std-runtime"] }
 
 ```toml
 [dependencies]
-mcpkit = { version = "0.2", features = ["smol-runtime"] }
+mcpkit = { version = "0.3", features = ["smol-runtime"] }
 ```
 
 **Use cases:**

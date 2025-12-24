@@ -17,8 +17,8 @@ Tokio is the default runtime and requires no additional configuration:
 
 ```toml
 [dependencies]
-mcpkit-transport = "0.2"
-mcpkit-server = "0.2"
+mcpkit-transport = "0.3"
+mcpkit-server = "0.3"
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -28,8 +28,8 @@ For minimal binary size, use smol:
 
 ```toml
 [dependencies]
-mcpkit-transport = { version = "0.2", default-features = false, features = ["smol-runtime"] }
-mcpkit-server = { version = "0.2", default-features = false, features = ["smol-runtime"] }
+mcpkit-transport = { version = "0.3", default-features = false, features = ["smol-runtime"] }
+mcpkit-server = { version = "0.3", default-features = false, features = ["smol-runtime"] }
 smol = "2"
 ```
 
