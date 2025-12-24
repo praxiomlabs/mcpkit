@@ -321,8 +321,7 @@ pub async fn handle_oauth_protected_resource(
     state: web::Data<OAuthState>,
 ) -> Result<HttpResponse, ExtensionError> {
     debug!("Serving OAuth protected resource metadata");
-    let body =
-        serde_json::to_string(&state.metadata).map_err(ExtensionError::Serialization)?;
+    let body = serde_json::to_string(&state.metadata).map_err(ExtensionError::Serialization)?;
 
     Ok(HttpResponse::Ok()
         .content_type(ContentType::json())
