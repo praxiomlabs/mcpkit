@@ -144,6 +144,25 @@ pub struct ParamAttrs {
     pub max: Option<i64>,
 }
 
+/// Attributes for the `#[mcp_client]` macro.
+#[derive(Debug, Default, FromMeta)]
+pub struct ClientAttrs {
+    /// Debug mode - print expanded code.
+    #[darling(default)]
+    pub debug_expand: bool,
+}
+
+impl ClientAttrs {
+    /// Parse client attributes from attribute tokens.
+    pub fn parse(attr: proc_macro2::TokenStream) -> Result<Self, darling::Error> {
+        if attr.is_empty() {
+            return Ok(Self::default());
+        }
+        let attr_args = NestedMeta::parse_meta_list(attr)?;
+        Self::from_list(&attr_args)
+    }
+}
+
 /// Create a span for error messages.
 pub fn call_site() -> Span {
     Span::call_site()

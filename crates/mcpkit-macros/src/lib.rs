@@ -58,6 +58,7 @@
 #![deny(missing_docs)]
 
 mod attrs;
+mod client;
 mod codegen;
 mod derive;
 mod error;
@@ -315,4 +316,270 @@ pub fn derive_tool_input(input: TokenStream) -> TokenStream {
     derive::expand_tool_input(input.into())
         .unwrap_or_else(|e| e.to_compile_error())
         .into()
+}
+
+// =============================================================================
+// Client Macros
+// =============================================================================
+
+/// The unified MCP client macro.
+///
+/// This macro transforms an impl block into a `ClientHandler` implementation,
+/// automatically generating all the necessary trait implementations.
+///
+/// # Example
+///
+/// ```ignore
+/// use mcpkit::prelude::*;
+///
+/// struct MyClient;
+///
+/// #[mcp_client]
+/// impl MyClient {
+///     /// Handle LLM sampling requests from servers.
+///     #[sampling]
+///     async fn handle_sampling(
+///         &self,
+///         request: CreateMessageRequest,
+///     ) -> Result<CreateMessageResult, McpError> {
+///         // Call your LLM here
+///         Ok(CreateMessageResult {
+///             role: Role::Assistant,
+///             content: Content::text("Response"),
+///             model: "my-model".to_string(),
+///             stop_reason: Some("end_turn".to_string()),
+///         })
+///     }
+///
+///     /// Provide filesystem roots to servers.
+///     #[roots]
+///     fn get_roots(&self) -> Vec<Root> {
+///         vec![Root::new("file:///home/user/project").name("Project")]
+///     }
+/// }
+/// ```
+///
+/// # Handler Methods
+///
+/// The following attributes mark methods as handlers:
+///
+/// - `#[sampling]` - Handle `sampling/createMessage` requests
+/// - `#[elicitation]` - Handle `elicitation/elicit` requests
+/// - `#[roots]` - Handle `roots/list` requests
+/// - `#[on_connected]` - Called when connection is established
+/// - `#[on_disconnected]` - Called when connection is closed
+/// - `#[on_task_progress]` - Handle task progress notifications
+/// - `#[on_resource_updated]` - Handle resource update notifications
+/// - `#[on_tools_list_changed]` - Handle tools list change notifications
+/// - `#[on_resources_list_changed]` - Handle resources list change notifications
+/// - `#[on_prompts_list_changed]` - Handle prompts list change notifications
+///
+/// # Generated Code
+///
+/// The macro generates:
+///
+/// 1. `impl ClientHandler` with all handler methods delegating to your implementations
+/// 2. A `capabilities()` method returning the appropriate `ClientCapabilities`
+#[proc_macro_attribute]
+pub fn mcp_client(attr: TokenStream, item: TokenStream) -> TokenStream {
+    client::expand_mcp_client(attr.into(), item.into())
+        .unwrap_or_else(|e| e.to_compile_error())
+        .into()
+}
+
+/// Mark a method as a sampling handler.
+///
+/// This handler is called when servers request LLM completions.
+/// The method should accept a `CreateMessageRequest` and return
+/// `Result<CreateMessageResult, McpError>` or `CreateMessageResult`.
+///
+/// # Example
+///
+/// ```ignore
+/// #[sampling]
+/// async fn handle_sampling(
+///     &self,
+///     request: CreateMessageRequest,
+/// ) -> Result<CreateMessageResult, McpError> {
+///     // Process the request and generate a response
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn sampling(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    // This is a marker attribute - just pass through the item unchanged
+    item
+}
+
+/// Mark a method as an elicitation handler.
+///
+/// This handler is called when servers request user input.
+/// The method should accept an `ElicitRequest` and return
+/// `Result<ElicitResult, McpError>` or `ElicitResult`.
+///
+/// # Example
+///
+/// ```ignore
+/// #[elicitation]
+/// async fn handle_elicitation(
+///     &self,
+///     request: ElicitRequest,
+/// ) -> Result<ElicitResult, McpError> {
+///     // Present the request to the user and return their response
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn elicitation(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    // This is a marker attribute - just pass through the item unchanged
+    item
+}
+
+/// Mark a method as a roots handler.
+///
+/// This handler is called when servers request the list of filesystem roots.
+/// The method should return `Vec<Root>` or `Result<Vec<Root>, McpError>`.
+///
+/// # Example
+///
+/// ```ignore
+/// #[roots]
+/// fn get_roots(&self) -> Vec<Root> {
+///     vec![
+///         Root::new("file:///home/user/project").name("Project"),
+///         Root::new("file:///home/user/docs").name("Documents"),
+///     ]
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn roots(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    // This is a marker attribute - just pass through the item unchanged
+    item
+}
+
+/// Mark a method as the connection established handler.
+///
+/// This handler is called when the client connects to a server.
+///
+/// # Example
+///
+/// ```ignore
+/// #[on_connected]
+/// async fn handle_connected(&self) {
+///     println!("Connected to server!");
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn on_connected(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    // This is a marker attribute - just pass through the item unchanged
+    item
+}
+
+/// Mark a method as the disconnection handler.
+///
+/// This handler is called when the client disconnects from a server.
+///
+/// # Example
+///
+/// ```ignore
+/// #[on_disconnected]
+/// async fn handle_disconnected(&self) {
+///     println!("Disconnected from server");
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn on_disconnected(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    // This is a marker attribute - just pass through the item unchanged
+    item
+}
+
+/// Mark a method as a task progress notification handler.
+///
+/// This handler is called when the server reports progress on a task.
+/// The method should accept a `TaskId` and `TaskProgress`.
+///
+/// # Example
+///
+/// ```ignore
+/// #[on_task_progress]
+/// async fn handle_progress(&self, task_id: TaskId, progress: TaskProgress) {
+///     println!("Task {} is {}% complete", task_id, progress.progress * 100.0);
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn on_task_progress(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    // This is a marker attribute - just pass through the item unchanged
+    item
+}
+
+/// Mark a method as a resource update notification handler.
+///
+/// This handler is called when a subscribed resource is updated.
+/// The method should accept a `String` (the resource URI).
+///
+/// # Example
+///
+/// ```ignore
+/// #[on_resource_updated]
+/// async fn handle_resource_updated(&self, uri: String) {
+///     println!("Resource updated: {}", uri);
+///     // Invalidate cache, refresh data, etc.
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn on_resource_updated(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    // This is a marker attribute - just pass through the item unchanged
+    item
+}
+
+/// Mark a method as a tools list change notification handler.
+///
+/// This handler is called when the server's tool list changes.
+///
+/// # Example
+///
+/// ```ignore
+/// #[on_tools_list_changed]
+/// async fn handle_tools_changed(&self) {
+///     println!("Tools list changed - refreshing cache");
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn on_tools_list_changed(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    // This is a marker attribute - just pass through the item unchanged
+    item
+}
+
+/// Mark a method as a resources list change notification handler.
+///
+/// This handler is called when the server's resource list changes.
+///
+/// # Example
+///
+/// ```ignore
+/// #[on_resources_list_changed]
+/// async fn handle_resources_changed(&self) {
+///     println!("Resources list changed - refreshing cache");
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn on_resources_list_changed(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    // This is a marker attribute - just pass through the item unchanged
+    item
+}
+
+/// Mark a method as a prompts list change notification handler.
+///
+/// This handler is called when the server's prompt list changes.
+///
+/// # Example
+///
+/// ```ignore
+/// #[on_prompts_list_changed]
+/// async fn handle_prompts_changed(&self) {
+///     println!("Prompts list changed - refreshing cache");
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn on_prompts_list_changed(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    // This is a marker attribute - just pass through the item unchanged
+    item
 }

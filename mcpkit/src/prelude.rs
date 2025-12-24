@@ -56,4 +56,8 @@ pub use mcpkit_server::{
 pub use mcpkit_transport::{Transport, TransportListener, TransportMetadata};
 
 // Macros - these are automatically available at crate root
-pub use mcpkit_macros::{ToolInput, mcp_server, prompt, resource, tool};
+pub use mcpkit_macros::{
+    ToolInput, elicitation, mcp_client, mcp_server, on_connected, on_disconnected,
+    on_prompts_list_changed, on_resource_updated, on_resources_list_changed, on_task_progress,
+    on_tools_list_changed, prompt, resource, roots, sampling, tool,
+};
