@@ -449,4 +449,226 @@ mod tests {
         let idx = find_handler_attr(&method.attrs, "sampling");
         assert_eq!(idx, Some(0));
     }
+
+    #[test]
+    fn test_find_handler_attr_not_found() {
+        let tokens = quote! {
+            async fn handle_something(&self) {}
+        };
+
+        let method: syn::ImplItemFn = syn::parse2(tokens).unwrap();
+        let idx = find_handler_attr(&method.attrs, "sampling");
+        assert_eq!(idx, None);
+    }
+
+    #[test]
+    fn test_find_handler_attr_multiple_attrs() {
+        let tokens = quote! {
+            #[doc = "Some docs"]
+            #[elicitation]
+            #[allow(unused)]
+            async fn handle_elicit(&self, request: ElicitRequest) -> ElicitResult {
+                // ...
+            }
+        };
+
+        let method: syn::ImplItemFn = syn::parse2(tokens).unwrap();
+        let idx = find_handler_attr(&method.attrs, "elicitation");
+        assert_eq!(idx, Some(1));
+    }
+
+    #[test]
+    fn test_find_and_remove_handler() {
+        let tokens = quote! {
+            impl MyHandler {
+                #[sampling]
+                async fn handle_sampling(&self, request: CreateMessageRequest) -> Result<CreateMessageResult, McpError> {
+                    Ok(CreateMessageResult::default())
+                }
+            }
+        };
+
+        let mut impl_block: ItemImpl = syn::parse2(tokens).unwrap();
+        let handler = find_and_remove_handler(&mut impl_block, "sampling");
+
+        assert!(handler.is_some());
+        let handler = handler.unwrap();
+        assert_eq!(handler.name.to_string(), "handle_sampling");
+        assert!(handler.is_async);
+        assert!(handler.returns_result);
+    }
+
+    #[test]
+    fn test_find_and_remove_handler_sync() {
+        let tokens = quote! {
+            impl MyHandler {
+                #[roots]
+                fn get_roots(&self) -> Vec<Root> {
+                    vec![]
+                }
+            }
+        };
+
+        let mut impl_block: ItemImpl = syn::parse2(tokens).unwrap();
+        let handler = find_and_remove_handler(&mut impl_block, "roots");
+
+        assert!(handler.is_some());
+        let handler = handler.unwrap();
+        assert_eq!(handler.name.to_string(), "get_roots");
+        assert!(!handler.is_async);
+        assert!(!handler.returns_result);
+    }
+
+    #[test]
+    fn test_find_and_remove_handler_not_found() {
+        let tokens = quote! {
+            impl MyHandler {
+                async fn regular_method(&self) {}
+            }
+        };
+
+        let mut impl_block: ItemImpl = syn::parse2(tokens).unwrap();
+        let handler = find_and_remove_handler(&mut impl_block, "sampling");
+
+        assert!(handler.is_none());
+    }
+
+    #[test]
+    fn test_expand_mcp_client_empty() {
+        let attr = quote! {};
+        let item = quote! {
+            impl EmptyHandler {}
+        };
+
+        let result = expand_mcp_client(attr, item);
+        assert!(result.is_ok());
+
+        let output = result.unwrap().to_string();
+        // Should contain ClientHandler impl
+        assert!(output.contains("ClientHandler"));
+        // Should contain capabilities method
+        assert!(output.contains("capabilities"));
+    }
+
+    #[test]
+    fn test_expand_mcp_client_with_sampling() {
+        let attr = quote! {};
+        let item = quote! {
+            impl SamplingHandler {
+                #[sampling]
+                async fn handle(&self, request: CreateMessageRequest) -> Result<CreateMessageResult, McpError> {
+                    todo!()
+                }
+            }
+        };
+
+        let result = expand_mcp_client(attr, item);
+        assert!(result.is_ok());
+
+        let output = result.unwrap().to_string();
+        // Should contain create_message implementation
+        assert!(output.contains("create_message"));
+        // Should have with_sampling in capabilities
+        assert!(output.contains("with_sampling"));
+    }
+
+    #[test]
+    fn test_expand_mcp_client_with_all_handlers() {
+        let attr = quote! {};
+        let item = quote! {
+            impl FullHandler {
+                #[sampling]
+                async fn sampling(&self, request: CreateMessageRequest) -> Result<CreateMessageResult, McpError> {
+                    todo!()
+                }
+
+                #[elicitation]
+                async fn elicit(&self, request: ElicitRequest) -> Result<ElicitResult, McpError> {
+                    todo!()
+                }
+
+                #[roots]
+                async fn roots(&self) -> Result<Vec<Root>, McpError> {
+                    Ok(vec![])
+                }
+
+                #[on_connected]
+                async fn connected(&self) {}
+
+                #[on_disconnected]
+                async fn disconnected(&self) {}
+            }
+        };
+
+        let result = expand_mcp_client(attr, item);
+        assert!(result.is_ok());
+
+        let output = result.unwrap().to_string();
+        // Should contain all method implementations
+        assert!(output.contains("create_message"));
+        assert!(output.contains("elicit"));
+        assert!(output.contains("list_roots"));
+        assert!(output.contains("on_connected"));
+        assert!(output.contains("on_disconnected"));
+        // Should have all capabilities
+        assert!(output.contains("with_sampling"));
+        assert!(output.contains("with_elicitation"));
+        assert!(output.contains("with_roots"));
+    }
+
+    #[test]
+    fn test_expand_mcp_client_notification_handlers() {
+        let attr = quote! {};
+        let item = quote! {
+            impl NotifyHandler {
+                #[on_task_progress]
+                async fn task_progress(&self, task_id: TaskId, progress: TaskProgress) {}
+
+                #[on_resource_updated]
+                async fn resource_updated(&self, uri: String) {}
+
+                #[on_tools_list_changed]
+                async fn tools_changed(&self) {}
+
+                #[on_resources_list_changed]
+                async fn resources_changed(&self) {}
+
+                #[on_prompts_list_changed]
+                async fn prompts_changed(&self) {}
+            }
+        };
+
+        let result = expand_mcp_client(attr, item);
+        assert!(result.is_ok());
+
+        let output = result.unwrap().to_string();
+        // Should contain all notification handlers
+        assert!(output.contains("on_task_progress"));
+        assert!(output.contains("on_resource_updated"));
+        assert!(output.contains("on_tools_list_changed"));
+        assert!(output.contains("on_resources_list_changed"));
+        assert!(output.contains("on_prompts_list_changed"));
+    }
+
+    #[test]
+    fn test_generate_client_convenience_methods_no_caps() {
+        let self_ty: syn::Type = syn::parse2(quote!(MyHandler)).unwrap();
+        let output = generate_client_convenience_methods(&self_ty, false, false, false);
+
+        let output_str = output.to_string();
+        assert!(output_str.contains("capabilities"));
+        assert!(output_str.contains("ClientCapabilities :: default ()"));
+        assert!(!output_str.contains("with_sampling"));
+    }
+
+    #[test]
+    fn test_generate_client_convenience_methods_all_caps() {
+        let self_ty: syn::Type = syn::parse2(quote!(MyHandler)).unwrap();
+        let output = generate_client_convenience_methods(&self_ty, true, true, true);
+
+        let output_str = output.to_string();
+        assert!(output_str.contains("with_sampling"));
+        assert!(output_str.contains("with_elicitation"));
+        assert!(output_str.contains("with_roots"));
+    }
 }
