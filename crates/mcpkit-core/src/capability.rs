@@ -3,6 +3,7 @@
 //! Capabilities are negotiated during the initialization handshake.
 //! They determine what features are available in the session.
 
+use crate::extension::ExtensionRegistry;
 use serde::{Deserialize, Serialize};
 
 /// Server capabilities advertised during initialization.
@@ -137,6 +138,60 @@ impl ServerCapabilities {
             .and_then(|r| r.subscribe)
             .unwrap_or(false)
     }
+
+    /// Set extensions from an extension registry.
+    ///
+    /// This populates the `experimental` field with extension declarations.
+    ///
+    /// # Arguments
+    ///
+    /// * `registry` - The extension registry containing extensions to advertise
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use mcpkit_core::capability::ServerCapabilities;
+    /// use mcpkit_core::extension::{Extension, ExtensionRegistry};
+    ///
+    /// let registry = ExtensionRegistry::new()
+    ///     .register(Extension::new("io.mcp.apps").with_version("0.1.0"));
+    ///
+    /// let caps = ServerCapabilities::new()
+    ///     .with_tools()
+    ///     .with_extensions(registry);
+    ///
+    /// assert!(caps.has_extension("io.mcp.apps"));
+    /// ```
+    #[must_use]
+    pub fn with_extensions(mut self, registry: ExtensionRegistry) -> Self {
+        if !registry.is_empty() {
+            self.experimental = Some(registry.to_experimental());
+        }
+        self
+    }
+
+    /// Check if a specific extension is supported.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The extension name to check
+    #[must_use]
+    pub fn has_extension(&self, name: &str) -> bool {
+        self.experimental
+            .as_ref()
+            .and_then(ExtensionRegistry::from_experimental)
+            .is_some_and(|registry| registry.has(name))
+    }
+
+    /// Get the extension registry from capabilities.
+    ///
+    /// Returns `None` if no extensions are declared or if parsing fails.
+    #[must_use]
+    pub fn extensions(&self) -> Option<ExtensionRegistry> {
+        self.experimental
+            .as_ref()
+            .and_then(ExtensionRegistry::from_experimental)
+    }
 }
 
 /// Client capabilities advertised during initialization.
@@ -209,6 +264,34 @@ impl ClientCapabilities {
     #[must_use]
     pub const fn has_elicitation(&self) -> bool {
         self.elicitation.is_some()
+    }
+
+    /// Set extensions from an extension registry.
+    ///
+    /// This populates the `experimental` field with extension declarations.
+    #[must_use]
+    pub fn with_extensions(mut self, registry: ExtensionRegistry) -> Self {
+        if !registry.is_empty() {
+            self.experimental = Some(registry.to_experimental());
+        }
+        self
+    }
+
+    /// Check if a specific extension is supported.
+    #[must_use]
+    pub fn has_extension(&self, name: &str) -> bool {
+        self.experimental
+            .as_ref()
+            .and_then(ExtensionRegistry::from_experimental)
+            .is_some_and(|registry| registry.has(name))
+    }
+
+    /// Get the extension registry from capabilities.
+    #[must_use]
+    pub fn extensions(&self) -> Option<ExtensionRegistry> {
+        self.experimental
+            .as_ref()
+            .and_then(ExtensionRegistry::from_experimental)
     }
 }
 

@@ -57,6 +57,7 @@
 pub mod auth;
 pub mod capability;
 pub mod error;
+pub mod extension;
 pub mod protocol;
 pub mod protocol_version;
 pub mod schema;
