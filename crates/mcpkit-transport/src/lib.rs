@@ -23,7 +23,8 @@
 //! | [`http::HttpTransportListener`] | HTTP server (Streamable HTTP) | `http` feature |
 //! | [`websocket::WebSocketTransport`] | WebSocket client with reconnection | Always available |
 //! | [`websocket::WebSocketListener`] | WebSocket server | Always available |
-//! | [`unix::UnixTransport`] | Unix domain sockets (local IPC) | Unix platforms only |
+//! | `unix::UnixTransport` | Unix domain sockets (local IPC) | Unix platforms only |
+//! | `windows::NamedPipeTransport` | Windows named pipes (local IPC) | Windows only |
 //!
 //! ## Quick Reference
 //!
@@ -103,6 +104,9 @@ pub mod websocket;
 #[cfg(unix)]
 pub mod unix;
 
+#[cfg(windows)]
+pub mod windows;
+
 // Re-export commonly used types
 pub use error::TransportError;
 pub use traits::{Transport, TransportExt, TransportListener, TransportMetadata};
@@ -133,6 +137,10 @@ pub use websocket::{
 #[cfg(unix)]
 pub use unix::{UnixListener, UnixSocketConfig, UnixTransport, UnixTransportBuilder};
 
+// Windows named pipe transport
+#[cfg(windows)]
+pub use windows::{NamedPipeBuilder, NamedPipeConfig, NamedPipeServer, NamedPipeTransport};
+
 // Connection pooling
 pub use pool::{Pool, PoolConfig, PoolStats, PooledConnection};
 
@@ -145,6 +153,14 @@ pub use telemetry::{
     LatencyHistogram, MetricsSnapshot, TelemetryConfig, TelemetryLayer, TelemetryMetrics,
     TelemetryTransport,
 };
+
+// OpenTelemetry integration (requires `opentelemetry` feature)
+#[cfg(feature = "opentelemetry")]
+pub use telemetry::otel::{OtelConfig, TracingGuard, init_tracing, init_tracing_default};
+
+// Prometheus metrics (requires `prometheus` feature)
+#[cfg(feature = "prometheus")]
+pub use telemetry::prom::{McpMetrics, MetricsExporter, create_default_metrics};
 
 /// Prelude module for convenient imports.
 pub mod prelude {
@@ -165,6 +181,10 @@ pub mod prelude {
     // Unix
     #[cfg(unix)]
     pub use crate::unix::{UnixListener, UnixTransport};
+
+    // Windows
+    #[cfg(windows)]
+    pub use crate::windows::{NamedPipeServer, NamedPipeTransport};
 
     // Pool
     pub use crate::pool::{Pool, PoolConfig, PooledConnection};
