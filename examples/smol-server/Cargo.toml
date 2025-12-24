@@ -1,0 +1,26 @@
+[package]
+name = "smol-server"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Example MCP server using the smol async runtime"
+
+[dependencies]
+mcpkit = { path = "../../mcpkit" }
+mcpkit-core = { path = "../../crates/mcpkit-core" }
+mcpkit-server = { path = "../../crates/mcpkit-server" }
+mcpkit-transport = { path = "../../crates/mcpkit-transport", features = ["smol-runtime"] }
+
+# smol runtime
+smol = "2"
+async-io = "2"
+futures-lite = "2"
+
+serde_json = "1"
+
+[features]
+default = ["smol-runtime"]
+smol-runtime = []
+
+[package.metadata.cargo-machete]
+ignored = ["mcpkit-server", "mcpkit-transport", "async-io"]

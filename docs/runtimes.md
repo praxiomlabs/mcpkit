@@ -155,8 +155,86 @@ Make sure you've enabled the corresponding runtime feature in all dependent crat
 
 Ensure you've called `smol::block_on()` or are running inside an executor.
 
+## Runtime Selection Guide
+
+Use this decision tree to choose the right runtime for your project:
+
+### Choose Tokio if:
+
+- You need HTTP or WebSocket transports
+- You're building a production server that handles many concurrent connections
+- You want the most mature async ecosystem with extensive documentation
+- Binary size is not a critical concern
+- You need advanced features like `tokio::select!` or `tokio::join!`
+
+### Choose smol if:
+
+- You want the smallest possible binary size
+- You're building embedded or resource-constrained applications
+- You only need stdio or memory transports
+- You prefer a simpler, more lightweight runtime
+- You're targeting WASM (smol has better WASM compatibility)
+- You're learning async Rust (smol is conceptually simpler)
+
+### Quick Reference
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                  Do you need HTTP/WebSocket?                     │
+└───────────────────────────┬─────────────────────────────────────┘
+                            │
+            ┌───────────────┴───────────────┐
+            │                               │
+           Yes                              No
+            │                               │
+            v                               v
+    ┌───────────────┐           ┌───────────────────────────────┐
+    │  Use Tokio    │           │ Is binary size critical?      │
+    └───────────────┘           └───────────────┬───────────────┘
+                                                │
+                                ┌───────────────┴───────────────┐
+                                │                               │
+                               Yes                              No
+                                │                               │
+                                v                               v
+                        ┌───────────────┐           ┌───────────────┐
+                        │   Use smol    │           │   Use Tokio   │
+                        └───────────────┘           │   (default)   │
+                                                    └───────────────┘
+```
+
+## Example: smol Server
+
+See the `examples/smol-server` for a complete working example:
+
+```bash
+cargo run -p smol-server
+```
+
+Key patterns for smol:
+
+```rust
+// Instead of #[tokio::main]
+fn main() -> Result<(), McpError> {
+    smol::block_on(async {
+        // Your async code here
+    })
+}
+
+// Instead of tokio::time::sleep
+smol::Timer::after(Duration::from_secs(1)).await;
+
+// Instead of tokio::spawn
+smol::spawn(async { /* background task */ }).detach();
+
+// Instead of tokio::join!
+use futures_lite::future;
+let (a, b) = future::zip(future_a, future_b).await;
+```
+
 ## See Also
 
 - [ADR 0004: Runtime-Agnostic Design](./adr/0004-runtime-agnostic-design.md)
 - [Transport Documentation](./transports.md)
 - [Performance Guide](./performance.md)
+- [smol Server Example](../examples/smol-server/)
