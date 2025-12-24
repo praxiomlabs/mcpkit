@@ -89,12 +89,12 @@ mod session;
 mod state;
 
 pub use error::ExtensionError;
-pub use handler::{handle_mcp_post, handle_sse};
+pub use handler::{handle_mcp_post, handle_oauth_protected_resource, handle_sse};
 pub use router::McpRouter;
 pub use session::{
     EventStore, EventStoreConfig, Session, SessionManager, SessionStore, StoredEvent,
 };
-pub use state::McpState;
+pub use state::{McpState, OAuthState};
 
 /// Prelude module for convenient imports.
 ///
@@ -105,12 +105,12 @@ pub use state::McpState;
 /// ```
 pub mod prelude {
     pub use crate::error::ExtensionError;
-    pub use crate::handler::{handle_mcp_post, handle_sse};
+    pub use crate::handler::{handle_mcp_post, handle_oauth_protected_resource, handle_sse};
     pub use crate::router::McpRouter;
     pub use crate::session::{
         EventStore, EventStoreConfig, Session, SessionManager, SessionStore, StoredEvent,
     };
-    pub use crate::state::McpState;
+    pub use crate::state::{McpState, OAuthState};
 }
 
 /// Protocol versions supported by this extension.

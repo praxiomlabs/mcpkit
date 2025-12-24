@@ -1,9 +1,10 @@
 //! Router builder for MCP endpoints.
 
-use crate::handler::{handle_mcp_post, handle_sse};
-use crate::state::{HasServerInfo, McpState};
+use crate::handler::{handle_mcp_post, handle_oauth_protected_resource, handle_sse};
+use crate::state::{HasServerInfo, McpState, OAuthState};
 use axum::Router;
 use axum::routing::{get, post};
+use mcpkit_core::auth::ProtectedResourceMetadata;
 use mcpkit_server::{PromptHandler, ResourceHandler, ServerHandler, ToolHandler};
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
@@ -38,6 +39,7 @@ pub struct McpRouter<H> {
     enable_tracing: bool,
     post_path: String,
     sse_path: String,
+    oauth_metadata: Option<ProtectedResourceMetadata>,
 }
 
 impl<H> McpRouter<H>
@@ -59,6 +61,7 @@ where
             enable_tracing: false,
             post_path: "/mcp".to_string(),
             sse_path: "/mcp/sse".to_string(),
+            oauth_metadata: None,
         }
     }
 
@@ -92,12 +95,53 @@ where
         self
     }
 
+    /// Enable OAuth 2.1 Protected Resource Metadata discovery.
+    ///
+    /// When enabled, the router will serve metadata at `/.well-known/oauth-protected-resource`
+    /// per RFC 9728. This is required by the MCP specification for servers that require
+    /// authentication.
+    ///
+    /// # Arguments
+    ///
+    /// * `metadata` - The protected resource metadata to serve
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use mcpkit_axum::McpRouter;
+    /// use mcpkit_core::auth::ProtectedResourceMetadata;
+    ///
+    /// let metadata = ProtectedResourceMetadata::new("https://mcp.example.com")
+    ///     .with_authorization_server("https://auth.example.com")
+    ///     .with_scopes(["files:read", "files:write"]);
+    ///
+    /// let router = McpRouter::new(MyHandler)
+    ///     .with_oauth(metadata)
+    ///     .into_router();
+    /// ```
+    #[must_use]
+    pub fn with_oauth(mut self, metadata: ProtectedResourceMetadata) -> Self {
+        self.oauth_metadata = Some(metadata);
+        self
+    }
+
     /// Build the router.
     pub fn into_router(self) -> Router {
         let mut router = Router::new()
             .route(&self.post_path, post(handle_mcp_post::<H>))
             .route(&self.sse_path, get(handle_sse::<H>))
             .with_state(self.state);
+
+        // Add OAuth discovery endpoint if configured
+        if let Some(metadata) = self.oauth_metadata {
+            let oauth_router = Router::new()
+                .route(
+                    "/.well-known/oauth-protected-resource",
+                    get(handle_oauth_protected_resource),
+                )
+                .with_state(OAuthState::new(metadata));
+            router = router.merge(oauth_router);
+        }
 
         if self.enable_cors {
             router = router.layer(

@@ -2,12 +2,13 @@
 
 use crate::error::ExtensionError;
 use crate::session::{EventStore, StoredEvent};
-use crate::state::{HasServerInfo, McpState};
+use crate::state::{HasServerInfo, McpState, OAuthState};
 use crate::{SUPPORTED_VERSIONS, is_supported_version};
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use axum::response::sse::{Event, KeepAlive, Sse};
+use axum::Json;
 use futures::stream::Stream;
 use mcpkit_core::capability::ClientCapabilities;
 use mcpkit_core::protocol::Message;
@@ -346,4 +347,43 @@ fn create_sse_stream_with_replay(
             }
         }
     }
+}
+
+/// Handle `.well-known/oauth-protected-resource` requests.
+///
+/// Per RFC 9728, MCP servers MUST implement this endpoint to indicate
+/// the locations of authorization servers that can issue tokens for this resource.
+///
+/// # Response
+///
+/// Returns a JSON object containing:
+/// - `resource`: The protected resource identifier (server URL)
+/// - `authorization_servers`: List of authorization server URLs
+/// - `scopes_supported`: Optional list of supported scopes
+/// - `bearer_methods_supported`: Token presentation methods (typically `["header"]`)
+///
+/// # Example Response
+///
+/// ```json
+/// {
+///   "resource": "https://mcp.example.com",
+///   "authorization_servers": ["https://auth.example.com"],
+///   "scopes_supported": ["files:read", "files:write"],
+///   "bearer_methods_supported": ["header"]
+/// }
+/// ```
+///
+/// # References
+///
+/// - [RFC 9728: OAuth 2.0 Protected Resource Metadata](https://datatracker.ietf.org/doc/html/rfc9728)
+/// - [MCP Authorization Specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)
+pub async fn handle_oauth_protected_resource(
+    State(state): State<OAuthState>,
+) -> impl IntoResponse {
+    debug!("Serving OAuth protected resource metadata");
+    (
+        StatusCode::OK,
+        [("content-type", "application/json")],
+        Json(state.metadata),
+    )
 }

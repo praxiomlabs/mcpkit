@@ -1,10 +1,11 @@
 //! Router builder for MCP endpoints.
 
-use crate::handler::{handle_mcp_post, handle_sse};
-use crate::state::{HasServerInfo, McpState};
+use crate::handler::{handle_mcp_post, handle_oauth_protected_resource, handle_sse};
+use crate::state::{HasServerInfo, McpState, OAuthState};
 use actix_cors::Cors;
 use actix_web::middleware::Logger;
 use actix_web::{App, HttpServer, web};
+use mcpkit_core::auth::ProtectedResourceMetadata;
 use mcpkit_server::{PromptHandler, ResourceHandler, ServerHandler, ToolHandler};
 
 /// Builder for MCP Actix routers.
@@ -41,6 +42,7 @@ pub struct McpRouter<H> {
     enable_logging: bool,
     post_path: String,
     sse_path: String,
+    oauth_metadata: Option<ProtectedResourceMetadata>,
 }
 
 impl<H> McpRouter<H>
@@ -62,6 +64,7 @@ where
             enable_logging: false,
             post_path: "/mcp".to_string(),
             sse_path: "/mcp/sse".to_string(),
+            oauth_metadata: None,
         }
     }
 
@@ -95,6 +98,37 @@ where
         self
     }
 
+    /// Enable OAuth 2.1 Protected Resource Metadata discovery.
+    ///
+    /// When enabled, the router will serve metadata at `/.well-known/oauth-protected-resource`
+    /// per RFC 9728. This is required by the MCP specification for servers that require
+    /// authentication.
+    ///
+    /// # Arguments
+    ///
+    /// * `metadata` - The protected resource metadata to serve
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use mcpkit_actix::McpRouter;
+    /// use mcpkit_core::auth::ProtectedResourceMetadata;
+    ///
+    /// let metadata = ProtectedResourceMetadata::new("https://mcp.example.com")
+    ///     .with_authorization_server("https://auth.example.com")
+    ///     .with_scopes(["files:read", "files:write"]);
+    ///
+    /// McpRouter::new(MyHandler)
+    ///     .with_oauth(metadata)
+    ///     .serve("0.0.0.0:3000")
+    ///     .await?;
+    /// ```
+    #[must_use]
+    pub fn with_oauth(mut self, metadata: ProtectedResourceMetadata) -> Self {
+        self.oauth_metadata = Some(metadata);
+        self
+    }
+
     /// Configure an Actix App with MCP routes.
     ///
     /// This is useful when you need to integrate MCP routes with an existing Actix application.
@@ -102,11 +136,21 @@ where
         let state = self.state.clone();
         let post_path = self.post_path.clone();
         let sse_path = self.sse_path.clone();
+        let oauth_metadata = self.oauth_metadata.clone();
 
         move |cfg: &mut web::ServiceConfig| {
             cfg.app_data(web::Data::new(state.clone()))
                 .route(&post_path, web::post().to(handle_mcp_post::<H>))
                 .route(&sse_path, web::get().to(handle_sse::<H>));
+
+            // Add OAuth discovery endpoint if configured
+            if let Some(metadata) = &oauth_metadata {
+                cfg.app_data(web::Data::new(OAuthState::new(metadata.clone())))
+                    .route(
+                        "/.well-known/oauth-protected-resource",
+                        web::get().to(handle_oauth_protected_resource),
+                    );
+            }
         }
     }
 
@@ -124,20 +168,16 @@ where
     ///
     /// For more control over the server, use [`Self::configure_app`] instead.
     pub async fn serve(self, addr: &str) -> std::io::Result<()> {
-        let state = self.state.clone();
-        let post_path = self.post_path.clone();
-        let sse_path = self.sse_path.clone();
         let enable_cors = self.enable_cors;
         let enable_logging = self.enable_logging;
+        let configure = self.configure_app();
 
         // Due to Actix's type system, we need to handle middleware combinations explicitly
         match (enable_cors, enable_logging) {
             (true, true) => {
                 HttpServer::new(move || {
                     App::new()
-                        .app_data(web::Data::new(state.clone()))
-                        .route(&post_path, web::post().to(handle_mcp_post::<H>))
-                        .route(&sse_path, web::get().to(handle_sse::<H>))
+                        .configure(configure.clone())
                         .wrap(Cors::permissive())
                         .wrap(Logger::default())
                 })
@@ -148,9 +188,7 @@ where
             (true, false) => {
                 HttpServer::new(move || {
                     App::new()
-                        .app_data(web::Data::new(state.clone()))
-                        .route(&post_path, web::post().to(handle_mcp_post::<H>))
-                        .route(&sse_path, web::get().to(handle_sse::<H>))
+                        .configure(configure.clone())
                         .wrap(Cors::permissive())
                 })
                 .bind(addr)?
@@ -160,9 +198,7 @@ where
             (false, true) => {
                 HttpServer::new(move || {
                     App::new()
-                        .app_data(web::Data::new(state.clone()))
-                        .route(&post_path, web::post().to(handle_mcp_post::<H>))
-                        .route(&sse_path, web::get().to(handle_sse::<H>))
+                        .configure(configure.clone())
                         .wrap(Logger::default())
                 })
                 .bind(addr)?
@@ -170,15 +206,10 @@ where
                 .await
             }
             (false, false) => {
-                HttpServer::new(move || {
-                    App::new()
-                        .app_data(web::Data::new(state.clone()))
-                        .route(&post_path, web::post().to(handle_mcp_post::<H>))
-                        .route(&sse_path, web::get().to(handle_sse::<H>))
-                })
-                .bind(addr)?
-                .run()
-                .await
+                HttpServer::new(move || App::new().configure(configure.clone()))
+                    .bind(addr)?
+                    .run()
+                    .await
             }
         }
     }

@@ -1,6 +1,7 @@
 //! Shared state for MCP Axum handlers.
 
 use crate::session::{SessionManager, SessionStore};
+use mcpkit_core::auth::ProtectedResourceMetadata;
 use mcpkit_core::capability::ServerInfo;
 use std::fmt;
 use std::sync::Arc;
@@ -90,5 +91,23 @@ where
 {
     fn server_info(&self) -> ServerInfo {
         <T as mcpkit_server::ServerHandler>::server_info(self)
+    }
+}
+
+/// State for OAuth discovery endpoints.
+///
+/// This struct holds the OAuth 2.1 Protected Resource Metadata (RFC 9728)
+/// that is served at `.well-known/oauth-protected-resource`.
+#[derive(Clone, Debug)]
+pub struct OAuthState {
+    /// Protected resource metadata per RFC 9728.
+    pub metadata: ProtectedResourceMetadata,
+}
+
+impl OAuthState {
+    /// Create new OAuth state with the given metadata.
+    #[must_use]
+    pub const fn new(metadata: ProtectedResourceMetadata) -> Self {
+        Self { metadata }
     }
 }
