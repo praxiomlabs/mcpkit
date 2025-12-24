@@ -57,7 +57,17 @@
 //! # References
 //!
 //! - [MCP Extensions](https://modelcontextprotocol.io/specification/2025-11-25/extensions)
-//! - [SEP-1865: MCP Apps Extension](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/seps/sep-1865-mcp-apps.md)
+//! - [SEP-1865: MCP Apps Extension](https://github.com/modelcontextprotocol/ext-apps)
+//!
+//! # Submodules
+//!
+//! - [`apps`] - MCP Apps extension for interactive UIs (SEP-1865)
+//! - [`discovery`] - Extension discovery and negotiation utilities
+//! - [`templates`] - Domain-specific extension templates (healthcare, finance, `IoT`)
+
+pub mod apps;
+pub mod discovery;
+pub mod templates;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -301,8 +311,8 @@ mod tests {
 
     #[test]
     fn test_experimental_roundtrip() {
-        let registry = ExtensionRegistry::new()
-            .register(Extension::new("io.mcp.apps").with_version("0.1.0"));
+        let registry =
+            ExtensionRegistry::new().register(Extension::new("io.mcp.apps").with_version("0.1.0"));
 
         let json = registry.to_experimental();
         let parsed = ExtensionRegistry::from_experimental(&json).unwrap();

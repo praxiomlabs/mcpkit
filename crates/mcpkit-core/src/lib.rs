@@ -56,6 +56,7 @@
 
 pub mod auth;
 pub mod capability;
+pub mod debug;
 pub mod error;
 pub mod extension;
 pub mod protocol;
