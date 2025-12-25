@@ -1,0 +1,38 @@
+# Kustomization for MCP server deployment
+#
+# Deploy with: kubectl apply -k deploy/kubernetes/
+# Or: kustomize build deploy/kubernetes/ | kubectl apply -f -
+#
+# For production, create an overlay:
+#   deploy/kubernetes/overlays/production/kustomization.yaml
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: mcp-system
+
+labels:
+  - includeSelectors: true
+    pairs:
+      app.kubernetes.io/managed-by: kustomize
+      app.kubernetes.io/part-of: mcpkit
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - service.yaml
+  - deployment.yaml
+  - hpa.yaml
+  - pdb.yaml
+  # Ingress is commented out by default - enable for external access
+  # - ingress.yaml
+
+images:
+  - name: mcpkit/mcp-server
+    newTag: latest
+
+configMapGenerator: []
+
+# Common configuration
+commonLabels:
+  app.kubernetes.io/version: "0.4.0"

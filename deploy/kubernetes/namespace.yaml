@@ -1,0 +1,8 @@
+# Namespace for MCP server resources
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mcp-system
+  labels:
+    app.kubernetes.io/name: mcpkit
+    app.kubernetes.io/part-of: mcp-system

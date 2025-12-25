@@ -1,0 +1,20 @@
+# Production overrides for docker-compose
+#
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  mcp-server:
+    environment:
+      RUST_LOG: "warn,http_server_example=info"
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 128M
+      replicas: 2
+    # In production, you might use a pre-built image
+    # image: your-registry/mcpkit/mcp-server:${VERSION:-latest}

@@ -1,0 +1,48 @@
+# Ingress for MCP server
+# Requires an ingress controller (nginx-ingress, traefik, etc.)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mcp-server
+  namespace: mcp-system
+  labels:
+    app.kubernetes.io/name: mcp-server
+    app.kubernetes.io/component: ingress
+  annotations:
+    # NGINX Ingress Controller annotations
+    nginx.ingress.kubernetes.io/proxy-body-size: "1m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    # Enable SSE support
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/upstream-hash-by: "$request_uri"
+    # CORS configuration
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Content-Type, MCP-Protocol-Version, MCP-Session-ID, Last-Event-ID"
+    nginx.ingress.kubernetes.io/cors-expose-headers: "MCP-Session-ID"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: mcp.example.com  # Replace with your domain
+      http:
+        paths:
+          - path: /mcp
+            pathType: Prefix
+            backend:
+              service:
+                name: mcp-server
+                port:
+                  name: http
+          - path: /health
+            pathType: Exact
+            backend:
+              service:
+                name: mcp-server
+                port:
+                  name: http
+  # TLS configuration (recommended for production)
+  # tls:
+  #   - hosts:
+  #       - mcp.example.com
+  #     secretName: mcp-tls-secret

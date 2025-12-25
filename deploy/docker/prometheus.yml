@@ -1,0 +1,11 @@
+# Prometheus configuration for MCP server monitoring
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'mcp-server'
+    static_configs:
+      - targets: ['mcp-server:3000']
+    metrics_path: /metrics
+    scrape_interval: 10s

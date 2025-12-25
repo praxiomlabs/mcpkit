@@ -1,0 +1,81 @@
+# Docker Compose configuration for mcpkit MCP server deployment
+#
+# Usage:
+#   Development:  docker-compose -f deploy/docker/docker-compose.yml up
+#   Production:   docker-compose -f deploy/docker/docker-compose.yml -f deploy/docker/docker-compose.prod.yml up -d
+#   With tracing: docker-compose -f deploy/docker/docker-compose.yml --profile observability up
+#
+# The MCP server will be available at http://localhost:3000/mcp
+
+services:
+  # MCP HTTP Server
+  mcp-server:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    image: mcpkit/mcp-server:latest
+    container_name: mcp-server
+    ports:
+      - "3000:3000"
+    environment:
+      MCP_BIND_ADDR: "0.0.0.0:3000"
+      RUST_LOG: "info,http_server_example=debug"
+      # OpenTelemetry configuration (optional)
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://jaeger:4317"
+      OTEL_SERVICE_NAME: "mcp-server"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - mcp-network
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256M
+        reservations:
+          cpus: "0.25"
+          memory: 64M
+
+  # Jaeger for distributed tracing (optional - enabled with --profile observability)
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: mcp-jaeger
+    profiles:
+      - observability
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "4317:4317"    # OTLP gRPC
+      - "4318:4318"    # OTLP HTTP
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    networks:
+      - mcp-network
+
+  # Prometheus for metrics (optional - enabled with --profile observability)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: mcp-prometheus
+    profiles:
+      - observability
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    networks:
+      - mcp-network
+
+networks:
+  mcp-network:
+    driver: bridge
+
+volumes:
+  prometheus_data:

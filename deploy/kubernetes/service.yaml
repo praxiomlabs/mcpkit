@@ -1,0 +1,27 @@
+# Service for MCP server
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-server
+  namespace: mcp-system
+  labels:
+    app.kubernetes.io/name: mcp-server
+    app.kubernetes.io/component: server
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: mcp-server
+---
+# ServiceAccount for MCP server
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mcp-server
+  namespace: mcp-system
+  labels:
+    app.kubernetes.io/name: mcp-server

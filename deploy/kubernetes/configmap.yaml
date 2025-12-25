@@ -1,0 +1,19 @@
+# ConfigMap for MCP server configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mcp-server-config
+  namespace: mcp-system
+  labels:
+    app.kubernetes.io/name: mcp-server
+    app.kubernetes.io/component: config
+data:
+  # Logging configuration
+  RUST_LOG: "info,http_server_example=debug"
+
+  # OpenTelemetry configuration
+  OTEL_SERVICE_NAME: "mcp-server"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+
+  # MCP server configuration
+  MCP_BIND_ADDR: "0.0.0.0:3000"
