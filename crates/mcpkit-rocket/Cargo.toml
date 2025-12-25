@@ -1,0 +1,49 @@
+[package]
+name = "mcpkit-rocket"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Rocket integration for mcpkit"
+repository.workspace = true
+keywords = ["mcp", "rocket", "web", "api", "rust"]
+categories = ["web-programming::http-server", "asynchronous"]
+
+[dependencies]
+# Internal crates
+mcpkit-core = { version = "0.4.0", path = "../mcpkit-core" }
+mcpkit-server = { version = "0.4.0", path = "../mcpkit-server" }
+mcpkit-transport = { version = "0.4.0", path = "../mcpkit-transport", features = ["http"] }
+
+# Web framework
+rocket = { version = "0.5", features = ["json"] }
+
+# Async runtime
+tokio = { workspace = true, features = ["sync", "rt"] }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Utilities
+uuid = { workspace = true }
+dashmap = "6"
+tracing = { workspace = true }
+thiserror = { workspace = true }
+futures = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
+tokio-test.workspace = true
+
+[lints]
+workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[package.metadata.cargo-machete]
+# mcpkit-transport: re-exported transport types
+# serde: used via derive macros
+ignored = ["mcpkit-transport", "serde"]
