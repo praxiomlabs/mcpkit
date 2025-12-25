@@ -79,6 +79,12 @@ jobs:
             --sample-size ${{ github.event.inputs.sample_size || '100' }} \
             --measurement-time ${{ github.event.inputs.measurement_time || '10' }}
 
+      - name: Run comparison benchmarks (mcpkit vs rmcp)
+        run: |
+          cargo bench --package mcpkit-core --bench comparison -- \
+            --sample-size ${{ github.event.inputs.sample_size || '100' }} \
+            --measurement-time ${{ github.event.inputs.measurement_time || '10' }}
+
       - name: Save baseline
         if: ${{ github.event.inputs.save_baseline == 'true' || github.event_name == 'schedule' }}
         uses: actions/cache/save@v4
@@ -92,7 +98,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
 
           # Find all benchmark reports
-          for bench in serialization tool_invocation transport memory; do
+          for bench in serialization tool_invocation transport memory request_serialization_comparison request_deserialization_comparison message_parsing_comparison tool_operations_comparison payload_sizes_comparison tool_call_params_comparison; do
             report_dir="target/criterion/${bench}"
             if [ -d "$report_dir" ]; then
               echo "## ${bench^}" >> $GITHUB_STEP_SUMMARY
