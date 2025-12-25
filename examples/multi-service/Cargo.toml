@@ -1,0 +1,36 @@
+[package]
+name = "multi-service-example"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Multi-service MCP architecture demonstration"
+
+[[bin]]
+name = "gateway"
+path = "src/gateway.rs"
+
+[[bin]]
+name = "tools-service"
+path = "src/tools_service.rs"
+
+[[bin]]
+name = "resources-service"
+path = "src/resources_service.rs"
+
+[dependencies]
+mcpkit = { path = "../../mcpkit" }
+mcpkit-core = { path = "../../crates/mcpkit-core" }
+mcpkit-server = { path = "../../crates/mcpkit-server" }
+mcpkit-client = { path = "../../crates/mcpkit-client" }
+mcpkit-transport = { path = "../../crates/mcpkit-transport", features = ["http", "tokio-runtime"] }
+
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+axum = "0.8"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+uuid = { version = "1", features = ["v4"] }
+async-trait = "0.1"
+futures = "0.3"
