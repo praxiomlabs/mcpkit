@@ -23,6 +23,7 @@
 //! | [`http::HttpTransportListener`] | HTTP server (Streamable HTTP) | `http` feature |
 //! | [`websocket::WebSocketTransport`] | WebSocket client with reconnection | Always available |
 //! | [`websocket::WebSocketListener`] | WebSocket server | Always available |
+//! | `grpc::GrpcTransport` | gRPC client with bidirectional streaming | `grpc` feature |
 //! | `unix::UnixTransport` | Unix domain sockets (local IPC) | Unix platforms only |
 //! | `windows::NamedPipeTransport` | Windows named pipes (local IPC) | Windows only |
 //!
@@ -101,6 +102,9 @@ pub mod telemetry;
 pub mod traits;
 pub mod websocket;
 
+#[cfg(feature = "grpc")]
+pub mod grpc;
+
 #[cfg(unix)]
 pub mod unix;
 
@@ -140,6 +144,10 @@ pub use unix::{UnixListener, UnixSocketConfig, UnixTransport, UnixTransportBuild
 // Windows named pipe transport
 #[cfg(windows)]
 pub use windows::{NamedPipeBuilder, NamedPipeConfig, NamedPipeServer, NamedPipeTransport};
+
+// gRPC transport (requires `grpc` feature)
+#[cfg(feature = "grpc")]
+pub use grpc::{GrpcConfig, GrpcTransport};
 
 // Connection pooling
 pub use pool::{Pool, PoolConfig, PoolStats, PooledConnection};

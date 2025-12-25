@@ -1,0 +1,41 @@
+// MCP (Model Context Protocol) gRPC Service Definition
+//
+// This protocol wraps JSON-RPC messages for MCP communication over gRPC.
+// Messages are serialized as JSON strings in the payload field, allowing
+// full MCP protocol support while leveraging gRPC's bidirectional streaming
+// and HTTP/2 transport capabilities.
+
+syntax = "proto3";
+
+package mcp;
+
+// MCP message envelope for gRPC transport.
+//
+// The payload contains the JSON-RPC message as a string. This approach
+// allows the gRPC layer to handle transport concerns while the MCP layer
+// handles protocol semantics.
+message McpMessage {
+    // The JSON-RPC message payload as a string.
+    // Contains the serialized MCP protocol message (request, response, or notification).
+    string payload = 1;
+
+    // Optional metadata key-value pairs.
+    // Can be used for transport-level metadata like session IDs, tracing info, etc.
+    map<string, string> metadata = 2;
+}
+
+// MCP gRPC service for bidirectional streaming communication.
+//
+// This service provides a single bidirectional streaming RPC that allows
+// both client and server to send MCP messages at any time. This enables:
+// - Request/response patterns (client sends request, server responds)
+// - Server-initiated notifications
+// - Full-duplex communication
+service McpService {
+    // Bidirectional streaming RPC for MCP communication.
+    //
+    // Both client and server can send McpMessage instances at any time.
+    // The streams operate independently, allowing for flexible communication
+    // patterns including request/response, notifications, and progress updates.
+    rpc Stream(stream McpMessage) returns (stream McpMessage);
+}

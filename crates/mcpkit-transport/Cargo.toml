@@ -37,6 +37,11 @@ hyper = { workspace = true, optional = true }
 # WebSocket transport
 tokio-tungstenite = { workspace = true, optional = true }
 
+# gRPC transport
+tonic = { version = "0.12", optional = true, features = ["tls", "channel", "codegen"] }
+prost = { version = "0.13", optional = true }
+tokio-stream = { version = "0.1", optional = true }
+
 # Utilities
 uuid = { workspace = true }
 url = { workspace = true }
@@ -54,15 +59,21 @@ prometheus = { workspace = true, optional = true }
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }
 
+[build-dependencies]
+tonic-build = { version = "0.12", optional = true }
+prost-build = { version = "0.13", optional = true }
+protobuf-src = { version = "2", optional = true }
+
 [features]
 default = ["tokio-runtime"]
 tokio-runtime = ["tokio"]
 smol-runtime = ["smol", "async-io"]
 http = ["reqwest", "axum", "hyper", "tokio-runtime"]
 websocket = ["tokio-tungstenite", "tokio-runtime"]
+grpc = ["tonic", "prost", "tokio-stream", "tokio-runtime", "tonic-build", "prost-build", "protobuf-src"]
 opentelemetry = ["dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-otlp", "dep:tracing-opentelemetry", "dep:tracing-subscriber", "tokio-runtime"]
 prometheus = ["dep:prometheus"]
-full = ["http", "websocket", "opentelemetry", "prometheus"]
+full = ["http", "websocket", "grpc", "opentelemetry", "prometheus"]
 
 # Deprecated feature aliases for backwards compatibility
 # These map to smol-runtime since async-std was replaced by smol
