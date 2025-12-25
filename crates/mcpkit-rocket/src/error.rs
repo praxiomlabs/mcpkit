@@ -113,7 +113,7 @@ mod tests {
     #[test]
     fn test_error_debug_format() {
         let error = RocketError::InvalidMessage("test".to_string());
-        let debug = format!("{:?}", error);
+        let debug = format!("{error:?}");
         assert!(debug.contains("InvalidMessage"));
         assert!(debug.contains("test"));
     }

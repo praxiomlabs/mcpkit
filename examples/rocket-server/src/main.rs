@@ -226,6 +226,7 @@ impl PromptHandler for RocketHandler {
 create_mcp_routes!(RocketHandler);
 
 #[rocket::main]
+#[allow(clippy::result_large_err)] // rocket::Error is large by design
 async fn main() -> Result<(), rocket::Error> {
     // Initialize tracing
     tracing_subscriber::fmt()

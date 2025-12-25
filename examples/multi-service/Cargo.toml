@@ -5,6 +5,10 @@ edition = "2024"
 publish = false
 description = "Multi-service MCP architecture demonstration"
 
+[package.metadata.cargo-machete]
+# These dependencies are for the multi-service pattern even if not all used in current code
+ignored = ["mcpkit", "mcpkit-client", "mcpkit-server", "mcpkit-transport", "async-trait", "futures"]
+
 [[bin]]
 name = "gateway"
 path = "src/gateway.rs"

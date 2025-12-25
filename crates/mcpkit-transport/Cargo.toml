@@ -91,4 +91,5 @@ rustdoc-args = ["--cfg", "docsrs"]
 # async-io: used conditionally in smol runtime
 # hyper: used internally by axum for HTTP transport
 # pin-project-lite: used for pin projection in async code
-ignored = ["async-io", "hyper", "pin-project-lite"]
+# prost: used by generated protobuf code (tonic-build)
+ignored = ["async-io", "hyper", "pin-project-lite", "prost"]

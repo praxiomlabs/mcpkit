@@ -2251,7 +2251,6 @@ name = "mcpkit-rocket"
 version = "0.4.0"
 dependencies = [
  "dashmap",
- "futures",
  "mcpkit-core",
  "mcpkit-server",
  "mcpkit-transport",

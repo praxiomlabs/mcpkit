@@ -24,6 +24,9 @@ fn compile_protos() {
     let mut prost_config = prost_build::Config::new();
     prost_config.protoc_executable(protobuf_src::protoc());
 
+    // Add clippy allows for generated code
+    prost_config.type_attribute(".", "#[allow(clippy::derive_partial_eq_without_eq)]");
+
     // Configure tonic-build
     tonic_build::configure()
         // Generate server code

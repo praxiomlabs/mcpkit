@@ -52,8 +52,14 @@ impl ToolHandler for TestHandler {
                 Ok(ToolOutput::text(format!("Echo: {msg}")))
             }
             "add" => {
-                let a = args.get("a").and_then(|v| v.as_i64()).unwrap_or(0);
-                let b = args.get("b").and_then(|v| v.as_i64()).unwrap_or(0);
+                let a = args
+                    .get("a")
+                    .and_then(serde_json::Value::as_i64)
+                    .unwrap_or(0);
+                let b = args
+                    .get("b")
+                    .and_then(serde_json::Value::as_i64)
+                    .unwrap_or(0);
                 Ok(ToolOutput::text(format!("{}", a + b)))
             }
             _ => Err(McpError::tool_error(name, "Tool not found")),

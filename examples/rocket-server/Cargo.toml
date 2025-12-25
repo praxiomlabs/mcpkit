@@ -17,4 +17,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [package.metadata.cargo-machete]
-ignored = ["mcpkit-server", "serde"]
+# rocket: peer dependency for extending with custom rocket routes
+# mcpkit-server: used via trait implementations
+# serde: used via derive macros
+ignored = ["mcpkit-server", "serde", "rocket"]

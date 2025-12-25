@@ -18,4 +18,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [package.metadata.cargo-machete]
-ignored = ["mcpkit-server", "serde"]
+# warp: peer dependency for extending with custom warp filters
+# mcpkit-server: used via trait implementations
+# serde: used via derive macros
+ignored = ["mcpkit-server", "serde", "warp"]

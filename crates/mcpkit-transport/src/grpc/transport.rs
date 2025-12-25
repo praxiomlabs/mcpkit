@@ -21,6 +21,13 @@ use tonic::{Request, Response, Status, Streaming};
 use tracing::{debug, error, info, warn};
 
 // Include the generated protobuf code
+// Allow clippy lints for generated code that we cannot control
+#[allow(
+    clippy::derive_partial_eq_without_eq,
+    clippy::doc_markdown,
+    clippy::default_trait_access,
+    clippy::map_unwrap_or
+)]
 pub mod proto {
     tonic::include_proto!("mcp");
 }
@@ -585,8 +592,7 @@ impl proto::mcp_service_server::McpService for McpServiceImpl {
     ) -> Result<Response<Self::StreamStream>, Status> {
         let remote_addr = request
             .remote_addr()
-            .map(|a| a.to_string())
-            .unwrap_or_else(|| "unknown".to_string());
+            .map_or_else(|| "unknown".to_string(), |a| a.to_string());
 
         info!(remote = %remote_addr, "New gRPC MCP connection");
 
