@@ -5,9 +5,9 @@
 use mcpkit_core::capability::{ServerCapabilities, ServerInfo};
 use mcpkit_core::error::McpError;
 use mcpkit_core::types::{GetPromptResult, Prompt, Resource, ResourceContents, Tool, ToolOutput};
+use mcpkit_server::ServerHandler;
 use mcpkit_server::context::Context;
 use mcpkit_server::handler::{PromptHandler, ResourceHandler, ToolHandler};
-use mcpkit_server::ServerHandler;
 use mcpkit_warp::McpRouter;
 
 /// Test MCP server handler.
@@ -78,7 +78,9 @@ impl ResourceHandler for TestHandler {
 
 impl PromptHandler for TestHandler {
     async fn list_prompts(&self, _ctx: &Context<'_>) -> Result<Vec<Prompt>, McpError> {
-        Ok(vec![Prompt::new("greeting").description("A greeting prompt")])
+        Ok(vec![
+            Prompt::new("greeting").description("A greeting prompt"),
+        ])
     }
 
     async fn get_prompt(
@@ -259,7 +261,12 @@ async fn test_cors_headers() {
         .await;
 
     assert_eq!(response.status(), 200);
-    assert!(response.headers().get("access-control-allow-origin").is_some());
+    assert!(
+        response
+            .headers()
+            .get("access-control-allow-origin")
+            .is_some()
+    );
 }
 
 #[tokio::test]
@@ -271,7 +278,10 @@ async fn test_cors_preflight() {
         .path("/mcp")
         .header("origin", "http://localhost:3000")
         .header("access-control-request-method", "POST")
-        .header("access-control-request-headers", "content-type,mcp-protocol-version")
+        .header(
+            "access-control-request-headers",
+            "content-type,mcp-protocol-version",
+        )
         .reply(&filter)
         .await;
 
@@ -294,5 +304,10 @@ async fn test_without_cors() {
 
     assert_eq!(response.status(), 200);
     // Without CORS, there should be no CORS headers
-    assert!(response.headers().get("access-control-allow-origin").is_none());
+    assert!(
+        response
+            .headers()
+            .get("access-control-allow-origin")
+            .is_none()
+    );
 }

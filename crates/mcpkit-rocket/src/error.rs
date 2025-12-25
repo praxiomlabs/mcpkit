@@ -1,8 +1,8 @@
 //! Error types for Rocket MCP integration.
 
+use rocket::Request;
 use rocket::http::Status;
 use rocket::response::{self, Responder};
-use rocket::Request;
 use thiserror::Error;
 
 /// Errors that can occur during MCP request handling.

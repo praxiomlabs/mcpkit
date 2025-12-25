@@ -79,7 +79,11 @@ impl SessionStore {
     }
 
     /// Send a message to an SSE session.
-    pub fn send(&self, id: &str, msg: String) -> Result<usize, broadcast::error::SendError<String>> {
+    pub fn send(
+        &self,
+        id: &str,
+        msg: String,
+    ) -> Result<usize, broadcast::error::SendError<String>> {
         self.sse_channels
             .get(id)
             .ok_or_else(|| broadcast::error::SendError(msg.clone()))
@@ -89,9 +93,8 @@ impl SessionStore {
     /// Remove sessions older than the given duration.
     pub fn cleanup(&self, max_age: Duration) {
         let now = Instant::now();
-        self.sessions.retain(|_, session| {
-            now.duration_since(session.last_seen) < max_age
-        });
+        self.sessions
+            .retain(|_, session| now.duration_since(session.last_seen) < max_age);
     }
 }
 

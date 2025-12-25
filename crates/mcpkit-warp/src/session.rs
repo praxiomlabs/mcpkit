@@ -38,7 +38,8 @@ impl SessionStore {
     pub fn create(&self) -> String {
         let id = Uuid::new_v4().to_string();
         let now = Instant::now();
-        self.sessions.insert(id.clone(), SessionState { last_seen: now });
+        self.sessions
+            .insert(id.clone(), SessionState { last_seen: now });
         id
     }
 

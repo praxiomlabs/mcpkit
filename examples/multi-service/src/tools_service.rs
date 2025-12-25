@@ -58,8 +58,7 @@ fn get_tools() -> Vec<Tool> {
             .description("Generate a hash of the input")
             .with_string_param("input", "Text to hash", true)
             .with_string_param("algorithm", "Hash algorithm (sha256, md5)", false),
-        Tool::new("uuid")
-            .description("Generate a new UUID"),
+        Tool::new("uuid").description("Generate a new UUID"),
         Tool::new("timestamp")
             .description("Get current timestamp")
             .with_string_param("format", "Output format (unix, iso, rfc2822)", false),
@@ -83,9 +82,7 @@ fn call_tool(name: &str, args: &Value) -> Result<ToolOutput, String> {
             Ok(ToolOutput::text(result))
         }
         "hash" => {
-            let input = args["input"]
-                .as_str()
-                .ok_or("Missing 'input' parameter")?;
+            let input = args["input"].as_str().ok_or("Missing 'input' parameter")?;
             let algorithm = args["algorithm"].as_str().unwrap_or("sha256");
             // Simple hash simulation
             let hash = format!("{algorithm}:{:x}", input.len() * 31337);
@@ -129,11 +126,13 @@ async fn handle_request(state: &AppState, request: &Request) -> JsonRpcResponse 
         "tools/list" => {
             let tools: Vec<Value> = get_tools()
                 .into_iter()
-                .map(|t| json!({
-                    "name": t.name,
-                    "description": t.description,
-                    "inputSchema": t.input_schema,
-                }))
+                .map(|t| {
+                    json!({
+                        "name": t.name,
+                        "description": t.description,
+                        "inputSchema": t.input_schema,
+                    })
+                })
                 .collect();
             JsonRpcResponse::success(request.id.clone(), json!({ "tools": tools }))
         }

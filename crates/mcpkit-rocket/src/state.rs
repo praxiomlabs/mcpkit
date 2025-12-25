@@ -45,7 +45,7 @@ where
     }
 
     /// Get the handler's capabilities.
-    #[must_use] 
+    #[must_use]
     pub fn capabilities(&self) -> ServerCapabilities
     where
         H: ServerHandler,
@@ -69,9 +69,11 @@ impl<H> Clone for McpState<H> {
 mod tests {
     use super::*;
     use mcpkit_core::error::McpError;
-    use mcpkit_core::types::{GetPromptResult, Prompt, Resource, ResourceContents, Tool, ToolOutput};
-    use mcpkit_server::handler::{PromptHandler, ResourceHandler, ToolHandler};
+    use mcpkit_core::types::{
+        GetPromptResult, Prompt, Resource, ResourceContents, Tool, ToolOutput,
+    };
     use mcpkit_server::context::Context;
+    use mcpkit_server::handler::{PromptHandler, ResourceHandler, ToolHandler};
 
     struct TestHandler;
 
@@ -81,9 +83,7 @@ mod tests {
         }
 
         fn capabilities(&self) -> ServerCapabilities {
-            ServerCapabilities::new()
-                .with_tools()
-                .with_resources()
+            ServerCapabilities::new().with_tools().with_resources()
         }
     }
 

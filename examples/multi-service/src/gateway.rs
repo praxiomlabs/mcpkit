@@ -120,10 +120,8 @@ impl AppState {
 /// Gateway prompts (provided directly by gateway).
 fn get_prompts() -> Vec<Prompt> {
     vec![
-        Prompt::new("system-overview")
-            .description("Get an overview of the multi-service system"),
-        Prompt::new("debug-services")
-            .description("Debug information about connected services"),
+        Prompt::new("system-overview").description("Get an overview of the multi-service system"),
+        Prompt::new("debug-services").description("Debug information about connected services"),
     ]
 }
 
@@ -168,66 +166,60 @@ async fn handle_request(state: &AppState, request: &Request) -> JsonRpcResponse 
         ),
 
         // Aggregate tools from tools service
-        "tools/list" => {
-            match state.tools_client.forward(request).await {
-                Some(resp) => resp,
-                None => {
-                    warn!("Tools service unavailable");
-                    JsonRpcResponse::success(request.id.clone(), json!({ "tools": [] }))
-                }
+        "tools/list" => match state.tools_client.forward(request).await {
+            Some(resp) => resp,
+            None => {
+                warn!("Tools service unavailable");
+                JsonRpcResponse::success(request.id.clone(), json!({ "tools": [] }))
             }
-        }
+        },
 
         // Forward tool calls to tools service
-        "tools/call" => {
-            match state.tools_client.forward(request).await {
-                Some(resp) => resp,
-                None => JsonRpcResponse::error(
-                    request.id.clone(),
-                    JsonRpcError {
-                        code: -32603,
-                        message: "Tools service unavailable".to_string(),
-                        data: None,
-                    },
-                ),
-            }
-        }
+        "tools/call" => match state.tools_client.forward(request).await {
+            Some(resp) => resp,
+            None => JsonRpcResponse::error(
+                request.id.clone(),
+                JsonRpcError {
+                    code: -32603,
+                    message: "Tools service unavailable".to_string(),
+                    data: None,
+                },
+            ),
+        },
 
         // Aggregate resources from resources service
-        "resources/list" => {
-            match state.resources_client.forward(request).await {
-                Some(resp) => resp,
-                None => {
-                    warn!("Resources service unavailable");
-                    JsonRpcResponse::success(request.id.clone(), json!({ "resources": [] }))
-                }
+        "resources/list" => match state.resources_client.forward(request).await {
+            Some(resp) => resp,
+            None => {
+                warn!("Resources service unavailable");
+                JsonRpcResponse::success(request.id.clone(), json!({ "resources": [] }))
             }
-        }
+        },
 
         // Forward resource reads to resources service
-        "resources/read" => {
-            match state.resources_client.forward(request).await {
-                Some(resp) => resp,
-                None => JsonRpcResponse::error(
-                    request.id.clone(),
-                    JsonRpcError {
-                        code: -32603,
-                        message: "Resources service unavailable".to_string(),
-                        data: None,
-                    },
-                ),
-            }
-        }
+        "resources/read" => match state.resources_client.forward(request).await {
+            Some(resp) => resp,
+            None => JsonRpcResponse::error(
+                request.id.clone(),
+                JsonRpcError {
+                    code: -32603,
+                    message: "Resources service unavailable".to_string(),
+                    data: None,
+                },
+            ),
+        },
 
         // Gateway provides prompts directly
         "prompts/list" => {
             let prompts: Vec<Value> = get_prompts()
                 .into_iter()
-                .map(|p| json!({
-                    "name": p.name,
-                    "description": p.description,
-                    "arguments": p.arguments,
-                }))
+                .map(|p| {
+                    json!({
+                        "name": p.name,
+                        "description": p.description,
+                        "arguments": p.arguments,
+                    })
+                })
                 .collect();
             JsonRpcResponse::success(request.id.clone(), json!({ "prompts": prompts }))
         }
@@ -340,8 +332,14 @@ async fn main() {
     println!("MCP Gateway running at http://{addr}/mcp");
     println!();
     println!("Backend services:");
-    println!("  - Tools Service:     http://127.0.0.1:{}/mcp", common::ports::TOOLS);
-    println!("  - Resources Service: http://127.0.0.1:{}/mcp", common::ports::RESOURCES);
+    println!(
+        "  - Tools Service:     http://127.0.0.1:{}/mcp",
+        common::ports::TOOLS
+    );
+    println!(
+        "  - Resources Service: http://127.0.0.1:{}/mcp",
+        common::ports::RESOURCES
+    );
     println!();
     println!("Test with:");
     println!("  curl -X POST http://{addr}/mcp \\");

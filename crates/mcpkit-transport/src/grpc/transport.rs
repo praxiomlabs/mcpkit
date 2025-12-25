@@ -9,13 +9,13 @@ use async_lock::Mutex;
 use mcpkit_core::protocol::Message;
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::mpsc;
-use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
+use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::{Channel, Endpoint, Server, Uri};
 use tonic::{Request, Response, Status, Streaming};
 use tracing::{debug, error, info, warn};
@@ -544,11 +544,11 @@ impl GrpcServerBuilder {
 
 // Re-export the generated types and service for external use
 #[allow(unused_imports)]
+pub use proto::McpMessage;
+#[allow(unused_imports)]
 pub use proto::mcp_service_client::McpServiceClient;
 #[allow(unused_imports)]
 pub use proto::mcp_service_server::{McpService, McpServiceServer};
-#[allow(unused_imports)]
-pub use proto::McpMessage;
 
 /// Convert an MCP protocol message to a gRPC proto message.
 fn message_to_proto(msg: &Message) -> Result<proto::McpMessage, serde_json::Error> {
@@ -595,7 +595,8 @@ impl proto::mcp_service_server::McpService for McpServiceImpl {
         let (incoming_tx, incoming_rx) = mpsc::channel::<Message>(100);
 
         // Create a transport for this connection
-        let transport = GrpcTransportInner::new(incoming_rx, outgoing_tx.clone(), remote_addr.clone());
+        let transport =
+            GrpcTransportInner::new(incoming_rx, outgoing_tx.clone(), remote_addr.clone());
 
         // Send the transport to the server's accept queue
         if let Err(e) = self.connection_tx.send(transport.into_transport()).await {
@@ -804,7 +805,10 @@ mod tests {
         assert!(server.config().tls);
         assert_eq!(server.config().max_concurrent_streams, Some(100));
         assert_eq!(server.config().tcp_keepalive, Some(Duration::from_secs(30)));
-        assert_eq!(server.config().http2_keepalive_interval, Some(Duration::from_secs(15)));
+        assert_eq!(
+            server.config().http2_keepalive_interval,
+            Some(Duration::from_secs(15))
+        );
     }
 
     #[test]
@@ -819,7 +823,10 @@ mod tests {
         assert!(config.tls);
         assert_eq!(config.max_concurrent_streams, Some(50));
         assert_eq!(config.tcp_keepalive, Some(Duration::from_secs(120)));
-        assert_eq!(config.http2_keepalive_interval, Some(Duration::from_secs(60)));
+        assert_eq!(
+            config.http2_keepalive_interval,
+            Some(Duration::from_secs(60))
+        );
     }
 
     #[test]

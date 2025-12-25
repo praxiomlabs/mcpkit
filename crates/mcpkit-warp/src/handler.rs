@@ -15,9 +15,9 @@ use std::convert::Infallible;
 use std::sync::Arc;
 use tokio_stream::wrappers::BroadcastStream;
 use tracing::{debug, info, warn};
+use warp::Filter;
 use warp::http::StatusCode;
 use warp::sse::Event;
-use warp::Filter;
 
 /// Handle MCP POST requests.
 ///
@@ -224,10 +224,7 @@ where
 /// Handle SSE connections for server-to-client streaming.
 ///
 /// This returns a stream of Server-Sent Events.
-pub fn handle_sse<H>(
-    state: Arc<McpState<H>>,
-    session_id: Option<String>,
-) -> impl warp::Reply
+pub fn handle_sse<H>(state: Arc<McpState<H>>, session_id: Option<String>) -> impl warp::Reply
 where
     H: HasServerInfo + Send + Sync + 'static,
 {
@@ -254,10 +251,7 @@ where
                 Ok(msg) => {
                     let event_id = format!("evt-{}", uuid::Uuid::new_v4());
                     Some(Ok::<_, Infallible>(
-                        Event::default()
-                            .id(&event_id)
-                            .event("message")
-                            .data(msg),
+                        Event::default().id(&event_id).event("message").data(msg),
                     ))
                 }
                 Err(e) => {
@@ -272,9 +266,9 @@ where
 }
 
 /// Create a filter to extract the MCP protocol version header.
-#[must_use] 
-pub fn with_protocol_version(
-) -> impl Filter<Extract = (Option<String>,), Error = warp::Rejection> + Clone {
+#[must_use]
+pub fn with_protocol_version()
+-> impl Filter<Extract = (Option<String>,), Error = warp::Rejection> + Clone {
     warp::header::optional("mcp-protocol-version")
 }
 
@@ -290,7 +284,9 @@ mod tests {
     use super::*;
     use mcpkit_core::capability::{ServerCapabilities, ServerInfo};
     use mcpkit_core::error::McpError;
-    use mcpkit_core::types::{GetPromptResult, Prompt, Resource, ResourceContents, Tool, ToolOutput};
+    use mcpkit_core::types::{
+        GetPromptResult, Prompt, Resource, ResourceContents, Tool, ToolOutput,
+    };
     use mcpkit_server::context::Context;
     use mcpkit_server::handler::{PromptHandler, ResourceHandler, ToolHandler};
 

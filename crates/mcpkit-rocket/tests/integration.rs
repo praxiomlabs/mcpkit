@@ -5,11 +5,11 @@
 use mcpkit_core::capability::{ServerCapabilities, ServerInfo};
 use mcpkit_core::error::McpError;
 use mcpkit_core::types::{GetPromptResult, Prompt, Resource, ResourceContents, Tool, ToolOutput};
-use mcpkit_rocket::prelude::*;
 use mcpkit_rocket::Cors;
+use mcpkit_rocket::prelude::*;
+use mcpkit_server::ServerHandler;
 use mcpkit_server::context::Context;
 use mcpkit_server::handler::{PromptHandler, ResourceHandler, ToolHandler};
-use mcpkit_server::ServerHandler;
 use rocket::http::{ContentType, Header, Status};
 use rocket::local::blocking::Client;
 
@@ -81,7 +81,9 @@ impl ResourceHandler for TestHandler {
 
 impl PromptHandler for TestHandler {
     async fn list_prompts(&self, _ctx: &Context<'_>) -> Result<Vec<Prompt>, McpError> {
-        Ok(vec![Prompt::new("greeting").description("A greeting prompt")])
+        Ok(vec![
+            Prompt::new("greeting").description("A greeting prompt"),
+        ])
     }
 
     async fn get_prompt(
@@ -296,8 +298,10 @@ fn test_cors_headers() {
         .dispatch();
 
     assert_eq!(response.status(), Status::Ok);
-    assert!(response
-        .headers()
-        .get_one("Access-Control-Allow-Origin")
-        .is_some());
+    assert!(
+        response
+            .headers()
+            .get_one("Access-Control-Allow-Origin")
+            .is_some()
+    );
 }

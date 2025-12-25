@@ -62,7 +62,7 @@ where
     /// Note: Due to Rocket's type system constraints, this method creates
     /// routes that are specific to the handler type. Use the `create_routes!`
     /// macro in your application to generate the routes.
-    #[must_use] 
+    #[must_use]
     pub fn into_rocket(self) -> Rocket<Build> {
         let mut rocket = rocket::build().manage(self.state);
 
@@ -74,7 +74,7 @@ where
     }
 
     /// Get the MCP state for use with custom route handlers.
-    #[must_use] 
+    #[must_use]
     pub fn into_state(self) -> McpState<H> {
         self.state
     }
@@ -111,7 +111,10 @@ impl Fairing for Cors {
             "Access-Control-Allow-Headers",
             "Content-Type, mcp-protocol-version, mcp-session-id, last-event-id",
         ));
-        response.set_header(Header::new("Access-Control-Expose-Headers", "mcp-session-id"));
+        response.set_header(Header::new(
+            "Access-Control-Expose-Headers",
+            "mcp-session-id",
+        ));
     }
 }
 
@@ -155,13 +158,8 @@ macro_rules! create_mcp_routes {
             session: $crate::handler::SessionIdHeader,
             body: String,
         ) -> $crate::handler::McpResponse {
-            $crate::handler::handle_mcp_post(
-                state.inner(),
-                version.0.as_deref(),
-                session.0,
-                &body,
-            )
-            .await
+            $crate::handler::handle_mcp_post(state.inner(), version.0.as_deref(), session.0, &body)
+                .await
         }
 
         #[rocket::get("/mcp/sse")]

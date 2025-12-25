@@ -21,8 +21,10 @@
 //! bidirectional message exchange.
 
 use mcpkit_core::protocol::{Message, Request};
-use mcpkit_transport::grpc::{GrpcConfig, GrpcServer, GrpcServerBuilder, GrpcServerConfig, GrpcTransport};
 use mcpkit_transport::Transport;
+use mcpkit_transport::grpc::{
+    GrpcConfig, GrpcServer, GrpcServerBuilder, GrpcServerConfig, GrpcTransport,
+};
 use std::time::Duration;
 use tracing::{error, info};
 
@@ -119,9 +121,7 @@ async fn demonstrate_client_connection() {
             info!("Transport closed");
         }
         Err(e) => {
-            info!(
-                "Could not connect (expected if no server is running): {e}"
-            );
+            info!("Could not connect (expected if no server is running): {e}");
         }
     }
 }
@@ -150,7 +150,10 @@ async fn demonstrate_server_api() {
     let accept_task = tokio::spawn(async move {
         info!("Waiting for incoming connection...");
         if let Some(transport) = server_handle.accept().await {
-            info!("Accepted connection from: {:?}", transport.metadata().remote_addr);
+            info!(
+                "Accepted connection from: {:?}",
+                transport.metadata().remote_addr
+            );
 
             // Echo back any received messages
             if let Ok(Some(msg)) = transport.recv().await {
@@ -161,7 +164,7 @@ async fn demonstrate_server_api() {
                     mcpkit_core::protocol::Response::success(
                         1u64,
                         serde_json::json!({"status": "pong"}),
-                    )
+                    ),
                 );
 
                 if let Err(e) = transport.send(response).await {

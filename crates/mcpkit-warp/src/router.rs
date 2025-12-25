@@ -64,8 +64,10 @@ where
     /// CORS is applied with permissive defaults suitable for development.
     /// For production, consider using `into_filter_without_cors()` and
     /// applying your own CORS configuration.
-    #[must_use] 
-    pub fn into_filter(self) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
+    #[must_use]
+    pub fn into_filter(
+        self,
+    ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
         let state = self.state;
 
         // POST /mcp - Handle JSON-RPC requests
@@ -116,7 +118,7 @@ where
     /// Build the Warp filter for MCP endpoints (without CORS).
     ///
     /// This is useful when you want to add your own CORS configuration.
-    #[must_use] 
+    #[must_use]
     pub fn into_filter_without_cors(
         self,
     ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {

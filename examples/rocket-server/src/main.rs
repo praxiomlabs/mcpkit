@@ -18,11 +18,14 @@
 
 use mcpkit_core::capability::{ServerCapabilities, ServerInfo};
 use mcpkit_core::error::McpError;
-use mcpkit_core::types::{GetPromptResult, Prompt, PromptArgument, PromptMessage, Resource, ResourceContents, Tool, ToolOutput};
+use mcpkit_core::types::{
+    GetPromptResult, Prompt, PromptArgument, PromptMessage, Resource, ResourceContents, Tool,
+    ToolOutput,
+};
 use mcpkit_rocket::{McpRouter, McpState, create_mcp_routes};
+use mcpkit_server::ServerHandler;
 use mcpkit_server::context::Context;
 use mcpkit_server::handler::{PromptHandler, ResourceHandler, ToolHandler};
-use mcpkit_server::ServerHandler;
 use serde_json::json;
 use tracing::info;
 
@@ -89,14 +92,16 @@ impl ToolHandler for RocketHandler {
     ) -> Result<ToolOutput, McpError> {
         match name {
             "greet" => {
-                let name = args
-                    .get("name")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("World");
-                Ok(ToolOutput::text(format!("Hello, {name}! Welcome to the Rocket MCP server.")))
+                let name = args.get("name").and_then(|v| v.as_str()).unwrap_or("World");
+                Ok(ToolOutput::text(format!(
+                    "Hello, {name}! Welcome to the Rocket MCP server."
+                )))
             }
             "calculate" => {
-                let op = args.get("operation").and_then(|v| v.as_str()).unwrap_or("add");
+                let op = args
+                    .get("operation")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("add");
                 let a = args.get("a").and_then(|v| v.as_f64()).unwrap_or(0.0);
                 let b = args.get("b").and_then(|v| v.as_f64()).unwrap_or(0.0);
 
@@ -110,7 +115,12 @@ impl ToolHandler for RocketHandler {
                         }
                         a / b
                     }
-                    _ => return Err(McpError::tool_error("calculate", format!("Unknown operation: {op}"))),
+                    _ => {
+                        return Err(McpError::tool_error(
+                            "calculate",
+                            format!("Unknown operation: {op}"),
+                        ));
+                    }
                 };
 
                 Ok(ToolOutput::text(format!("{a} {op} {b} = {result}")))
@@ -145,7 +155,10 @@ impl ResourceHandler for RocketHandler {
                     "framework": "Rocket 0.5",
                     "features": ["tools", "resources", "prompts"]
                 });
-                Ok(vec![ResourceContents::text(uri, serde_json::to_string_pretty(&info).unwrap())])
+                Ok(vec![ResourceContents::text(
+                    uri,
+                    serde_json::to_string_pretty(&info).unwrap(),
+                )])
             }
             "rocket://readme" => {
                 let readme = r#"

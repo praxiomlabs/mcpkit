@@ -18,10 +18,13 @@
 
 use mcpkit_core::capability::{ServerCapabilities, ServerInfo};
 use mcpkit_core::error::McpError;
-use mcpkit_core::types::{GetPromptResult, Prompt, PromptArgument, PromptMessage, Resource, ResourceContents, Tool, ToolOutput};
+use mcpkit_core::types::{
+    GetPromptResult, Prompt, PromptArgument, PromptMessage, Resource, ResourceContents, Tool,
+    ToolOutput,
+};
+use mcpkit_server::ServerHandler;
 use mcpkit_server::context::Context;
 use mcpkit_server::handler::{PromptHandler, ResourceHandler, ToolHandler};
-use mcpkit_server::ServerHandler;
 use mcpkit_warp::McpRouter;
 use serde_json::json;
 use tracing::info;
@@ -101,10 +104,7 @@ impl ToolHandler for WarpHandler {
     ) -> Result<ToolOutput, McpError> {
         match name {
             "greet" => {
-                let name = args
-                    .get("name")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("World");
+                let name = args.get("name").and_then(|v| v.as_str()).unwrap_or("World");
                 Ok(ToolOutput::text(format!(
                     "Hello, {name}! Welcome to the Warp MCP server."
                 )))
@@ -217,9 +217,11 @@ curl -X POST http://localhost:3000/mcp \
 
 impl PromptHandler for WarpHandler {
     async fn list_prompts(&self, _ctx: &Context<'_>) -> Result<Vec<Prompt>, McpError> {
-        Ok(vec![Prompt::new("welcome")
-            .description("Generate a welcome message for a user")
-            .argument(PromptArgument::required("name", "The user's name"))])
+        Ok(vec![
+            Prompt::new("welcome")
+                .description("Generate a welcome message for a user")
+                .argument(PromptArgument::required("name", "The user's name")),
+        ])
     }
 
     async fn get_prompt(

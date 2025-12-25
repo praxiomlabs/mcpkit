@@ -154,12 +154,14 @@ async fn handle_request(state: &AppState, request: &Request) -> JsonRpcResponse 
         "resources/list" => {
             let resources: Vec<Value> = get_resources()
                 .into_iter()
-                .map(|r| json!({
-                    "uri": r.uri,
-                    "name": r.name,
-                    "description": r.description,
-                    "mimeType": r.mime_type,
-                }))
+                .map(|r| {
+                    json!({
+                        "uri": r.uri,
+                        "name": r.name,
+                        "description": r.description,
+                        "mimeType": r.mime_type,
+                    })
+                })
                 .collect();
             JsonRpcResponse::success(request.id.clone(), json!({ "resources": resources }))
         }

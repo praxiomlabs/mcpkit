@@ -58,10 +58,7 @@ impl<'r> FromRequest<'r> for LastEventIdHeader {
     type Error = ();
 
     async fn from_request(request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
-        let last_event_id = request
-            .headers()
-            .get_one("last-event-id")
-            .map(String::from);
+        let last_event_id = request.headers().get_one("last-event-id").map(String::from);
         Outcome::Success(LastEventIdHeader(last_event_id))
     }
 }
@@ -76,7 +73,7 @@ pub struct McpResponse {
 
 impl McpResponse {
     /// Create a success response.
-    #[must_use] 
+    #[must_use]
     pub fn success(body: String, session_id: String) -> Self {
         Self {
             status: Status::Ok,
@@ -87,7 +84,7 @@ impl McpResponse {
     }
 
     /// Create an accepted response (for notifications).
-    #[must_use] 
+    #[must_use]
     pub fn accepted(session_id: String) -> Self {
         Self {
             status: Status::Accepted,
@@ -98,7 +95,7 @@ impl McpResponse {
     }
 
     /// Create an error response.
-    #[must_use] 
+    #[must_use]
     pub fn error(status: Status, message: String) -> Self {
         Self {
             status,
@@ -155,7 +152,7 @@ impl<H> HandlerContext<H> {
     }
 
     /// Get a reference to the inner handler.
-    #[must_use] 
+    #[must_use]
     pub fn handler(&self) -> &H {
         &self.inner
     }
@@ -228,7 +225,10 @@ where
 
             match serde_json::to_string(&Message::Response(response)) {
                 Ok(body) => McpResponse::success(body, session_id),
-                Err(e) => McpResponse::error(Status::InternalServerError, format!("Serialization error: {e}")),
+                Err(e) => McpResponse::error(
+                    Status::InternalServerError,
+                    format!("Serialization error: {e}"),
+                ),
             }
         }
         Message::Notification(notification) => {
@@ -241,7 +241,10 @@ where
         }
         _ => {
             warn!("Unexpected message type received");
-            McpResponse::error(Status::BadRequest, "Expected request or notification".to_string())
+            McpResponse::error(
+                Status::BadRequest,
+                "Expected request or notification".to_string(),
+            )
         }
     }
 }
@@ -325,10 +328,7 @@ where
 /// Handle SSE connections for server-to-client streaming.
 ///
 /// This returns an `EventStream` for pushing notifications to clients.
-pub fn handle_sse<H>(
-    state: &McpState<H>,
-    session_id: Option<String>,
-) -> EventStream![]
+pub fn handle_sse<H>(state: &McpState<H>, session_id: Option<String>) -> EventStream![]
 where
     H: HasServerInfo + Send + Sync + 'static,
 {
@@ -403,7 +403,8 @@ mod tests {
     // Test McpResponse
     #[test]
     fn test_mcp_response_success() {
-        let response = McpResponse::success(r#"{"result":"ok"}"#.to_string(), "session-123".to_string());
+        let response =
+            McpResponse::success(r#"{"result":"ok"}"#.to_string(), "session-123".to_string());
         assert_eq!(response.status, Status::Ok);
         assert_eq!(response.content_type, ContentType::JSON);
         assert_eq!(response.session_id, Some("session-123".to_string()));
