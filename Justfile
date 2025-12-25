@@ -538,7 +538,9 @@ examples:
     # Examples are workspace packages, not --examples targets
     {{cargo}} build -p minimal-server -p full-server -p http-server-example \
         -p client-example -p database-server-example -p websocket-server-example \
-        -p with-middleware-example -p filesystem-server
+        -p with-middleware-example -p filesystem-server -p rocket-server-example \
+        -p warp-server-example -p grpc-client-example -p multi-service-example \
+        -p smol-server
     printf '{{green}}[OK]{{reset}}   Examples built\n'
 
 [group('examples')]
@@ -944,6 +946,8 @@ publish-dry:
     {{cargo}} publish --dry-run -p mcpkit-testing
     {{cargo}} publish --dry-run -p mcpkit-axum
     {{cargo}} publish --dry-run -p mcpkit-actix
+    {{cargo}} publish --dry-run -p mcpkit-rocket
+    {{cargo}} publish --dry-run -p mcpkit-warp
     {{cargo}} publish --dry-run -p mcpkit
     printf '{{green}}[OK]{{reset}}   Dry run complete\n'
 
@@ -974,6 +978,8 @@ publish:
     printf '{{cyan}}[INFO]{{reset}} Publishing integration crates...\n'
     {{cargo}} publish -p mcpkit-axum
     {{cargo}} publish -p mcpkit-actix
+    {{cargo}} publish -p mcpkit-rocket
+    {{cargo}} publish -p mcpkit-warp
     sleep 30
 
     # Tier 3: Umbrella crate

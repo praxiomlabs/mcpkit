@@ -23,6 +23,12 @@ ignore = [
     # - Only pulled in through rmcp (dev-dependency for comparison benchmarks)
     # - Not used in production code paths
     "RUSTSEC-2024-0436",
+
+    # RUSTSEC-2025-0134: rustls-pemfile is unmaintained
+    # - Transitive dependency from tonic v0.12
+    # - Not a security vulnerability, just unmaintained
+    # - Will be resolved when tonic updates to rustls-pki-types
+    "RUSTSEC-2025-0134",
 ]
 
 [licenses]
