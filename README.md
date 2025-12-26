@@ -38,7 +38,7 @@ Add the dependency to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-mcpkit = "0.4"
+mcpkit = "0.5"
 tokio = { version = "1", features = ["full"] }
 serde_json = "1"
 ```

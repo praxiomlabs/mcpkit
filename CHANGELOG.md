@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2025-12-25
+
+### Added
+
+- **gRPC transport** with bidirectional streaming (`mcpkit-transport::grpc`)
+  - Full protobuf-based MCP message transport
+  - Server and client implementations using tonic
+  - Automatic protobuf code generation via prost-build
+- **mcpkit-rocket** web framework integration
+  - Rocket 0.5 support for MCP servers
+  - JSON-RPC endpoint handling
+  - Session management with SSE support
+- **mcpkit-warp** web framework integration
+  - Warp 0.3 support for MCP servers
+  - Lightweight alternative to Axum/Actix
+  - CORS and session management
+- **Framework-specific examples**
+  - `rocket-server-example` demonstrating Rocket integration
+  - `warp-server-example` demonstrating Warp integration
+- **Multi-service distributed architecture example**
+  - Gateway pattern with service mesh
+  - Tools service and resources service separation
+  - Docker Compose and Kubernetes deployment configs
+- **Deployment configurations**
+  - Docker multi-stage build optimized for production
+  - Kubernetes manifests with health checks and resource limits
+  - Docker Compose for local development
+
+### Changed
+
+- Updated release workflow to include mcpkit-rocket and mcpkit-warp
+- Improved clippy lint configuration for generated protobuf code
+
+### Fixed
+
+- Clippy warnings in generated protobuf code
+- Redundant closure warnings in integration tests
+- Format string warnings in error formatting
+
 ## [0.4.0] - 2025-12-24
 
 ### Added
@@ -265,7 +304,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mcpkit-testing` crate for test utilities
 - Protocol version detection and capability negotiation
 
-[Unreleased]: https://github.com/praxiomlabs/mcpkit/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/praxiomlabs/mcpkit/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/praxiomlabs/mcpkit/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/praxiomlabs/mcpkit/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/praxiomlabs/mcpkit/compare/v0.2.5...v0.3.0
 [0.2.5]: https://github.com/praxiomlabs/mcpkit/compare/v0.2.4...v0.2.5

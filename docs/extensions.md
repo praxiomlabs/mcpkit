@@ -17,10 +17,10 @@ These crates serve as reference implementations and can be used directly or as p
 
 ```toml
 # For Axum
-mcpkit-axum = "0.4"
+mcpkit-axum = "0.5"
 
 # For Actix-web
-mcpkit-actix = "0.4"
+mcpkit-actix = "0.5"
 ```
 
 ## Overview
@@ -610,8 +610,8 @@ keywords = ["mcp", "extension"]
 categories = ["web-programming", "asynchronous"]
 
 [dependencies]
-mcpkit-core = "0.4"
-mcpkit-server = "0.4"
+mcpkit-core = "0.5"
+mcpkit-server = "0.5"
 axum = "0.8"
 tokio = { version = "1", features = ["sync"] }
 serde = { version = "1", features = ["derive"] }
@@ -621,7 +621,7 @@ tracing = "0.1"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }
-tower = "0.4"
+tower = "0.5"
 ```
 
 ## See Also

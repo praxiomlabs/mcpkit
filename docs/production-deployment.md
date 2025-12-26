@@ -338,7 +338,7 @@ tracing::info!(
 
 ```toml
 [dependencies]
-mcpkit = { version = "0.4", features = ["tokio-runtime"] }
+mcpkit = { version = "0.5", features = ["tokio-runtime"] }
 ```
 
 **Advantages:**
@@ -354,7 +354,7 @@ mcpkit = { version = "0.4", features = ["tokio-runtime"] }
 
 ```toml
 [dependencies]
-mcpkit = { version = "0.4", features = ["smol-runtime"] }
+mcpkit = { version = "0.5", features = ["smol-runtime"] }
 ```
 
 **Use cases:**

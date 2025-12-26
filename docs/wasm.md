@@ -59,14 +59,14 @@ For WASM-compatible projects:
 
 ```toml
 [dependencies]
-mcpkit-core = "0.4"
+mcpkit-core = "0.5"
 # Don't include transport or server - they have platform dependencies
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2"
-wasm-bindgen-futures = "0.4"
+wasm-bindgen-futures = "0.5"
 js-sys = "0.3"
-web-sys = { version = "0.4", features = ["console"] }
+web-sys = { version = "0.5", features = ["console"] }
 ```
 
 ## Browser Integration

@@ -11,9 +11,9 @@ categories = ["web-programming::http-server", "asynchronous"]
 
 [dependencies]
 # Internal crates
-mcpkit-core = { version = "0.4.0", path = "../mcpkit-core" }
-mcpkit-server = { version = "0.4.0", path = "../mcpkit-server" }
-mcpkit-transport = { version = "0.4.0", path = "../mcpkit-transport", features = ["http"] }
+mcpkit-core = { version = "0.5.0", path = "../mcpkit-core" }
+mcpkit-server = { version = "0.5.0", path = "../mcpkit-server" }
+mcpkit-transport = { version = "0.5.0", path = "../mcpkit-transport", features = ["http"] }
 
 # Web framework
 rocket = { version = "0.5", features = ["json"] }
