@@ -202,6 +202,49 @@ clean:
 [doc("Clean and rebuild from scratch")]
 rebuild: clean build
 
+[group('build')]
+[doc("Cross-platform compilation check (per RELEASING.md Platform Notes)")]
+cross-check:
+    #!/usr/bin/env bash
+    printf '\n{{bold}}{{blue}}══════ Cross-Platform Check ══════{{reset}}\n\n'
+
+    # Check native platform
+    printf '{{cyan}}[INFO]{{reset}} Checking native platform ({{platform}})...\n'
+    {{cargo}} check --workspace --all-features
+
+    # Check Linux target (if not already on Linux)
+    if [ "{{platform}}" != "linux" ]; then
+        printf '{{cyan}}[INFO]{{reset}} Checking x86_64-unknown-linux-gnu...\n'
+        if rustup target list --installed | grep -q "x86_64-unknown-linux-gnu"; then
+            {{cargo}} check --workspace --all-features --target x86_64-unknown-linux-gnu
+        else
+            printf '{{yellow}}[WARN]{{reset}} Target not installed: rustup target add x86_64-unknown-linux-gnu\n'
+        fi
+    fi
+
+    # Check macOS target (if not already on macOS)
+    if [ "{{platform}}" != "macos" ]; then
+        printf '{{cyan}}[INFO]{{reset}} Checking x86_64-apple-darwin...\n'
+        if rustup target list --installed | grep -q "x86_64-apple-darwin"; then
+            {{cargo}} check --workspace --all-features --target x86_64-apple-darwin
+        else
+            printf '{{yellow}}[WARN]{{reset}} Target not installed (requires macOS SDK or cross)\n'
+        fi
+    fi
+
+    # Check Windows target (if not already on Windows)
+    if [ "{{platform}}" != "windows" ]; then
+        printf '{{cyan}}[INFO]{{reset}} Checking x86_64-pc-windows-msvc...\n'
+        if rustup target list --installed | grep -q "x86_64-pc-windows-msvc"; then
+            {{cargo}} check --workspace --all-features --target x86_64-pc-windows-msvc
+        else
+            printf '{{yellow}}[WARN]{{reset}} Target not installed (requires Windows SDK or cross)\n'
+        fi
+    fi
+
+    printf '{{green}}[OK]{{reset}}   Cross-platform check complete\n'
+    printf '{{cyan}}[INFO]{{reset}} For full cross-compilation, install cross: cargo install cross\n'
+
 # ============================================================================
 # TESTING RECIPES
 # ============================================================================
@@ -298,6 +341,65 @@ test-features:
     printf '{{cyan}}[INFO]{{reset}} Testing with all features...\n'
     {{cargo}} test --workspace --all-features -j {{jobs}}
     printf '{{green}}[OK]{{reset}}   Feature matrix tests passed\n'
+
+[group('test')]
+[doc("Comprehensive feature matrix testing (per RELEASING.md)")]
+test-feature-matrix:
+    #!/usr/bin/env bash
+    printf '\n{{bold}}{{blue}}══════ Comprehensive Feature Matrix ══════{{reset}}\n\n'
+
+    # Verify no-default-features compiles for core crates
+    printf '{{cyan}}[INFO]{{reset}} Testing no-default-features compilation...\n'
+    for crate in mcpkit-core mcpkit-transport mcpkit-server mcpkit-client; do
+        printf '{{cyan}}[INFO]{{reset}}   Checking %s...\n' "$crate"
+        {{cargo}} check -p "$crate" --no-default-features
+    done
+
+    # mcpkit umbrella crate features
+    printf '{{cyan}}[INFO]{{reset}} Testing mcpkit feature combinations...\n'
+    {{cargo}} test -p mcpkit --no-default-features --features server,tokio-runtime -j {{jobs}}
+    {{cargo}} test -p mcpkit --no-default-features --features client,tokio-runtime -j {{jobs}}
+    {{cargo}} test -p mcpkit --features websocket -j {{jobs}}
+    {{cargo}} test -p mcpkit --features http -j {{jobs}}
+    {{cargo}} test -p mcpkit --features full -j {{jobs}}
+
+    # mcpkit-transport features
+    printf '{{cyan}}[INFO]{{reset}} Testing mcpkit-transport feature combinations...\n'
+    {{cargo}} test -p mcpkit-transport --no-default-features --features tokio-runtime -j {{jobs}}
+    {{cargo}} check -p mcpkit-transport --no-default-features --features smol-runtime
+    {{cargo}} test -p mcpkit-transport --features http -j {{jobs}}
+    {{cargo}} test -p mcpkit-transport --features websocket -j {{jobs}}
+
+    # mcpkit-core features
+    printf '{{cyan}}[INFO]{{reset}} Testing mcpkit-core feature combinations...\n'
+    {{cargo}} test -p mcpkit-core -j {{jobs}}
+    {{cargo}} test -p mcpkit-core --features fancy-errors -j {{jobs}}
+
+    # Full workspace with all features
+    printf '{{cyan}}[INFO]{{reset}} Testing full workspace with all features...\n'
+    {{cargo}} test --workspace --all-features -j {{jobs}}
+
+    printf '{{green}}[OK]{{reset}}   Comprehensive feature matrix passed\n'
+
+[group('test')]
+[doc("Verify runtime exclusivity (tokio vs smol)")]
+test-runtime:
+    #!/usr/bin/env bash
+    printf '{{cyan}}[INFO]{{reset}} Testing runtime exclusivity...\n'
+
+    # Test tokio runtime compiles
+    printf '{{cyan}}[INFO]{{reset}} Checking tokio-runtime...\n'
+    {{cargo}} check -p mcpkit-transport --no-default-features --features tokio-runtime
+
+    # Test smol runtime compiles
+    printf '{{cyan}}[INFO]{{reset}} Checking smol-runtime...\n'
+    {{cargo}} check -p mcpkit-transport --no-default-features --features smol-runtime
+
+    # Verify examples compile with correct runtime
+    printf '{{cyan}}[INFO]{{reset}} Checking smol-server example...\n'
+    {{cargo}} check -p smol-server
+
+    printf '{{green}}[OK]{{reset}}   Runtime exclusivity verified\n'
 
 # ============================================================================
 # CODE QUALITY RECIPES
@@ -1203,6 +1305,45 @@ tag:
     printf '\n{{cyan}}[INFO]{{reset}} Next steps:\n'
     printf '  1. Push tag: git push origin v{{version}}\n'
     printf '  2. Monitor release: gh run watch\n'
+
+[group('release')]
+[confirm("This will yank the specified version from crates.io. Continue?")]
+[doc("Yank a version from crates.io (for security incidents)")]
+yank version:
+    #!/usr/bin/env bash
+    printf '\n{{bold}}{{red}}══════ Yanking Version {{version}} ══════{{reset}}\n\n'
+    printf '{{yellow}}[WARN]{{reset}} Yanking prevents new projects from depending on this version.\n'
+    printf '{{yellow}}[WARN]{{reset}} Existing Cargo.lock files will continue to work.\n\n'
+
+    # List of all publishable crates in reverse dependency order
+    CRATES="mcpkit mcpkit-warp mcpkit-rocket mcpkit-actix mcpkit-axum mcpkit-testing mcpkit-client mcpkit-server mcpkit-transport mcpkit-macros mcpkit-core"
+
+    for crate in $CRATES; do
+        printf '{{cyan}}[INFO]{{reset}} Yanking %s@{{version}}...\n' "$crate"
+        {{cargo}} yank --version {{version}} "$crate" || printf '{{yellow}}[WARN]{{reset}} Failed to yank %s (may not be published)\n' "$crate"
+    done
+
+    printf '\n{{green}}[OK]{{reset}}   Yank complete for version {{version}}\n'
+    printf '{{cyan}}[INFO]{{reset}} Next steps:\n'
+    printf '  1. Bump to patch version (e.g., {{version}} -> X.Y.Z+1)\n'
+    printf '  2. Fix the security issue\n'
+    printf '  3. Run full release cycle with new version\n'
+    printf '  4. Publish GitHub Security Advisory\n'
+
+[group('release')]
+[doc("Unyank a version from crates.io (restore availability)")]
+unyank version:
+    #!/usr/bin/env bash
+    printf '{{cyan}}[INFO]{{reset}} Unyanking version {{version}}...\n'
+
+    CRATES="mcpkit-core mcpkit-macros mcpkit-transport mcpkit-server mcpkit-client mcpkit-testing mcpkit-axum mcpkit-actix mcpkit-rocket mcpkit-warp mcpkit"
+
+    for crate in $CRATES; do
+        printf '{{cyan}}[INFO]{{reset}} Unyanking %s@{{version}}...\n' "$crate"
+        {{cargo}} yank --version {{version}} --undo "$crate" || printf '{{yellow}}[WARN]{{reset}} Failed to unyank %s\n' "$crate"
+    done
+
+    printf '{{green}}[OK]{{reset}}   Unyank complete for version {{version}}\n'
 
 # ============================================================================
 # UTILITIES

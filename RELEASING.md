@@ -2,6 +2,33 @@
 
 Comprehensive guide for releasing new versions of MCPkit to crates.io.
 
+**Version:** 0.5.0 | **MSRV:** 1.85 | **Edition:** 2024
+
+---
+
+## Table of Contents
+
+1. [Cardinal Rules](#cardinal-rules)
+2. [Pre-flight Checks](#0-pre-flight-checks)
+3. [Codebase Hygiene & Safety](#1-codebase-hygiene--safety)
+4. [Version Consistency](#2-version-consistency-the-blast-radius)
+5. [Environment & Infrastructure Alignment](#3-environment--infrastructure-alignment)
+6. [Dependency & Security Compliance](#4-dependency--security-compliance)
+7. [Documentation Integrity](#5-documentation-integrity)
+8. [Final Build Verification](#6-final-build-verification)
+9. [API Compatibility & Semver](#7-api-compatibility--semver)
+10. [Publishing Preparation](#8-publishing-preparation-rustcratesio-specific)
+11. [Git & Release Protocol](#9-git--release-protocol)
+12. [Post-Release Verification](#10-post-release-verification)
+13. [Manual Recovery Procedures](#manual-recovery-procedures)
+14. [Crate Dependency Graph](#crate-dependency-graph)
+15. [Feature-Specific Testing](#feature-specific-testing)
+16. [Platform-Specific Notes](#platform-specific-notes)
+17. [Security Incident Response](#security-incident-response)
+18. [Lessons Learned](#lessons-learned)
+19. [CI Automation Coverage](#ci-automation-coverage)
+20. [Justfile Recipe Mapping](#justfile-recipe-mapping)
+
 ---
 
 ## Cardinal Rules
@@ -578,7 +605,305 @@ You cannot truly "undo" a crates.io publish, but you can mitigate:
 
 ---
 
-## Summary of Issues Addressed (This Release)
+## Crate Dependency Graph
+
+Understanding the dependency structure is critical for correct publish order.
+
+```
+Tier 0 (No internal deps):
+└── mcpkit-core
+
+Tier 1 (Depends on Tier 0):
+├── mcpkit-macros → mcpkit-core
+└── mcpkit-transport → mcpkit-core
+
+Tier 2 (Depends on Tier 1):
+├── mcpkit-server → mcpkit-core, mcpkit-transport
+├── mcpkit-client → mcpkit-core, mcpkit-transport
+└── mcpkit-testing → mcpkit-core, mcpkit-transport
+
+Tier 3 (Integration crates):
+├── mcpkit-axum → mcpkit-core, mcpkit-server
+├── mcpkit-actix → mcpkit-core, mcpkit-server
+├── mcpkit-rocket → mcpkit-core, mcpkit-server
+└── mcpkit-warp → mcpkit-core, mcpkit-server
+
+Tier 4 (Umbrella crate):
+└── mcpkit → mcpkit-core, mcpkit-transport, mcpkit-server, mcpkit-client
+
+Not Published:
+├── mcpkit-macros-tests (test-only)
+├── benches (benchmarks)
+└── examples/* (example applications)
+```
+
+### Publish Order
+
+**Always publish in this order, waiting ~30 seconds between tiers:**
+
+1. `mcpkit-core`
+2. `mcpkit-macros`, `mcpkit-transport` (can publish in parallel)
+3. `mcpkit-server`, `mcpkit-client`, `mcpkit-testing` (can publish in parallel)
+4. `mcpkit-axum`, `mcpkit-actix`, `mcpkit-rocket`, `mcpkit-warp` (can publish in parallel)
+5. `mcpkit` (umbrella crate, last)
+
+This is handled automatically by `just publish` which uses the correct order.
+
+---
+
+## Feature-Specific Testing
+
+Before release, verify that all feature combinations work correctly.
+
+### mcpkit (Umbrella Crate)
+
+| Feature | Description | Test Command | Notes |
+|---------|-------------|--------------|-------|
+| `default` | server + client + tokio-runtime | `cargo test -p mcpkit` | Standard functionality |
+| `server` | Server-side functionality | `cargo test -p mcpkit --no-default-features --features server,tokio-runtime` | Server only |
+| `client` | Client-side functionality | `cargo test -p mcpkit --no-default-features --features client,tokio-runtime` | Client only |
+| `tokio-runtime` | Tokio async runtime | `cargo test -p mcpkit --features tokio-runtime` | Default runtime |
+| `websocket` | WebSocket transport | `cargo test -p mcpkit --features websocket` | Requires tokio |
+| `http` | HTTP transport | `cargo test -p mcpkit --features http` | Requires tokio |
+| `full` | All transports | `cargo test -p mcpkit --features full` | websocket + http |
+
+### mcpkit-transport
+
+| Feature | Description | Test Command | Notes |
+|---------|-------------|--------------|-------|
+| `tokio-runtime` | Tokio runtime (default) | `cargo test -p mcpkit-transport` | Standard |
+| `smol-runtime` | smol/async-io runtime | `cargo test -p mcpkit-transport --no-default-features --features smol-runtime` | Lighter weight |
+| `http` | HTTP/SSE transport | `cargo test -p mcpkit-transport --features http` | axum/reqwest |
+| `websocket` | WebSocket transport | `cargo test -p mcpkit-transport --features websocket` | tokio-tungstenite |
+| `grpc` | gRPC transport | `cargo test -p mcpkit-transport --features grpc` | tonic/prost |
+| `opentelemetry` | OpenTelemetry tracing | `cargo test -p mcpkit-transport --features opentelemetry` | Observability |
+| `prometheus` | Prometheus metrics | `cargo test -p mcpkit-transport --features prometheus` | Metrics export |
+| `full` | All transport features | `cargo test -p mcpkit-transport --features full` | Everything |
+
+### mcpkit-core
+
+| Feature | Description | Test Command | Notes |
+|---------|-------------|--------------|-------|
+| `default` | No features | `cargo test -p mcpkit-core` | Core only |
+| `fancy-errors` | Colorful error output | `cargo test -p mcpkit-core --features fancy-errors` | miette/fancy |
+
+### Critical Feature Combinations
+
+```bash
+# Test no-default-features compiles for each crate
+for crate in mcpkit-core mcpkit-transport mcpkit-server mcpkit-client; do
+    cargo check -p "$crate" --no-default-features
+done
+
+# Test runtime exclusivity (should not compile with both)
+cargo check -p mcpkit-transport --no-default-features --features tokio-runtime
+cargo check -p mcpkit-transport --no-default-features --features smol-runtime
+
+# Test full workspace with all features
+cargo test --workspace --all-features
+
+# Test examples compile
+cargo build --package minimal-server
+cargo build --package smol-server --no-default-features --features smol-runtime
+```
+
+---
+
+## Platform-Specific Notes
+
+### Linux
+
+- **glibc compatibility**: Builds require glibc 2.17+ (CentOS 7+, Ubuntu 14.04+, Debian 8+)
+- **musl builds**: For static binaries, use `x86_64-unknown-linux-musl` target
+- **OpenSSL**: HTTP/WebSocket features may require OpenSSL dev libraries
+
+```bash
+# Install OpenSSL dev on Debian/Ubuntu
+sudo apt install libssl-dev pkg-config
+
+# Install OpenSSL dev on Fedora/RHEL
+sudo dnf install openssl-devel
+```
+
+### macOS
+
+- **Universal binaries**: Consider building for both `x86_64-apple-darwin` and `aarch64-apple-darwin`
+- **Security framework**: Some crypto operations use macOS Security.framework
+- **Homebrew**: If dependencies are installed via Homebrew, ensure paths are configured
+
+### Windows
+
+- **MSVC vs GNU**: Prefer `x86_64-pc-windows-msvc` for better compatibility
+- **OpenSSL alternatives**: Consider using `rustls` instead of native-tls where available
+- **Long paths**: Enable long path support if needed: `git config --system core.longpaths true`
+
+### Cross-Platform Testing
+
+```bash
+# Verify platform-specific code compiles
+cargo check --target x86_64-unknown-linux-gnu
+cargo check --target x86_64-apple-darwin  # Requires macOS or cross
+cargo check --target x86_64-pc-windows-msvc  # Requires Windows or cross
+
+# CI handles cross-platform testing via matrix builds
+```
+
+---
+
+## Security Incident Response
+
+This section documents procedures for handling security vulnerabilities in released versions.
+
+### Severity Assessment
+
+| Severity | CVSS Score | Response Time | Examples |
+|----------|------------|---------------|----------|
+| **Critical** | 9.0-10.0 | Immediate (same day) | RCE in transport layer, auth bypass |
+| **High** | 7.0-8.9 | 24-48 hours | Message injection, significant data leak |
+| **Medium** | 4.0-6.9 | 1 week | Limited information disclosure, DoS |
+| **Low** | 0.1-3.9 | Next release | Minor information disclosure |
+
+### Security Release Process
+
+1. **Assess and Confirm**
+   - Verify the vulnerability is real and reproducible
+   - Determine affected versions and severity
+   - Check if actively exploited
+
+2. **Develop Fix**
+   - Create fix on private branch
+   - Ensure fix doesn't introduce new issues
+   - Prepare minimal, targeted patch
+
+3. **Coordinate Disclosure** (for Critical/High)
+   - Notify affected downstream users privately if known
+   - Coordinate with security researchers if externally reported
+   - Prepare security advisory
+
+4. **Release Security Patch**
+   - Follow standard release process with expedited timeline
+   - Use PATCH version bump (e.g., 0.5.0 → 0.5.1)
+   - Document as security fix in CHANGELOG
+
+5. **Post-Release**
+   - Publish GitHub Security Advisory
+   - Request CVE if applicable
+   - Update RustSec advisory database
+
+### Security Advisory Template
+
+```markdown
+## Security Advisory: [Brief Description]
+
+**Severity**: [Critical/High/Medium/Low]
+**CVE**: [CVE-YYYY-NNNNN or "Pending"]
+**Affected Versions**: [e.g., < 0.5.1]
+**Fixed Versions**: [e.g., >= 0.5.1]
+
+### Description
+
+[Detailed description of the vulnerability]
+
+### Impact
+
+[What can an attacker do with this vulnerability]
+
+### Mitigation
+
+[Immediate steps users can take before updating]
+
+### Resolution
+
+Update to version X.Y.Z or later:
+\`\`\`bash
+cargo update -p mcpkit
+\`\`\`
+
+### Credits
+
+[Acknowledge reporters if they consent]
+```
+
+### Yanking Considerations
+
+For severe security issues, yank affected versions:
+
+```bash
+# Yank vulnerable versions (all affected crates)
+for crate in mcpkit mcpkit-core mcpkit-transport mcpkit-server mcpkit-client; do
+    cargo yank --version 0.X.Y "$crate"
+done
+```
+
+---
+
+## Lessons Learned
+
+This section documents issues encountered in past releases and patterns to avoid.
+
+### 1. CI Parity is Non-Negotiable
+
+**Issue**: Local tests pass but CI fails due to environment differences.
+
+**Solution**: Always run `just deny` and `just ci` before pushing. These commands are designed to exactly mirror CI configuration.
+
+### 2. Version Grep Across All Docs
+
+**Issue**: Version references in documentation become stale after bumps.
+
+**Solution**: Run `just version-sync` and manually grep for old version strings in all markdown files, not just README.
+
+### 3. crates.io Index Propagation
+
+**Issue**: Publishing dependent crates immediately after dependencies causes "package not found" errors.
+
+**Solution**: Wait 30 seconds between tiers. The `just publish` recipe handles this automatically.
+
+### 4. Feature Combination Testing
+
+**Issue**: Code compiles with `--all-features` but fails with specific combinations.
+
+**Solution**: Test critical feature combinations explicitly, especially runtime features which are mutually exclusive.
+
+### 5. Advisory Ignore Documentation
+
+**Issue**: Ignored advisories in `deny.toml` without rationale cause confusion.
+
+**Solution**: Always document why an advisory is ignored, including the advisory ID and user impact.
+
+### 6. MSRV Drift
+
+**Issue**: Using newer Rust features without updating declared MSRV.
+
+**Solution**: Run `just msrv-check` regularly and before any release.
+
+### 7. Panic Path Audit
+
+**Issue**: `.unwrap()` calls in production code cause unexpected panics.
+
+**Solution**: Run `just panic-audit` before release. Consider using `is_none_or()` pattern for graceful handling.
+
+### 8. Float Comparison Safety
+
+**Issue**: `partial_cmp().unwrap()` on floats panics with NaN values.
+
+**Solution**: Use `total_cmp()` for NaN-safe float comparisons.
+
+### 9. Tag Format Consistency
+
+**Issue**: Tags without `v` prefix (e.g., `0.5.0` instead of `v0.5.0`) don't trigger release workflow.
+
+**Solution**: Always use `just tag` which enforces the `vX.Y.Z` format.
+
+### 10. Partial Publish Recovery
+
+**Issue**: Publishing fails partway through workspace, leaving inconsistent state.
+
+**Solution**: Check what was published with `cargo search`, wait for index propagation, then continue from the failed crate manually.
+
+---
+
+## Summary of Issues Addressed (Release 0.5.0)
 
 ### Code Fixes
 | File | Issue | Resolution |
@@ -680,6 +1005,12 @@ Quick reference: which `just` recipes cover which checklist sections.
 | **8. Publishing** | `just metadata-check` | Cargo.toml metadata verification |
 | **9. Git Protocol** | `just tag` | Create annotated version tag (verifies CI) |
 | **9. Git Protocol** | `just release-check` | Full release validation + git state |
+| **Feature Testing** | `just test-features` | Basic feature matrix (no/default/all) |
+| **Feature Testing** | `just test-feature-matrix` | Comprehensive per-crate feature testing |
+| **Feature Testing** | `just test-runtime` | Verify runtime exclusivity (tokio/smol) |
+| **Platform** | `just cross-check` | Cross-platform compilation verification |
+| **Security** | `just yank <version>` | Yank version from crates.io (incidents) |
+| **Security** | `just unyank <version>` | Restore yanked version |
 | **Utility** | `just dep-graph` | Generate dependency graph visualization |
 
 **Comprehensive Release Command:**
