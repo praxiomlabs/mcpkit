@@ -2,9 +2,9 @@
 
 This document outlines the path to a stable 1.0 release of mcpkit.
 
-## Current Status: v0.3.0 (Pre-release)
+## Current Status: v0.5.0 (Release Candidate)
 
-mcpkit is currently in active development with a stable API surface. The SDK implements the full MCP 2025-11-25 specification and is suitable for production use, though the API may still change before 1.0.
+mcpkit is feature-complete and ready for 1.0. The SDK implements the full MCP 2025-11-25 specification with comprehensive transport and framework support. All 1.0 release criteria have been met.
 
 ## 1.0 Release Criteria
 
@@ -18,11 +18,13 @@ mcpkit is currently in active development with a stable API surface. The SDK imp
 | Tasks (async operations) | ✅ Complete | Full task lifecycle support |
 | Elicitation | ✅ Complete | Server-initiated user input |
 | Tool/Resource/Prompt handlers | ✅ Complete | Full MCP primitives |
-| Multiple transport support | ✅ Complete | stdio, HTTP/SSE, WebSocket, Unix |
+| Multiple transport support | ✅ Complete | stdio, HTTP/SSE, WebSocket, Unix, gRPC |
 | Client SDK | ✅ Complete | Connection management, retries |
 | Server SDK | ✅ Complete | Handler traits, routing |
 | Axum integration | ✅ Complete | Router, SSE, OAuth discovery |
 | Actix-web integration | ✅ Complete | Router, SSE, OAuth discovery |
+| Rocket integration | ✅ Complete | Router, SSE, session management |
+| Warp integration | ✅ Complete | Router, SSE, CORS support |
 | Extension infrastructure | ✅ Complete | Structured extension support |
 | Comprehensive documentation | ✅ Complete | 28+ doc files, ADRs |
 | Test coverage | ✅ Complete | 100+ tests, integration tests |
@@ -78,6 +80,8 @@ mcpkit is currently in active development with a stable API surface. The SDK imp
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| 0.5.0 | Dec 2025 | gRPC transport, Rocket/Warp integrations, deployment configs |
+| 0.4.0 | Dec 2025 | `#[mcp_client]` macro, protocol extensions, debug tooling |
 | 0.3.0 | Dec 2024 | MCP 2025-11-25, Tasks, Elicitation, OAuth |
 | 0.2.0 | Nov 2024 | MCP 2025-06-18, Structured output |
 | 0.1.0 | Oct 2024 | Initial release, MCP 2024-11-05 |
@@ -99,4 +103,4 @@ No specific timeline is set for 1.0. Release will occur when all criteria above 
 
 ---
 
-*Last updated: December 2024*
+*Last updated: December 2025*
