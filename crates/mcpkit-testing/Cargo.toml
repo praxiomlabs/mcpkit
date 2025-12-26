@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 description = "Testing utilities for mcpkit"
 repository.workspace = true
+readme = "README.md"
 keywords = ["mcp", "mcp-protocol", "testing"]
 categories = ["development-tools::testing"]
 

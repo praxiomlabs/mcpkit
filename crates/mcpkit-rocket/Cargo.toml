@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 description = "Rocket integration for mcpkit"
 repository.workspace = true
+readme = "README.md"
 keywords = ["mcp", "rocket", "web", "api", "rust"]
 categories = ["web-programming::http-server", "asynchronous"]
 

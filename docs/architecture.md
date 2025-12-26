@@ -323,7 +323,7 @@ let pool = TransportPool::builder()
 
 ### Async I/O
 
-All I/O operations are async by default. The SDK currently requires Tokio but is designed for future runtime agnosticism (see [ADR-0004](./adr/0004-runtime-agnostic-design.md)).
+All I/O operations are async by default. The SDK is runtime-agnostic, supporting both Tokio (default) and smol runtimes (see [ADR-0004](./adr/0004-runtime-agnostic-design.md) and [Runtime Guide](./runtimes.md)).
 
 ### Memory Efficiency
 

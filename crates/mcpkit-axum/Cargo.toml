@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 description = "Axum integration for mcpkit"
 repository.workspace = true
+readme = "README.md"
 keywords = ["mcp", "axum", "web", "api", "rust"]
 categories = ["web-programming::http-server", "asynchronous"]
 
