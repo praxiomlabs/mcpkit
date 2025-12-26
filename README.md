@@ -108,13 +108,17 @@ mcpkit/
 │   │   ├── stdio               # Standard I/O transport
 │   │   ├── http                # Streamable HTTP transport
 │   │   ├── websocket           # WebSocket transport
-│   │   └── unix                # Unix domain sockets
+│   │   ├── grpc                # gRPC with bidirectional streaming
+│   │   ├── unix                # Unix domain sockets
+│   │   └── windows             # Windows named pipes
 │   ├── mcpkit-server/          # Server implementation
 │   ├── mcpkit-client/          # Client implementation
 │   ├── mcpkit-macros/          # Procedural macros
 │   ├── mcpkit-testing/         # Test utilities
 │   ├── mcpkit-axum/            # Axum web framework integration
-│   └── mcpkit-actix/           # Actix-web framework integration
+│   ├── mcpkit-actix/           # Actix-web framework integration
+│   ├── mcpkit-rocket/          # Rocket web framework integration
+│   └── mcpkit-warp/            # Warp web framework integration
 └── examples/                   # Example servers
 ```
 

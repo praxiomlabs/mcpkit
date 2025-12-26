@@ -80,11 +80,11 @@ mcpkit is feature-complete and ready for 1.0. The SDK implements the full MCP 20
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| 0.5.0 | Dec 2025 | gRPC transport, Rocket/Warp integrations, deployment configs |
-| 0.4.0 | Dec 2025 | `#[mcp_client]` macro, protocol extensions, debug tooling |
-| 0.3.0 | Dec 2024 | MCP 2025-11-25, Tasks, Elicitation, OAuth |
-| 0.2.0 | Nov 2024 | MCP 2025-06-18, Structured output |
-| 0.1.0 | Oct 2024 | Initial release, MCP 2024-11-05 |
+| 0.5.0 | 2025-12-25 | gRPC transport, Rocket/Warp integrations, deployment configs |
+| 0.4.0 | 2025-12-24 | `#[mcp_client]` macro, protocol extensions, debug tooling |
+| 0.3.0 | 2025-12-23 | Zero-copy messages, filesystem server, stress testing |
+| 0.2.0 | 2025-12-12 | Client APIs, Tasks, server metrics |
+| 0.1.0 | 2025-12-11 | Initial release, MCP 2025-11-25 protocol |
 
 ## Contributing to 1.0
 

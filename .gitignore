@@ -125,3 +125,6 @@ audit.json
 .cache/
 .tmp/
 
+# Development artifacts (AI planning files, etc.)
+.ignore/
+
