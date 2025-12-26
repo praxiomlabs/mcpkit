@@ -290,7 +290,7 @@ This stability commitment is effective starting with version 1.0.0. Pre-1.0 rele
 
 ---
 
-*Last updated: December 2024*
+*Last updated: December 2025*
 
 ## References
 
