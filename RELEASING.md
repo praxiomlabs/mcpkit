@@ -4,6 +4,45 @@ Comprehensive guide for releasing new versions of MCPkit to crates.io.
 
 ---
 
+## Cardinal Rules
+
+> **These rules are non-negotiable. Violating them will cause release failures.**
+
+### 1. Never Tag Before CI Passes
+
+```bash
+# WRONG: Tag immediately after committing
+git commit -m "chore: bump to 0.5.0" && git tag v0.5.0  # ❌
+
+# RIGHT: Wait for CI, then tag
+git push origin main
+gh run watch  # Wait for green
+just tag      # Verifies CI status automatically
+```
+
+### 2. Never Force Push Tags
+
+Once a tag is pushed, it cannot be safely changed. If you need to fix something:
+- Delete the broken tag remotely: `git push --delete origin v0.X.0`
+- Delete locally: `git tag -d v0.X.0`
+- Fix the issue, bump to the next patch version, and re-tag
+
+### 3. Publishing is Irreversible
+
+`cargo publish` cannot be undone. A yanked crate still counts as "published":
+- The version number is permanently consumed
+- You must bump to a new version to publish fixes
+- Always run `just publish-dry` before the real publish
+
+### 4. Local Must Match CI
+
+If it passes locally but fails in CI, your environment is misconfigured:
+- Run `just deny` locally before pushing (matches CI `cargo-deny-action@v2`)
+- Use `just ci` to mirror the full CI pipeline
+- Never assume "it works on my machine" is sufficient
+
+---
+
 ## 0. Pre-flight Checks
 
 Quick verification before detailed review:
@@ -446,6 +485,99 @@ cargo build
 
 ---
 
+## Manual Recovery Procedures
+
+### Failed CI After Tagging
+
+If CI fails on the tag push (before publish):
+
+```bash
+# 1. Delete the remote tag
+git push --delete origin v0.X.0
+
+# 2. Delete the local tag
+git tag -d v0.X.0
+
+# 3. Fix the issue
+# ... make fixes ...
+git commit -m "fix: resolve CI failure"
+git push origin main
+
+# 4. Wait for CI to pass on main
+gh run watch
+
+# 5. Re-tag with same version (if no code changes) or bump patch
+just tag
+git push origin v0.X.0
+```
+
+### Partial Publish (Some Crates Failed)
+
+If `just publish` fails partway through:
+
+```bash
+# 1. Check what was published
+cargo search mcpkit-core mcpkit-macros mcpkit-transport # etc.
+
+# 2. Wait for crates.io index to update (~2-5 minutes)
+
+# 3. Resume publishing from the failed crate
+cargo publish -p mcpkit-<failed-crate>
+# Continue with remaining crates in dependency order
+```
+
+### Published with Bug (Critical Fix Needed)
+
+If a critical bug is discovered after publishing:
+
+```bash
+# 1. Yank the broken version (makes it invisible but preserves existing locks)
+cargo yank --version 0.X.0 mcpkit
+
+# 2. Bump patch version in Cargo.toml
+# 0.X.0 -> 0.X.1
+
+# 3. Fix the bug
+# ... make fixes ...
+
+# 4. Full release cycle with new version
+just release-check
+git commit -m "fix: critical bug in v0.X.0"
+git push origin main
+gh run watch
+just tag  # Creates v0.X.1
+git push origin v0.X.1
+```
+
+### Tag Exists But Release Workflow Failed
+
+If the tag was pushed but the release workflow didn't trigger or failed:
+
+```bash
+# 1. Check workflow status
+gh run list --workflow=release.yml --limit 5
+
+# 2. If workflow didn't trigger, re-run manually
+gh workflow run release.yml --ref v0.X.0
+
+# 3. If workflow failed, check logs and fix
+gh run view <run-id> --log-failed
+```
+
+### Rollback a Release
+
+You cannot truly "undo" a crates.io publish, but you can mitigate:
+
+1. **Yank the version:** `cargo yank --version 0.X.0 mcpkit`
+   - Prevents new projects from depending on it
+   - Existing Cargo.lock files still work
+
+2. **Publish a patch:** Release 0.X.1 with the fix or revert
+
+3. **Update documentation:** Note the broken version in CHANGELOG.md
+
+---
+
 ## Summary of Issues Addressed (This Release)
 
 ### Code Fixes
@@ -520,7 +652,12 @@ Quick reference: which `just` recipes cover which checklist sections.
 
 | Checklist Section | Just Recipe(s) | What It Covers |
 |-------------------|----------------|----------------|
+| **Setup** | `just setup` | Full project setup: tools, hooks, initial build |
+| **Setup** | `just setup-quick` | Minimal tools and git hooks |
+| **Setup** | `just setup-hooks` | Install pre-commit and pre-push hooks |
 | **0. Pre-flight** | `just ci` | fmt, clippy, test, doc-check, link-check, version-sync |
+| **0. Pre-flight** | `just ci-status` | Check CI status via GitHub CLI |
+| **0. Pre-flight** | `just ci-watch` | Watch CI run in real-time |
 | **1. Code Hygiene** | `just wip-check` | TODO/FIXME/XXX/HACK, todo!/unimplemented! |
 | **1. Code Hygiene** | `just panic-audit` | .unwrap()/.expect() in production code |
 | **1. Code Hygiene** | `just typos` | Spell checking |
@@ -531,6 +668,7 @@ Quick reference: which `just` recipes cover which checklist sections.
 | **4. Security** | `just deny` | Licenses, bans, advisories |
 | **4. Security** | `just audit` | Security vulnerabilities |
 | **4. Security** | `just vet` | Supply chain audit |
+| **4. Security** | `just check-deps` | Git/path dependencies (crates.io compliance) |
 | **5. Documentation** | `just link-check` | Markdown link validation |
 | **5. Documentation** | `just doc-check` | Documentation builds without warnings |
 | **6. Build Verification** | `just ci-release` | Full CI + coverage + security + semver + msrv |
@@ -540,8 +678,9 @@ Quick reference: which `just` recipes cover which checklist sections.
 | **8. Publishing** | `just publish-dry` | Dry-run publish all crates |
 | **8. Publishing** | `just publish` | Publish all crates to crates.io |
 | **8. Publishing** | `just metadata-check` | Cargo.toml metadata verification |
-| **9. Git Protocol** | `just tag` | Create annotated version tag |
+| **9. Git Protocol** | `just tag` | Create annotated version tag (verifies CI) |
 | **9. Git Protocol** | `just release-check` | Full release validation + git state |
+| **Utility** | `just dep-graph` | Generate dependency graph visualization |
 
 **Comprehensive Release Command:**
 ```bash

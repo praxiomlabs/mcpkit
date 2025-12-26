@@ -87,11 +87,70 @@ default:
 # Load .env file if present
 set dotenv-load
 
-# Use bash for shell commands
-set shell := ["bash", "-cu"]
+# Use bash for shell commands with strict mode
+# -e: Exit on error
+# -u: Error on undefined variables
+# -o pipefail: Fail on pipe errors
+set shell := ["bash", "-euo", "pipefail", "-c"]
 
 # Export all variables to child processes
 set export
+
+# ============================================================================
+# SETUP & BOOTSTRAP RECIPES
+# ============================================================================
+
+[group('setup')]
+[doc("Complete project setup: tools, hooks, and initial build")]
+setup: install-tools setup-hooks build
+    @printf '{{green}}[OK]{{reset}}   Project setup complete\n'
+
+[group('setup')]
+[doc("Quick setup: minimal tools and hooks only")]
+setup-quick: install-tools-minimal setup-hooks
+    @printf '{{green}}[OK]{{reset}}   Quick setup complete\n'
+
+[group('setup')]
+[doc("Install git pre-commit and pre-push hooks")]
+setup-hooks:
+    #!/usr/bin/env bash
+    printf '{{cyan}}[INFO]{{reset}} Installing git hooks...\n'
+
+    # Ensure .git/hooks directory exists
+    mkdir -p .git/hooks
+
+    # Create pre-commit hook
+    cat > .git/hooks/pre-commit << 'HOOK'
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "Running pre-commit checks..."
+just pre-commit
+HOOK
+    chmod +x .git/hooks/pre-commit
+
+    # Create pre-push hook
+    cat > .git/hooks/pre-push << 'HOOK'
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "Running pre-push checks..."
+just pre-push
+HOOK
+    chmod +x .git/hooks/pre-push
+
+    printf '{{green}}[OK]{{reset}}   Git hooks installed\n'
+    printf '{{cyan}}[INFO]{{reset}} Hooks will run:\n'
+    printf '  pre-commit: just pre-commit (fmt-check, clippy, check)\n'
+    printf '  pre-push:   just pre-push (full CI)\n'
+
+[group('setup')]
+[doc("Remove git hooks")]
+remove-hooks:
+    #!/usr/bin/env bash
+    printf '{{cyan}}[INFO]{{reset}} Removing git hooks...\n'
+    rm -f .git/hooks/pre-commit .git/hooks/pre-push
+    printf '{{green}}[OK]{{reset}}   Git hooks removed\n'
 
 # ============================================================================
 # CORE BUILD RECIPES
@@ -703,6 +762,60 @@ watch-clippy:
 # ============================================================================
 
 [group('ci')]
+[doc("Check CI status for current branch (requires gh CLI)")]
+ci-status:
+    #!/usr/bin/env bash
+    printf '{{cyan}}[INFO]{{reset}} Checking CI status...\n'
+    if ! command -v gh &> /dev/null; then
+        printf '{{red}}[ERR]{{reset}}  GitHub CLI (gh) not installed\n'
+        printf '{{cyan}}[INFO]{{reset}} Install: https://cli.github.com/\n'
+        exit 1
+    fi
+
+    BRANCH=$(git branch --show-current)
+    printf '{{cyan}}[INFO]{{reset}} Branch: %s\n' "$BRANCH"
+
+    # Get latest run status
+    STATUS=$(gh run list --branch "$BRANCH" --limit 1 --json status,conclusion,name,databaseId --jq '.[0]')
+    if [ -z "$STATUS" ] || [ "$STATUS" = "null" ]; then
+        printf '{{yellow}}[WARN]{{reset}} No CI runs found for branch %s\n' "$BRANCH"
+        exit 0
+    fi
+
+    RUN_STATUS=$(echo "$STATUS" | jq -r '.status')
+    RUN_CONCLUSION=$(echo "$STATUS" | jq -r '.conclusion // "pending"')
+    RUN_NAME=$(echo "$STATUS" | jq -r '.name')
+    RUN_ID=$(echo "$STATUS" | jq -r '.databaseId')
+
+    printf '{{cyan}}[INFO]{{reset}} Latest run: %s (ID: %s)\n' "$RUN_NAME" "$RUN_ID"
+
+    if [ "$RUN_STATUS" = "completed" ]; then
+        if [ "$RUN_CONCLUSION" = "success" ]; then
+            printf '{{green}}[OK]{{reset}}   CI passed ✓\n'
+            exit 0
+        else
+            printf '{{red}}[ERR]{{reset}}  CI failed: %s\n' "$RUN_CONCLUSION"
+            printf '{{cyan}}[INFO]{{reset}} View details: gh run view %s\n' "$RUN_ID"
+            exit 1
+        fi
+    else
+        printf '{{yellow}}[WAIT]{{reset}} CI in progress: %s\n' "$RUN_STATUS"
+        printf '{{cyan}}[INFO]{{reset}} Watch: gh run watch %s\n' "$RUN_ID"
+        exit 1
+    fi
+
+[group('ci')]
+[doc("Watch CI run in real-time (requires gh CLI)")]
+ci-watch:
+    #!/usr/bin/env bash
+    printf '{{cyan}}[INFO]{{reset}} Watching CI...\n'
+    if ! command -v gh &> /dev/null; then
+        printf '{{red}}[ERR]{{reset}}  GitHub CLI (gh) not installed\n'
+        exit 1
+    fi
+    gh run watch
+
+[group('ci')]
 [doc("Check documentation versions match Cargo.toml")]
 version-sync:
     #!/usr/bin/env bash
@@ -802,6 +915,40 @@ tree-features package:
     #!/usr/bin/env bash
     printf '{{cyan}}[INFO]{{reset}} Features for {{package}}:\n'
     {{cargo}} tree -p {{package}} -f "{p} {f}"
+
+[group('deps')]
+[doc("Generate dependency graph visualization (requires graphviz)")]
+dep-graph output="deps.svg":
+    #!/usr/bin/env bash
+    printf '{{cyan}}[INFO]{{reset}} Generating dependency graph...\n'
+    if ! command -v dot &> /dev/null; then
+        printf '{{red}}[ERR]{{reset}}  graphviz not installed (required for dot command)\n'
+        printf '{{cyan}}[INFO]{{reset}} Install: apt install graphviz / brew install graphviz\n'
+        exit 1
+    fi
+    {{cargo}} depgraph --workspace --all-features 2>/dev/null | dot -Tsvg > {{output}} \
+        || (printf '{{yellow}}[WARN]{{reset}} cargo-depgraph not installed, using cargo tree\n' && \
+            {{cargo}} tree --workspace --prefix depth | head -100 > deps.txt && \
+            printf '{{cyan}}[INFO]{{reset}} Dependency list saved to deps.txt (install cargo-depgraph for graph)\n')
+    if [ -f "{{output}}" ]; then
+        printf '{{green}}[OK]{{reset}}   Graph saved to {{output}}\n'
+        printf '{{cyan}}[INFO]{{reset}} Open with: {{open_cmd}} {{output}}\n'
+    fi
+
+[group('deps')]
+[doc("Check for direct URL dependencies (not allowed on crates.io)")]
+check-deps:
+    #!/usr/bin/env bash
+    printf '{{cyan}}[INFO]{{reset}} Checking for prohibited dependencies...\n'
+    # Check for git dependencies
+    if grep -r 'git = "' Cargo.toml crates/*/Cargo.toml 2>/dev/null | grep -v '#'; then
+        printf '{{yellow}}[WARN]{{reset}} Git dependencies found (not allowed on crates.io)\n'
+    fi
+    # Check for path dependencies pointing outside workspace
+    if grep -r 'path = "\.\.' Cargo.toml crates/*/Cargo.toml 2>/dev/null | grep -v '#'; then
+        printf '{{yellow}}[WARN]{{reset}} External path dependencies found\n'
+    fi
+    printf '{{green}}[OK]{{reset}}   Dependency check complete\n'
 
 # ============================================================================
 # RELEASE RECIPES
@@ -993,12 +1140,69 @@ publish:
     printf '  3. Update CHANGELOG.md [Unreleased] section\n'
 
 [group('release')]
-[doc("Create git tag for release")]
+[doc("Create git tag for release (verifies CI status first)")]
 tag:
     #!/usr/bin/env bash
+    printf '{{cyan}}[INFO]{{reset}} Preparing to create tag v{{version}}...\n'
+
+    # Check for uncommitted changes
+    if ! git diff-index --quiet HEAD --; then
+        printf '{{red}}[ERR]{{reset}}  Uncommitted changes detected. Commit or stash before tagging.\n'
+        exit 1
+    fi
+
+    # Verify we're on main branch (optional safety check)
+    BRANCH=$(git branch --show-current)
+    if [ "$BRANCH" != "main" ] && [ "$BRANCH" != "master" ]; then
+        printf '{{yellow}}[WARN]{{reset}} Not on main/master branch (current: %s)\n' "$BRANCH"
+        read -p "Continue anyway? [y/N] " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            printf '{{cyan}}[INFO]{{reset}} Aborted\n'
+            exit 1
+        fi
+    fi
+
+    # Verify CI status (if gh is available)
+    if command -v gh &> /dev/null; then
+        printf '{{cyan}}[INFO]{{reset}} Checking CI status...\n'
+        STATUS=$(gh run list --branch "$BRANCH" --limit 1 --json status,conclusion --jq '.[0]')
+        if [ -n "$STATUS" ] && [ "$STATUS" != "null" ]; then
+            RUN_STATUS=$(echo "$STATUS" | jq -r '.status')
+            RUN_CONCLUSION=$(echo "$STATUS" | jq -r '.conclusion // "pending"')
+
+            if [ "$RUN_STATUS" != "completed" ]; then
+                printf '{{red}}[ERR]{{reset}}  CI is still running. Wait for completion before tagging.\n'
+                printf '{{cyan}}[INFO]{{reset}} Run: just ci-watch\n'
+                exit 1
+            fi
+
+            if [ "$RUN_CONCLUSION" != "success" ]; then
+                printf '{{red}}[ERR]{{reset}}  CI failed (%s). Fix before tagging.\n' "$RUN_CONCLUSION"
+                exit 1
+            fi
+            printf '{{green}}[OK]{{reset}}   CI passed\n'
+        else
+            printf '{{yellow}}[WARN]{{reset}} No CI runs found - proceeding without CI verification\n'
+        fi
+    else
+        printf '{{yellow}}[WARN]{{reset}} GitHub CLI not installed - skipping CI verification\n'
+        printf '{{cyan}}[INFO]{{reset}} Install gh for automatic CI status checks\n'
+    fi
+
+    # Check if tag already exists
+    if git tag -l "v{{version}}" | grep -q "v{{version}}"; then
+        printf '{{red}}[ERR]{{reset}}  Tag v{{version}} already exists\n'
+        exit 1
+    fi
+
+    # Create the tag
     printf '{{cyan}}[INFO]{{reset}} Creating tag v{{version}}...\n'
     git tag -a "v{{version}}" -m "Release v{{version}}"
     printf '{{green}}[OK]{{reset}}   Tag created: v{{version}}\n'
+    printf '\n{{cyan}}[INFO]{{reset}} Next steps:\n'
+    printf '  1. Push tag: git push origin v{{version}}\n'
+    printf '  2. Monitor release: gh run watch\n'
 
 # ============================================================================
 # UTILITIES
