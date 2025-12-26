@@ -138,10 +138,12 @@ Before declaring 1.0 stable, we will:
 
 | Milestone | Target | Status |
 |-----------|--------|--------|
-| 0.1.0 Alpha | Q4 2024 | Released |
-| 0.2.0 Beta | Q4 2024 | Released |
-| 0.3.0 RC | Q4 2024 | Released |
-| 1.0.0 Stable | 2025 | In Progress |
+| 0.1.0 Alpha | Q4 2025 | Released |
+| 0.2.0 Beta | Q4 2025 | Released |
+| 0.3.0 RC | Q4 2025 | Released |
+| 0.4.0 | Q4 2025 | Released |
+| 0.5.0 | Q4 2025 | Released |
+| 1.0.0 Stable | 2026 | In Progress |
 
 Note: We follow a "release when ready" philosophy. The 1.0 release will occur when all criteria in the [ROADMAP.md](../ROADMAP.md) are met and the API has stabilized through community usage.
 

@@ -4,6 +4,8 @@
 
 Accepted
 
+> **Note (v0.3.0+):** async-std has been deprecated due to [RUSTSEC-2025-0052](https://rustsec.org/advisories/RUSTSEC-2025-0052.html). The `async-std-runtime` feature now maps to `smol-runtime` for backwards compatibility. New projects should use `tokio-runtime` (default) or `smol-runtime` directly.
+
 ## Context
 
 The Rust async ecosystem has multiple runtime options:
