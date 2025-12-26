@@ -91,7 +91,7 @@ async fn main() -> Result<(), McpError> {
 | **Macro** | Single `#[mcp_server]` with `#[tool]`, `#[resource]`, `#[prompt]` |
 | **Parameters** | Extracted directly from function signatures |
 | **Errors** | Unified `McpError` with `.context()` chains |
-| **Transports** | stdio, WebSocket, HTTP/SSE, Unix sockets |
+| **Transports** | stdio, WebSocket, HTTP/SSE, Unix sockets, gRPC, Windows pipes |
 | **Middleware** | Built-in Tower-compatible Layer system |
 | **Runtime** | Agnostic (Tokio, smol) |
 
@@ -222,6 +222,26 @@ use mcpkit_transport::unix::UnixTransport;
 
 #[cfg(unix)]
 let transport = UnixTransport::new("/tmp/mcp.sock");
+```
+
+### gRPC
+
+```rust,ignore
+use mcpkit_transport::grpc::{GrpcTransport, GrpcConfig};
+
+let config = GrpcConfig::new("http://localhost:50051");
+let transport = GrpcTransport::connect(config).await?;
+```
+
+### Windows Named Pipes (Windows only)
+
+```rust,ignore
+#[cfg(windows)]
+use mcpkit_transport::windows::{NamedPipeTransport, NamedPipeConfig};
+
+#[cfg(windows)]
+let config = NamedPipeConfig::new(r"\\.\pipe\mcp-server");
+let transport = NamedPipeTransport::connect(config).await?;
 ```
 
 ## Middleware
