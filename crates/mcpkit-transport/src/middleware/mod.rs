@@ -38,7 +38,7 @@ pub use logging::LoggingLayer;
 pub use metrics::MetricsLayer;
 pub use rate_limit::{
     RateLimitAction, RateLimitAlgorithm, RateLimitConfig, RateLimitLayer, RateLimitStats,
-    RateLimitedTransport, RateLimiter,
+    RateLimitedTransport, RateLimiter, log_rate_limit_warning,
 };
 pub use retry::{ExponentialBackoff, RetryLayer, RetryPolicy};
 pub use timeout::TimeoutLayer;

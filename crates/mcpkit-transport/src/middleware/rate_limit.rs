@@ -368,6 +368,29 @@ impl RateLimitStats {
     }
 }
 
+/// Log a warning about rate limiting for production deployments.
+///
+/// Call this during server initialization if rate limiting is not configured
+/// to remind operators about the importance of rate limiting.
+///
+/// # Example
+///
+/// ```rust
+/// use mcpkit_transport::middleware::log_rate_limit_warning;
+///
+/// // Call during server startup if rate limiting is not applied
+/// log_rate_limit_warning();
+/// ```
+pub fn log_rate_limit_warning() {
+    tracing::warn!(
+        target: "mcpkit::security",
+        "⚠️  SECURITY WARNING: Rate limiting is NOT enabled. \
+         Without rate limiting, your MCP server is vulnerable to: \
+         resource exhaustion, denial of service, and expensive operation abuse. \
+         Configure rate limiting with RateLimitLayer for production deployments."
+    );
+}
+
 /// Rate limiting layer for transports.
 pub struct RateLimitLayer {
     limiter: RateLimiter,

@@ -54,7 +54,7 @@ pub use config::{
 };
 
 #[cfg(feature = "http")]
-pub use server::{HttpServerConfig, HttpTransportListener};
+pub use server::{HttpServerConfig, HttpTransportListener, OriginValidationMode};
 
 // Re-export SSE types for testing
 pub use sse::HttpTransportState;

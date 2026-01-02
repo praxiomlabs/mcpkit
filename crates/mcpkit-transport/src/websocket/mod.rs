@@ -34,7 +34,7 @@ mod server;
 // Re-export public types
 pub use client::{WebSocketTransport, WebSocketTransportBuilder};
 pub use config::{ConnectionState, ExponentialBackoff, WebSocketConfig};
-pub use server::{WebSocketListener, WebSocketServerConfig};
+pub use server::{OriginValidationMode, WebSocketServerConfig};
 
 #[cfg(feature = "websocket")]
-pub use server::AcceptedConnection;
+pub use server::{AcceptedConnection, WebSocketListener};
