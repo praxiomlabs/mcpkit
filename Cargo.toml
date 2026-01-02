@@ -12,6 +12,10 @@ members = [
     "crates/mcpkit-actix",
     "crates/mcpkit-rocket",
     "crates/mcpkit-warp",
+    # mcpkit-forge orchestration layer
+    "crates/mcpkit-provider",
+    "crates/mcpkit-template",
+    "crates/mcpkit-template-derive",
     "mcpkit",
     "examples/minimal-server",
     "examples/full-server",
@@ -64,6 +68,10 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 axum = { version = "0.8" }
 tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
 hyper = { version = "1.0", features = ["full"] }
+tokio-stream = "0.1"
+
+# Text processing
+regex = "1.11"
 
 # Utilities
 uuid = { version = "1.0", features = ["v4", "serde", "js"] }
@@ -73,6 +81,9 @@ url = { version = "2.5", features = ["serde"] }
 bytes = "1.5"
 rand = "0.8"
 sha2 = "0.10"
+
+# JWT validation
+jsonwebtoken = { version = "10.0", features = ["rust_crypto"] }
 
 # Tracing/Logging
 tracing = "0.1"
@@ -96,6 +107,7 @@ darling = "0.20"
 # Testing
 tokio-test = "0.4"
 pretty_assertions = "1.4"
+proptest = "1.6"
 
 # Benchmarking
 criterion = { version = "0.5", features = ["html_reports", "async_tokio"] }
@@ -107,6 +119,11 @@ mcpkit-server = { version = "0.5.0", path = "crates/mcpkit-server" }
 mcpkit-client = { version = "0.5.0", path = "crates/mcpkit-client" }
 mcpkit-macros = { version = "0.5.0", path = "crates/mcpkit-macros" }
 mcpkit-testing = { version = "0.5.0", path = "crates/mcpkit-testing" }
+
+# mcpkit-forge orchestration layer crates
+mcpkit-provider = { version = "0.5.0", path = "crates/mcpkit-provider" }
+mcpkit-template = { version = "0.5.0", path = "crates/mcpkit-template" }
+mcpkit-template-derive = { version = "0.5.0", path = "crates/mcpkit-template-derive" }
 
 [workspace.lints.rust]
 unsafe_code = "deny"
