@@ -1,0 +1,46 @@
+[package]
+name = "mcpkit-rag"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+keywords = ["mcp", "rag", "retrieval", "llm", "ai"]
+categories = ["api-bindings", "asynchronous", "text-processing"]
+description = "Retrieval-Augmented Generation (RAG) components for mcpkit-forge"
+
+[dependencies]
+# Internal crates
+mcpkit-provider.workspace = true
+mcpkit-embedding.workspace = true
+
+# Serialization
+serde.workspace = true
+serde_json.workspace = true
+
+# Async
+async-trait.workspace = true
+tokio.workspace = true
+futures.workspace = true
+
+# Error handling
+thiserror.workspace = true
+
+# Logging
+tracing.workspace = true
+
+# Text processing
+regex.workspace = true
+
+# Utilities
+uuid.workspace = true
+
+[dev-dependencies]
+tokio-test.workspace = true
+pretty_assertions.workspace = true
+tempfile = "3.10"
+
+[lints]
+workspace = true
