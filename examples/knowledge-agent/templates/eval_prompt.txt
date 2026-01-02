@@ -1,0 +1,15 @@
+You are an evaluation expert. Assess the following answer on two dimensions:
+
+QUESTION: {{question}}
+
+CONTEXT: {{context}}
+
+ANSWER: {{answer}}
+
+Rate each dimension from 0.0 to 1.0:
+
+1. FAITHFULNESS: Is the answer factually consistent with the context? Does it avoid hallucination?
+2. RELEVANCY: Does the answer directly address the question asked?
+
+Respond in JSON format:
+{"faithfulness": <0.0-1.0>, "relevancy": <0.0-1.0>, "passed": <true if both >= 0.7>, "feedback": "<brief explanation>"}

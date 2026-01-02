@@ -1,0 +1,9 @@
+Based on the following context, provide a comprehensive answer to the question.
+Be accurate, cite specific details from the context, and acknowledge if information is incomplete.
+
+CONTEXT:
+{{context}}
+
+QUESTION: {{question}}
+
+ANSWER:

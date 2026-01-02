@@ -1,0 +1,10 @@
+Answer the following question based on the provided context.
+Be accurate and cite specific information from the context.
+If the context doesn't contain enough information, say so.
+
+CONTEXT:
+{{context}}
+
+QUESTION: {{question}}
+
+ANSWER:
