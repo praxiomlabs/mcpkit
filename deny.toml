@@ -26,8 +26,10 @@ ignore = [
 
     # RUSTSEC-2025-0134: rustls-pemfile is unmaintained
     # - Transitive dependency from tonic v0.12
-    # - Not a security vulnerability, just unmaintained
-    # - Will be resolved when tonic updates to rustls-pki-types
+    # - Not a security vulnerability, just unmaintained (archived Aug 2025)
+    # - Migration path: tonic 0.14.x uses rustls-pki-types instead
+    # - TODO: Upgrade to tonic 0.14.x when API compatibility is verified
+    # - See: https://rustsec.org/advisories/RUSTSEC-2025-0134
     "RUSTSEC-2025-0134",
 ]
 
