@@ -815,6 +815,145 @@ pub struct Embedding {
     pub embedding: Vec<f32>,
 }
 
+impl EmbeddingResponse {
+    /// Calculate cosine similarity between two embeddings by index.
+    ///
+    /// Returns a value between -1.0 and 1.0, where:
+    /// - 1.0 means the vectors are identical in direction
+    /// - 0.0 means the vectors are orthogonal (unrelated)
+    /// - -1.0 means the vectors point in opposite directions
+    ///
+    /// # Errors
+    ///
+    /// Returns `None` if either index is out of bounds or if the embeddings
+    /// have different dimensions.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let response = provider.embed(EmbeddingRequest::batch(vec![
+    ///     "Hello world".to_string(),
+    ///     "Hi there".to_string(),
+    /// ])).await?;
+    ///
+    /// let similarity = response.cosine_similarity(0, 1).unwrap();
+    /// println!("Similarity: {:.4}", similarity);
+    /// ```
+    #[must_use]
+    pub fn cosine_similarity(&self, index_a: usize, index_b: usize) -> Option<f32> {
+        let a = self.embeddings.get(index_a)?;
+        let b = self.embeddings.get(index_b)?;
+
+        if a.embedding.len() != b.embedding.len() {
+            return None;
+        }
+
+        let dot_product: f32 = a
+            .embedding
+            .iter()
+            .zip(b.embedding.iter())
+            .map(|(x, y)| x * y)
+            .sum();
+
+        let magnitude_a: f32 = a.embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
+        let magnitude_b: f32 = b.embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
+
+        if magnitude_a == 0.0 || magnitude_b == 0.0 {
+            return None;
+        }
+
+        Some(dot_product / (magnitude_a * magnitude_b))
+    }
+
+    /// Calculate dot product between two embeddings by index.
+    ///
+    /// For normalized embeddings (like OpenAI's), dot product equals cosine similarity
+    /// and is faster to compute.
+    ///
+    /// # Errors
+    ///
+    /// Returns `None` if either index is out of bounds or if the embeddings
+    /// have different dimensions.
+    #[must_use]
+    pub fn dot_product(&self, index_a: usize, index_b: usize) -> Option<f32> {
+        let a = self.embeddings.get(index_a)?;
+        let b = self.embeddings.get(index_b)?;
+
+        if a.embedding.len() != b.embedding.len() {
+            return None;
+        }
+
+        Some(
+            a.embedding
+                .iter()
+                .zip(b.embedding.iter())
+                .map(|(x, y)| x * y)
+                .sum(),
+        )
+    }
+
+    /// Calculate Euclidean distance between two embeddings by index.
+    ///
+    /// Returns the L2 distance. Smaller values mean more similar.
+    ///
+    /// # Errors
+    ///
+    /// Returns `None` if either index is out of bounds or if the embeddings
+    /// have different dimensions.
+    #[must_use]
+    pub fn euclidean_distance(&self, index_a: usize, index_b: usize) -> Option<f32> {
+        let a = self.embeddings.get(index_a)?;
+        let b = self.embeddings.get(index_b)?;
+
+        if a.embedding.len() != b.embedding.len() {
+            return None;
+        }
+
+        let sum_squared_diff: f32 = a
+            .embedding
+            .iter()
+            .zip(b.embedding.iter())
+            .map(|(x, y)| (x - y).powi(2))
+            .sum();
+
+        Some(sum_squared_diff.sqrt())
+    }
+}
+
+impl Embedding {
+    /// Get the dimensionality of this embedding.
+    #[must_use]
+    pub fn dimensions(&self) -> usize {
+        self.embedding.len()
+    }
+
+    /// Compute cosine similarity with another embedding.
+    ///
+    /// Returns `None` if dimensions don't match or either vector has zero magnitude.
+    #[must_use]
+    pub fn cosine_similarity(&self, other: &Embedding) -> Option<f32> {
+        if self.embedding.len() != other.embedding.len() {
+            return None;
+        }
+
+        let dot_product: f32 = self
+            .embedding
+            .iter()
+            .zip(other.embedding.iter())
+            .map(|(x, y)| x * y)
+            .sum();
+
+        let magnitude_a: f32 = self.embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
+        let magnitude_b: f32 = other.embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
+
+        if magnitude_a == 0.0 || magnitude_b == 0.0 {
+            return None;
+        }
+
+        Some(dot_product / (magnitude_a * magnitude_b))
+    }
+}
+
 /// Token usage for an embedding request.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct EmbeddingUsage {
@@ -884,5 +1023,101 @@ mod tests {
         let usage = Usage::with_tokens(1000, 500);
         let cost = model.estimate_cost(&usage).unwrap();
         assert!((cost - 0.06).abs() < 0.0001); // $0.03 input + $0.03 output
+    }
+
+    #[test]
+    fn test_embedding_cosine_similarity() {
+        let response = EmbeddingResponse {
+            model: "test-model".to_string(),
+            embeddings: vec![
+                Embedding {
+                    index: 0,
+                    embedding: vec![1.0, 0.0, 0.0],
+                },
+                Embedding {
+                    index: 1,
+                    embedding: vec![1.0, 0.0, 0.0],
+                },
+                Embedding {
+                    index: 2,
+                    embedding: vec![0.0, 1.0, 0.0],
+                },
+            ],
+            usage: EmbeddingUsage::default(),
+        };
+
+        // Identical vectors should have similarity 1.0
+        let sim = response.cosine_similarity(0, 1).unwrap();
+        assert!((sim - 1.0).abs() < 0.0001);
+
+        // Orthogonal vectors should have similarity 0.0
+        let sim = response.cosine_similarity(0, 2).unwrap();
+        assert!(sim.abs() < 0.0001);
+
+        // Out of bounds should return None
+        assert!(response.cosine_similarity(0, 10).is_none());
+    }
+
+    #[test]
+    fn test_embedding_dot_product() {
+        let response = EmbeddingResponse {
+            model: "test-model".to_string(),
+            embeddings: vec![
+                Embedding {
+                    index: 0,
+                    embedding: vec![1.0, 2.0, 3.0],
+                },
+                Embedding {
+                    index: 1,
+                    embedding: vec![4.0, 5.0, 6.0],
+                },
+            ],
+            usage: EmbeddingUsage::default(),
+        };
+
+        // Dot product: 1*4 + 2*5 + 3*6 = 4 + 10 + 18 = 32
+        let dot = response.dot_product(0, 1).unwrap();
+        assert!((dot - 32.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_embedding_euclidean_distance() {
+        let response = EmbeddingResponse {
+            model: "test-model".to_string(),
+            embeddings: vec![
+                Embedding {
+                    index: 0,
+                    embedding: vec![0.0, 0.0, 0.0],
+                },
+                Embedding {
+                    index: 1,
+                    embedding: vec![3.0, 4.0, 0.0],
+                },
+            ],
+            usage: EmbeddingUsage::default(),
+        };
+
+        // Distance: sqrt(3^2 + 4^2) = 5
+        let dist = response.euclidean_distance(0, 1).unwrap();
+        assert!((dist - 5.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_single_embedding_similarity() {
+        let a = Embedding {
+            index: 0,
+            embedding: vec![1.0, 0.0],
+        };
+        let b = Embedding {
+            index: 1,
+            embedding: vec![0.707, 0.707], // ~45 degrees
+        };
+
+        let sim = a.cosine_similarity(&b).unwrap();
+        // cos(45°) ≈ 0.707
+        assert!((sim - 0.707).abs() < 0.01);
+
+        // Dimensions
+        assert_eq!(a.dimensions(), 2);
     }
 }
