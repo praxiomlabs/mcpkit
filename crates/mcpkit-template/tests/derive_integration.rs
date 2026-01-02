@@ -3,7 +3,7 @@
 //! These tests verify that the derive macro correctly generates Template
 //! implementations and validates templates at compile time.
 
-use mcpkit_template::{Role, Template, TemplateExt};
+use mcpkit_template::{template, Role, Template, TemplateExt};
 
 /// Basic template with two variables.
 #[derive(Template)]
@@ -344,8 +344,7 @@ fn test_path_template_variables() {
 }
 
 // Tests for the template! macro
-
-use mcpkit_template_derive::template;
+// (template! is imported above from mcpkit_template)
 
 #[test]
 fn test_template_macro_basic() {

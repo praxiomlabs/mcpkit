@@ -21,6 +21,6 @@ mcpkit-template-derive = { path = "../mcpkit-template-derive", optional = true }
 tokio = { version = "1.44", features = ["rt-multi-thread", "macros"] }
 
 [features]
-default = ["runtime"]
+default = ["runtime", "derive"]
 runtime = []
 derive = ["mcpkit-template-derive"]

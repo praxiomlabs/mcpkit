@@ -53,6 +53,9 @@ pub use runtime::{extract_variables, validate_template, RuntimeTemplate, Templat
 #[cfg(feature = "derive")]
 pub use mcpkit_template_derive::Template;
 
+#[cfg(feature = "derive")]
+pub use mcpkit_template_derive::template;
+
 /// A compiled prompt template.
 ///
 /// This trait is automatically implemented by the `#[derive(Template)]` macro.

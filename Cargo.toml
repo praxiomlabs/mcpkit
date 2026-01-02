@@ -18,6 +18,10 @@ members = [
     "crates/mcpkit-template-derive",
     "crates/mcpkit-memory",
     "crates/mcpkit-embedding",
+    "crates/mcpkit-chain",
+    "crates/mcpkit-agent",
+    "crates/mcpkit-rag",
+    "crates/mcpkit-eval",
     "mcpkit",
     "examples/minimal-server",
     "examples/full-server",
@@ -32,6 +36,7 @@ members = [
     "examples/rocket-server",
     "examples/warp-server",
     "examples/grpc-client",
+    "examples/knowledge-agent",
     "benches",
 ]
 
@@ -106,6 +111,12 @@ quote = "1.0"
 proc-macro2 = "1.0"
 darling = "0.20"
 
+# Database support
+rusqlite = { version = "0.32", features = ["bundled"] }
+sqlite-vec = "0.1"
+sqlx = { version = "0.8", features = ["runtime-tokio", "postgres"] }
+pgvector = { version = "0.4", features = ["sqlx"] }
+
 # Testing
 tokio-test = "0.4"
 pretty_assertions = "1.4"
@@ -128,6 +139,10 @@ mcpkit-template = { version = "0.5.0", path = "crates/mcpkit-template" }
 mcpkit-template-derive = { version = "0.5.0", path = "crates/mcpkit-template-derive" }
 mcpkit-memory = { version = "0.5.0", path = "crates/mcpkit-memory" }
 mcpkit-embedding = { version = "0.5.0", path = "crates/mcpkit-embedding" }
+mcpkit-chain = { version = "0.5.0", path = "crates/mcpkit-chain" }
+mcpkit-agent = { version = "0.5.0", path = "crates/mcpkit-agent" }
+mcpkit-rag = { version = "0.5.0", path = "crates/mcpkit-rag" }
+mcpkit-eval = { version = "0.5.0", path = "crates/mcpkit-eval" }
 
 [workspace.lints.rust]
 unsafe_code = "deny"
