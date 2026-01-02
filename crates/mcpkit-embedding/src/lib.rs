@@ -8,6 +8,8 @@
 //!
 //! - **`VectorStore` trait**: Common interface for vector storage backends
 //! - **`InMemoryStore`**: Fast in-memory implementation for development and small datasets
+//! - **`SqliteVecStore`**: Persistent SQLite storage with sqlite-vec extension (feature: `sqlite`)
+//! - **`PgVectorStore`**: Production-ready PostgreSQL storage with pgvector (feature: `postgres`)
 //! - **Distance metrics**: Cosine, Euclidean, and Dot Product similarity
 //! - **Metadata support**: Associate JSON metadata with embeddings for filtering
 //!
@@ -95,8 +97,20 @@ mod error;
 mod memory_store;
 mod store;
 
+#[cfg(feature = "sqlite")]
+mod sqlite_store;
+
+#[cfg(feature = "postgres")]
+mod postgres_store;
+
 // Re-exports
 pub use distance::DistanceMetric;
 pub use error::{EmbeddingError, EmbeddingResult};
 pub use memory_store::InMemoryStore;
 pub use store::{SearchOptions, SearchResult, StoredEmbedding, VectorStore};
+
+#[cfg(feature = "sqlite")]
+pub use sqlite_store::SqliteVecStore;
+
+#[cfg(feature = "postgres")]
+pub use postgres_store::PgVectorStore;

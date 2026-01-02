@@ -34,9 +34,19 @@ tokio = { workspace = true, optional = true }
 # Tracing
 tracing.workspace = true
 
+# SQLite with sqlite-vec (optional)
+rusqlite = { workspace = true, optional = true }
+sqlite-vec = { workspace = true, optional = true }
+
+# PostgreSQL with pgvector (optional)
+sqlx = { workspace = true, optional = true }
+pgvector = { workspace = true, optional = true }
+
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 
 [features]
 default = ["tokio"]
 tokio = ["dep:tokio"]
+sqlite = ["rusqlite", "sqlite-vec"]
+postgres = ["sqlx", "pgvector", "tokio"]

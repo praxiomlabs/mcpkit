@@ -46,6 +46,13 @@ pub enum EmbeddingError {
     /// Provider error during embedding generation.
     #[error("provider error: {0}")]
     Provider(#[from] mcpkit_provider::ProviderError),
+
+    /// Storage backend error.
+    #[error("storage error: {message}")]
+    Storage {
+        /// Description of the storage error.
+        message: String,
+    },
 }
 
 /// Result type for embedding operations.
