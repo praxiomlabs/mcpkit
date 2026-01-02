@@ -496,4 +496,141 @@ mod tests {
             Some("ws://localhost:8080".to_string())
         );
     }
+
+    #[test]
+    fn test_initial_message_counters() {
+        let transport = WebSocketTransport::new(WebSocketConfig::default());
+        assert_eq!(transport.messages_sent(), 0);
+        assert_eq!(transport.messages_received(), 0);
+    }
+
+    #[test]
+    fn test_connection_state_enum_values() {
+        // Test all ConnectionState variants are correctly mapped
+        let transport = WebSocketTransport::new(WebSocketConfig::default());
+
+        // Set each state and verify it can be retrieved correctly
+        transport.set_connection_state(ConnectionState::Disconnected);
+        assert_eq!(transport.connection_state(), ConnectionState::Disconnected);
+
+        transport.set_connection_state(ConnectionState::Connecting);
+        assert_eq!(transport.connection_state(), ConnectionState::Connecting);
+
+        transport.set_connection_state(ConnectionState::Connected);
+        assert_eq!(transport.connection_state(), ConnectionState::Connected);
+
+        transport.set_connection_state(ConnectionState::Reconnecting);
+        assert_eq!(transport.connection_state(), ConnectionState::Reconnecting);
+
+        transport.set_connection_state(ConnectionState::Closed);
+        assert_eq!(transport.connection_state(), ConnectionState::Closed);
+    }
+
+    #[test]
+    fn test_connection_state_invalid_value_defaults_to_disconnected() {
+        let transport = WebSocketTransport::new(WebSocketConfig::default());
+        // Set an invalid state value directly
+        transport.connection_state.store(255, Ordering::Release);
+        // Should default to Disconnected for unknown values
+        assert_eq!(transport.connection_state(), ConnectionState::Disconnected);
+    }
+
+    #[test]
+    fn test_builder_all_options() {
+        let transport = WebSocketTransportBuilder::new("wss://secure.example.com/mcp")
+            .connect_timeout(Duration::from_secs(15))
+            .ping_interval(Duration::from_secs(20))
+            .pong_timeout(Duration::from_secs(8))
+            .max_message_size(8 * 1024 * 1024)
+            .no_auto_reconnect()
+            .header("Authorization", "Bearer token")
+            .header("X-Request-Id", "abc123")
+            .build();
+
+        assert_eq!(transport.url(), "wss://secure.example.com/mcp");
+        assert!(!transport.is_connected());
+        assert_eq!(transport.connection_state(), ConnectionState::Disconnected);
+    }
+
+    #[test]
+    fn test_config_reconnect_settings() {
+        let config = WebSocketConfig::new("ws://localhost:8080")
+            .without_auto_reconnect()
+            .with_max_reconnect_attempts(5);
+
+        assert!(!config.auto_reconnect);
+        assert_eq!(config.max_reconnect_attempts, 5);
+    }
+
+    #[test]
+    fn test_config_default_reconnect_enabled() {
+        let config = WebSocketConfig::default();
+        assert!(config.auto_reconnect);
+        assert_eq!(config.max_reconnect_attempts, 10);
+    }
+
+    #[test]
+    fn test_config_custom_backoff() {
+        use super::super::config::ExponentialBackoff;
+
+        let backoff = ExponentialBackoff::new(
+            Duration::from_millis(50),
+            Duration::from_secs(5),
+            1.5,
+        );
+
+        // Test backoff calculations
+        assert_eq!(backoff.delay_for_attempt(0), Duration::from_millis(50));
+        // 50 * 1.5 = 75ms
+        assert_eq!(backoff.delay_for_attempt(1), Duration::from_millis(75));
+        // 50 * 1.5^2 = 112.5ms -> 112ms
+        assert_eq!(backoff.delay_for_attempt(2), Duration::from_millis(112));
+
+        // Eventually caps at max_delay
+        assert_eq!(backoff.delay_for_attempt(100), Duration::from_secs(5));
+    }
+
+    #[test]
+    fn test_url_accessor() {
+        let transport = WebSocketTransport::new(WebSocketConfig::new("ws://test.example.com:9000/path"));
+        assert_eq!(transport.url(), "ws://test.example.com:9000/path");
+    }
+
+    #[test]
+    fn test_websocket_scheme_variations() {
+        // Test ws:// scheme
+        let transport_ws = WebSocketTransport::new(WebSocketConfig::new("ws://localhost:8080"));
+        assert_eq!(transport_ws.url(), "ws://localhost:8080");
+
+        // Test wss:// scheme
+        let transport_wss = WebSocketTransport::new(WebSocketConfig::new("wss://localhost:8443"));
+        assert_eq!(transport_wss.url(), "wss://localhost:8443");
+    }
+
+    #[test]
+    fn test_connection_state_enum_debug() {
+        // Ensure ConnectionState implements Debug
+        let state = ConnectionState::Connecting;
+        let debug_output = format!("{:?}", state);
+        assert!(debug_output.contains("Connecting"));
+    }
+
+    #[test]
+    fn test_connection_state_clone_and_copy() {
+        let state = ConnectionState::Connected;
+        let cloned = state.clone();
+        let copied = state;
+
+        assert_eq!(state, cloned);
+        assert_eq!(state, copied);
+    }
+
+    #[test]
+    fn test_builder_default() {
+        let builder = WebSocketTransportBuilder::default();
+        let transport = builder.build();
+
+        // Default URL from WebSocketConfig::default
+        assert_eq!(transport.url(), "ws://localhost:8080/mcp");
+    }
 }
