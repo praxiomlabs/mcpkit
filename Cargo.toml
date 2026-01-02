@@ -16,6 +16,8 @@ members = [
     "crates/mcpkit-provider",
     "crates/mcpkit-template",
     "crates/mcpkit-template-derive",
+    "crates/mcpkit-memory",
+    "crates/mcpkit-embedding",
     "mcpkit",
     "examples/minimal-server",
     "examples/full-server",
@@ -124,6 +126,8 @@ mcpkit-testing = { version = "0.5.0", path = "crates/mcpkit-testing" }
 mcpkit-provider = { version = "0.5.0", path = "crates/mcpkit-provider" }
 mcpkit-template = { version = "0.5.0", path = "crates/mcpkit-template" }
 mcpkit-template-derive = { version = "0.5.0", path = "crates/mcpkit-template-derive" }
+mcpkit-memory = { version = "0.5.0", path = "crates/mcpkit-memory" }
+mcpkit-embedding = { version = "0.5.0", path = "crates/mcpkit-embedding" }
 
 [workspace.lints.rust]
 unsafe_code = "deny"

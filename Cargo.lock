@@ -2528,6 +2528,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "mcpkit-embedding"
+version = "0.5.0"
+dependencies = [
+ "async-trait",
+ "futures",
+ "mcpkit-provider",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "mcpkit-macros"
 version = "0.5.0"
 dependencies = [
@@ -2548,6 +2562,21 @@ dependencies = [
  "serde_json",
  "tokio",
  "trybuild",
+]
+
+[[package]]
+name = "mcpkit-memory"
+version = "0.5.0"
+dependencies = [
+ "async-trait",
+ "futures",
+ "mcpkit-provider",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
