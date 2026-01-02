@@ -29,7 +29,7 @@
 mod batching;
 mod logging;
 mod metrics;
-mod rate_limit;
+pub mod rate_limit;
 mod retry;
 mod timeout;
 
@@ -37,8 +37,9 @@ pub use batching::{BatchingConfig, BatchingLayer, BatchingStats, BatchingTranspo
 pub use logging::LoggingLayer;
 pub use metrics::MetricsLayer;
 pub use rate_limit::{
-    RateLimitAction, RateLimitAlgorithm, RateLimitConfig, RateLimitLayer, RateLimitStats,
-    RateLimitedTransport, RateLimiter, log_rate_limit_warning,
+    log_rate_limit_warning, BoxedRateLimitStore, InMemoryStore, RateLimitAction,
+    RateLimitAlgorithm, RateLimitConfig, RateLimitDecision, RateLimitLayer, RateLimitStats,
+    RateLimitStore, RateLimitStoreError, RateLimitedTransport, RateLimiter, StoreStats,
 };
 pub use retry::{ExponentialBackoff, RetryLayer, RetryPolicy};
 pub use timeout::TimeoutLayer;

@@ -19,6 +19,7 @@ futures = { workspace = true }
 pin-project-lite = { workspace = true }
 bytes = { workspace = true }
 tracing = { workspace = true }
+async-trait = { workspace = true }
 
 # Runtime-specific dependencies
 tokio = { version = "1", features = ["io-util", "io-std", "sync", "rt", "net", "time", "process"], optional = true }

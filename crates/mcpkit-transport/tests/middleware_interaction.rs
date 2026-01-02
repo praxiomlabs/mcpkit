@@ -562,7 +562,7 @@ async fn test_rate_limited_transport_stats() -> Result<(), Box<dyn std::error::E
     }
 
     // Check stats
-    let stats = transport.stats();
+    let stats = transport.stats().await;
     assert_eq!(stats.total_requests, 7);
     assert_eq!(stats.total_rejected, 2); // Last 2 should be rejected
 

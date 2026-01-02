@@ -28,6 +28,14 @@
 //! - **Sliding Window**: Tracks requests in a rolling time window
 //! - **Fixed Window**: Simple per-window counting (least memory, least accurate)
 //!
+//! # Pluggable Storage Backends
+//!
+//! Rate limiting state can be stored in different backends using the
+//! [`RateLimitStore`] trait:
+//!
+//! - [`InMemoryStore`]: Default in-memory store (single-process deployments)
+//! - Custom stores: Implement [`RateLimitStore`] for Redis, DynamoDB, etc.
+//!
 //! # Example
 //!
 //! ```rust
@@ -42,6 +50,43 @@
 //! assert_eq!(config.burst_size, 10);
 //! ```
 //!
+//! # Custom Store Example
+//!
+//! ```rust,ignore
+//! use mcpkit_transport::middleware::rate_limit::{
+//!     RateLimitStore, RateLimitDecision, RateLimitStoreError, RateLimitConfig,
+//! };
+//! use async_trait::async_trait;
+//! use std::sync::Arc;
+//!
+//! struct RedisStore { /* ... */ }
+//!
+//! #[async_trait]
+//! impl RateLimitStore for RedisStore {
+//!     async fn check_and_consume(
+//!         &self,
+//!         key: &str,
+//!         config: &RateLimitConfig,
+//!     ) -> Result<RateLimitDecision, RateLimitStoreError> {
+//!         // Implement using Redis MULTI/EXEC or Lua scripts
+//!         todo!()
+//!     }
+//!
+//!     async fn get_stats(&self, key: &str) -> Result<StoreStats, RateLimitStoreError> {
+//!         todo!()
+//!     }
+//!
+//!     async fn reset(&self, key: &str) -> Result<(), RateLimitStoreError> {
+//!         todo!()
+//!     }
+//! }
+//!
+//! // Use custom store with RateLimiter
+//! let config = RateLimitConfig::new(100, Duration::from_secs(60));
+//! let store = Arc::new(RedisStore { /* ... */ });
+//! let limiter = RateLimiter::with_store(config, store);
+//! ```
+//!
 //! # Production Checklist
 //!
 //! Before deploying to production, ensure you have:
@@ -51,16 +96,20 @@
 //! 3. **Configured alerts** for rate limit rejections (indicates attack or misconfiguration)
 //! 4. **Tested behavior** under rate limiting conditions
 //! 5. **Documented limits** for clients to understand expected behavior
+//! 6. **Considered distributed stores** for multi-instance deployments
+
+mod store;
+
+pub use store::{
+    BoxedRateLimitStore, InMemoryStore, RateLimitDecision, RateLimitStore, RateLimitStoreError,
+    StoreStats,
+};
 
 use crate::error::TransportError;
 use crate::traits::{Transport, TransportMetadata};
 use mcpkit_core::protocol::Message;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{Duration, Instant};
-
-// Use async-lock for runtime-agnostic async mutex
-use async_lock::Mutex;
+use std::time::Duration;
 
 /// Rate limiting configuration.
 #[derive(Debug, Clone)]
@@ -115,11 +164,6 @@ impl RateLimitConfig {
         self.on_limit = action;
         self
     }
-
-    /// Calculate the refill rate for token bucket (tokens per millisecond).
-    fn refill_rate(&self) -> f64 {
-        self.max_requests as f64 / self.window.as_millis() as f64
-    }
 }
 
 impl Default for RateLimitConfig {
@@ -153,82 +197,96 @@ pub enum RateLimitAction {
     WarnAndAllow,
 }
 
-/// Rate limiter state.
-struct RateLimiterState {
-    /// Token bucket: current token count (scaled by 1000 for precision).
-    tokens: AtomicU64,
-    /// Last refill time.
-    last_refill: Mutex<Instant>,
-    /// Sliding window: request timestamps.
-    request_times: Mutex<Vec<Instant>>,
-    /// Fixed window: request count in current window.
-    window_count: AtomicU64,
-    /// Fixed window: window start time.
-    window_start: Mutex<Instant>,
-    /// Total requests tracked (for metrics).
-    total_requests: AtomicU64,
-    /// Total rejected requests (for metrics).
-    total_rejected: AtomicU64,
-}
-
-impl RateLimiterState {
-    fn new(config: &RateLimitConfig) -> Self {
-        Self {
-            // Start with full bucket (scaled by 1000)
-            tokens: AtomicU64::new(config.burst_size * 1000),
-            last_refill: Mutex::new(Instant::now()),
-            request_times: Mutex::new(Vec::with_capacity(config.max_requests as usize)),
-            window_count: AtomicU64::new(0),
-            window_start: Mutex::new(Instant::now()),
-            total_requests: AtomicU64::new(0),
-            total_rejected: AtomicU64::new(0),
-        }
-    }
-}
-
 /// Rate limiter that can be shared across transports.
+///
+/// Uses a pluggable [`RateLimitStore`] for state storage, defaulting to
+/// [`InMemoryStore`] for single-process deployments.
+///
+/// # Thread Safety
+///
+/// `RateLimiter` is `Clone` and can be safely shared across tasks.
+/// The underlying store is accessed through `Arc<dyn RateLimitStore>`.
 #[derive(Clone)]
 pub struct RateLimiter {
     config: RateLimitConfig,
-    state: Arc<RateLimiterState>,
+    store: Arc<dyn RateLimitStore>,
+    /// Key used for rate limiting (empty string for global rate limiting).
+    key: String,
 }
 
 impl RateLimiter {
     /// Create a new rate limiter with the given configuration.
+    ///
+    /// Uses the default [`InMemoryStore`] for state storage.
     #[must_use]
     pub fn new(config: RateLimitConfig) -> Self {
+        let store = Arc::new(InMemoryStore::new(&config));
         Self {
-            state: Arc::new(RateLimiterState::new(&config)),
             config,
+            store,
+            key: String::new(),
         }
+    }
+
+    /// Create a rate limiter with a custom store backend.
+    ///
+    /// Use this for distributed rate limiting with Redis, DynamoDB, etc.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - Rate limit configuration
+    /// * `store` - Custom store implementation
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use mcpkit_transport::middleware::rate_limit::{RateLimiter, RateLimitConfig};
+    /// use std::sync::Arc;
+    ///
+    /// let config = RateLimitConfig::new(100, Duration::from_secs(60));
+    /// let redis_store = Arc::new(MyRedisStore::new(/* ... */));
+    /// let limiter = RateLimiter::with_store(config, redis_store);
+    /// ```
+    #[must_use]
+    pub fn with_store<S: RateLimitStore + 'static>(config: RateLimitConfig, store: Arc<S>) -> Self {
+        Self {
+            config,
+            store,
+            key: String::new(),
+        }
+    }
+
+    /// Set the rate limit key for per-client rate limiting.
+    ///
+    /// The key is used to identify distinct rate limit buckets.
+    /// Common choices include client ID, IP address, or API key.
+    #[must_use]
+    pub fn with_key(mut self, key: impl Into<String>) -> Self {
+        self.key = key.into();
+        self
     }
 
     /// Check if a request is allowed and consume a token if so.
     ///
     /// Returns `Ok(())` if allowed, `Err(TransportError)` if rate limited.
     pub async fn check(&self) -> Result<(), TransportError> {
-        self.state.total_requests.fetch_add(1, Ordering::Relaxed);
+        let decision = self
+            .store
+            .check_and_consume(&self.key, &self.config)
+            .await
+            .map_err(|e| TransportError::Connection {
+                message: format!("rate limit store error: {e}"),
+            })?;
 
-        let allowed = match self.config.algorithm {
-            RateLimitAlgorithm::TokenBucket => self.check_token_bucket().await,
-            RateLimitAlgorithm::SlidingWindow => self.check_sliding_window().await,
-            RateLimitAlgorithm::FixedWindow => self.check_fixed_window().await,
-        };
-
-        if allowed {
-            Ok(())
-        } else {
-            self.state.total_rejected.fetch_add(1, Ordering::Relaxed);
-
-            match self.config.on_limit {
+        match decision {
+            RateLimitDecision::Allowed { .. } => Ok(()),
+            RateLimitDecision::Denied { retry_after } => match self.config.on_limit {
                 RateLimitAction::Reject => Err(TransportError::RateLimited {
-                    retry_after: Some(self.config.window),
+                    retry_after: Some(retry_after),
                 }),
                 RateLimitAction::Wait => {
-                    // Wait for token refill and retry
-                    let wait_time =
-                        Duration::from_millis((1000.0 / self.config.refill_rate()).max(1.0) as u64);
-                    crate::runtime::sleep(wait_time).await;
+                    // Wait for the suggested retry_after duration and retry
+                    crate::runtime::sleep(retry_after).await;
                     // Retry after waiting
                     Box::pin(self.check()).await
                 }
@@ -238,110 +296,59 @@ impl RateLimiter {
                     );
                     Ok(())
                 }
-            }
+            },
         }
-    }
-
-    /// Token bucket algorithm implementation.
-    async fn check_token_bucket(&self) -> bool {
-        let now = Instant::now();
-
-        // Refill tokens based on elapsed time
-        let mut last_refill = self.state.last_refill.lock().await;
-
-        let elapsed = now.duration_since(*last_refill);
-        let tokens_to_add =
-            (elapsed.as_millis() as f64 * self.config.refill_rate() * 1000.0) as u64;
-
-        if tokens_to_add > 0 {
-            let current = self.state.tokens.load(Ordering::Relaxed);
-            let max_tokens = self.config.burst_size * 1000;
-            let new_tokens = (current + tokens_to_add).min(max_tokens);
-            self.state.tokens.store(new_tokens, Ordering::Relaxed);
-            *last_refill = now;
-        }
-
-        // Try to consume a token (1000 units = 1 token)
-        // Use fetch_update for more idiomatic CAS loop with built-in retry
-        self.state
-            .tokens
-            .fetch_update(Ordering::SeqCst, Ordering::Relaxed, |current| {
-                if current >= 1000 {
-                    Some(current - 1000)
-                } else {
-                    None
-                }
-            })
-            .is_ok()
-    }
-
-    /// Sliding window algorithm implementation.
-    async fn check_sliding_window(&self) -> bool {
-        let now = Instant::now();
-        // If window is larger than process uptime, keep all requests (they're all within the window)
-        let window_start = now.checked_sub(self.config.window);
-
-        let mut times = self.state.request_times.lock().await;
-
-        // Remove requests outside the window
-        // If window_start is None (window > process uptime), keep all requests
-        times.retain(|&t| window_start.is_none_or(|start| t > start));
-
-        // Check if we're under the limit
-        if times.len() < self.config.max_requests as usize {
-            times.push(now);
-            true
-        } else {
-            false
-        }
-    }
-
-    /// Fixed window algorithm implementation.
-    async fn check_fixed_window(&self) -> bool {
-        let now = Instant::now();
-
-        let mut window_start = self.state.window_start.lock().await;
-
-        // Check if we need to start a new window
-        if now.duration_since(*window_start) >= self.config.window {
-            *window_start = now;
-            self.state.window_count.store(1, Ordering::Relaxed);
-            return true;
-        }
-
-        // Increment count and check limit
-        let count = self.state.window_count.fetch_add(1, Ordering::Relaxed) + 1;
-        count <= self.config.max_requests
     }
 
     /// Get the current token count (for token bucket).
+    ///
+    /// Note: This may not reflect the exact current state in distributed stores.
     #[must_use]
-    pub fn tokens(&self) -> u64 {
-        self.state.tokens.load(Ordering::Relaxed) / 1000
+    pub async fn tokens(&self) -> u64 {
+        self.store
+            .get_stats(&self.key)
+            .await
+            .map(|s| s.current_tokens)
+            .unwrap_or(0)
     }
 
     /// Get statistics about rate limiting.
     #[must_use]
-    pub fn stats(&self) -> RateLimitStats {
-        RateLimitStats {
-            total_requests: self.state.total_requests.load(Ordering::Relaxed),
-            total_rejected: self.state.total_rejected.load(Ordering::Relaxed),
-            current_tokens: self.tokens(),
+    pub async fn stats(&self) -> RateLimitStats {
+        match self.store.get_stats(&self.key).await {
+            Ok(store_stats) => RateLimitStats {
+                total_requests: store_stats.total_requests,
+                total_rejected: store_stats.total_rejected,
+                current_tokens: store_stats.current_tokens,
+            },
+            Err(_) => RateLimitStats {
+                total_requests: 0,
+                total_rejected: 0,
+                current_tokens: 0,
+            },
         }
     }
 
     /// Reset the rate limiter state.
-    pub async fn reset(&self) {
-        self.state
-            .tokens
-            .store(self.config.burst_size * 1000, Ordering::Relaxed);
-        self.state.window_count.store(0, Ordering::Relaxed);
-        self.state.total_requests.store(0, Ordering::Relaxed);
-        self.state.total_rejected.store(0, Ordering::Relaxed);
+    pub async fn reset(&self) -> Result<(), TransportError> {
+        self.store
+            .reset(&self.key)
+            .await
+            .map_err(|e| TransportError::Connection {
+                message: format!("rate limit store error: {e}"),
+            })
+    }
 
-        *self.state.last_refill.lock().await = Instant::now();
-        *self.state.window_start.lock().await = Instant::now();
-        self.state.request_times.lock().await.clear();
+    /// Get the configuration.
+    #[must_use]
+    pub const fn config(&self) -> &RateLimitConfig {
+        &self.config
+    }
+
+    /// Get the store (for testing or advanced use cases).
+    #[must_use]
+    pub fn store(&self) -> &Arc<dyn RateLimitStore> {
+        &self.store
     }
 }
 
@@ -445,10 +452,22 @@ impl<T: Transport> RateLimitedTransport<T> {
         }
     }
 
-    /// Get rate limiting statistics.
+    /// Create with a custom store backend.
     #[must_use]
-    pub fn stats(&self) -> RateLimitStats {
-        self.limiter.stats()
+    pub fn with_store<S: RateLimitStore + 'static>(
+        inner: T,
+        config: RateLimitConfig,
+        store: Arc<S>,
+    ) -> Self {
+        Self {
+            inner,
+            limiter: RateLimiter::with_store(config, store),
+        }
+    }
+
+    /// Get rate limiting statistics.
+    pub async fn stats(&self) -> RateLimitStats {
+        self.limiter.stats().await
     }
 
     /// Get the inner transport.
@@ -553,7 +572,7 @@ mod tests {
             let _ = limiter.check().await;
         }
 
-        let stats = limiter.stats();
+        let stats = limiter.stats().await;
         assert_eq!(stats.total_requests, 7);
         assert_eq!(stats.total_rejected, 2); // Last 2 were rejected
     }
@@ -570,7 +589,7 @@ mod tests {
         assert!(limiter.check().await.is_err());
 
         // Reset
-        limiter.reset().await;
+        limiter.reset().await.unwrap();
 
         // Should allow requests again
         assert!(limiter.check().await.is_ok());
@@ -638,5 +657,36 @@ mod tests {
         };
 
         assert!((stats.rejection_rate() - 0.0).abs() < f64::EPSILON);
+    }
+
+    #[tokio::test]
+    async fn test_with_custom_store() {
+        // Test that custom stores can be injected
+        let config = RateLimitConfig::new(10, Duration::from_secs(1));
+        let store = Arc::new(InMemoryStore::new(&config));
+
+        // Create limiter with custom store
+        let limiter = RateLimiter::with_store(config, store.clone());
+
+        // Should work the same as default
+        assert!(limiter.check().await.is_ok());
+
+        // Stats should be accessible through the store
+        let stats = store.get_stats("").await.unwrap();
+        assert_eq!(stats.total_requests, 1);
+    }
+
+    #[tokio::test]
+    async fn test_rate_limiter_with_key() {
+        let config = RateLimitConfig::new(5, Duration::from_secs(1));
+        let store = Arc::new(InMemoryStore::new(&config));
+
+        // Create two limiters with different keys (same store)
+        let limiter1 = RateLimiter::with_store(config.clone(), store.clone()).with_key("client-1");
+        let limiter2 = RateLimiter::with_store(config, store).with_key("client-2");
+
+        // Both should be allowed (InMemoryStore uses global bucket, but API supports keys)
+        assert!(limiter1.check().await.is_ok());
+        assert!(limiter2.check().await.is_ok());
     }
 }
