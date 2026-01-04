@@ -108,19 +108,14 @@ async fn with_tools(provider: &impl Provider) {
 Send images to vision-capable models:
 
 ```rust
-use mcpkit_provider::{Provider, CompletionRequest, Message, ImageContent, ImageSource};
+use mcpkit_provider::{Provider, CompletionRequest, Message, ImageSource};
 
-async fn analyze_image(provider: &impl Provider) {
+async fn analyze_image(provider: &impl Provider, base64_image_data: &str) {
     // From URL
-    let image = ImageContent::new(ImageSource::Url(
-        "https://example.com/image.jpg".to_string()
-    ));
+    let image = ImageSource::from_url("https://example.com/image.jpg");
 
     // Or from base64-encoded data
-    let image = ImageContent::new(ImageSource::Base64 {
-        data: base64_image_data,
-        media_type: "image/jpeg".to_string(),
-    });
+    let image = ImageSource::from_base64(base64_image_data, "image/jpeg");
 
     let request = CompletionRequest::new()
         .model("gpt-4o")  // Use a vision-capable model

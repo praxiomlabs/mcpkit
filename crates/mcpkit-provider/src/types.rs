@@ -82,6 +82,12 @@ impl MessageContent {
         Self::Text { text: text.into() }
     }
 
+    /// Create image content.
+    #[must_use]
+    pub fn image(source: ImageSource) -> Self {
+        Self::Image { source }
+    }
+
     /// Get the text content if this is a text block.
     #[must_use]
     pub fn as_text(&self) -> Option<&str> {
@@ -108,6 +114,23 @@ pub enum ImageSource {
         /// The image URL.
         url: String,
     },
+}
+
+impl ImageSource {
+    /// Create an image source from a URL.
+    #[must_use]
+    pub fn from_url(url: impl Into<String>) -> Self {
+        Self::Url { url: url.into() }
+    }
+
+    /// Create an image source from base64-encoded data.
+    #[must_use]
+    pub fn from_base64(data: impl Into<String>, media_type: impl Into<String>) -> Self {
+        Self::Base64 {
+            data: data.into(),
+            media_type: media_type.into(),
+        }
+    }
 }
 
 /// A message in a conversation.
@@ -176,6 +199,13 @@ impl Message {
     #[must_use]
     pub fn text(&self) -> Option<&str> {
         self.content.first().and_then(MessageContent::as_text)
+    }
+
+    /// Add an image to this message (for vision models).
+    #[must_use]
+    pub fn with_image(mut self, source: ImageSource) -> Self {
+        self.content.push(MessageContent::image(source));
+        self
     }
 }
 
@@ -289,8 +319,10 @@ impl ToolResult {
 /// How the model should choose which tool to use.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum ToolChoice {
     /// Model decides whether to use tools.
+    #[default]
     Auto,
     /// Model must use a tool.
     Required,
@@ -303,17 +335,14 @@ pub enum ToolChoice {
     },
 }
 
-impl Default for ToolChoice {
-    fn default() -> Self {
-        Self::Auto
-    }
-}
 
 /// Response format specification for structured outputs.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[derive(Default)]
 pub enum ResponseFormat {
     /// Text output (default).
+    #[default]
     Text,
     /// JSON object output (model must be instructed to output JSON in the prompt).
     JsonObject,
@@ -327,11 +356,6 @@ pub enum ResponseFormat {
     },
 }
 
-impl Default for ResponseFormat {
-    fn default() -> Self {
-        Self::Text
-    }
-}
 
 /// A request to complete a conversation.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -523,7 +547,7 @@ impl ContentBlock {
 pub enum FinishReason {
     /// The model reached a natural stopping point.
     Stop,
-    /// The model hit the max_tokens limit.
+    /// The model hit the `max_tokens` limit.
     Length,
     /// The model made a tool call.
     ToolUse,
@@ -867,7 +891,7 @@ impl EmbeddingResponse {
 
     /// Calculate dot product between two embeddings by index.
     ///
-    /// For normalized embeddings (like OpenAI's), dot product equals cosine similarity
+    /// For normalized embeddings (like `OpenAI`'s), dot product equals cosine similarity
     /// and is faster to compute.
     ///
     /// # Errors
