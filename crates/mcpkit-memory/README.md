@@ -98,15 +98,15 @@ use mcpkit_memory::{Memory, SummaryMemory};
 use mcpkit_provider::openai::OpenAiProvider;
 
 let provider = OpenAiProvider::new(api_key)?;
-let mut memory = SummaryMemory::new(provider)
-    .max_messages(10)  // Summarize when exceeding 10 messages
-    .model("gpt-4o");
+let mut memory = SummaryMemory::new(provider, 10)  // Keep 10 recent messages
+    .summary_model("gpt-4o")        // Model for summarization
+    .max_summary_tokens(500);       // Max tokens for summary
 
 // Add messages normally
 memory.add(Message::user("Hello!")).await?;
 memory.add(Message::assistant("Hi!")).await?;
 
-// When limit is exceeded, older messages are summarized
+// When buffer fills, older messages are summarized
 // The summary becomes a system message preserving context
 ```
 

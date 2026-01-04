@@ -167,8 +167,15 @@ Generate text embeddings for semantic search and similarity:
 use mcpkit_provider::{Provider, EmbeddingRequest};
 
 async fn create_embeddings(provider: &impl Provider) {
-    let request = EmbeddingRequest::new(vec!["Hello world", "How are you?"])
+    // Single embedding
+    let request = EmbeddingRequest::new("Hello world")
         .model("text-embedding-3-small");
+
+    // Multiple embeddings (batch)
+    let request = EmbeddingRequest::batch(vec![
+        "Hello world".into(),
+        "How are you?".into(),
+    ]).model("text-embedding-3-small");
 
     let response = provider.embed(request).await.unwrap();
 
@@ -176,7 +183,7 @@ async fn create_embeddings(provider: &impl Provider) {
         println!("Dimensions: {}", embedding.len());
     }
 
-    // Calculate cosine similarity
+    // Calculate cosine similarity between first two embeddings
     let similarity = response.cosine_similarity(0, 1).unwrap();
     println!("Similarity: {:.4}", similarity);
 }
