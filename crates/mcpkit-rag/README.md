@@ -129,10 +129,10 @@ The `RagPipeline` provides an end-to-end workflow:
 use mcpkit_rag::{RagPipeline, PipelineConfig};
 
 let mut pipeline = RagPipeline::new(store, provider, splitter)
+    .embedding_model("text-embedding-3-small")  // Set on pipeline
     .config(PipelineConfig::new()
         .k(5)                           // Number of documents to retrieve
-        .embedding_model("text-embedding-3-small")
-        .generation_model("gpt-4o"));
+        .model("gpt-4o"));              // Generation model
 
 // Ingest documents
 pipeline.add_loader(loader);
