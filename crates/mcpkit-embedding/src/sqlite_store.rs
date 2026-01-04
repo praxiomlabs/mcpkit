@@ -1,14 +1,14 @@
 //! SQLite-based vector store using sqlite-vec extension.
 //!
-//! This module provides a persistent vector store backed by SQLite with the
+//! This module provides a persistent vector store backed by `SQLite` with the
 //! sqlite-vec extension for efficient vector similarity search.
 //!
 //! # Safety
 //!
 //! This module uses `unsafe` code to load the sqlite-vec extension via FFI.
 //! The unsafe block is minimal and well-contained - it only registers the
-//! extension initialization function with SQLite's auto-extension mechanism.
-//! This is required because SQLite extension loading inherently involves
+//! extension initialization function with `SQLite`'s auto-extension mechanism.
+//! This is required because `SQLite` extension loading inherently involves
 //! FFI calls that cannot be verified by Rust's borrow checker.
 
 #![allow(unsafe_code)]
@@ -17,7 +17,7 @@
 //!
 //! - **Persistent storage**: Vectors survive process restarts
 //! - **File-based**: Single file database, easy to deploy
-//! - **Cross-platform**: Works anywhere SQLite works
+//! - **Cross-platform**: Works anywhere `SQLite` works
 //! - **Efficient**: Uses sqlite-vec's optimized brute-force search
 //!
 //! # Example
@@ -46,7 +46,7 @@ use crate::distance::DistanceMetric;
 use crate::error::{EmbeddingError, EmbeddingResult};
 use crate::store::{SearchOptions, SearchResult, StoredEmbedding, VectorStore};
 
-/// A persistent vector store backed by SQLite with sqlite-vec extension.
+/// A persistent vector store backed by `SQLite` with sqlite-vec extension.
 ///
 /// This store uses the sqlite-vec extension to provide efficient vector
 /// similarity search with persistent storage. It supports cosine similarity
@@ -59,11 +59,11 @@ pub struct SqliteVecStore {
 }
 
 impl SqliteVecStore {
-    /// Create a new SQLite vector store, creating the database if it doesn't exist.
+    /// Create a new `SQLite` vector store, creating the database if it doesn't exist.
     ///
     /// # Arguments
     ///
-    /// * `path` - Path to the SQLite database file
+    /// * `path` - Path to the `SQLite` database file
     /// * `dimensions` - Expected dimensionality of vectors
     ///
     /// # Errors
@@ -73,11 +73,11 @@ impl SqliteVecStore {
         Self::open_with_metric(path, dimensions, DistanceMetric::Cosine)
     }
 
-    /// Create a new SQLite vector store with a specific distance metric.
+    /// Create a new `SQLite` vector store with a specific distance metric.
     ///
     /// # Arguments
     ///
-    /// * `path` - Path to the SQLite database file
+    /// * `path` - Path to the `SQLite` database file
     /// * `dimensions` - Expected dimensionality of vectors
     /// * `metric` - Distance metric to use for similarity search
     pub fn open_with_metric(
@@ -98,7 +98,7 @@ impl SqliteVecStore {
 
         // Create tables
         conn.execute_batch(&format!(
-            r#"
+            r"
             CREATE TABLE IF NOT EXISTS embeddings (
                 id TEXT PRIMARY KEY,
                 metadata TEXT DEFAULT '{{}}'
@@ -107,7 +107,7 @@ impl SqliteVecStore {
             CREATE VIRTUAL TABLE IF NOT EXISTS vec_embeddings USING vec0(
                 embedding float[{dimensions}]
             );
-            "#
+            "
         ))
         .map_err(|e| EmbeddingError::Storage {
             message: format!("Failed to create tables: {e}"),
@@ -126,7 +126,7 @@ impl SqliteVecStore {
         })
     }
 
-    /// Create an in-memory SQLite vector store (useful for testing).
+    /// Create an in-memory `SQLite` vector store (useful for testing).
     ///
     /// # Arguments
     ///
@@ -183,9 +183,7 @@ impl VectorStore for SqliteVecStore {
             .unwrap_or(false);
 
         if exists {
-            return Err(EmbeddingError::Storage {
-                message: format!("Embedding with ID '{}' already exists", item.id),
-            });
+            return Err(EmbeddingError::DuplicateId { id: item.id });
         }
 
         // Normalize for cosine similarity
@@ -525,5 +523,23 @@ mod tests {
             .await;
 
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_sqlite_store_duplicate_id() {
+        let mut store = SqliteVecStore::in_memory(3).unwrap();
+
+        // First insert should succeed
+        store
+            .insert(StoredEmbedding::new("doc1", vec![1.0, 0.0, 0.0]))
+            .await
+            .unwrap();
+
+        // Second insert with same ID should fail with DuplicateId error
+        let result = store
+            .insert(StoredEmbedding::new("doc1", vec![0.0, 1.0, 0.0]))
+            .await;
+
+        assert!(matches!(result, Err(EmbeddingError::DuplicateId { .. })));
     }
 }
