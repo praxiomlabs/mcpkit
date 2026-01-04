@@ -212,10 +212,11 @@ impl OllamaProvider {
     }
 
     /// Convert our response format to Ollama's format.
+    #[allow(clippy::single_option_map)] // Helper function called from multiple places
     fn convert_response_format(
-        format: &Option<crate::types::ResponseFormat>,
+        format: Option<&crate::types::ResponseFormat>,
     ) -> Option<OllamaFormat> {
-        format.as_ref().and_then(|f| match f {
+        format.and_then(|f| match f {
             // Ollama doesn't have a "text" format; omit the field entirely
             crate::types::ResponseFormat::Text => None,
             crate::types::ResponseFormat::JsonObject => {
@@ -265,7 +266,7 @@ impl Provider for OllamaProvider {
                 num_predict: request.max_tokens.map(|t| t as i32),
                 stop: request.stop.clone(),
             }),
-            format: Self::convert_response_format(&request.response_format),
+            format: Self::convert_response_format(request.response_format.as_ref()),
         };
 
         debug!("Sending request to Ollama");
@@ -332,7 +333,7 @@ impl Provider for OllamaProvider {
                 num_predict: request.max_tokens.map(|t| t as i32),
                 stop: request.stop.clone(),
             }),
-            format: Self::convert_response_format(&request.response_format),
+            format: Self::convert_response_format(request.response_format.as_ref()),
         };
 
         let response = self
@@ -438,7 +439,7 @@ impl Provider for OllamaProvider {
                                 }
                                 Err(e) => {
                                     yield Ok(StreamEvent::Error {
-                                        message: format!("Failed to parse Ollama chunk: {}", e),
+                                        message: format!("Failed to parse Ollama chunk: {e}"),
                                     });
                                 }
                             }
@@ -517,14 +518,13 @@ impl Provider for OllamaProvider {
             name: Some(model_id.to_string()),
             context_length: show_response
                 .model_info
-                .and_then(|i| i.get("context_length").and_then(|v| v.as_u64()))
+                .and_then(|i| i.get("context_length").and_then(serde_json::Value::as_u64))
                 .map(|v| v as u32),
             max_output_tokens: None,
             supports_tools: true,
             supports_vision: show_response
                 .details
-                .map(|d| d.families.iter().any(|f| f.contains("vision")))
-                .unwrap_or(false),
+                .is_some_and(|d| d.families.iter().any(|f| f.contains("vision"))),
             input_cost_per_million: Some(0.0),
             output_cost_per_million: Some(0.0),
         })

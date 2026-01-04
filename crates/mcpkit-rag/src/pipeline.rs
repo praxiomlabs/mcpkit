@@ -301,8 +301,7 @@ where
         });
 
         let user_prompt = format!(
-            "Context:\n{}\n\nQuestion: {}\n\nAnswer based on the context above.",
-            context, query
+            "Context:\n{context}\n\nQuestion: {query}\n\nAnswer based on the context above."
         );
 
         // Generate the answer
@@ -319,7 +318,7 @@ where
         }
 
         let response = self.provider.complete(request).await?;
-        let answer = response.text().unwrap_or_default().to_string();
+        let answer = response.text().unwrap_or_default();
 
         Ok(RagResponse::new(answer, sources))
     }

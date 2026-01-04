@@ -3,7 +3,7 @@
 //! Multi-LLM provider abstraction for the mcpkit-forge orchestration layer.
 //!
 //! This crate provides a unified interface for interacting with various LLM providers
-//! (OpenAI, Anthropic, Ollama, etc.) with support for:
+//! (`OpenAI`, Anthropic, Ollama, etc.) with support for:
 //!
 //! - **Streaming completions**: Token-by-token streaming with backpressure
 //! - **Tool/function calling**: Unified interface across providers
@@ -46,7 +46,7 @@
 //!
 //! # Feature Flags
 //!
-//! - `openai` (default): Enable OpenAI provider
+//! - `openai` (default): Enable `OpenAI` provider
 //! - `anthropic` (default): Enable Anthropic provider
 //! - `ollama`: Enable Ollama provider for local models
 //! - `all-providers`: Enable all providers

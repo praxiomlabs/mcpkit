@@ -97,7 +97,7 @@ impl Memory for BufferMemory {
         for message in non_system.into_iter().rev() {
             let msg_tokens = estimate_message_tokens(message);
             if total_tokens + msg_tokens <= max_tokens {
-                result.insert(if result.is_empty() { 0 } else { 1 }, message.clone());
+                result.insert(usize::from(!result.is_empty()), message.clone());
                 total_tokens += msg_tokens;
             } else {
                 break;

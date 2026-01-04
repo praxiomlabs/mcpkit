@@ -229,7 +229,7 @@ impl ToolRegistry {
 
     /// Register a tool.
     pub fn register<T: Tool + 'static>(&mut self, tool: T) {
-        let name = tool.schema().name.clone();
+        let name = tool.schema().name;
         self.tools.insert(name, Arc::new(tool));
     }
 

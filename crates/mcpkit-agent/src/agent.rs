@@ -79,6 +79,7 @@ pub struct AgentStep {
 
 impl AgentStep {
     /// Create a new step with an action.
+    #[must_use]
     pub fn new(action: AgentAction) -> Self {
         Self {
             action,

@@ -7,11 +7,11 @@ use serde::{Deserialize, Serialize};
 /// Different metrics are suited for different use cases:
 /// - **Cosine**: Best for semantic similarity, direction-based comparison
 /// - **Euclidean**: Best for absolute distance, clustering applications
-/// - **DotProduct**: Fast alternative for normalized vectors (equivalent to cosine)
+/// - **`DotProduct`**: Fast alternative for normalized vectors (equivalent to cosine)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DistanceMetric {
-    /// Cosine similarity (1 - cosine_distance).
+    /// Cosine similarity (1 - `cosine_distance`).
     ///
     /// Returns values between -1 and 1 where:
     /// - 1.0: identical direction (most similar)
@@ -61,7 +61,7 @@ impl DistanceMetric {
     /// Whether higher values indicate greater similarity.
     ///
     /// - Cosine: true (1.0 = most similar)
-    /// - DotProduct: true (higher = more similar)
+    /// - `DotProduct`: true (higher = more similar)
     /// - Euclidean: false (0.0 = most similar)
     #[must_use]
     pub const fn higher_is_better(&self) -> bool {

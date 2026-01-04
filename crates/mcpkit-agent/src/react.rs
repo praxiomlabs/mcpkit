@@ -211,7 +211,7 @@ impl<P: Provider + 'static> Agent for ReActAgent<P> {
 }
 
 /// Default system prompt for ReAct agents.
-const DEFAULT_REACT_SYSTEM_PROMPT: &str = r#"You are a helpful AI assistant that uses a systematic approach to solve problems.
+const DEFAULT_REACT_SYSTEM_PROMPT: &str = r"You are a helpful AI assistant that uses a systematic approach to solve problems.
 
 When given a question or task, you should:
 1. Think about what you need to do
@@ -230,7 +230,7 @@ Or when you have the final answer:
 Thought: [Your final reasoning]
 Final Answer: [Your complete answer to the question]
 
-Be precise and thorough. Only provide a Final Answer when you are confident in your response."#;
+Be precise and thorough. Only provide a Final Answer when you are confident in your response.";
 
 #[cfg(test)]
 mod tests {

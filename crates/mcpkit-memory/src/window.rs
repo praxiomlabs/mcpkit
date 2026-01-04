@@ -132,7 +132,7 @@ impl Memory for WindowMemory {
             let msg_tokens = estimate_message_tokens(message);
             if total_tokens + msg_tokens <= max_tokens {
                 // Insert after system message
-                let pos = if result.is_empty() { 0 } else { 1 };
+                let pos = usize::from(!result.is_empty());
                 result.insert(pos, message.clone());
                 total_tokens += msg_tokens;
             } else {
@@ -156,8 +156,7 @@ impl Memory for WindowMemory {
         let system_tokens = self
             .system
             .as_ref()
-            .map(estimate_message_tokens)
-            .unwrap_or(0);
+            .map_or(0, estimate_message_tokens);
 
         let message_tokens: usize = self.messages.iter().map(estimate_message_tokens).sum();
 

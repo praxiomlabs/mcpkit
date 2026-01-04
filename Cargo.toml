@@ -259,6 +259,16 @@ float_cmp = "allow"
 significant_drop_tightening = "allow"
 significant_drop_in_scrutinee = "allow"
 
+# --- Documentation formatting ---
+# False positives for proper nouns (OpenAI, ReAct, etc.) that aren't code identifiers
+doc_markdown = "allow"
+# False positives for template placeholders like {input} in string replacement
+literal_string_with_formatting_args = "allow"
+# The str lifetime warning for trait impls can't be fixed without changing trait signature
+unnecessary_literal_bound = "allow"
+# Type complexity is acceptable for closures in complex async patterns
+type_complexity = "allow"
+
 # --- Miscellaneous ---
 # Some functions are legitimately long (e.g., server initialization)
 too_many_lines = "allow"

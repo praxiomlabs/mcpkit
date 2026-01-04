@@ -124,11 +124,13 @@ where
     }
 
     /// Get a reference to the underlying store.
+    #[must_use] 
     pub fn store(&self) -> &Arc<tokio::sync::RwLock<S>> {
         &self.store
     }
 
     /// Get a reference to the provider.
+    #[must_use] 
     pub fn provider(&self) -> &Arc<P> {
         &self.provider
     }
@@ -325,9 +327,9 @@ where
         // Parse the generated queries
         let queries: Vec<String> = text
             .lines()
-            .map(|l| l.trim())
+            .map(str::trim)
             .filter(|l| !l.is_empty())
-            .map(|l| l.to_string())
+            .map(std::string::ToString::to_string)
             .take(self.num_queries)
             .collect();
 

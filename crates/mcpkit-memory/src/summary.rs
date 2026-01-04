@@ -196,8 +196,7 @@ impl<P: Provider> Memory for SummaryMemory<P> {
         // Add summary as a system-like context if present
         if let Some(summary) = &self.summary {
             result.push(Message::system(format!(
-                "[Conversation Summary]\n{}",
-                summary
+                "[Conversation Summary]\n{summary}"
             )));
         }
 
@@ -222,7 +221,7 @@ impl<P: Provider> Memory for SummaryMemory<P> {
 
         // Summary
         if let Some(summary) = &self.summary {
-            let summary_msg = Message::system(format!("[Conversation Summary]\n{}", summary));
+            let summary_msg = Message::system(format!("[Conversation Summary]\n{summary}"));
             let tokens = estimate_message_tokens(&summary_msg);
             if total_tokens + tokens <= max_tokens {
                 result.push(summary_msg);

@@ -145,8 +145,7 @@ impl DirectoryLoader {
 
         path.extension()
             .and_then(|ext| ext.to_str())
-            .map(|ext| self.extensions.iter().any(|e| e == ext))
-            .unwrap_or(false)
+            .is_some_and(|ext| self.extensions.iter().any(|e| e == ext))
     }
 
     /// Recursively collect all matching files.
@@ -355,6 +354,7 @@ pub struct MemoryLoader {
 
 impl MemoryLoader {
     /// Create a new memory loader with the given documents.
+    #[must_use] 
     pub fn new(documents: Vec<Document>) -> Self {
         Self { documents }
     }

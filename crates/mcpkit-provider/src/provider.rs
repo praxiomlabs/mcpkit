@@ -122,7 +122,7 @@ pub struct ProviderMetadata {
 /// The core trait that all LLM providers must implement.
 ///
 /// This trait provides a unified interface for interacting with any LLM provider,
-/// enabling provider-agnostic code that can work with OpenAI, Anthropic, Ollama,
+/// enabling provider-agnostic code that can work with `OpenAI`, Anthropic, Ollama,
 /// or any other compatible provider.
 ///
 /// # Example

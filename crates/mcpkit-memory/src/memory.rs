@@ -111,7 +111,7 @@ pub trait Memory: Send + Sync {
 #[must_use]
 pub fn estimate_tokens(text: &str) -> usize {
     // Rough estimate: ~4 characters per token on average
-    (text.len() + 3) / 4
+    text.len().div_ceil(4)
 }
 
 /// Utility function to estimate tokens in a message.
@@ -119,8 +119,7 @@ pub fn estimate_tokens(text: &str) -> usize {
 pub fn estimate_message_tokens(message: &Message) -> usize {
     let content_tokens = message
         .text()
-        .map(|t| estimate_tokens(t))
-        .unwrap_or(0);
+        .map_or(0, estimate_tokens);
 
     // Add overhead for role and structure (~4 tokens)
     content_tokens + 4

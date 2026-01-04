@@ -509,7 +509,7 @@ impl Provider for AnthropicProvider {
                                     }
                                     Err(e) => {
                                         yield Ok(StreamEvent::Error {
-                                            message: format!("Failed to parse SSE event: {}", e),
+                                            message: format!("Failed to parse SSE event: {e}"),
                                         });
                                     }
                                 }

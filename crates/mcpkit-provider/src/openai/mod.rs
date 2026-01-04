@@ -101,7 +101,7 @@ impl OpenAiConfig {
     }
 }
 
-/// OpenAI provider implementation.
+/// `OpenAI` provider implementation.
 pub struct OpenAiProvider {
     config: OpenAiConfig,
     client: reqwest::Client,
@@ -109,7 +109,7 @@ pub struct OpenAiProvider {
 }
 
 impl OpenAiProvider {
-    /// Create a new OpenAI provider with the given API key.
+    /// Create a new `OpenAI` provider with the given API key.
     ///
     /// # Errors
     ///
@@ -118,7 +118,7 @@ impl OpenAiProvider {
         Self::with_config(OpenAiConfig::new(api_key))
     }
 
-    /// Create a new OpenAI provider with the given configuration.
+    /// Create a new `OpenAI` provider with the given configuration.
     ///
     /// # Errors
     ///
@@ -179,12 +179,12 @@ impl OpenAiProvider {
             .unwrap_or(&self.config.default_model)
     }
 
-    /// Convert our message format to OpenAI's format.
+    /// Convert our message format to `OpenAI`'s format.
     fn convert_messages(messages: &[Message]) -> Vec<OpenAiMessage> {
         messages.iter().map(OpenAiMessage::from_message).collect()
     }
 
-    /// Convert our tool definitions to OpenAI's format.
+    /// Convert our tool definitions to `OpenAI`'s format.
     fn convert_tools(tools: &[ToolDefinition]) -> Vec<OpenAiTool> {
         tools
             .iter()
@@ -199,11 +199,12 @@ impl OpenAiProvider {
             .collect()
     }
 
-    /// Convert our response format to OpenAI's format.
+    /// Convert our response format to `OpenAI`'s format.
+    #[allow(clippy::single_option_map)] // Helper function called from multiple places
     fn convert_response_format(
-        format: &Option<crate::types::ResponseFormat>,
+        format: Option<&crate::types::ResponseFormat>,
     ) -> Option<OpenAiResponseFormat> {
-        format.as_ref().map(|f| match f {
+        format.map(|f| match f {
             crate::types::ResponseFormat::Text => OpenAiResponseFormat::Text,
             crate::types::ResponseFormat::JsonObject => OpenAiResponseFormat::JsonObject,
             crate::types::ResponseFormat::JsonSchema { schema, strict } => {
@@ -217,7 +218,7 @@ impl OpenAiProvider {
         })
     }
 
-    /// Parse an OpenAI error response.
+    /// Parse an `OpenAI` error response.
     fn parse_error(&self, status: reqwest::StatusCode, body: &str) -> ProviderError {
         // Try to parse as OpenAI error
         if let Ok(error) = serde_json::from_str::<OpenAiErrorResponse>(body) {
@@ -265,7 +266,7 @@ impl Provider for OpenAiProvider {
             top_p: request.top_p,
             stop: request.stop.clone(),
             tools: request.tools.as_ref().map(|t| Self::convert_tools(t)),
-            response_format: Self::convert_response_format(&request.response_format),
+            response_format: Self::convert_response_format(request.response_format.as_ref()),
             stream: false,
         };
 
@@ -336,7 +337,7 @@ impl Provider for OpenAiProvider {
             top_p: request.top_p,
             stop: request.stop.clone(),
             tools: request.tools.as_ref().map(|t| Self::convert_tools(t)),
-            response_format: Self::convert_response_format(&request.response_format),
+            response_format: Self::convert_response_format(request.response_format.as_ref()),
             stream: true,
         };
 
@@ -432,10 +433,10 @@ impl Provider for OpenAiProvider {
                                                     let content_index = tool_call.index + 1;
 
                                                     // Check if this is a new tool call (has id and name)
-                                                    if !seen_tool_indices.contains(&tool_call.index) {
-                                                        if let (Some(id), Some(func)) = (&tool_call.id, &tool_call.function) {
-                                                            if let Some(name) = &func.name {
-                                                                seen_tool_indices.insert(tool_call.index);
+                                                    // Use insert() which returns true if the value was newly inserted
+                                                    if let (Some(id), Some(func)) = (&tool_call.id, &tool_call.function) {
+                                                        if let Some(name) = &func.name {
+                                                            if seen_tool_indices.insert(tool_call.index) {
                                                                 yield Ok(StreamEvent::ToolUseStart {
                                                                     index: content_index,
                                                                     id: id.clone(),
@@ -464,7 +465,7 @@ impl Provider for OpenAiProvider {
                                     }
                                     Err(e) => {
                                         yield Ok(StreamEvent::Error {
-                                            message: format!("Failed to parse SSE chunk: {}", e),
+                                            message: format!("Failed to parse SSE chunk: {e}"),
                                         });
                                     }
                                 }
@@ -645,7 +646,7 @@ struct OpenAiChatRequest {
     stream: bool,
 }
 
-/// Response format specification for OpenAI API.
+/// Response format specification for `OpenAI` API.
 #[derive(Debug, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum OpenAiResponseFormat {
@@ -694,7 +695,7 @@ enum OpenAiContentPart {
     ImageUrl { image_url: OpenAiImageUrl },
 }
 
-/// Image URL specification for OpenAI vision.
+/// Image URL specification for `OpenAI` vision.
 #[derive(Debug, Serialize, Deserialize)]
 struct OpenAiImageUrl {
     /// The image URL (can be a regular URL or a data URI like "data:image/jpeg;base64,...").
@@ -730,7 +731,7 @@ impl OpenAiMessage {
                     crate::types::MessageContent::Image { source } => {
                         let url = match source {
                             crate::types::ImageSource::Base64 { media_type, data } => {
-                                format!("data:{};base64,{}", media_type, data)
+                                format!("data:{media_type};base64,{data}")
                             }
                             crate::types::ImageSource::Url { url } => url.clone(),
                         };

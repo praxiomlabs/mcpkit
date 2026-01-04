@@ -80,7 +80,7 @@ pub trait Metric: Send + Sync {
     fn name(&self) -> &str;
 
     /// Get the metric description.
-    fn description(&self) -> &str {
+    fn description(&self) -> &'static str {
         "Evaluation metric"
     }
 }
@@ -160,17 +160,16 @@ impl Metric for ExactMatchMetric {
             "Outputs match exactly".to_string()
         } else {
             format!(
-                "Outputs differ: expected '{}', got '{}'",
-                expected_norm, actual_norm
+                "Outputs differ: expected '{expected_norm}', got '{actual_norm}'"
             )
         }))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "exact_match"
     }
 
-    fn description(&self) -> &str {
+    fn description(&self) -> &'static str {
         "Checks if actual output exactly matches expected output"
     }
 }
@@ -232,15 +231,15 @@ impl Metric for ContainsMetric {
         Ok(MetricResult::new("contains", score).with_reason(if score == 1.0 {
             "Actual output contains expected text".to_string()
         } else {
-            format!("Actual output does not contain '{}'", expected)
+            format!("Actual output does not contain '{expected}'")
         }))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "contains"
     }
 
-    fn description(&self) -> &str {
+    fn description(&self) -> &'static str {
         "Checks if actual output contains expected text"
     }
 }
@@ -268,7 +267,7 @@ impl Metric for RegexMatchMetric {
         })?;
 
         let re = regex::Regex::new(&self.pattern).map_err(|e| {
-            EvalError::parse(format!("Invalid regex pattern: {}", e))
+            EvalError::parse(format!("Invalid regex pattern: {e}"))
         })?;
 
         let score = if re.is_match(actual) { 1.0 } else { 0.0 };
@@ -280,11 +279,11 @@ impl Metric for RegexMatchMetric {
         }))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "regex_match"
     }
 
-    fn description(&self) -> &str {
+    fn description(&self) -> &'static str {
         "Checks if actual output matches a regex pattern"
     }
 }
@@ -342,10 +341,10 @@ impl<P: Provider + 'static> Metric for FaithfulnessMetric<P> {
             r#"You are evaluating the faithfulness of an AI-generated answer.
 
 Context:
-{}
+{context}
 
 Answer:
-{}
+{actual}
 
 Evaluate whether the answer is faithful to the context. An answer is faithful if:
 1. All claims in the answer can be verified from the context
@@ -359,8 +358,7 @@ Where score is:
 - 1.0: Completely faithful, all claims supported by context
 - 0.5-0.9: Mostly faithful with minor unsupported claims
 - 0.1-0.4: Partially faithful with significant unsupported claims
-- 0.0: Not faithful, major hallucinations or contradictions"#,
-            context, actual
+- 0.0: Not faithful, major hallucinations or contradictions"#
         );
 
         let mut request = CompletionRequest::new()
@@ -378,11 +376,11 @@ Where score is:
         parse_llm_judge_response("faithfulness", &text)
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "faithfulness"
     }
 
-    fn description(&self) -> &str {
+    fn description(&self) -> &'static str {
         "LLM-as-judge evaluation of answer faithfulness to context"
     }
 }
@@ -466,11 +464,11 @@ Where score is:
         parse_llm_judge_response("answer_relevancy", &text)
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "answer_relevancy"
     }
 
-    fn description(&self) -> &str {
+    fn description(&self) -> &'static str {
         "LLM-as-judge evaluation of answer relevancy to the question"
     }
 }
@@ -558,11 +556,11 @@ Where score is the proportion of relevant contexts (e.g., 2 relevant out of 4 co
         parse_llm_judge_response("context_precision", &text)
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "context_precision"
     }
 
-    fn description(&self) -> &str {
+    fn description(&self) -> &'static str {
         "LLM-as-judge evaluation of context precision (relevance of retrieved contexts)"
     }
 }
@@ -583,20 +581,19 @@ fn parse_llm_judge_response(metric_name: &str, response: &str) -> EvalResult<Met
     // Parse as JSON
     let parsed: serde_json::Value = serde_json::from_str(json_str).map_err(|e| {
         EvalError::parse(format!(
-            "Failed to parse LLM judge response as JSON: {}. Response: {}",
-            e, response
+            "Failed to parse LLM judge response as JSON: {e}. Response: {response}"
         ))
     })?;
 
     let score = parsed
         .get("score")
-        .and_then(|v| v.as_f64())
+        .and_then(serde_json::Value::as_f64)
         .ok_or_else(|| EvalError::parse("Missing 'score' field in LLM judge response"))?;
 
     let reason = parsed
         .get("reason")
         .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
+        .map(std::string::ToString::to_string);
 
     let mut result = MetricResult::new(metric_name, score);
     if let Some(r) = reason {

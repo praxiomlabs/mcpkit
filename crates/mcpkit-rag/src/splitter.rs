@@ -104,7 +104,7 @@ impl RecursiveCharacterSplitter {
                 "; ".to_string(),
                 ", ".to_string(),
                 " ".to_string(),
-                "".to_string(),
+                String::new(),
             ],
             keep_separator: true,
         }
@@ -150,7 +150,7 @@ impl RecursiveCharacterSplitter {
 
         for (i, part) in parts.iter().enumerate() {
             if self.keep_separator && i < parts.len() - 1 {
-                result.push(format!("{}{}", part, separator));
+                result.push(format!("{part}{separator}"));
             } else {
                 result.push(part.to_string());
             }
@@ -268,7 +268,7 @@ impl TextSplitter for RecursiveCharacterSplitter {
             .enumerate()
             .map(|(i, content)| {
                 let mut doc = Document::new(content);
-                doc.metadata = document.metadata.clone();
+                doc.metadata.clone_from(&document.metadata);
                 doc.metadata
                     .insert("chunk_index".to_string(), serde_json::json!(i));
                 if let Some(id) = &document.id {
@@ -354,7 +354,7 @@ impl TextSplitter for FixedSizeSplitter {
             .enumerate()
             .map(|(i, content)| {
                 let mut doc = Document::new(content);
-                doc.metadata = document.metadata.clone();
+                doc.metadata.clone_from(&document.metadata);
                 doc.metadata
                     .insert("chunk_index".to_string(), serde_json::json!(i));
                 if let Some(id) = &document.id {
@@ -552,7 +552,7 @@ impl TextSplitter for SentenceSplitter {
             .enumerate()
             .map(|(i, content)| {
                 let mut doc = Document::new(content);
-                doc.metadata = document.metadata.clone();
+                doc.metadata.clone_from(&document.metadata);
                 doc.metadata
                     .insert("chunk_index".to_string(), serde_json::json!(i));
                 if let Some(id) = &document.id {

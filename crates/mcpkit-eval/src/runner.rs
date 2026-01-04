@@ -197,7 +197,7 @@ impl EvalReport {
         );
 
         for (metric, avg) in &self.metric_averages {
-            summary.push_str(&format!("  {}: {:.3}\n", metric, avg));
+            summary.push_str(&format!("  {metric}: {avg:.3}\n"));
         }
 
         summary
@@ -310,10 +310,8 @@ impl EvalRunner {
                 match metric_result {
                     Ok(r) => result.add_result(r),
                     Err(e) => {
-                        if self.config.continue_on_error {
-                            result.add_error(format!("{}: {}", name, e));
-                        } else {
-                            result.add_error(format!("{}: {}", name, e));
+                        result.add_error(format!("{name}: {e}"));
+                        if !self.config.continue_on_error {
                             break;
                         }
                     }
@@ -325,10 +323,8 @@ impl EvalRunner {
                 match metric.evaluate(test_case).await {
                     Ok(r) => result.add_result(r),
                     Err(e) => {
-                        if self.config.continue_on_error {
-                            result.add_error(format!("{}: {}", metric.name(), e));
-                        } else {
-                            result.add_error(format!("{}: {}", metric.name(), e));
+                        result.add_error(format!("{}: {}", metric.name(), e));
+                        if !self.config.continue_on_error {
                             break;
                         }
                     }
@@ -421,12 +417,12 @@ mod tests {
         let runner = EvalRunner::new("Dataset Test").with_metric(ExactMatchMetric::new());
 
         let dataset = TestDataset::new("Test Dataset")
-            .add(
+            .add_case(
                 TestCase::new("Q1")
                     .with_expected_output("A")
                     .with_actual_output("A"),
             )
-            .add(
+            .add_case(
                 TestCase::new("Q2")
                     .with_expected_output("B")
                     .with_actual_output("B"),

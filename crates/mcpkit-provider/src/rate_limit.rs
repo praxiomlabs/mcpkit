@@ -58,7 +58,7 @@ impl RateLimitConfig {
         self
     }
 
-    /// Create a config for OpenAI's free tier.
+    /// Create a config for `OpenAI`'s free tier.
     #[must_use]
     pub fn openai_free() -> Self {
         Self {
@@ -68,7 +68,7 @@ impl RateLimitConfig {
         }
     }
 
-    /// Create a config for OpenAI's tier 1.
+    /// Create a config for `OpenAI`'s tier 1.
     #[must_use]
     pub fn openai_tier1() -> Self {
         Self {

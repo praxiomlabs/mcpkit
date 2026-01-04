@@ -1,18 +1,18 @@
 //! PostgreSQL-based vector store using pgvector extension.
 //!
-//! This module provides a persistent vector store backed by PostgreSQL with the
+//! This module provides a persistent vector store backed by `PostgreSQL` with the
 //! pgvector extension for efficient vector similarity search.
 //!
 //! # Features
 //!
 //! - **Production-ready**: Designed for production workloads
-//! - **Scalable**: Leverages PostgreSQL's indexing and optimization
+//! - **Scalable**: Leverages `PostgreSQL`'s indexing and optimization
 //! - **IVFFlat/HNSW indexing**: Efficient approximate nearest neighbor search
 //! - **Full SQL support**: Combine vector search with relational queries
 //!
 //! # Prerequisites
 //!
-//! PostgreSQL must have the pgvector extension installed:
+//! `PostgreSQL` must have the pgvector extension installed:
 //!
 //! ```sql
 //! CREATE EXTENSION IF NOT EXISTS vector;
@@ -47,7 +47,7 @@ use crate::distance::DistanceMetric;
 use crate::error::{EmbeddingError, EmbeddingResult};
 use crate::store::{SearchOptions, SearchResult, StoredEmbedding, VectorStore};
 
-/// A persistent vector store backed by PostgreSQL with pgvector extension.
+/// A persistent vector store backed by `PostgreSQL` with pgvector extension.
 ///
 /// This store uses the pgvector extension to provide efficient vector
 /// similarity search with full SQL capabilities.
@@ -60,13 +60,13 @@ pub struct PgVectorStore {
 }
 
 impl PgVectorStore {
-    /// Create a new PostgreSQL vector store.
+    /// Create a new `PostgreSQL` vector store.
     ///
     /// This will create the necessary table if it doesn't exist.
     ///
     /// # Arguments
     ///
-    /// * `pool` - SQLx PostgreSQL connection pool
+    /// * `pool` - `SQLx` `PostgreSQL` connection pool
     /// * `dimensions` - Expected dimensionality of vectors
     ///
     /// # Errors
@@ -76,11 +76,11 @@ impl PgVectorStore {
         Self::with_table_name(pool, dimensions, "mcpkit_embeddings").await
     }
 
-    /// Create a new PostgreSQL vector store with a custom table name.
+    /// Create a new `PostgreSQL` vector store with a custom table name.
     ///
     /// # Arguments
     ///
-    /// * `pool` - SQLx PostgreSQL connection pool
+    /// * `pool` - `SQLx` `PostgreSQL` connection pool
     /// * `dimensions` - Expected dimensionality of vectors
     /// * `table_name` - Name of the table to use for storage
     pub async fn with_table_name(
@@ -91,11 +91,11 @@ impl PgVectorStore {
         Self::with_options(pool, dimensions, table_name, DistanceMetric::Cosine).await
     }
 
-    /// Create a new PostgreSQL vector store with full configuration.
+    /// Create a new `PostgreSQL` vector store with full configuration.
     ///
     /// # Arguments
     ///
-    /// * `pool` - SQLx PostgreSQL connection pool
+    /// * `pool` - `SQLx` `PostgreSQL` connection pool
     /// * `dimensions` - Expected dimensionality of vectors
     /// * `table_name` - Name of the table to use for storage
     /// * `metric` - Distance metric to use for similarity search
@@ -115,14 +115,14 @@ impl PgVectorStore {
 
         // Create table
         let create_sql = format!(
-            r#"
+            r"
             CREATE TABLE IF NOT EXISTS {table_name} (
                 id TEXT PRIMARY KEY,
                 embedding vector({dimensions}),
                 metadata JSONB DEFAULT '{{}}'::jsonb,
                 created_at TIMESTAMPTZ DEFAULT NOW()
             )
-            "#
+            "
         );
 
         sqlx::query(&create_sql)
@@ -140,12 +140,12 @@ impl PgVectorStore {
         };
 
         let index_sql = format!(
-            r#"
+            r"
             CREATE INDEX IF NOT EXISTS {table_name}_embedding_idx
             ON {table_name}
             USING ivfflat (embedding {index_type})
             WITH (lists = 100)
-            "#
+            "
         );
 
         // Index creation may fail if there are no rows, which is fine
@@ -231,13 +231,13 @@ impl VectorStore for PgVectorStore {
         let metadata = serde_json::to_value(&item.metadata).unwrap_or_default();
 
         let sql = format!(
-            r#"
+            r"
             INSERT INTO {} (id, embedding, metadata)
             VALUES ($1, $2, $3)
             ON CONFLICT (id) DO UPDATE SET
                 embedding = EXCLUDED.embedding,
                 metadata = EXCLUDED.metadata
-            "#,
+            ",
             self.table_name
         );
 
@@ -330,23 +330,23 @@ impl VectorStore for PgVectorStore {
         // Build query with optional threshold
         let sql = if options.threshold.is_some() {
             format!(
-                r#"
+                r"
                 SELECT id, embedding {op} $1 AS distance, metadata
                 FROM {}
                 WHERE embedding {op} $1 < $3
                 ORDER BY embedding {op} $1
                 LIMIT $2
-                "#,
+                ",
                 self.table_name
             )
         } else {
             format!(
-                r#"
+                r"
                 SELECT id, embedding {op} $1 AS distance, metadata
                 FROM {}
                 ORDER BY embedding {op} $1
                 LIMIT $2
-                "#,
+                ",
                 self.table_name
             )
         };

@@ -174,7 +174,7 @@ impl Memory for TokenMemory {
         for message in self.messages.iter().rev() {
             let msg_tokens = estimate_message_tokens(message);
             if total_tokens + msg_tokens <= max_tokens {
-                let pos = if result.is_empty() { 0 } else { 1 };
+                let pos = usize::from(!result.is_empty());
                 result.insert(pos, message.clone());
                 total_tokens += msg_tokens;
             } else {

@@ -141,8 +141,8 @@ impl TestCase {
 /// use mcpkit_eval::{TestCase, TestDataset};
 ///
 /// let dataset = TestDataset::new("QA Benchmark")
-///     .add(TestCase::new("Q1").with_expected_output("A1"))
-///     .add(TestCase::new("Q2").with_expected_output("A2"));
+///     .add_case(TestCase::new("Q1").with_expected_output("A1"))
+///     .add_case(TestCase::new("Q2").with_expected_output("A2"));
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TestDataset {
@@ -179,7 +179,7 @@ impl TestDataset {
 
     /// Add a test case.
     #[must_use]
-    pub fn add(mut self, test_case: TestCase) -> Self {
+    pub fn add_case(mut self, test_case: TestCase) -> Self {
         self.test_cases.push(test_case);
         self
     }
@@ -294,8 +294,8 @@ mod tests {
     fn test_dataset_creation() {
         let dataset = TestDataset::new("Test Suite")
             .description("A test dataset")
-            .add(TestCase::new("Q1"))
-            .add(TestCase::new("Q2"));
+            .add_case(TestCase::new("Q1"))
+            .add_case(TestCase::new("Q2"));
 
         assert_eq!(dataset.name, "Test Suite");
         assert_eq!(dataset.len(), 2);
@@ -304,8 +304,8 @@ mod tests {
     #[test]
     fn test_dataset_iteration() {
         let dataset = TestDataset::new("Suite")
-            .add(TestCase::new("Q1"))
-            .add(TestCase::new("Q2"));
+            .add_case(TestCase::new("Q1"))
+            .add_case(TestCase::new("Q2"));
 
         let inputs: Vec<_> = dataset.iter().map(|t| t.input.as_str()).collect();
         assert_eq!(inputs, vec!["Q1", "Q2"]);

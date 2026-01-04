@@ -76,7 +76,7 @@ pub struct SearchResult {
     ///
     /// Interpretation depends on the metric:
     /// - Cosine: -1.0 to 1.0 (higher = more similar)
-    /// - DotProduct: higher = more similar
+    /// - `DotProduct`: higher = more similar
     /// - Euclidean: >= 0 (lower = more similar)
     pub score: f32,
     /// The matching embedding vector (if requested).

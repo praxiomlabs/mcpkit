@@ -29,6 +29,7 @@ impl Default for ExecutorConfig {
 
 impl ExecutorConfig {
     /// Create a new config with the given max iterations.
+    #[must_use]
     pub fn new(max_iterations: usize) -> Self {
         Self {
             max_iterations,
@@ -64,6 +65,7 @@ pub struct ExecutorOutput {
 
 impl ExecutorOutput {
     /// Get a step-by-step trace of the execution.
+    #[must_use]
     pub fn trace(&self) -> String {
         let mut trace = String::new();
         for (i, step) in self.steps.iter().enumerate() {

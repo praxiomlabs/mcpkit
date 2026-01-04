@@ -40,12 +40,12 @@ use uuid::Uuid;
 
 // MCP Protocol imports
 use mcpkit_core::{
+    McpError,
     capability::{ServerCapabilities, ServerInfo},
     types::{
         CallToolResult, Content, GetPromptResult, Prompt, PromptMessage, Resource,
         ResourceContents, Task, TaskId, TaskProgress, TaskStatus, Tool as McpTool, ToolAnnotations,
     },
-    McpError,
 };
 
 // Forge imports - all 8 crates
@@ -54,20 +54,20 @@ use mcpkit_chain::{ChainValue, LlmRunnable, PromptRunnable, Runnable, RunnableRe
 use mcpkit_embedding::{InMemoryStore, SearchOptions, StoredEmbedding, VectorStore};
 use mcpkit_eval::{AnswerRelevancyMetric, FaithfulnessMetric, Metric, TestCase};
 use mcpkit_memory::{Memory, TokenMemory};
+use mcpkit_provider::streaming::CompletionStream;
 use mcpkit_provider::{
     CompletionRequest, CompletionResponse, ContentBlock, Embedding, EmbeddingRequest,
     EmbeddingResponse, EmbeddingUsage, FinishReason, Message, ModelInfo, Provider,
     ProviderCapabilities, ProviderError, ProviderInfo, Usage,
 };
-use mcpkit_provider::streaming::CompletionStream;
 use mcpkit_rag::{Document, RecursiveCharacterSplitter, TextSplitter};
 use mcpkit_template::Template;
 
 // Transport for stdio mode
-use mcpkit_transport::stdio::StdioTransport;
-use mcpkit_transport::Transport;
-use mcpkit_core::protocol::{Message as ProtocolMessage, Response};
 use mcpkit_core::error::JsonRpcError;
+use mcpkit_core::protocol::{Message as ProtocolMessage, Response};
+use mcpkit_transport::Transport;
+use mcpkit_transport::stdio::StdioTransport;
 
 // ============================================================================
 // PROMPT TEMPLATES (using mcpkit-template with compile-time validation)
@@ -257,8 +257,18 @@ impl<P: Provider + 'static> AgentTool for SearchKnowledgeTool<P> {
             "Search the knowledge base for relevant information. Use this when you need to find \
              specific facts, context, or documentation to answer a question.",
         )
-        .add_parameter("query", "string", "The search query to find relevant documents", true)
-        .add_parameter("top_k", "integer", "Number of results to return (default: 5)", false)
+        .add_parameter(
+            "query",
+            "string",
+            "The search query to find relevant documents",
+            true,
+        )
+        .add_parameter(
+            "top_k",
+            "integer",
+            "Number of results to return (default: 5)",
+            false,
+        )
     }
 
     async fn execute(&self, args: serde_json::Value) -> mcpkit_agent::AgentResult<ToolOutput> {
@@ -313,8 +323,10 @@ impl<P: Provider + 'static> AgentTool for SearchKnowledgeTool<P> {
             "count": formatted.len()
         });
 
-        Ok(ToolOutput::success(serde_json::to_string_pretty(&response).unwrap())
-            .with_data(response))
+        Ok(
+            ToolOutput::success(serde_json::to_string_pretty(&response).unwrap())
+                .with_data(response),
+        )
     }
 
     fn name(&self) -> &str {
@@ -537,7 +549,10 @@ impl<P: Provider + 'static> SelfImprovingQueryChain<P> {
         // Add response to conversation memory
         {
             let mut kb = self.kb.write().await;
-            let _ = kb.memory.add(Message::assistant(last_response.clone())).await;
+            let _ = kb
+                .memory
+                .add(Message::assistant(last_response.clone()))
+                .await;
         }
 
         // Build sources from last_context (FIX: ensure sources are populated)
@@ -579,20 +594,21 @@ impl<P: Provider + 'static> SelfImprovingQueryChain<P> {
         // Generate query embedding
         let embed_req = EmbeddingRequest::new(query);
 
-        let embed_response = self
-            .provider
-            .embed(embed_req)
-            .await
-            .map_err(|e| McpError::InternalMessage {
-                message: format!("Embedding failed: {e}"),
-            })?;
+        let embed_response =
+            self.provider
+                .embed(embed_req)
+                .await
+                .map_err(|e| McpError::InternalMessage {
+                    message: format!("Embedding failed: {e}"),
+                })?;
 
-        let query_embedding = embed_response
-            .embeddings
-            .first()
-            .ok_or_else(|| McpError::InternalMessage {
-                message: "No embedding returned".to_string(),
-            })?;
+        let query_embedding =
+            embed_response
+                .embeddings
+                .first()
+                .ok_or_else(|| McpError::InternalMessage {
+                    message: "No embedding returned".to_string(),
+                })?;
 
         // Search vector store
         let kb = self.kb.read().await;
@@ -624,7 +640,11 @@ impl<P: Provider + 'static> SelfImprovingQueryChain<P> {
     /// - LlmRunnable: LLM provider integration
     /// - RunnableRetry: Fault-tolerant retry logic
     /// - `.then()`: Sequential composition
-    async fn generate_with_chain(&self, query: &str, context: &[String]) -> Result<String, McpError> {
+    async fn generate_with_chain(
+        &self,
+        query: &str,
+        context: &[String],
+    ) -> Result<String, McpError> {
         let context_str = context.join("\n\n---\n\n");
 
         // Step 1: Format prompt using PromptRunnable
@@ -660,7 +680,10 @@ ANSWER:"#,
         // Create input object with context and question
         let mut input_obj = HashMap::new();
         input_obj.insert("context".to_string(), ChainValue::String(context_str));
-        input_obj.insert("question".to_string(), ChainValue::String(query.to_string()));
+        input_obj.insert(
+            "question".to_string(),
+            ChainValue::String(query.to_string()),
+        );
 
         let result = chain
             .invoke(ChainValue::Object(input_obj))
@@ -697,12 +720,13 @@ ANSWER:"#,
             })?;
 
         // Run relevancy evaluation
-        let relevancy_result = relevancy_metric
-            .evaluate(&test_case)
-            .await
-            .map_err(|e| McpError::InternalMessage {
-                message: format!("Relevancy evaluation failed: {e}"),
-            })?;
+        let relevancy_result =
+            relevancy_metric
+                .evaluate(&test_case)
+                .await
+                .map_err(|e| McpError::InternalMessage {
+                    message: format!("Relevancy evaluation failed: {e}"),
+                })?;
 
         let passed = faithfulness_result.score >= self.quality_threshold
             && relevancy_result.score >= self.quality_threshold;
@@ -884,7 +908,10 @@ impl<P: Provider + 'static> KnowledgeAgentServer<P> {
             "get_statistics" => self.tool_get_statistics().await,
             "get_conversation_history" => self.tool_get_conversation_history(args).await,
             "run_agent" => self.tool_run_agent(args).await,
-            _ => Err(McpError::invalid_params("call_tool", format!("Unknown tool: {name}"))),
+            _ => Err(McpError::invalid_params(
+                "call_tool",
+                format!("Unknown tool: {name}"),
+            )),
         }
     }
 
@@ -903,7 +930,11 @@ impl<P: Provider + 'static> KnowledgeAgentServer<P> {
             .unwrap_or("user-provided")
             .to_string();
 
-        info!(title = title, content_len = content.len(), "Ingesting document");
+        info!(
+            title = title,
+            content_len = content.len(),
+            "Ingesting document"
+        );
 
         // Create splitter and chunk document (mcpkit-rag)
         let splitter = RecursiveCharacterSplitter::new()
@@ -918,20 +949,22 @@ impl<P: Provider + 'static> KnowledgeAgentServer<P> {
         // Generate embeddings for each chunk (mcpkit-provider)
         let embed_req = EmbeddingRequest::batch(chunks.clone());
 
-        let embed_response = self
-            .provider
-            .embed(embed_req)
-            .await
-            .map_err(|e| McpError::InternalMessage {
-                message: format!("Embedding failed: {e}"),
-            })?;
+        let embed_response =
+            self.provider
+                .embed(embed_req)
+                .await
+                .map_err(|e| McpError::InternalMessage {
+                    message: format!("Embedding failed: {e}"),
+                })?;
 
         // Store in vector store (mcpkit-embedding)
         let doc_id = Uuid::new_v4().to_string();
         {
             let mut kb = self.kb.write().await;
-            for (i, (chunk, embedding)) in
-                chunks.iter().zip(embed_response.embeddings.iter()).enumerate()
+            for (i, (chunk, embedding)) in chunks
+                .iter()
+                .zip(embed_response.embeddings.iter())
+                .enumerate()
             {
                 let chunk_id = format!("{doc_id}_{i}");
                 let mut metadata = HashMap::new();
@@ -940,17 +973,15 @@ impl<P: Provider + 'static> KnowledgeAgentServer<P> {
                 metadata.insert("title".to_string(), serde_json::json!(title));
                 metadata.insert("chunk_index".to_string(), serde_json::json!(i));
 
-                let stored = StoredEmbedding::with_metadata(
-                    chunk_id,
-                    embedding.embedding.clone(),
-                    metadata,
-                );
+                let stored =
+                    StoredEmbedding::with_metadata(chunk_id, embedding.embedding.clone(), metadata);
 
-                kb.vector_store.insert(stored).await.map_err(|e| {
-                    McpError::InternalMessage {
+                kb.vector_store
+                    .insert(stored)
+                    .await
+                    .map_err(|e| McpError::InternalMessage {
                         message: format!("Storage failed: {e}"),
-                    }
-                })?;
+                    })?;
             }
 
             // Record document
@@ -1007,9 +1038,13 @@ impl<P: Provider + 'static> KnowledgeAgentServer<P> {
         let limit = args["limit"].as_u64().unwrap_or(10) as usize;
 
         let kb = self.kb.read().await;
-        let messages = kb.memory.last_n(limit).await.map_err(|e| McpError::InternalMessage {
-            message: format!("Memory read failed: {e}"),
-        })?;
+        let messages = kb
+            .memory
+            .last_n(limit)
+            .await
+            .map_err(|e| McpError::InternalMessage {
+                message: format!("Memory read failed: {e}"),
+            })?;
 
         let formatted: Vec<serde_json::Value> = messages
             .iter()
@@ -1032,7 +1067,11 @@ impl<P: Provider + 'static> KnowledgeAgentServer<P> {
             .ok_or_else(|| McpError::invalid_params("run_agent", "Missing 'task'"))?;
         let max_iterations = args["max_iterations"].as_u64().unwrap_or(5) as usize;
 
-        info!(task = task, max_iterations = max_iterations, "Running ReAct agent");
+        info!(
+            task = task,
+            max_iterations = max_iterations,
+            "Running ReAct agent"
+        );
 
         // Create agent with tools (mcpkit-agent)
         let agent = ReActAgent::from_arc(Arc::clone(&self.provider)).system_prompt(
@@ -1138,9 +1177,13 @@ impl<P: Provider + 'static> KnowledgeAgentServer<P> {
             }
             "knowledge://memory" => {
                 let kb = self.kb.read().await;
-                let messages = kb.memory.messages().await.map_err(|e| McpError::InternalMessage {
-                    message: format!("Memory read failed: {e}"),
-                })?;
+                let messages =
+                    kb.memory
+                        .messages()
+                        .await
+                        .map_err(|e| McpError::InternalMessage {
+                            message: format!("Memory read failed: {e}"),
+                        })?;
                 let formatted: Vec<serde_json::Value> = messages
                     .iter()
                     .map(|m| {
@@ -1239,7 +1282,10 @@ impl<P: Provider + 'static> KnowledgeAgentServer<P> {
                      scores are >= 0.7.",
                 )],
             }),
-            _ => Err(McpError::invalid_params("get_prompt", format!("Unknown prompt: {name}"))),
+            _ => Err(McpError::invalid_params(
+                "get_prompt",
+                format!("Unknown prompt: {name}"),
+            )),
         }
     }
 
@@ -1309,8 +1355,10 @@ impl<P: Provider + 'static> KnowledgeAgentServer<P> {
                             task.progress = 0.5;
                         }
 
-                        for (i, (chunk, embedding)) in
-                            chunks.iter().zip(embed_response.embeddings.iter()).enumerate()
+                        for (i, (chunk, embedding)) in chunks
+                            .iter()
+                            .zip(embed_response.embeddings.iter())
+                            .enumerate()
                         {
                             let chunk_id = format!("{doc_id}_{i}");
                             let mut metadata = HashMap::new();
@@ -1491,44 +1539,64 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             let name = params
                                 .and_then(|p: &serde_json::Value| p.get("name"))
                                 .and_then(|v: &serde_json::Value| v.as_str())
-                                .ok_or_else(|| McpError::invalid_params("tools/call", "missing name"))?;
+                                .ok_or_else(|| {
+                                    McpError::invalid_params("tools/call", "missing name")
+                                })?;
                             let args = params
                                 .and_then(|p: &serde_json::Value| p.get("arguments"))
                                 .cloned()
                                 .unwrap_or_else(|| serde_json::json!({}));
 
-                            server.call_tool(name, args).await
+                            server
+                                .call_tool(name, args)
+                                .await
                                 .map(|r| serde_json::to_value(r).unwrap_or_default())
                         }
 
                         // Resources
-                        "resources/list" => Ok(serde_json::json!({ "resources": server.list_resources() })),
+                        "resources/list" => {
+                            Ok(serde_json::json!({ "resources": server.list_resources() }))
+                        }
                         "resources/read" => {
                             let uri = params
                                 .and_then(|p: &serde_json::Value| p.get("uri"))
                                 .and_then(|v: &serde_json::Value| v.as_str())
-                                .ok_or_else(|| McpError::invalid_params("resources/read", "missing uri"))?;
+                                .ok_or_else(|| {
+                                    McpError::invalid_params("resources/read", "missing uri")
+                                })?;
 
-                            server.read_resource(uri).await
+                            server
+                                .read_resource(uri)
+                                .await
                                 .map(|contents| serde_json::json!({ "contents": [contents] }))
                         }
 
                         // Prompts
-                        "prompts/list" => Ok(serde_json::json!({ "prompts": server.list_prompts() })),
+                        "prompts/list" => {
+                            Ok(serde_json::json!({ "prompts": server.list_prompts() }))
+                        }
                         "prompts/get" => {
                             let name = params
                                 .and_then(|p: &serde_json::Value| p.get("name"))
                                 .and_then(|v: &serde_json::Value| v.as_str())
-                                .ok_or_else(|| McpError::invalid_params("prompts/get", "missing name"))?;
+                                .ok_or_else(|| {
+                                    McpError::invalid_params("prompts/get", "missing name")
+                                })?;
                             let args: HashMap<String, String> = params
                                 .and_then(|p: &serde_json::Value| p.get("arguments"))
                                 .and_then(|v: &serde_json::Value| v.as_object())
-                                .map(|obj| obj.iter().filter_map(|(k, v)| {
-                                    v.as_str().map(|s| (k.clone(), s.to_string()))
-                                }).collect())
+                                .map(|obj| {
+                                    obj.iter()
+                                        .filter_map(|(k, v)| {
+                                            v.as_str().map(|s| (k.clone(), s.to_string()))
+                                        })
+                                        .collect()
+                                })
                                 .unwrap_or_default();
 
-                            server.get_prompt(name, args).await
+                            server
+                                .get_prompt(name, args)
+                                .await
                                 .map(|r| serde_json::to_value(r).unwrap_or_default())
                         }
 
@@ -1746,11 +1814,17 @@ impl MockProvider {
             (&["memory", "heap", "stack", "allocation"], 10),
             (&["ownership", "borrow", "lifetime", "reference"], 20),
             (&["safety", "safe", "unsafe", "sound"], 30),
-            (&["concurrency", "concurrent", "parallel", "thread", "async"], 40),
+            (
+                &["concurrency", "concurrent", "parallel", "thread", "async"],
+                40,
+            ),
             // Programming concepts (dims 50-99)
             (&["type", "types", "typing", "generic", "trait"], 50),
             (&["error", "result", "option", "handle", "handling"], 60),
-            (&["performance", "fast", "speed", "efficient", "zero-cost"], 70),
+            (
+                &["performance", "fast", "speed", "efficient", "zero-cost"],
+                70,
+            ),
             (&["compile", "compiler", "compilation", "static"], 80),
             (&["pattern", "match", "matching", "enum"], 90),
             // General programming (dims 100-149)
@@ -1804,7 +1878,9 @@ impl MockProvider {
         }
 
         // Hash-based component for uniqueness (dims 350-383)
-        let hash = text.bytes().fold(0u64, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u64));
+        let hash = text
+            .bytes()
+            .fold(0u64, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u64));
         for i in 350..384 {
             embedding[i] = ((hash >> (i - 350)) & 1) as f32 * 0.1;
         }
@@ -1830,7 +1906,10 @@ impl Provider for MockProvider {
         &self.info
     }
 
-    async fn complete(&self, request: CompletionRequest) -> Result<CompletionResponse, ProviderError> {
+    async fn complete(
+        &self,
+        request: CompletionRequest,
+    ) -> Result<CompletionResponse, ProviderError> {
         // Return mock responses based on content
         let input = request
             .messages
@@ -1838,7 +1917,10 @@ impl Provider for MockProvider {
             .and_then(|m| m.text())
             .unwrap_or_default();
 
-        let response = if input.contains("evaluate") || input.contains("Evaluate") || input.contains("FAITHFULNESS") {
+        let response = if input.contains("evaluate")
+            || input.contains("Evaluate")
+            || input.contains("FAITHFULNESS")
+        {
             // Return evaluation JSON for mcpkit-eval metrics
             r#"{"score": 0.85, "reason": "Good answer grounded in context"}"#.to_string()
         } else if input.contains("QUESTION:") || input.contains("CONTEXT:") {

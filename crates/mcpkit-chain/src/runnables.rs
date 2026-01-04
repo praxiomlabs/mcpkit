@@ -120,6 +120,7 @@ pub struct RunnableConst {
 
 impl RunnableConst {
     /// Create a runnable that always returns the given value.
+    #[must_use]
     pub fn new(value: impl Into<ChainValue>) -> Self {
         Self {
             value: value.into(),
@@ -155,6 +156,7 @@ pub struct RunnablePick {
 
 impl RunnablePick {
     /// Create a runnable that extracts the given key from input.
+    #[must_use]
     pub fn new(key: impl Into<String>) -> Self {
         let key = key.into();
         Self {
@@ -188,6 +190,7 @@ pub struct RunnableAssign {
 
 impl RunnableAssign {
     /// Create a new assign runnable.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             assignments: Vec::new(),
@@ -264,6 +267,7 @@ pub struct RunnableBranch {
 
 impl RunnableBranch {
     /// Create a new branch runnable.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             branches: Vec::new(),

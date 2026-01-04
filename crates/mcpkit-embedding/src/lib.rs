@@ -8,8 +8,8 @@
 //!
 //! - **`VectorStore` trait**: Common interface for vector storage backends
 //! - **`InMemoryStore`**: Fast in-memory implementation for development and small datasets
-//! - **`SqliteVecStore`**: Persistent SQLite storage with sqlite-vec extension (feature: `sqlite`)
-//! - **`PgVectorStore`**: Production-ready PostgreSQL storage with pgvector (feature: `postgres`)
+//! - **`SqliteVecStore`**: Persistent `SQLite` storage with sqlite-vec extension (feature: `sqlite`)
+//! - **`PgVectorStore`**: Production-ready `PostgreSQL` storage with pgvector (feature: `postgres`)
 //! - **Distance metrics**: Cosine, Euclidean, and Dot Product similarity
 //! - **Metadata support**: Associate JSON metadata with embeddings for filtering
 //!
@@ -78,7 +78,7 @@
 //!
 //! - **Cosine** (default): Best for semantic similarity, ignores magnitude
 //! - **Euclidean**: Best for clustering, considers absolute distances
-//! - **DotProduct**: Fast alternative for normalized vectors
+//! - **`DotProduct`**: Fast alternative for normalized vectors
 //!
 //! ```rust,ignore
 //! use mcpkit_embedding::{InMemoryStore, DistanceMetric};

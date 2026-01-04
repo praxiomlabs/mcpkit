@@ -97,8 +97,8 @@
 //!
 //! let dataset = TestDataset::new("QA Benchmark")
 //!     .description("Common question-answering tests")
-//!     .add(TestCase::new("Q1").with_expected_output("A1"))
-//!     .add(TestCase::new("Q2").with_expected_output("A2"));
+//!     .add_case(TestCase::new("Q1").with_expected_output("A1"))
+//!     .add_case(TestCase::new("Q2").with_expected_output("A2"));
 //!
 //! // Datasets can be saved/loaded from JSON
 //! // dataset.to_json_file("qa_benchmark.json").await?;

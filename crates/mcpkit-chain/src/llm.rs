@@ -297,8 +297,7 @@ fn extract_json(text: &str) -> Option<&str> {
         // Skip optional language identifier on same line
         let start = text[start..]
             .find('\n')
-            .map(|i| start + i + 1)
-            .unwrap_or(start);
+            .map_or(start, |i| start + i + 1);
         if let Some(end) = text[start..].find("```") {
             return Some(text[start..start + end].trim());
         }

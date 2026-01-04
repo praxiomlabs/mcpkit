@@ -204,6 +204,7 @@ impl PromptBuilder {
 /// This is useful for creating reusable prompt patterns that can be
 /// customized with different few-shot examples or context.
 #[derive(Debug, Clone)]
+#[derive(Default)]
 pub struct PromptTemplate {
     /// The base system message.
     pub system: Option<String>,
@@ -267,15 +268,6 @@ impl PromptTemplate {
     }
 }
 
-impl Default for PromptTemplate {
-    fn default() -> Self {
-        Self {
-            system: None,
-            examples: Vec::new(),
-            suffix: None,
-        }
-    }
-}
 
 #[cfg(test)]
 mod tests {

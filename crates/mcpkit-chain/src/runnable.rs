@@ -13,10 +13,11 @@ use crate::error::ChainResult;
 /// `ChainValue` provides a type-erased container for passing data between
 /// chain steps. It supports common types and can be converted to/from
 /// strongly typed values.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ChainValue {
     /// Null/empty value.
+    #[default]
     Null,
     /// Boolean value.
     Bool(bool),
@@ -30,12 +31,6 @@ pub enum ChainValue {
     Array(Vec<ChainValue>),
     /// Object/map of values.
     Object(HashMap<String, ChainValue>),
-}
-
-impl Default for ChainValue {
-    fn default() -> Self {
-        Self::Null
-    }
 }
 
 impl ChainValue {
@@ -240,11 +235,8 @@ impl From<ChainValue> for serde_json::Value {
             ChainValue::Null => serde_json::Value::Null,
             ChainValue::Bool(b) => serde_json::Value::Bool(b),
             ChainValue::Int(i) => serde_json::Value::Number(i.into()),
-            ChainValue::Float(f) => {
-                serde_json::Number::from_f64(f)
-                    .map(serde_json::Value::Number)
-                    .unwrap_or(serde_json::Value::Null)
-            }
+            ChainValue::Float(f) => serde_json::Number::from_f64(f)
+                .map_or(serde_json::Value::Null, serde_json::Value::Number),
             ChainValue::String(s) => serde_json::Value::String(s),
             ChainValue::Array(arr) => {
                 serde_json::Value::Array(arr.into_iter().map(serde_json::Value::from).collect())
@@ -319,6 +311,7 @@ pub struct RunnableSequence {
 
 impl RunnableSequence {
     /// Create a new sequence from a list of runnables.
+    #[must_use]
     pub fn new(steps: Vec<Arc<dyn Runnable>>) -> Self {
         Self {
             steps,
@@ -377,6 +370,7 @@ pub struct RunnableParallel {
 
 impl RunnableParallel {
     /// Create a new parallel runnable.
+    #[must_use]
     pub fn new(branches: Vec<(String, Arc<dyn Runnable>)>) -> Self {
         Self {
             branches,

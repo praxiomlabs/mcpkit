@@ -220,6 +220,7 @@ impl ProviderError {
     }
 
     /// Create a timeout error.
+    #[must_use] 
     pub fn timeout(duration: Duration) -> Self {
         Self::Timeout { duration }
     }

@@ -39,16 +39,16 @@
 //!
 //! # Choosing a Memory Type
 //!
-//! - **BufferMemory**: Simplest option, stores everything. Good for short
+//! - **`BufferMemory`**: Simplest option, stores everything. Good for short
 //!   conversations or when you control the conversation length.
 //!
-//! - **WindowMemory**: Keeps the last N messages. Useful when only recent
+//! - **`WindowMemory`**: Keeps the last N messages. Useful when only recent
 //!   context matters.
 //!
-//! - **TokenMemory**: Manages messages to stay within a token budget.
+//! - **`TokenMemory`**: Manages messages to stay within a token budget.
 //!   Essential for production systems with token limits.
 //!
-//! - **SummaryMemory**: Uses an LLM to summarize older messages. Best for
+//! - **`SummaryMemory`**: Uses an LLM to summarize older messages. Best for
 //!   long conversations where historical context matters but full history
 //!   would exceed limits.
 

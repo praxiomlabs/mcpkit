@@ -479,7 +479,7 @@ fn template_impl(input: TemplateInvocation) -> syn::Result<TokenStream2> {
                     if chars.peek() == Some(&'}') {
                         chars.next();
 
-                        if let Some((_, expr)) = input.args.iter().find(|(n, _)| n.to_string() == var_name) {
+                        if let Some((_, expr)) = input.args.iter().find(|(n, _)| *n == var_name) {
                             format_str.push_str("{}");
                             format_args.push(quote! { #expr });
                         }
