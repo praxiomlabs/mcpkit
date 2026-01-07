@@ -555,7 +555,7 @@ pub enum JwtAlgorithm {
 impl JwtAlgorithm {
     /// Parse algorithm from JWT header "alg" value.
     #[must_use]
-    pub fn from_str(alg: &str) -> Option<Self> {
+    pub fn parse(alg: &str) -> Option<Self> {
         match alg {
             "RS256" => Some(Self::RS256),
             "RS384" => Some(Self::RS384),
@@ -712,7 +712,7 @@ pub fn validate_token(
     let header = decode_header(token)?;
 
     // Parse algorithm
-    let alg = JwtAlgorithm::from_str(&header.alg).ok_or_else(|| JwtError::UnsupportedAlgorithm {
+    let alg = JwtAlgorithm::parse(&header.alg).ok_or_else(|| JwtError::UnsupportedAlgorithm {
         algorithm: header.alg.clone(),
     })?;
 
@@ -1174,14 +1174,14 @@ mod signature_tests {
     }
 
     #[test]
-    fn test_jwt_algorithm_from_str() {
-        assert_eq!(JwtAlgorithm::from_str("RS256"), Some(JwtAlgorithm::RS256));
-        assert_eq!(JwtAlgorithm::from_str("RS384"), Some(JwtAlgorithm::RS384));
-        assert_eq!(JwtAlgorithm::from_str("RS512"), Some(JwtAlgorithm::RS512));
-        assert_eq!(JwtAlgorithm::from_str("ES256"), Some(JwtAlgorithm::ES256));
-        assert_eq!(JwtAlgorithm::from_str("ES384"), Some(JwtAlgorithm::ES384));
-        assert_eq!(JwtAlgorithm::from_str("HS256"), None);
-        assert_eq!(JwtAlgorithm::from_str("invalid"), None);
+    fn test_jwt_algorithm_parse() {
+        assert_eq!(JwtAlgorithm::parse("RS256"), Some(JwtAlgorithm::RS256));
+        assert_eq!(JwtAlgorithm::parse("RS384"), Some(JwtAlgorithm::RS384));
+        assert_eq!(JwtAlgorithm::parse("RS512"), Some(JwtAlgorithm::RS512));
+        assert_eq!(JwtAlgorithm::parse("ES256"), Some(JwtAlgorithm::ES256));
+        assert_eq!(JwtAlgorithm::parse("ES384"), Some(JwtAlgorithm::ES384));
+        assert_eq!(JwtAlgorithm::parse("HS256"), None);
+        assert_eq!(JwtAlgorithm::parse("invalid"), None);
     }
 
     #[test]

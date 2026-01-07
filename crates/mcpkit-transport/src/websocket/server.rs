@@ -486,6 +486,7 @@ impl Drop for ActiveConnectionGuard {
 
 /// Stub listener when websocket feature is disabled.
 #[cfg(not(feature = "websocket"))]
+#[allow(dead_code)]
 pub struct WebSocketListener {
     bind_addr: String,
     config: WebSocketServerConfig,
@@ -494,11 +495,13 @@ pub struct WebSocketListener {
 
 /// Stub for `AcceptedConnection` when websocket feature is disabled.
 #[cfg(not(feature = "websocket"))]
+#[allow(dead_code)]
 pub struct AcceptedConnection {
     _private: (),
 }
 
 #[cfg(not(feature = "websocket"))]
+#[allow(dead_code)]
 impl WebSocketListener {
     /// Create a new WebSocket listener.
     #[must_use]

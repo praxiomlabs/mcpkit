@@ -183,7 +183,7 @@ impl std::fmt::Debug for PgVectorStore {
             .field("dimensions", &self.dimensions)
             .field("metric", &self.metric)
             .field("count", &self.count.load(Ordering::Relaxed))
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 

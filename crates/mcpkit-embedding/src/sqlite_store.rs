@@ -87,6 +87,7 @@ impl SqliteVecStore {
     ) -> EmbeddingResult<Self> {
         // Load the sqlite-vec extension
         unsafe {
+            #[allow(clippy::missing_transmute_annotations)]
             rusqlite::ffi::sqlite3_auto_extension(Some(std::mem::transmute(
                 sqlite_vec::sqlite3_vec_init as *const (),
             )));
@@ -157,7 +158,7 @@ impl std::fmt::Debug for SqliteVecStore {
             .field("dimensions", &self.dimensions)
             .field("metric", &self.metric)
             .field("count", &*self.count.lock().unwrap())
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 

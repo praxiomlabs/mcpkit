@@ -244,16 +244,15 @@ impl InMemoryStore {
                 }
             });
 
-        match result {
-            Ok(new_value) => RateLimitDecision::Allowed {
+        if let Ok(new_value) = result {
+            RateLimitDecision::Allowed {
                 remaining: new_value / 1000,
-            },
-            Err(_) => {
-                // Calculate retry_after based on refill rate
-                let wait_ms = (1000.0 / refill_rate).max(1.0) as u64;
-                RateLimitDecision::Denied {
-                    retry_after: Duration::from_millis(wait_ms),
-                }
+            }
+        } else {
+            // Calculate retry_after based on refill rate
+            let wait_ms = (1000.0 / refill_rate).max(1.0) as u64;
+            RateLimitDecision::Denied {
+                retry_after: Duration::from_millis(wait_ms),
             }
         }
     }

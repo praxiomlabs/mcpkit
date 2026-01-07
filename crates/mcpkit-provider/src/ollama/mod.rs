@@ -511,7 +511,7 @@ impl Provider for OllamaProvider {
 
         let body = response.text().await?;
         let show_response: OllamaShowResponse =
-            serde_json::from_str(&body).unwrap_or(OllamaShowResponse::default());
+            serde_json::from_str(&body).unwrap_or_default();
 
         Ok(ModelInfo {
             id: model_id.to_string(),

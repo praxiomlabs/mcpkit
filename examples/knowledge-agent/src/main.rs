@@ -1802,6 +1802,7 @@ impl MockProvider {
 
     /// Creates semantic embeddings using keyword/concept matching
     /// Texts containing similar concepts will have similar vectors
+    #[allow(clippy::needless_range_loop)]
     fn create_semantic_embedding(text: &str) -> Vec<f32> {
         let text_lower = text.to_lowercase();
         let mut embedding = vec![0.0f32; 384];

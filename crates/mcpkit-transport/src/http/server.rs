@@ -598,31 +598,28 @@ fn validate_origin(
             }
         }
         OriginValidationMode::Strict => {
-            match origin {
-                Some(origin_str) => {
-                    if config.allowed_origins.iter().any(|o| o == origin_str) {
-                        Ok(())
-                    } else {
-                        tracing::warn!(
-                            target: "mcpkit::security",
-                            origin = %origin_str,
-                            "Rejecting request from disallowed origin (strict mode)"
-                        );
-                        Err(Box::new(
-                            (StatusCode::FORBIDDEN, "Origin not allowed").into_response(),
-                        ))
-                    }
-                }
-                None => {
-                    // Strict mode requires Origin header
+            if let Some(origin_str) = origin {
+                if config.allowed_origins.iter().any(|o| o == origin_str) {
+                    Ok(())
+                } else {
                     tracing::warn!(
                         target: "mcpkit::security",
-                        "Rejecting request without Origin header (strict mode)"
+                        origin = %origin_str,
+                        "Rejecting request from disallowed origin (strict mode)"
                     );
                     Err(Box::new(
-                        (StatusCode::FORBIDDEN, "Origin header required").into_response(),
+                        (StatusCode::FORBIDDEN, "Origin not allowed").into_response(),
                     ))
                 }
+            } else {
+                // Strict mode requires Origin header
+                tracing::warn!(
+                    target: "mcpkit::security",
+                    "Rejecting request without Origin header (strict mode)"
+                );
+                Err(Box::new(
+                    (StatusCode::FORBIDDEN, "Origin header required").into_response(),
+                ))
             }
         }
     }
