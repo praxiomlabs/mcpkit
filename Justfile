@@ -91,7 +91,7 @@ set dotenv-load
 # -e: Exit on error
 # -u: Error on undefined variables
 # -o pipefail: Fail on pipe errors
-set shell := ["bash", "-euo", "pipefail", "-c"]
+set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 
 # Export all variables to child processes
 set export
@@ -120,23 +120,23 @@ setup-hooks:
     mkdir -p .git/hooks
 
     # Create pre-commit hook
-    cat > .git/hooks/pre-commit << 'HOOK'
-#!/usr/bin/env bash
-set -euo pipefail
-
-echo "Running pre-commit checks..."
-just pre-commit
-HOOK
+    {
+        echo '#!/usr/bin/env bash'
+        echo 'set -euo pipefail'
+        echo ''
+        echo 'echo "Running pre-commit checks..."'
+        echo 'just pre-commit'
+    } > .git/hooks/pre-commit
     chmod +x .git/hooks/pre-commit
 
     # Create pre-push hook
-    cat > .git/hooks/pre-push << 'HOOK'
-#!/usr/bin/env bash
-set -euo pipefail
-
-echo "Running pre-push checks..."
-just pre-push
-HOOK
+    {
+        echo '#!/usr/bin/env bash'
+        echo 'set -euo pipefail'
+        echo ''
+        echo 'echo "Running pre-push checks..."'
+        echo 'just pre-push'
+    } > .git/hooks/pre-push
     chmod +x .git/hooks/pre-push
 
     printf '{{green}}[OK]{{reset}}   Git hooks installed\n'
@@ -1077,8 +1077,8 @@ wip-check:
         fi
     fi
 
-    # Search for incomplete macros (excluding tests)
-    MACROS=$(grep -rn "todo!\|unimplemented!" --include="*.rs" crates/*/src/ 2>/dev/null || true)
+    # Search for incomplete macros (excluding tests and doc comments)
+    MACROS=$(grep -rn "todo!\|unimplemented!" --include="*.rs" crates/*/src/ 2>/dev/null | grep -v "//!" || true)
     if [ -n "$MACROS" ]; then
         printf '{{red}}[ERR]{{reset}}  Found incomplete macros in production code:\n'
         echo "$MACROS"
