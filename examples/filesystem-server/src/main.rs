@@ -38,6 +38,8 @@ struct FilesystemServer {
 impl FilesystemServer {
     /// Create a new filesystem server with access to the specified directory.
     fn new(allowed_root: PathBuf) -> Self {
+        // Canonicalize the root to handle symlinks (e.g., macOS /var -> /private/var)
+        let allowed_root = allowed_root.canonicalize().unwrap_or(allowed_root);
         Self { allowed_root }
     }
 
