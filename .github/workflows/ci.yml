@@ -177,7 +177,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.85
       - uses: Swatinem/rust-cache@v2
-      - run: cargo check --all-features --all-targets
+      # Only check library code compiles with MSRV, not tests/dev-dependencies
+      # (wiremock 0.6+ requires Rust 1.87 for let chains)
+      - run: cargo check --all-features --lib -p mcpkit
 
   # ==========================================================================
   # Cross-platform matrix - PRs only (to save CI minutes)

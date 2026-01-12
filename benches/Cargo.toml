@@ -5,6 +5,11 @@ edition = "2024"
 publish = false
 description = "Benchmarks for mcpkit-sdk"
 
+[lib]
+# Disable lib tests - this crate is benchmarks only
+test = false
+bench = false
+
 [[bench]]
 name = "serialization"
 harness = false
