@@ -205,7 +205,8 @@ jobs:
       - name: Run benchmarks on PR
         run: |
           # Run benchmarks and save to different directory
-          cargo bench --package mcpkit-benches -- \
+          # Use --benches to skip lib tests which don't understand criterion options
+          cargo bench --package mcpkit-benches --benches -- \
             --sample-size 50 \
             --measurement-time 5 \
             --save-baseline pr-benchmark
