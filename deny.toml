@@ -24,6 +24,19 @@ ignore = [
     # - Not used in production code paths
     "RUSTSEC-2024-0436",
 
+    # RUSTSEC-2023-0071: RSA Marvin Attack timing sidechannel vulnerability
+    # - Affects rsa crate via jsonwebtoken and sqlx-mysql transitive dependencies
+    # - No fix available yet (RustCrypto team working on constant-time implementation)
+    # - Risk Assessment: LOW for our use case because:
+    #   1. JWT validation in MCP servers doesn't expose timing info over network
+    #   2. We don't perform RSA decryption operations directly
+    #   3. sqlx-mysql's RSA usage is for TLS handshakes (client-initiated)
+    # - Workaround: The vulnerability requires network-observable timing measurements
+    #   which is not applicable to our JWT validation patterns
+    # - Tracking: https://github.com/RustCrypto/RSA/issues/19
+    # - See: https://rustsec.org/advisories/RUSTSEC-2023-0071
+    "RUSTSEC-2023-0071",
+
     # RUSTSEC-2025-0134: rustls-pemfile is unmaintained
     # - Transitive dependency from tonic v0.12
     # - Not a security vulnerability, just unmaintained (archived Aug 2025)
