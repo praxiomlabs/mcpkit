@@ -174,7 +174,7 @@ pub trait Provider: Send + Sync {
     ///
     /// Returns an error if streaming is not supported or the request fails.
     async fn complete_stream(&self, request: CompletionRequest)
-        -> ProviderResult<CompletionStream>;
+    -> ProviderResult<CompletionStream>;
 
     /// List available models.
     ///

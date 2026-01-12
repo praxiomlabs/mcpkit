@@ -61,6 +61,7 @@ pub enum OriginValidationMode {
 ///     .with_allowed_origin("https://trusted-app.com");
 /// ```
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct WebSocketServerConfig {
     /// Allowed origins for DNS rebinding protection.
     pub allowed_origins: Vec<String>,
@@ -599,7 +600,10 @@ mod tests {
     #[test]
     fn test_websocket_server_config_default() {
         let config = WebSocketServerConfig::default();
-        assert_eq!(config.origin_validation_mode, OriginValidationMode::WarnAndAllow);
+        assert_eq!(
+            config.origin_validation_mode,
+            OriginValidationMode::WarnAndAllow
+        );
         assert!(!config.security_warning_acknowledged);
         assert!(config.allowed_origins.is_empty());
     }
@@ -607,14 +611,17 @@ mod tests {
     #[test]
     fn test_websocket_server_config_production() {
         let config = WebSocketServerConfig::production();
-        assert_eq!(config.origin_validation_mode, OriginValidationMode::AllowList);
+        assert_eq!(
+            config.origin_validation_mode,
+            OriginValidationMode::AllowList
+        );
         assert!(config.security_warning_acknowledged);
     }
 
     #[test]
     fn test_websocket_server_config_with_origin_validation() {
-        let config = WebSocketServerConfig::new()
-            .with_origin_validation(OriginValidationMode::Strict);
+        let config =
+            WebSocketServerConfig::new().with_origin_validation(OriginValidationMode::Strict);
         assert_eq!(config.origin_validation_mode, OriginValidationMode::Strict);
     }
 
@@ -626,8 +633,7 @@ mod tests {
 
     #[test]
     fn test_websocket_server_config_with_allowed_origin() {
-        let config = WebSocketServerConfig::new()
-            .with_allowed_origin("https://trusted.com");
+        let config = WebSocketServerConfig::new().with_allowed_origin("https://trusted.com");
         assert_eq!(config.allowed_origins.len(), 1);
         assert_eq!(config.allowed_origins[0], "https://trusted.com");
     }
@@ -682,8 +688,8 @@ mod tests {
 
     #[test]
     fn test_origin_validation_allowlist_empty_allows_all() {
-        let config = WebSocketServerConfig::new()
-            .with_origin_validation(OriginValidationMode::AllowList);
+        let config =
+            WebSocketServerConfig::new().with_origin_validation(OriginValidationMode::AllowList);
 
         // Empty allowlist permits all (backwards compatibility)
         assert!(config.is_origin_allowed(Some("https://anything.com")));
@@ -703,8 +709,8 @@ mod tests {
 
     #[test]
     fn test_origin_validation_strict_empty_rejects_all() {
-        let config = WebSocketServerConfig::new()
-            .with_origin_validation(OriginValidationMode::Strict);
+        let config =
+            WebSocketServerConfig::new().with_origin_validation(OriginValidationMode::Strict);
 
         // Strict mode with no allowed origins rejects everything
         assert!(!config.is_origin_allowed(Some("https://anything.com")));
@@ -715,8 +721,7 @@ mod tests {
 
     #[test]
     fn test_listener_with_config() {
-        let config = WebSocketServerConfig::production()
-            .with_allowed_origin("https://trusted.com");
+        let config = WebSocketServerConfig::production().with_allowed_origin("https://trusted.com");
         let listener = WebSocketListener::with_config("0.0.0.0:8080", config);
 
         assert_eq!(listener.bind_addr(), "0.0.0.0:8080");
@@ -732,8 +737,7 @@ mod tests {
 
     #[test]
     fn test_listener_config_accessor() {
-        let config = WebSocketServerConfig::new()
-            .with_allowed_origin("https://trusted.com");
+        let config = WebSocketServerConfig::new().with_allowed_origin("https://trusted.com");
         let listener = WebSocketListener::with_config("0.0.0.0:8080", config);
 
         // Access config through the listener
@@ -742,8 +746,7 @@ mod tests {
 
     #[test]
     fn test_listener_with_custom_message_size() {
-        let config = WebSocketServerConfig::new()
-            .with_max_message_size(1024 * 1024);
+        let config = WebSocketServerConfig::new().with_max_message_size(1024 * 1024);
         let listener = WebSocketListener::with_config("0.0.0.0:8080", config);
 
         assert_eq!(listener.config().max_message_size, 1024 * 1024);

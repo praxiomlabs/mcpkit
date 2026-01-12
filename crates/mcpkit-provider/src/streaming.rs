@@ -4,8 +4,8 @@
 //! with support for backpressure, cancellation, and state tracking.
 
 use std::pin::Pin;
-use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::task::{Context, Poll};
 
 use futures::Stream;
@@ -92,7 +92,8 @@ impl CompletionStream {
 
     /// Cancel the stream.
     pub fn cancel(&self) {
-        self.state.store(StreamState::Cancelled as u8, Ordering::Release);
+        self.state
+            .store(StreamState::Cancelled as u8, Ordering::Release);
     }
 
     /// Check if the stream has been cancelled.
@@ -231,12 +232,14 @@ impl Stream for CompletionStream {
             Poll::Ready(Some(Ok(event))) => {
                 // Update state on completion
                 if matches!(event, StreamEvent::Stop { .. } | StreamEvent::Error { .. }) {
-                    this.state.store(StreamState::Completed as u8, Ordering::Release);
+                    this.state
+                        .store(StreamState::Completed as u8, Ordering::Release);
                 }
                 Poll::Ready(Some(Ok(event)))
             }
             Poll::Ready(Some(Err(e))) => {
-                this.state.store(StreamState::Error as u8, Ordering::Release);
+                this.state
+                    .store(StreamState::Error as u8, Ordering::Release);
                 Poll::Ready(Some(Err(e)))
             }
             Poll::Ready(None) => {
@@ -263,7 +266,8 @@ pub struct CancellationHandle {
 impl CancellationHandle {
     /// Cancel the associated stream.
     pub fn cancel(&self) {
-        self.state.store(StreamState::Cancelled as u8, Ordering::Release);
+        self.state
+            .store(StreamState::Cancelled as u8, Ordering::Release);
     }
 
     /// Check if the stream has been cancelled.

@@ -295,9 +295,7 @@ fn extract_json(text: &str) -> Option<&str> {
     if let Some(start) = text.find("```") {
         let start = start + 3;
         // Skip optional language identifier on same line
-        let start = text[start..]
-            .find('\n')
-            .map_or(start, |i| start + i + 1);
+        let start = text[start..].find('\n').map_or(start, |i| start + i + 1);
         if let Some(end) = text[start..].find("```") {
             return Some(text[start..start + end].trim());
         }
@@ -323,19 +321,13 @@ mod tests {
         );
 
         let result = prompt.invoke(input).await.unwrap();
-        assert_eq!(
-            result.as_str(),
-            Some("Hello, Alice! You are 30 years old.")
-        );
+        assert_eq!(result.as_str(), Some("Hello, Alice! You are 30 years old."));
     }
 
     #[tokio::test]
     async fn test_prompt_string_input() {
         let prompt = PromptRunnable::new("Process this: {input}");
-        let result = prompt
-            .invoke(ChainValue::from("my data"))
-            .await
-            .unwrap();
+        let result = prompt.invoke(ChainValue::from("my data")).await.unwrap();
         assert_eq!(result.as_str(), Some("Process this: my data"));
     }
 
@@ -348,7 +340,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(result.get("name").and_then(|v| v.as_str()), Some("Alice"));
-        assert_eq!(result.get("age").and_then(|v| v.as_int()), Some(30));
+        assert_eq!(result.get("age").and_then(ChainValue::as_int), Some(30));
     }
 
     #[tokio::test]

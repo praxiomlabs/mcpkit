@@ -423,9 +423,7 @@ mod tests {
     async fn test_pick() {
         let pick = RunnablePick::new("name");
         let input = ChainValue::Object(
-            [("name".to_string(), ChainValue::from("Alice"))]
-                .into_iter()
-                .collect(),
+            std::iter::once(("name".to_string(), ChainValue::from("Alice"))).collect(),
         );
         let result = pick.invoke(input).await.unwrap();
         assert_eq!(result.as_str(), Some("Alice"));
@@ -443,11 +441,11 @@ mod tests {
     async fn test_branch() {
         let branch = RunnableBranch::new()
             .when(
-                |v| v.as_int().map(|i| i > 0).unwrap_or(false),
+                |v| v.as_int().is_some_and(|i| i > 0),
                 RunnableConst::new("positive"),
             )
             .when(
-                |v| v.as_int().map(|i| i < 0).unwrap_or(false),
+                |v| v.as_int().is_some_and(|i| i < 0),
                 RunnableConst::new("negative"),
             )
             .otherwise(RunnableConst::new("zero"));
@@ -482,9 +480,7 @@ mod tests {
     #[tokio::test]
     async fn test_function_runnable() {
         let uppercase = RunnableFn::new(|input: ChainValue| {
-            Box::pin(async move {
-                Ok(ChainValue::from(input.to_string_value().to_uppercase()))
-            })
+            Box::pin(async move { Ok(ChainValue::from(input.to_string_value().to_uppercase())) })
         });
 
         let result = uppercase.invoke(ChainValue::from("hello")).await.unwrap();

@@ -124,9 +124,7 @@ impl AgentContext {
     /// Get the last observation if any.
     #[must_use]
     pub fn last_observation(&self) -> Option<&str> {
-        self.steps
-            .last()
-            .and_then(|s| s.observation.as_deref())
+        self.steps.last().and_then(|s| s.observation.as_deref())
     }
 
     /// Get the number of steps taken.
@@ -180,7 +178,11 @@ mod tests {
 
     #[test]
     fn test_agent_action_tool() {
-        let action = AgentAction::tool("search", serde_json::json!({"q": "test"}), Some("I need to search".to_string()));
+        let action = AgentAction::tool(
+            "search",
+            serde_json::json!({"q": "test"}),
+            Some("I need to search".to_string()),
+        );
 
         assert!(!action.is_finish());
         assert_eq!(action.thought(), Some("I need to search"));

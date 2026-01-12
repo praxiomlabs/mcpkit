@@ -25,7 +25,7 @@
 //! ```
 
 use async_trait::async_trait;
-use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
+use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use tracing::{debug, instrument};
@@ -652,9 +652,7 @@ struct OpenAiChatRequest {
 enum OpenAiResponseFormat {
     Text,
     JsonObject,
-    JsonSchema {
-        json_schema: OpenAiJsonSchema,
-    },
+    JsonSchema { json_schema: OpenAiJsonSchema },
 }
 
 #[derive(Debug, Serialize)]
@@ -715,9 +713,10 @@ impl OpenAiMessage {
         };
 
         // Check if message contains any images
-        let has_images = msg.content.iter().any(|c| {
-            matches!(c, crate::types::MessageContent::Image { .. })
-        });
+        let has_images = msg
+            .content
+            .iter()
+            .any(|c| matches!(c, crate::types::MessageContent::Image { .. }));
 
         let content = if has_images {
             // Use multimodal format with content parts

@@ -143,26 +143,32 @@ impl ExactMatchMetric {
 #[async_trait]
 impl Metric for ExactMatchMetric {
     async fn evaluate(&self, test_case: &TestCase) -> EvalResult<MetricResult> {
-        let expected = test_case.expected_output.as_ref().ok_or_else(|| {
-            EvalError::invalid_test_case("ExactMatch requires expected_output")
-        })?;
+        let expected = test_case
+            .expected_output
+            .as_ref()
+            .ok_or_else(|| EvalError::invalid_test_case("ExactMatch requires expected_output"))?;
 
-        let actual = test_case.actual_output.as_ref().ok_or_else(|| {
-            EvalError::invalid_test_case("ExactMatch requires actual_output")
-        })?;
+        let actual = test_case
+            .actual_output
+            .as_ref()
+            .ok_or_else(|| EvalError::invalid_test_case("ExactMatch requires actual_output"))?;
 
         let expected_norm = self.normalize(expected);
         let actual_norm = self.normalize(actual);
 
-        let score = if expected_norm == actual_norm { 1.0 } else { 0.0 };
-
-        Ok(MetricResult::new("exact_match", score).with_reason(if score == 1.0 {
-            "Outputs match exactly".to_string()
+        let score = if expected_norm == actual_norm {
+            1.0
         } else {
-            format!(
-                "Outputs differ: expected '{expected_norm}', got '{actual_norm}'"
-            )
-        }))
+            0.0
+        };
+
+        Ok(
+            MetricResult::new("exact_match", score).with_reason(if score == 1.0 {
+                "Outputs match exactly".to_string()
+            } else {
+                format!("Outputs differ: expected '{expected_norm}', got '{actual_norm}'")
+            }),
+        )
     }
 
     fn name(&self) -> &'static str {
@@ -208,13 +214,15 @@ impl ContainsMetric {
 #[async_trait]
 impl Metric for ContainsMetric {
     async fn evaluate(&self, test_case: &TestCase) -> EvalResult<MetricResult> {
-        let expected = test_case.expected_output.as_ref().ok_or_else(|| {
-            EvalError::invalid_test_case("Contains requires expected_output")
-        })?;
+        let expected = test_case
+            .expected_output
+            .as_ref()
+            .ok_or_else(|| EvalError::invalid_test_case("Contains requires expected_output"))?;
 
-        let actual = test_case.actual_output.as_ref().ok_or_else(|| {
-            EvalError::invalid_test_case("Contains requires actual_output")
-        })?;
+        let actual = test_case
+            .actual_output
+            .as_ref()
+            .ok_or_else(|| EvalError::invalid_test_case("Contains requires actual_output"))?;
 
         let (expected_cmp, actual_cmp) = if self.case_sensitive {
             (expected.clone(), actual.clone())
@@ -228,11 +236,13 @@ impl Metric for ContainsMetric {
             0.0
         };
 
-        Ok(MetricResult::new("contains", score).with_reason(if score == 1.0 {
-            "Actual output contains expected text".to_string()
-        } else {
-            format!("Actual output does not contain '{expected}'")
-        }))
+        Ok(
+            MetricResult::new("contains", score).with_reason(if score == 1.0 {
+                "Actual output contains expected text".to_string()
+            } else {
+                format!("Actual output does not contain '{expected}'")
+            }),
+        )
     }
 
     fn name(&self) -> &'static str {
@@ -262,21 +272,23 @@ impl RegexMatchMetric {
 #[async_trait]
 impl Metric for RegexMatchMetric {
     async fn evaluate(&self, test_case: &TestCase) -> EvalResult<MetricResult> {
-        let actual = test_case.actual_output.as_ref().ok_or_else(|| {
-            EvalError::invalid_test_case("RegexMatch requires actual_output")
-        })?;
+        let actual = test_case
+            .actual_output
+            .as_ref()
+            .ok_or_else(|| EvalError::invalid_test_case("RegexMatch requires actual_output"))?;
 
-        let re = regex::Regex::new(&self.pattern).map_err(|e| {
-            EvalError::parse(format!("Invalid regex pattern: {e}"))
-        })?;
+        let re = regex::Regex::new(&self.pattern)
+            .map_err(|e| EvalError::parse(format!("Invalid regex pattern: {e}")))?;
 
         let score = if re.is_match(actual) { 1.0 } else { 0.0 };
 
-        Ok(MetricResult::new("regex_match", score).with_reason(if score == 1.0 {
-            "Output matches pattern".to_string()
-        } else {
-            format!("Output does not match pattern '{}'", self.pattern)
-        }))
+        Ok(
+            MetricResult::new("regex_match", score).with_reason(if score == 1.0 {
+                "Output matches pattern".to_string()
+            } else {
+                format!("Output does not match pattern '{}'", self.pattern)
+            }),
+        )
     }
 
     fn name(&self) -> &'static str {
@@ -325,9 +337,10 @@ impl<P: Provider + 'static> FaithfulnessMetric<P> {
 #[async_trait]
 impl<P: Provider + 'static> Metric for FaithfulnessMetric<P> {
     async fn evaluate(&self, test_case: &TestCase) -> EvalResult<MetricResult> {
-        let actual = test_case.actual_output.as_ref().ok_or_else(|| {
-            EvalError::invalid_test_case("Faithfulness requires actual_output")
-        })?;
+        let actual = test_case
+            .actual_output
+            .as_ref()
+            .ok_or_else(|| EvalError::invalid_test_case("Faithfulness requires actual_output"))?;
 
         if test_case.contexts.is_empty() {
             return Err(EvalError::invalid_test_case(
@@ -675,8 +688,7 @@ mod tests {
     async fn test_regex_match_metric() {
         let metric = RegexMatchMetric::new(r"\d{3}-\d{4}");
 
-        let test = TestCase::new("Question")
-            .with_actual_output("Call 555-1234 for help");
+        let test = TestCase::new("Question").with_actual_output("Call 555-1234 for help");
 
         let result = metric.evaluate(&test).await.unwrap();
         assert_eq!(result.score, 1.0);
@@ -708,7 +720,8 @@ mod tests {
 
     #[test]
     fn test_parse_llm_judge_response_with_text() {
-        let response = r#"Here is my evaluation: {"score": 0.9, "reason": "Good"} That's my assessment."#;
+        let response =
+            r#"Here is my evaluation: {"score": 0.9, "reason": "Good"} That's my assessment."#;
         let result = parse_llm_judge_response("test", response).unwrap();
 
         assert_eq!(result.score, 0.9);

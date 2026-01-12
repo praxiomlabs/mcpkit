@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use mcpkit_provider::{Message, Role};
 
 use crate::error::MemoryResult;
-use crate::memory::{estimate_message_tokens, Memory};
+use crate::memory::{Memory, estimate_message_tokens};
 
 /// A simple buffer that stores all messages.
 ///
@@ -125,7 +125,11 @@ impl Memory for BufferMemory {
     }
 
     async fn system_message(&self) -> MemoryResult<Option<Message>> {
-        Ok(self.messages.iter().find(|m| m.role == Role::System).cloned())
+        Ok(self
+            .messages
+            .iter()
+            .find(|m| m.role == Role::System)
+            .cloned())
     }
 }
 
@@ -201,10 +205,7 @@ mod tests {
     #[tokio::test]
     async fn test_messages_within_tokens() {
         let mut memory = BufferMemory::new();
-        memory
-            .add(Message::system("System"))
-            .await
-            .unwrap();
+        memory.add(Message::system("System")).await.unwrap();
         memory.add(Message::user("Message 1")).await.unwrap();
         memory.add(Message::user("Message 2")).await.unwrap();
         memory.add(Message::user("Message 3")).await.unwrap();

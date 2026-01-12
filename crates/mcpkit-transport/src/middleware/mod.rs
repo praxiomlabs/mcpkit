@@ -37,9 +37,9 @@ pub use batching::{BatchingConfig, BatchingLayer, BatchingStats, BatchingTranspo
 pub use logging::LoggingLayer;
 pub use metrics::MetricsLayer;
 pub use rate_limit::{
-    log_rate_limit_warning, BoxedRateLimitStore, InMemoryStore, RateLimitAction,
-    RateLimitAlgorithm, RateLimitConfig, RateLimitDecision, RateLimitLayer, RateLimitStats,
-    RateLimitStore, RateLimitStoreError, RateLimitedTransport, RateLimiter, StoreStats,
+    BoxedRateLimitStore, InMemoryStore, RateLimitAction, RateLimitAlgorithm, RateLimitConfig,
+    RateLimitDecision, RateLimitLayer, RateLimitStats, RateLimitStore, RateLimitStoreError,
+    RateLimitedTransport, RateLimiter, StoreStats, log_rate_limit_warning,
 };
 pub use retry::{ExponentialBackoff, RetryLayer, RetryPolicy};
 pub use timeout::TimeoutLayer;

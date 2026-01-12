@@ -104,7 +104,9 @@ impl RetryConfig {
 
         // Calculate exponential backoff
         let base_delay = self.initial_delay.as_millis() as f64;
-        let multiplier = self.backoff_multiplier.powi(attempt.saturating_sub(1) as i32);
+        let multiplier = self
+            .backoff_multiplier
+            .powi(attempt.saturating_sub(1) as i32);
         let delay_ms = base_delay * multiplier;
 
         // Apply max delay cap

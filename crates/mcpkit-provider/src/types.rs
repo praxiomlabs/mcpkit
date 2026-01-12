@@ -335,7 +335,6 @@ pub enum ToolChoice {
     },
 }
 
-
 /// Response format specification for structured outputs.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -355,7 +354,6 @@ pub enum ResponseFormat {
         strict: bool,
     },
 }
-
 
 /// A request to complete a conversation.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -763,7 +761,8 @@ impl ModelInfo {
     /// Estimate the cost for given token usage.
     #[must_use]
     pub fn estimate_cost(&self, usage: &Usage) -> Option<f64> {
-        let input_cost = self.input_cost_per_million? * f64::from(usage.prompt_tokens) / 1_000_000.0;
+        let input_cost =
+            self.input_cost_per_million? * f64::from(usage.prompt_tokens) / 1_000_000.0;
         let output_cost =
             self.output_cost_per_million? * f64::from(usage.completion_tokens) / 1_000_000.0;
         Some(input_cost + output_cost)
@@ -1020,10 +1019,7 @@ mod tests {
         let response = CompletionResponse {
             id: "test".to_string(),
             model: "gpt-4".to_string(),
-            content: vec![
-                ContentBlock::text("Hello "),
-                ContentBlock::text("world!"),
-            ],
+            content: vec![ContentBlock::text("Hello "), ContentBlock::text("world!")],
             finish_reason: FinishReason::Stop,
             usage: Usage::with_tokens(10, 5),
         };

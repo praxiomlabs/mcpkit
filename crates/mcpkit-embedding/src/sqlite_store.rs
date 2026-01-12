@@ -40,7 +40,7 @@ use std::path::Path;
 use std::sync::Mutex;
 
 use async_trait::async_trait;
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 
 use crate::distance::DistanceMetric;
 use crate::error::{EmbeddingError, EmbeddingResult};
@@ -176,11 +176,9 @@ impl VectorStore for SqliteVecStore {
 
         // Check if ID already exists
         let exists: bool = conn
-            .query_row(
-                "SELECT 1 FROM embeddings WHERE id = ?",
-                [&item.id],
-                |_| Ok(true),
-            )
+            .query_row("SELECT 1 FROM embeddings WHERE id = ?", [&item.id], |_| {
+                Ok(true)
+            })
             .unwrap_or(false);
 
         if exists {
@@ -284,7 +282,9 @@ impl VectorStore for SqliteVecStore {
                 let metadata: HashMap<String, serde_json::Value> =
                     serde_json::from_str(&metadata_json).unwrap_or_default();
 
-                Ok(Some(StoredEmbedding::with_metadata(id, embedding, metadata)))
+                Ok(Some(StoredEmbedding::with_metadata(
+                    id, embedding, metadata,
+                )))
             }
             None => Ok(None),
         }
@@ -295,11 +295,9 @@ impl VectorStore for SqliteVecStore {
 
         // Get the rowid first
         let rowid: Option<i64> = conn
-            .query_row(
-                "SELECT rowid FROM id_rowid_map WHERE id = ?",
-                [id],
-                |row| row.get(0),
-            )
+            .query_row("SELECT rowid FROM id_rowid_map WHERE id = ?", [id], |row| {
+                row.get(0)
+            })
             .ok();
 
         if let Some(rowid) = rowid {
@@ -371,9 +369,10 @@ impl VectorStore for SqliteVecStore {
 
         for row in rows {
             let row_result: Result<(String, f64, String), rusqlite::Error> = row;
-            let (id, distance, metadata_json) = row_result.map_err(|e| EmbeddingError::Storage {
-                message: format!("Failed to read search result: {e}"),
-            })?;
+            let (id, distance, metadata_json) =
+                row_result.map_err(|e| EmbeddingError::Storage {
+                    message: format!("Failed to read search result: {e}"),
+                })?;
 
             // Convert distance to similarity score
             // sqlite-vec returns L2 distance, convert based on metric

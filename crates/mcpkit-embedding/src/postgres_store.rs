@@ -35,8 +35,8 @@
 //! ```
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use async_trait::async_trait;
 use pgvector::Vector;
@@ -357,11 +357,13 @@ impl VectorStore for PgVectorStore {
             query_builder = query_builder.bind(threshold);
         }
 
-        let rows: Vec<PgRow> = query_builder.fetch_all(&self.pool).await.map_err(|e| {
-            EmbeddingError::Storage {
-                message: format!("Failed to search embeddings: {e}"),
-            }
-        })?;
+        let rows: Vec<PgRow> =
+            query_builder
+                .fetch_all(&self.pool)
+                .await
+                .map_err(|e| EmbeddingError::Storage {
+                    message: format!("Failed to search embeddings: {e}"),
+                })?;
 
         let mut results = Vec::with_capacity(rows.len());
         for row in rows {
@@ -419,8 +421,8 @@ mod tests {
     async fn test_postgres_store_basic() {
         use super::*;
 
-        let database_url =
-            std::env::var("DATABASE_URL").unwrap_or("postgres://localhost/test".to_string());
+        let database_url = std::env::var("DATABASE_URL")
+            .unwrap_or_else(|_| "postgres://localhost/test".to_string());
 
         let pool = PgPool::connect(&database_url).await.unwrap();
         let mut store = PgVectorStore::with_table_name(pool, 3, "test_embeddings")

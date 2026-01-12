@@ -12,7 +12,7 @@
 
 use mcpkit_core::error::JsonRpcError;
 use mcpkit_core::protocol::{
-    Cursor, Message, Notification, ProgressToken, Request, RequestId, Response, JSONRPC_VERSION,
+    Cursor, JSONRPC_VERSION, Message, Notification, ProgressToken, Request, RequestId, Response,
 };
 use proptest::prelude::*;
 use std::borrow::Cow;
@@ -27,7 +27,7 @@ fn arb_request_id() -> impl Strategy<Value = RequestId> {
         // Numeric IDs (most common case)
         any::<u64>().prop_map(RequestId::Number),
         // String IDs (less common but valid)
-        "[a-zA-Z0-9_-]{1,100}".prop_map(|s| RequestId::String(s)),
+        "[a-zA-Z0-9_-]{1,100}".prop_map(RequestId::String),
     ]
 }
 
@@ -37,9 +37,9 @@ fn arb_request_id() -> impl Strategy<Value = RequestId> {
 fn arb_method() -> impl Strategy<Value = Cow<'static, str>> {
     prop_oneof![
         // Namespaced methods (most common)
-        "[a-z]+/[a-z_]+".prop_map(|s| Cow::Owned(s)),
+        "[a-z]+/[a-z_]+".prop_map(Cow::Owned),
         // Simple methods
-        "[a-z_]+".prop_map(|s| Cow::Owned(s)),
+        "[a-z_]+".prop_map(Cow::Owned),
         // Well-known MCP methods
         Just(Cow::Borrowed("tools/list")),
         Just(Cow::Borrowed("tools/call")),
@@ -80,10 +80,9 @@ fn arb_params() -> impl Strategy<Value = Option<serde_json::Value>> {
             }
         }))),
         // Array params
-        proptest::collection::vec("[a-z]+", 0..5)
-            .prop_map(|v| Some(serde_json::Value::Array(
-                v.into_iter().map(serde_json::Value::String).collect()
-            ))),
+        proptest::collection::vec("[a-z]+", 0..5).prop_map(|v| Some(serde_json::Value::Array(
+            v.into_iter().map(serde_json::Value::String).collect()
+        ))),
     ]
 }
 
@@ -116,11 +115,11 @@ fn arb_result() -> impl Strategy<Value = serde_json::Value> {
 /// Strategy for generating JsonRpcError values.
 fn arb_error() -> impl Strategy<Value = JsonRpcError> {
     let codes = prop_oneof![
-        Just(-32700), // Parse error
-        Just(-32600), // Invalid Request
-        Just(-32601), // Method not found
-        Just(-32602), // Invalid params
-        Just(-32603), // Internal error
+        Just(-32700),         // Parse error
+        Just(-32600),         // Invalid Request
+        Just(-32601),         // Method not found
+        Just(-32602),         // Invalid params
+        Just(-32603),         // Internal error
         (-32099..=-32000i32), // Server errors
     ];
 
@@ -195,7 +194,7 @@ fn arb_message() -> impl Strategy<Value = Message> {
 fn arb_progress_token() -> impl Strategy<Value = ProgressToken> {
     prop_oneof![
         any::<u64>().prop_map(ProgressToken::Number),
-        "[a-zA-Z0-9_-]{1,50}".prop_map(|s| ProgressToken::String(s)),
+        "[a-zA-Z0-9_-]{1,50}".prop_map(ProgressToken::String),
     ]
 }
 

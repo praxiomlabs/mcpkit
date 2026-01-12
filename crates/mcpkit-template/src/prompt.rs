@@ -203,8 +203,7 @@ impl PromptBuilder {
 ///
 /// This is useful for creating reusable prompt patterns that can be
 /// customized with different few-shot examples or context.
-#[derive(Debug, Clone)]
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
 pub struct PromptTemplate {
     /// The base system message.
     pub system: Option<String>,
@@ -267,7 +266,6 @@ impl PromptTemplate {
         builder
     }
 }
-
 
 #[cfg(test)]
 mod tests {

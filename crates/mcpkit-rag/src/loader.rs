@@ -68,10 +68,9 @@ impl TextLoader {
 #[async_trait]
 impl DocumentLoader for TextLoader {
     async fn load(&self) -> RagResult<Vec<Document>> {
-        let content =
-            tokio::fs::read_to_string(&self.path)
-                .await
-                .map_err(|e| RagError::file(self.path.display().to_string(), e))?;
+        let content = tokio::fs::read_to_string(&self.path)
+            .await
+            .map_err(|e| RagError::file(self.path.display().to_string(), e))?;
 
         let doc = Document::new(content)
             .with_metadata("source", self.path.display().to_string())
@@ -264,7 +263,10 @@ impl JsonLoader {
     }
 
     /// Parse a single JSON object into a document.
-    fn parse_object(&self, obj: &serde_json::Map<String, serde_json::Value>) -> RagResult<Document> {
+    fn parse_object(
+        &self,
+        obj: &serde_json::Map<String, serde_json::Value>,
+    ) -> RagResult<Document> {
         let content = obj
             .get(&self.content_key)
             .and_then(|v| v.as_str())
@@ -301,10 +303,9 @@ impl JsonLoader {
 #[async_trait]
 impl DocumentLoader for JsonLoader {
     async fn load(&self) -> RagResult<Vec<Document>> {
-        let content =
-            tokio::fs::read_to_string(&self.path)
-                .await
-                .map_err(|e| RagError::file(self.path.display().to_string(), e))?;
+        let content = tokio::fs::read_to_string(&self.path)
+            .await
+            .map_err(|e| RagError::file(self.path.display().to_string(), e))?;
 
         let json: serde_json::Value = serde_json::from_str(&content)?;
 
@@ -354,7 +355,7 @@ pub struct MemoryLoader {
 
 impl MemoryLoader {
     /// Create a new memory loader with the given documents.
-    #[must_use] 
+    #[must_use]
     pub fn new(documents: Vec<Document>) -> Self {
         Self { documents }
     }
@@ -412,7 +413,10 @@ mod tests {
         assert_eq!(docs.len(), 2);
         assert_eq!(docs[0].content, "First doc");
         assert_eq!(docs[1].content, "Second doc");
-        assert_eq!(docs[1].get_metadata("key"), Some(&serde_json::json!("value")));
+        assert_eq!(
+            docs[1].get_metadata("key"),
+            Some(&serde_json::json!("value"))
+        );
     }
 
     #[tokio::test]

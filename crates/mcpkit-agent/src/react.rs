@@ -124,7 +124,9 @@ impl<P: Provider> ReActAgent<P> {
         }
 
         prompt.push_str("\nNow decide your next action. ");
-        prompt.push_str("Respond with a Thought, then either an Action/Action Input or a Final Answer.\n");
+        prompt.push_str(
+            "Respond with a Thought, then either an Action/Action Input or a Final Answer.\n",
+        );
 
         prompt
     }
@@ -142,13 +144,12 @@ impl<P: Provider> ReActAgent<P> {
         }
 
         // Extract action and input
-        let action_name = extract_field(response, "Action:")
-            .ok_or_else(|| AgentError::ParseError {
+        let action_name =
+            extract_field(response, "Action:").ok_or_else(|| AgentError::ParseError {
                 message: "No Action or Final Answer found in response".to_string(),
             })?;
 
-        let action_input = extract_field(response, "Action Input:")
-            .unwrap_or_default();
+        let action_input = extract_field(response, "Action Input:").unwrap_or_default();
 
         // Parse action input as JSON
         let arguments: serde_json::Value = if action_input.is_empty() {
@@ -240,15 +241,24 @@ mod tests {
     fn test_extract_field() {
         let text = "Thought: I need to search\nAction: search\nAction Input: {\"q\": \"test\"}";
 
-        assert_eq!(extract_field(text, "Thought:"), Some("I need to search".to_string()));
+        assert_eq!(
+            extract_field(text, "Thought:"),
+            Some("I need to search".to_string())
+        );
         assert_eq!(extract_field(text, "Action:"), Some("search".to_string()));
-        assert_eq!(extract_field(text, "Action Input:"), Some("{\"q\": \"test\"}".to_string()));
+        assert_eq!(
+            extract_field(text, "Action Input:"),
+            Some("{\"q\": \"test\"}".to_string())
+        );
         assert_eq!(extract_field(text, "Final Answer:"), None);
     }
 
     #[test]
     fn test_extract_field_with_colon() {
         let text = "Final Answer: The answer is: 42";
-        assert_eq!(extract_field(text, "Final Answer:"), Some("The answer is: 42".to_string()));
+        assert_eq!(
+            extract_field(text, "Final Answer:"),
+            Some("The answer is: 42".to_string())
+        );
     }
 }

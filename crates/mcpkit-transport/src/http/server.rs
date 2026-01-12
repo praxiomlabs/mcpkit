@@ -359,6 +359,7 @@ pub enum OriginValidationMode {
 ///
 /// See: <https://www.straiker.ai/blog/agentic-danger-dns-rebinding-exposing-your-internal-mcp-servers>
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct HttpServerConfig {
     /// Allowed origins for DNS rebinding protection.
     pub allowed_origins: Vec<String>,
@@ -894,14 +895,16 @@ mod tests {
     fn test_http_server_config_production_constructor() {
         let config = HttpServerConfig::production();
 
-        assert_eq!(config.origin_validation_mode, OriginValidationMode::AllowList);
+        assert_eq!(
+            config.origin_validation_mode,
+            OriginValidationMode::AllowList
+        );
         assert!(config.security_warning_acknowledged);
     }
 
     #[test]
     fn test_http_server_config_with_validation_mode() {
-        let config = HttpServerConfig::new()
-            .with_origin_validation(OriginValidationMode::Strict);
+        let config = HttpServerConfig::new().with_origin_validation(OriginValidationMode::Strict);
 
         assert_eq!(config.origin_validation_mode, OriginValidationMode::Strict);
     }
@@ -945,8 +948,8 @@ mod tests {
 
     #[test]
     fn test_http_server_config_allowlist_mode_empty_allows_all() {
-        let config = HttpServerConfig::new()
-            .with_origin_validation(OriginValidationMode::AllowList);
+        let config =
+            HttpServerConfig::new().with_origin_validation(OriginValidationMode::AllowList);
 
         // AllowList with no configured origins allows all (backwards compat)
         assert!(config.is_origin_allowed(Some("https://anything.com")));
@@ -968,8 +971,7 @@ mod tests {
 
     #[test]
     fn test_http_server_config_strict_mode_empty_rejects_all() {
-        let config = HttpServerConfig::new()
-            .with_origin_validation(OriginValidationMode::Strict);
+        let config = HttpServerConfig::new().with_origin_validation(OriginValidationMode::Strict);
 
         // Strict mode with no configured origins rejects all
         assert!(!config.is_origin_allowed(Some("https://anything.com")));

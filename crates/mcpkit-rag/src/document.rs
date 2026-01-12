@@ -71,7 +71,7 @@ impl Document {
     }
 
     /// Get a metadata value as a specific type.
-    #[must_use] 
+    #[must_use]
     pub fn get_metadata_as<T: for<'de> Deserialize<'de>>(&self, key: &str) -> Option<T> {
         self.metadata
             .get(key)

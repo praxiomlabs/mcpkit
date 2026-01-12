@@ -224,7 +224,11 @@ impl<A: Agent> AgentExecutor<A> {
                         iterations,
                     });
                 }
-                AgentAction::Tool { ref name, ref arguments, .. } => {
+                AgentAction::Tool {
+                    ref name,
+                    ref arguments,
+                    ..
+                } => {
                     // Execute the tool
                     let observation = match self.tools.execute(name, arguments.clone()).await {
                         Ok(output) => format_tool_output(&output),
@@ -343,10 +347,7 @@ mod tests {
         assert_eq!(result.steps.len(), 2);
 
         // First step should have observation
-        assert_eq!(
-            result.steps[0].observation,
-            Some("Echo: hello".to_string())
-        );
+        assert_eq!(result.steps[0].observation, Some("Echo: hello".to_string()));
     }
 
     #[tokio::test]
@@ -380,7 +381,13 @@ mod tests {
         let result = executor.run("test").await.unwrap();
 
         // Should continue with error observation
-        assert_eq!(result.steps[0].observation.as_deref().unwrap().contains("Error"), true);
+        assert!(
+            result.steps[0]
+                .observation
+                .as_deref()
+                .unwrap()
+                .contains("Error")
+        );
     }
 
     #[test]
@@ -394,7 +401,10 @@ mod tests {
                     Some("Need to search".to_string()),
                 ))
                 .with_observation("Found: result"),
-                AgentStep::new(AgentAction::finish("Final answer", Some("I have the answer".to_string()))),
+                AgentStep::new(AgentAction::finish(
+                    "Final answer",
+                    Some("I have the answer".to_string()),
+                )),
             ],
             iterations: 2,
         };

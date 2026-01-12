@@ -3,8 +3,8 @@
 //! This module provides token bucket rate limiting to prevent exceeding
 //! provider rate limits and manage request throughput.
 
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use tokio::sync::Mutex;

@@ -21,6 +21,14 @@ fn create_provider(mock_server: &MockServer) -> OpenAiProvider {
     OpenAiProvider::with_config(config).expect("Failed to create provider")
 }
 
+/// Helper to compute cosine similarity between two vectors.
+fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
+    let dot: f32 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
+    let norm_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
+    let norm_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
+    dot / (norm_a * norm_b)
+}
+
 #[tokio::test]
 async fn test_basic_completion() {
     let mock_server = MockServer::start().await;
@@ -60,10 +68,7 @@ async fn test_basic_completion() {
 
     assert_eq!(response.id, "chatcmpl-123");
     assert_eq!(response.model, "gpt-4o");
-    assert_eq!(
-        response.text().unwrap(),
-        "Hello! How can I help you today?"
-    );
+    assert_eq!(response.text().unwrap(), "Hello! How can I help you today?");
     assert_eq!(response.usage.total_tokens, 18);
 }
 
@@ -194,11 +199,9 @@ async fn test_embeddings() {
 
     let provider = create_provider(&mock_server);
 
-    let request = EmbeddingRequest::batch(vec![
-        "Hello world".to_string(),
-        "How are you?".to_string(),
-    ])
-    .model("text-embedding-3-small");
+    let request =
+        EmbeddingRequest::batch(vec!["Hello world".to_string(), "How are you?".to_string()])
+            .model("text-embedding-3-small");
 
     let response = provider.embed(request).await.expect("Embedding failed");
 
@@ -231,11 +234,7 @@ async fn test_embedding_vectors() {
 
     let provider = create_provider(&mock_server);
 
-    let request = EmbeddingRequest::batch(vec![
-        "a".to_string(),
-        "b".to_string(),
-        "c".to_string(),
-    ]);
+    let request = EmbeddingRequest::batch(vec!["a".to_string(), "b".to_string(), "c".to_string()]);
     let response = provider.embed(request).await.expect("Embedding failed");
 
     // Verify we got the expected embeddings
@@ -243,14 +242,6 @@ async fn test_embedding_vectors() {
     assert_eq!(response.embeddings[0].embedding, vec![1.0, 0.0, 0.0]);
     assert_eq!(response.embeddings[1].embedding, vec![0.0, 1.0, 0.0]);
     assert_eq!(response.embeddings[2].embedding, vec![1.0, 0.0, 0.0]);
-
-    // Helper to compute cosine similarity
-    fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
-        let dot: f32 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
-        let norm_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
-        let norm_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
-        dot / (norm_a * norm_b)
-    }
 
     // Orthogonal vectors should have 0 similarity
     let sim_01 = cosine_similarity(
@@ -505,10 +496,11 @@ data: [DONE]
                 got_start = true;
                 assert_eq!(id, "chatcmpl-stream");
             }
-            Ok(StreamEvent::ContentDelta { delta, .. }) => {
-                if let ContentDelta::Text { text } = delta {
-                    collected_text.push_str(&text);
-                }
+            Ok(StreamEvent::ContentDelta {
+                delta: ContentDelta::Text { text },
+                ..
+            }) => {
+                collected_text.push_str(&text);
             }
             Ok(StreamEvent::Stop { .. }) => {
                 got_stop = true;
@@ -576,10 +568,11 @@ data: [DONE]
                 assert_eq!(id, "call_abc");
                 assert_eq!(name, "get_weather");
             }
-            Ok(StreamEvent::ContentDelta { delta, .. }) => {
-                if let ContentDelta::ToolInput { partial_json } = delta {
-                    collected_args.push_str(&partial_json);
-                }
+            Ok(StreamEvent::ContentDelta {
+                delta: ContentDelta::ToolInput { partial_json },
+                ..
+            }) => {
+                collected_args.push_str(&partial_json);
             }
             Err(e) => panic!("Stream error: {e}"),
             _ => {}

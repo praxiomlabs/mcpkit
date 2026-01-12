@@ -204,7 +204,10 @@ impl EvalReport {
     }
 
     /// Save the report to a JSON file.
-    pub async fn to_json_file(&self, path: impl AsRef<std::path::Path>) -> Result<(), std::io::Error> {
+    pub async fn to_json_file(
+        &self,
+        path: impl AsRef<std::path::Path>,
+    ) -> Result<(), std::io::Error> {
         let content = serde_json::to_string_pretty(self)?;
         tokio::fs::write(path, content).await?;
         Ok(())
@@ -401,9 +404,11 @@ mod tests {
     async fn test_report_summary() {
         let runner = EvalRunner::new("Summary Test").with_metric(ExactMatchMetric::new());
 
-        let tests = vec![TestCase::new("Q1")
-            .with_expected_output("A")
-            .with_actual_output("A")];
+        let tests = vec![
+            TestCase::new("Q1")
+                .with_expected_output("A")
+                .with_actual_output("A"),
+        ];
 
         let report = runner.run(&tests).await.unwrap();
         let summary = report.summary();

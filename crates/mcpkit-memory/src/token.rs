@@ -5,7 +5,7 @@ use mcpkit_provider::{Message, Role};
 use std::collections::VecDeque;
 
 use crate::error::MemoryResult;
-use crate::memory::{estimate_message_tokens, Memory};
+use crate::memory::{Memory, estimate_message_tokens};
 
 /// A memory that manages messages within a token budget.
 ///
@@ -266,7 +266,10 @@ mod tests {
     async fn test_token_memory_resize() {
         let mut memory = TokenMemory::new(200);
 
-        memory.add(Message::user("A long message here")).await.unwrap();
+        memory
+            .add(Message::user("A long message here"))
+            .await
+            .unwrap();
         memory.add(Message::user("Another message")).await.unwrap();
 
         let before = memory.len();

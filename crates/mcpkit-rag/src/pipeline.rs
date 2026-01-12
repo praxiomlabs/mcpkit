@@ -134,7 +134,12 @@ impl RagResponse {
             result.push_str("\n\nSources:\n");
             for (i, source) in self.sources.iter().enumerate() {
                 let id = source.id().unwrap_or("unknown");
-                result.push_str(&format!("[{}] {} (score: {:.3})\n", i + 1, id, source.score));
+                result.push_str(&format!(
+                    "[{}] {} (score: {:.3})\n",
+                    i + 1,
+                    id,
+                    source.score
+                ));
             }
         }
 
@@ -339,12 +344,12 @@ mod tests {
     use super::*;
     use crate::splitter::FixedSizeSplitter;
     use mcpkit_embedding::InMemoryStore;
+    use mcpkit_provider::streaming::CompletionStream;
     use mcpkit_provider::{
         CompletionRequest, CompletionResponse, ContentBlock, Embedding, EmbeddingRequest,
         EmbeddingResponse, EmbeddingUsage, FinishReason, ModelInfo, ProviderCapabilities,
         ProviderError, ProviderInfo, Usage,
     };
-    use mcpkit_provider::streaming::CompletionStream;
 
     struct MockProvider {
         info: ProviderInfo,
@@ -365,17 +370,25 @@ mod tests {
             &self.info
         }
 
-        async fn complete(&self, _request: CompletionRequest) -> Result<CompletionResponse, ProviderError> {
+        async fn complete(
+            &self,
+            _request: CompletionRequest,
+        ) -> Result<CompletionResponse, ProviderError> {
             Ok(CompletionResponse {
                 id: "mock-completion".to_string(),
                 model: "mock-model".to_string(),
-                content: vec![ContentBlock::text("This is the generated answer based on the context.")],
+                content: vec![ContentBlock::text(
+                    "This is the generated answer based on the context.",
+                )],
                 finish_reason: FinishReason::Stop,
                 usage: Usage::with_tokens(10, 20),
             })
         }
 
-        async fn complete_stream(&self, _request: CompletionRequest) -> Result<CompletionStream, ProviderError> {
+        async fn complete_stream(
+            &self,
+            _request: CompletionRequest,
+        ) -> Result<CompletionStream, ProviderError> {
             Err(ProviderError::Unsupported {
                 provider: "mock".to_string(),
                 feature: "streaming".to_string(),
@@ -390,7 +403,10 @@ mod tests {
             Ok(ModelInfo::new(model_id))
         }
 
-        async fn embed(&self, request: EmbeddingRequest) -> Result<EmbeddingResponse, ProviderError> {
+        async fn embed(
+            &self,
+            request: EmbeddingRequest,
+        ) -> Result<EmbeddingResponse, ProviderError> {
             let embeddings: Vec<Embedding> = request
                 .input
                 .iter()
@@ -468,7 +484,8 @@ mod tests {
         let provider = MockProvider::new();
         let splitter = FixedSizeSplitter::new(100);
 
-        let pipeline = RagPipeline::new(store, provider, splitter).config(PipelineConfig::new().k(3));
+        let pipeline =
+            RagPipeline::new(store, provider, splitter).config(PipelineConfig::new().k(3));
 
         let docs = vec![
             Document::new("Rust is a systems programming language.").with_id("rust-doc"),

@@ -582,7 +582,8 @@ mod tests {
             .chunk_size(50)
             .chunk_overlap(10);
 
-        let doc = Document::new("This is a test. It has multiple sentences. Each one is fairly short.");
+        let doc =
+            Document::new("This is a test. It has multiple sentences. Each one is fairly short.");
         let chunks = splitter.split(&doc);
 
         assert!(!chunks.is_empty());
@@ -601,7 +602,7 @@ mod tests {
         let chunks = splitter.split(&doc);
 
         // Should split on paragraph boundaries
-        assert!(chunks.len() >= 1);
+        assert!(!chunks.is_empty());
     }
 
     #[test]
@@ -644,7 +645,9 @@ mod tests {
     fn test_token_splitter() {
         let splitter = TokenSplitter::new(10).with_overlap(2);
 
-        let doc = Document::new("This is a fairly long document that should be split into multiple chunks based on token count.");
+        let doc = Document::new(
+            "This is a fairly long document that should be split into multiple chunks based on token count.",
+        );
         let chunks = splitter.split(&doc);
 
         assert!(!chunks.is_empty());
@@ -652,11 +655,10 @@ mod tests {
 
     #[test]
     fn test_sentence_splitter() {
-        let splitter = SentenceSplitter::new()
-            .max_sentences(2)
-            .with_overlap(1);
+        let splitter = SentenceSplitter::new().max_sentences(2).with_overlap(1);
 
-        let doc = Document::new("First sentence. Second sentence. Third sentence. Fourth sentence.");
+        let doc =
+            Document::new("First sentence. Second sentence. Third sentence. Fourth sentence.");
         let chunks = splitter.split(&doc);
 
         assert!(chunks.len() >= 2);
@@ -667,10 +669,7 @@ mod tests {
     fn test_split_documents() {
         let splitter = FixedSizeSplitter::new(10);
 
-        let docs = vec![
-            Document::new("0123456789AB"),
-            Document::new("XYZ"),
-        ];
+        let docs = vec![Document::new("0123456789AB"), Document::new("XYZ")];
 
         let chunks = splitter.split_documents(&docs);
 

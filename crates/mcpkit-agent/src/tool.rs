@@ -287,8 +287,12 @@ mod tests {
     #[async_trait]
     impl Tool for EchoTool {
         fn schema(&self) -> ToolSchema {
-            ToolSchema::new("echo", "Echo the input back")
-                .add_parameter("message", "string", "The message to echo", true)
+            ToolSchema::new("echo", "Echo the input back").add_parameter(
+                "message",
+                "string",
+                "The message to echo",
+                true,
+            )
         }
 
         async fn execute(&self, input: serde_json::Value) -> AgentResult<ToolOutput> {
@@ -317,7 +321,12 @@ mod tests {
         assert!(props.get("input").is_some());
         assert!(props.get("optional").is_some());
 
-        let required = schema.parameters.get("required").unwrap().as_array().unwrap();
+        let required = schema
+            .parameters
+            .get("required")
+            .unwrap()
+            .as_array()
+            .unwrap();
         assert!(required.contains(&serde_json::Value::String("input".to_string())));
         assert!(!required.contains(&serde_json::Value::String("optional".to_string())));
     }

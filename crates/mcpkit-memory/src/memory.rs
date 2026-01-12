@@ -117,9 +117,7 @@ pub fn estimate_tokens(text: &str) -> usize {
 /// Utility function to estimate tokens in a message.
 #[must_use]
 pub fn estimate_message_tokens(message: &Message) -> usize {
-    let content_tokens = message
-        .text()
-        .map_or(0, estimate_tokens);
+    let content_tokens = message.text().map_or(0, estimate_tokens);
 
     // Add overhead for role and structure (~4 tokens)
     content_tokens + 4
@@ -140,7 +138,7 @@ mod tests {
         // Typical sentence (~40 chars = ~10 tokens)
         let sentence = "Hello, how are you doing today?";
         let tokens = estimate_tokens(sentence);
-        assert!(tokens >= 5 && tokens <= 15);
+        assert!((5..=15).contains(&tokens));
     }
 
     #[test]

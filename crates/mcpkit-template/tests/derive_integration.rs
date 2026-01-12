@@ -3,7 +3,7 @@
 //! These tests verify that the derive macro correctly generates Template
 //! implementations and validates templates at compile time.
 
-use mcpkit_template::{template, Role, Template, TemplateExt};
+use mcpkit_template::{Role, Template, TemplateExt, template};
 
 /// Basic template with two variables.
 #[derive(Template)]
@@ -20,10 +20,7 @@ fn test_basic_template() {
         age: 30,
     };
 
-    assert_eq!(
-        greeting.render(),
-        "Hello, Alice! You are 30 years old."
-    );
+    assert_eq!(greeting.render(), "Hello, Alice! You are 30 years old.");
 }
 
 #[test]
@@ -51,9 +48,7 @@ struct Welcome {
 
 #[test]
 fn test_single_variable() {
-    let welcome = Welcome {
-        user: "Bob".into(),
-    };
+    let welcome = Welcome { user: "Bob".into() };
     assert_eq!(welcome.render(), "Welcome, Bob!");
 }
 
@@ -65,10 +60,7 @@ struct StaticMessage {}
 #[test]
 fn test_no_variables() {
     let msg = StaticMessage {};
-    assert_eq!(
-        msg.render(),
-        "This is a static message with no variables."
-    );
+    assert_eq!(msg.render(), "This is a static message with no variables.");
     assert!(StaticMessage::variables().is_empty());
 }
 

@@ -5,7 +5,7 @@ use mcpkit_provider::{CompletionRequest, Message, Provider, Role};
 use std::sync::Arc;
 
 use crate::error::MemoryResult;
-use crate::memory::{estimate_message_tokens, Memory};
+use crate::memory::{Memory, estimate_message_tokens};
 
 /// A memory that summarizes older messages using an LLM.
 ///
@@ -302,6 +302,10 @@ mod tests {
     fn test_summary_memory_creation() {
         // This just tests that types compile correctly
         // Actual provider calls would require mocking
-        let _memory_type_check = |p: OpenAiProvider| SummaryMemory::new(p, 10);
+        fn type_check(p: OpenAiProvider) -> SummaryMemory<OpenAiProvider> {
+            SummaryMemory::new(p, 10)
+        }
+        // Verify the function signature compiles - we don't need to call it
+        let _ = type_check as fn(_) -> _;
     }
 }

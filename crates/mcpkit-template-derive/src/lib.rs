@@ -8,8 +8,9 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use std::path::PathBuf;
 use syn::{
+    Attribute, Data, DeriveInput, Expr, Fields, Ident, LitStr, Meta, Token,
     parse::{Parse, ParseStream},
-    parse_macro_input, Attribute, Data, DeriveInput, Expr, Fields, Ident, LitStr, Meta, Token,
+    parse_macro_input,
 };
 
 /// Derive the `Template` trait for a struct.
@@ -82,22 +83,19 @@ fn derive_template_impl(input: DeriveInput) -> syn::Result<TokenStream2> {
                 return Err(syn::Error::new_spanned(
                     &input,
                     "Template derive only supports structs with named fields",
-                ))
+                ));
             }
         },
         _ => {
             return Err(syn::Error::new_spanned(
                 &input,
                 "Template derive only supports structs",
-            ))
+            ));
         }
     };
 
     // Extract field names and validate against template
-    let field_names: Vec<_> = fields
-        .iter()
-        .map(|f| f.ident.as_ref().unwrap())
-        .collect();
+    let field_names: Vec<_> = fields.iter().map(|f| f.ident.as_ref().unwrap()).collect();
 
     // Parse variable attributes for custom formatting
     let var_attrs: Vec<_> = fields
@@ -183,7 +181,7 @@ fn parse_template_attr(attrs: &[Attribute]) -> syn::Result<TemplateAttr> {
                     return Err(syn::Error::new_spanned(
                         attr,
                         "Expected #[template(source = \"...\")]",
-                    ))
+                    ));
                 }
             }
         }
@@ -239,7 +237,11 @@ impl Parse for TemplateArgs {
                 let content = std::fs::read_to_string(&template_path).map_err(|e| {
                     syn::Error::new_spanned(
                         &value,
-                        format!("Failed to read template file '{}': {}", template_path.display(), e),
+                        format!(
+                            "Failed to read template file '{}': {}",
+                            template_path.display(),
+                            e
+                        ),
                     )
                 })?;
 
@@ -255,8 +257,9 @@ impl Parse for TemplateArgs {
         }
 
         Ok(TemplateArgs {
-            source: source
-                .ok_or_else(|| syn::Error::new(input.span(), "Missing 'source' or 'path' attribute"))?,
+            source: source.ok_or_else(|| {
+                syn::Error::new(input.span(), "Missing 'source' or 'path' attribute")
+            })?,
         })
     }
 }
@@ -280,7 +283,7 @@ fn parse_var_attr(attrs: &[Attribute]) -> syn::Result<VarAttr> {
                     return Err(syn::Error::new_spanned(
                         attr,
                         "Expected #[var(format = \"...\")]",
-                    ))
+                    ));
                 }
             }
         }
@@ -369,7 +372,9 @@ fn generate_render_impl(
                         chars.next();
 
                         // Find the field index
-                        if let Some(idx) = field_names.iter().position(|f| f.to_string() == var_name) {
+                        if let Some(idx) =
+                            field_names.iter().position(|f| f.to_string() == var_name)
+                        {
                             let field = field_names[idx];
                             let var_attr = &var_attrs[idx];
 
@@ -458,7 +463,10 @@ fn template_impl(input: TemplateInvocation) -> syn::Result<TokenStream2> {
         if !input.args.iter().any(|(name, _)| name == var) {
             return Err(syn::Error::new_spanned(
                 &input.template,
-                format!("Template variable '{{{{{}}}}}' has no corresponding argument", var),
+                format!(
+                    "Template variable '{{{{{}}}}}' has no corresponding argument",
+                    var
+                ),
             ));
         }
     }

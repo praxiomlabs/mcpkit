@@ -803,10 +803,7 @@ mod tests {
 
     #[test]
     fn test_parse_tools_call_missing_name() {
-        let request = make_request(
-            "tools/call",
-            Some(serde_json::json!({"arguments": {}})),
-        );
+        let request = make_request("tools/call", Some(serde_json::json!({"arguments": {}})));
         let result = parse_request(&request);
         assert!(result.is_err());
     }
@@ -1077,7 +1074,10 @@ mod tests {
         if let ParsedRequest::SamplingCreateMessage(params) = parsed {
             assert_eq!(params.messages.len(), 1);
             assert_eq!(params.max_tokens, Some(100));
-            assert_eq!(params.system_prompt, Some("You are a helpful assistant.".to_string()));
+            assert_eq!(
+                params.system_prompt,
+                Some("You are a helpful assistant.".to_string())
+            );
         } else {
             panic!("Expected SamplingCreateMessage");
         }
@@ -1086,10 +1086,7 @@ mod tests {
 
     #[test]
     fn test_parse_sampling_create_message_missing_messages() {
-        let request = make_request(
-            "sampling/createMessage",
-            Some(serde_json::json!({})),
-        );
+        let request = make_request("sampling/createMessage", Some(serde_json::json!({})));
         let result = parse_request(&request);
         assert!(result.is_err());
     }
@@ -1198,7 +1195,10 @@ mod tests {
         assert_eq!(methods::TOOLS_CALL, "tools/call");
         assert_eq!(methods::RESOURCES_LIST, "resources/list");
         assert_eq!(methods::RESOURCES_READ, "resources/read");
-        assert_eq!(methods::RESOURCES_TEMPLATES_LIST, "resources/templates/list");
+        assert_eq!(
+            methods::RESOURCES_TEMPLATES_LIST,
+            "resources/templates/list"
+        );
         assert_eq!(methods::RESOURCES_SUBSCRIBE, "resources/subscribe");
         assert_eq!(methods::RESOURCES_UNSUBSCRIBE, "resources/unsubscribe");
         assert_eq!(methods::PROMPTS_LIST, "prompts/list");
@@ -1221,9 +1221,21 @@ mod tests {
         assert_eq!(notifications::CANCELLED, "notifications/cancelled");
         assert_eq!(notifications::PROGRESS, "notifications/progress");
         assert_eq!(notifications::MESSAGE, "notifications/message");
-        assert_eq!(notifications::RESOURCES_UPDATED, "notifications/resources/updated");
-        assert_eq!(notifications::RESOURCES_LIST_CHANGED, "notifications/resources/list_changed");
-        assert_eq!(notifications::TOOLS_LIST_CHANGED, "notifications/tools/list_changed");
-        assert_eq!(notifications::PROMPTS_LIST_CHANGED, "notifications/prompts/list_changed");
+        assert_eq!(
+            notifications::RESOURCES_UPDATED,
+            "notifications/resources/updated"
+        );
+        assert_eq!(
+            notifications::RESOURCES_LIST_CHANGED,
+            "notifications/resources/list_changed"
+        );
+        assert_eq!(
+            notifications::TOOLS_LIST_CHANGED,
+            "notifications/tools/list_changed"
+        );
+        assert_eq!(
+            notifications::PROMPTS_LIST_CHANGED,
+            "notifications/prompts/list_changed"
+        );
     }
 }

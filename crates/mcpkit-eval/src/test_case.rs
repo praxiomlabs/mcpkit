@@ -216,7 +216,10 @@ impl TestDataset {
     }
 
     /// Save the dataset to a JSON file.
-    pub async fn to_json_file(&self, path: impl AsRef<std::path::Path>) -> Result<(), std::io::Error> {
+    pub async fn to_json_file(
+        &self,
+        path: impl AsRef<std::path::Path>,
+    ) -> Result<(), std::io::Error> {
         let content = serde_json::to_string_pretty(self)?;
         tokio::fs::write(path, content).await?;
         Ok(())
@@ -284,10 +287,7 @@ mod tests {
             test.metadata.get("category"),
             Some(&serde_json::json!("science"))
         );
-        assert_eq!(
-            test.metadata.get("difficulty"),
-            Some(&serde_json::json!(3))
-        );
+        assert_eq!(test.metadata.get("difficulty"), Some(&serde_json::json!(3)));
     }
 
     #[test]

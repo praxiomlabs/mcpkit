@@ -120,9 +120,7 @@ impl ChainValue {
             Self::Int(i) => i.to_string(),
             Self::Float(f) => f.to_string(),
             Self::String(s) => s.clone(),
-            Self::Array(_) | Self::Object(_) => {
-                serde_json::to_string(self).unwrap_or_default()
-            }
+            Self::Array(_) | Self::Object(_) => serde_json::to_string(self).unwrap_or_default(),
         }
     }
 
@@ -222,9 +220,11 @@ impl From<serde_json::Value> for ChainValue {
             serde_json::Value::Array(arr) => {
                 Self::Array(arr.into_iter().map(ChainValue::from).collect())
             }
-            serde_json::Value::Object(obj) => {
-                Self::Object(obj.into_iter().map(|(k, v)| (k, ChainValue::from(v))).collect())
-            }
+            serde_json::Value::Object(obj) => Self::Object(
+                obj.into_iter()
+                    .map(|(k, v)| (k, ChainValue::from(v)))
+                    .collect(),
+            ),
         }
     }
 }
@@ -241,13 +241,11 @@ impl From<ChainValue> for serde_json::Value {
             ChainValue::Array(arr) => {
                 serde_json::Value::Array(arr.into_iter().map(serde_json::Value::from).collect())
             }
-            ChainValue::Object(obj) => {
-                serde_json::Value::Object(
-                    obj.into_iter()
-                        .map(|(k, v)| (k, serde_json::Value::from(v)))
-                        .collect(),
-                )
-            }
+            ChainValue::Object(obj) => serde_json::Value::Object(
+                obj.into_iter()
+                    .map(|(k, v)| (k, serde_json::Value::from(v)))
+                    .collect(),
+            ),
         }
     }
 }
@@ -459,12 +457,10 @@ mod tests {
     #[test]
     fn test_chain_value_json_roundtrip() {
         let original = ChainValue::Object(
-            [("key".to_string(), ChainValue::String("value".to_string()))]
-                .into_iter()
-                .collect(),
+            std::iter::once(("key".to_string(), ChainValue::String("value".to_string()))).collect(),
         );
 
-        let json: serde_json::Value = original.clone().into();
+        let json: serde_json::Value = original.into();
         let back: ChainValue = json.into();
 
         assert_eq!(back.get("key").and_then(|v| v.as_str()), Some("value"));
@@ -476,7 +472,7 @@ mod tests {
         assert_eq!(ChainValue::Bool(true).type_name(), "bool");
         assert_eq!(ChainValue::Int(1).type_name(), "int");
         assert_eq!(ChainValue::Float(1.0).type_name(), "float");
-        assert_eq!(ChainValue::String("".to_string()).type_name(), "string");
+        assert_eq!(ChainValue::String(String::new()).type_name(), "string");
         assert_eq!(ChainValue::Array(vec![]).type_name(), "array");
         assert_eq!(ChainValue::Object(HashMap::new()).type_name(), "object");
     }

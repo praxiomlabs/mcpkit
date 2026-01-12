@@ -25,7 +25,7 @@
 //! ```
 
 use async_trait::async_trait;
-use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
+use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use tracing::{debug, instrument};
@@ -131,7 +131,7 @@ impl OllamaProvider {
         let info = ProviderInfo::new("ollama", "Ollama")
             .capabilities(ProviderCapabilities {
                 streaming: true,
-                tools: true, // Ollama supports tools with compatible models
+                tools: true,  // Ollama supports tools with compatible models
                 vision: true, // Some models support vision
                 json_mode: true,
                 embeddings: true,
@@ -510,8 +510,7 @@ impl Provider for OllamaProvider {
         }
 
         let body = response.text().await?;
-        let show_response: OllamaShowResponse =
-            serde_json::from_str(&body).unwrap_or_default();
+        let show_response: OllamaShowResponse = serde_json::from_str(&body).unwrap_or_default();
 
         Ok(ModelInfo {
             id: model_id.to_string(),

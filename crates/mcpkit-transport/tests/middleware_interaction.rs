@@ -578,9 +578,7 @@ async fn test_rate_limit_with_metrics_layer() -> Result<(), Box<dyn std::error::
     let rate_config = RateLimitConfig::new(5, Duration::from_secs(60));
     let rate_layer = RateLimitLayer::new(rate_config);
 
-    let stack = LayerStack::new(client)
-        .with(rate_layer)
-        .with(metrics_layer);
+    let stack = LayerStack::new(client).with(rate_layer).with(metrics_layer);
     let transport = stack.into_inner();
 
     // Send messages up to limit

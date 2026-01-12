@@ -48,7 +48,7 @@ pub use error::{TemplateError, TemplateResult};
 pub use prompt::{Message, PromptBuilder, PromptTemplate, Role};
 
 #[cfg(feature = "runtime")]
-pub use runtime::{extract_variables, validate_template, RuntimeTemplate, TemplateBuilder};
+pub use runtime::{RuntimeTemplate, TemplateBuilder, extract_variables, validate_template};
 
 #[cfg(feature = "derive")]
 pub use mcpkit_template_derive::Template;
@@ -107,7 +107,7 @@ pub mod prelude {
     };
 
     #[cfg(feature = "runtime")]
-    pub use super::{extract_variables, validate_template, RuntimeTemplate, TemplateBuilder};
+    pub use super::{RuntimeTemplate, TemplateBuilder, extract_variables, validate_template};
 
     // The Template derive macro is already re-exported at the crate level (lib.rs line 54)
     // when the derive feature is enabled, so no need to re-export it here.

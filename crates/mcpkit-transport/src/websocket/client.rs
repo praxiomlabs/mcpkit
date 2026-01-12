@@ -573,11 +573,8 @@ mod tests {
     fn test_config_custom_backoff() {
         use super::super::config::ExponentialBackoff;
 
-        let backoff = ExponentialBackoff::new(
-            Duration::from_millis(50),
-            Duration::from_secs(5),
-            1.5,
-        );
+        let backoff =
+            ExponentialBackoff::new(Duration::from_millis(50), Duration::from_secs(5), 1.5);
 
         // Test backoff calculations
         assert_eq!(backoff.delay_for_attempt(0), Duration::from_millis(50));
@@ -592,7 +589,8 @@ mod tests {
 
     #[test]
     fn test_url_accessor() {
-        let transport = WebSocketTransport::new(WebSocketConfig::new("ws://test.example.com:9000/path"));
+        let transport =
+            WebSocketTransport::new(WebSocketConfig::new("ws://test.example.com:9000/path"));
         assert_eq!(transport.url(), "ws://test.example.com:9000/path");
     }
 
@@ -611,14 +609,14 @@ mod tests {
     fn test_connection_state_enum_debug() {
         // Ensure ConnectionState implements Debug
         let state = ConnectionState::Connecting;
-        let debug_output = format!("{:?}", state);
+        let debug_output = format!("{state:?}");
         assert!(debug_output.contains("Connecting"));
     }
 
     #[test]
     fn test_connection_state_clone_and_copy() {
         let state = ConnectionState::Connected;
-        let cloned = state.clone();
+        let cloned = state; // Copy instead of clone for Copy types
         let copied = state;
 
         assert_eq!(state, cloned);

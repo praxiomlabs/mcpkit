@@ -791,9 +791,7 @@ mod tests {
 
     #[test]
     fn test_string_format() {
-        let schema = SchemaBuilder::string()
-            .format(formats::EMAIL)
-            .build();
+        let schema = SchemaBuilder::string().format(formats::EMAIL).build();
         assert_eq!(schema.format, Some("email".to_string()));
     }
 
@@ -810,20 +808,19 @@ mod tests {
 
     #[test]
     fn test_multiple_of() {
-        let schema = SchemaBuilder::integer()
-            .multiple_of(5)
-            .build();
+        let schema = SchemaBuilder::integer().multiple_of(5).build();
 
         assert_eq!(schema.multiple_of, Some(5.0));
     }
 
     #[test]
     fn test_const_value() {
-        let schema = SchemaBuilder::string()
-            .const_value("constant")
-            .build();
+        let schema = SchemaBuilder::string().const_value("constant").build();
 
-        assert_eq!(schema.const_value, Some(Value::String("constant".to_string())));
+        assert_eq!(
+            schema.const_value,
+            Some(Value::String("constant".to_string()))
+        );
     }
 
     #[test]
@@ -887,20 +884,18 @@ mod tests {
 
     #[test]
     fn test_not_composition() {
-        let schema = SchemaBuilder::new()
-            .not(SchemaBuilder::null())
-            .build();
+        let schema = SchemaBuilder::new().not(SchemaBuilder::null()).build();
 
         assert!(schema.not.is_some());
-        assert_eq!(schema.not.as_ref().unwrap().schema_type, Some(SchemaType::Null));
+        assert_eq!(
+            schema.not.as_ref().unwrap().schema_type,
+            Some(SchemaType::Null)
+        );
     }
 
     #[test]
     fn test_integer_schema() {
-        let schema = SchemaBuilder::integer()
-            .minimum(0)
-            .maximum(100)
-            .build();
+        let schema = SchemaBuilder::integer().minimum(0).maximum(100).build();
 
         assert_eq!(schema.schema_type, Some(SchemaType::Integer));
     }

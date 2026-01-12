@@ -54,7 +54,10 @@ pub trait Retriever: Send + Sync {
         threshold: f32,
     ) -> RagResult<Vec<RetrievedDocument>> {
         let results = self.retrieve(query, k).await?;
-        Ok(results.into_iter().filter(|r| r.score >= threshold).collect())
+        Ok(results
+            .into_iter()
+            .filter(|r| r.score >= threshold)
+            .collect())
     }
 
     /// Get a description of the retriever.
@@ -124,13 +127,13 @@ where
     }
 
     /// Get a reference to the underlying store.
-    #[must_use] 
+    #[must_use]
     pub fn store(&self) -> &Arc<tokio::sync::RwLock<S>> {
         &self.store
     }
 
     /// Get a reference to the provider.
-    #[must_use] 
+    #[must_use]
     pub fn provider(&self) -> &Arc<P> {
         &self.provider
     }
@@ -314,8 +317,8 @@ where
             self.num_queries, query
         );
 
-        let mut request =
-            mcpkit_provider::CompletionRequest::new().message(mcpkit_provider::Message::user(prompt));
+        let mut request = mcpkit_provider::CompletionRequest::new()
+            .message(mcpkit_provider::Message::user(prompt));
 
         if let Some(model) = &self.model {
             request = request.model(model.clone());
@@ -372,7 +375,11 @@ where
 
         // Sort by score and take top k
         let mut results: Vec<_> = seen.into_values().collect();
-        results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        results.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         results.truncate(k);
 
         Ok(results)
@@ -444,12 +451,12 @@ where
 mod tests {
     use super::*;
     use mcpkit_embedding::InMemoryStore;
-    use mcpkit_provider::{
-        CompletionRequest, CompletionResponse, ContentBlock, EmbeddingRequest, EmbeddingResponse,
-        Embedding, EmbeddingUsage, FinishReason, ModelInfo, ProviderCapabilities, ProviderError,
-        ProviderInfo, Usage,
-    };
     use mcpkit_provider::streaming::CompletionStream;
+    use mcpkit_provider::{
+        CompletionRequest, CompletionResponse, ContentBlock, Embedding, EmbeddingRequest,
+        EmbeddingResponse, EmbeddingUsage, FinishReason, ModelInfo, ProviderCapabilities,
+        ProviderError, ProviderInfo, Usage,
+    };
 
     // Mock provider for testing
     struct MockProvider {
@@ -471,17 +478,25 @@ mod tests {
             &self.info
         }
 
-        async fn complete(&self, _request: CompletionRequest) -> Result<CompletionResponse, ProviderError> {
+        async fn complete(
+            &self,
+            _request: CompletionRequest,
+        ) -> Result<CompletionResponse, ProviderError> {
             Ok(CompletionResponse {
                 id: "mock-completion".to_string(),
                 model: "mock-model".to_string(),
-                content: vec![ContentBlock::text("Query variant 1\nQuery variant 2\nQuery variant 3")],
+                content: vec![ContentBlock::text(
+                    "Query variant 1\nQuery variant 2\nQuery variant 3",
+                )],
                 finish_reason: FinishReason::Stop,
                 usage: Usage::with_tokens(10, 20),
             })
         }
 
-        async fn complete_stream(&self, _request: CompletionRequest) -> Result<CompletionStream, ProviderError> {
+        async fn complete_stream(
+            &self,
+            _request: CompletionRequest,
+        ) -> Result<CompletionStream, ProviderError> {
             Err(ProviderError::Unsupported {
                 provider: "mock".to_string(),
                 feature: "streaming".to_string(),
@@ -496,7 +511,10 @@ mod tests {
             Ok(ModelInfo::new(model_id))
         }
 
-        async fn embed(&self, request: EmbeddingRequest) -> Result<EmbeddingResponse, ProviderError> {
+        async fn embed(
+            &self,
+            request: EmbeddingRequest,
+        ) -> Result<EmbeddingResponse, ProviderError> {
             // Return simple embeddings based on input
             let embeddings: Vec<Embedding> = request
                 .input
@@ -569,8 +587,12 @@ mod tests {
         let base = VectorStoreRetriever::new(store, provider);
 
         let docs = vec![
-            Document::new("Rust doc").with_id("doc-1").with_metadata("lang", "rust"),
-            Document::new("Python doc").with_id("doc-2").with_metadata("lang", "python"),
+            Document::new("Rust doc")
+                .with_id("doc-1")
+                .with_metadata("lang", "rust"),
+            Document::new("Python doc")
+                .with_id("doc-2")
+                .with_metadata("lang", "python"),
         ];
         base.index(&docs).await.unwrap();
 

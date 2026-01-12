@@ -5,7 +5,7 @@ use mcpkit_provider::{Message, Role};
 use std::collections::VecDeque;
 
 use crate::error::MemoryResult;
-use crate::memory::{estimate_message_tokens, Memory};
+use crate::memory::{Memory, estimate_message_tokens};
 
 /// A sliding window memory that keeps the last N messages.
 ///
@@ -153,10 +153,7 @@ impl Memory for WindowMemory {
     }
 
     fn estimated_tokens(&self) -> usize {
-        let system_tokens = self
-            .system
-            .as_ref()
-            .map_or(0, estimate_message_tokens);
+        let system_tokens = self.system.as_ref().map_or(0, estimate_message_tokens);
 
         let message_tokens: usize = self.messages.iter().map(estimate_message_tokens).sum();
 
