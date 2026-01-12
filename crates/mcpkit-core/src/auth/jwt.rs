@@ -394,12 +394,11 @@ pub fn decode_header(token: &str) -> Result<JwtHeader, JwtError> {
         });
     }
 
-    let header_json =
-        base64::engine::general_purpose::URL_SAFE_NO_PAD
-            .decode(parts[0])
-            .map_err(|e| JwtError::InvalidFormat {
-                message: format!("invalid header encoding: {e}"),
-            })?;
+    let header_json = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(parts[0])
+        .map_err(|e| JwtError::InvalidFormat {
+            message: format!("invalid header encoding: {e}"),
+        })?;
 
     serde_json::from_slice(&header_json).map_err(|e| JwtError::InvalidFormat {
         message: format!("invalid header JSON: {e}"),
@@ -424,12 +423,11 @@ pub fn decode_claims_unverified(token: &str) -> Result<TokenClaims, JwtError> {
         });
     }
 
-    let payload_json =
-        base64::engine::general_purpose::URL_SAFE_NO_PAD
-            .decode(parts[1])
-            .map_err(|e| JwtError::InvalidFormat {
-                message: format!("invalid payload encoding: {e}"),
-            })?;
+    let payload_json = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(parts[1])
+        .map_err(|e| JwtError::InvalidFormat {
+            message: format!("invalid payload encoding: {e}"),
+        })?;
 
     serde_json::from_slice(&payload_json).map_err(|e| JwtError::InvalidFormat {
         message: format!("invalid payload JSON: {e}"),
@@ -593,7 +591,10 @@ impl std::fmt::Display for JwtAlgorithm {
 
 /// Create a jsonwebtoken DecodingKey from our Jwk type.
 #[cfg(feature = "jwt")]
-fn create_decoding_key(jwk: &Jwk, alg: JwtAlgorithm) -> Result<jsonwebtoken::DecodingKey, JwtError> {
+fn create_decoding_key(
+    jwk: &Jwk,
+    alg: JwtAlgorithm,
+) -> Result<jsonwebtoken::DecodingKey, JwtError> {
     match alg {
         JwtAlgorithm::RS256 | JwtAlgorithm::RS384 | JwtAlgorithm::RS512 => {
             let n = jwk.n.as_ref().ok_or_else(|| JwtError::InvalidFormat {
@@ -719,17 +720,13 @@ pub fn validate_token(
     // Find the matching key in JWKS
     let jwk = if let Some(ref kid) = header.kid {
         // If kid is specified, find that specific key
-        jwks.find_key(kid).ok_or_else(|| JwtError::NoMatchingKey {
-            kid: kid.clone(),
-        })?
+        jwks.find_key(kid)
+            .ok_or_else(|| JwtError::NoMatchingKey { kid: kid.clone() })?
     } else {
         // No kid specified, try the first signing key with matching algorithm
         jwks.keys
             .iter()
-            .find(|k| {
-                k.is_signing_key()
-                    && k.alg.as_deref() == Some(&header.alg)
-            })
+            .find(|k| k.is_signing_key() && k.alg.as_deref() == Some(&header.alg))
             .or_else(|| jwks.first_key())
             .ok_or_else(|| JwtError::NoMatchingKey {
                 kid: "<no kid specified>".to_string(),
@@ -743,26 +740,24 @@ pub fn validate_token(
     let jwt_validation = build_jwt_validation(validation, alg);
 
     // Decode and verify the token
-    let token_data =
-        jsonwebtoken::decode::<TokenClaims>(token, &decoding_key, &jwt_validation).map_err(
-            |e| match e.kind() {
-                jsonwebtoken::errors::ErrorKind::ExpiredSignature => JwtError::Expired,
-                jsonwebtoken::errors::ErrorKind::ImmatureSignature => JwtError::NotYetValid,
-                jsonwebtoken::errors::ErrorKind::InvalidSignature => JwtError::InvalidSignature {
-                    message: "signature verification failed".to_string(),
-                },
-                jsonwebtoken::errors::ErrorKind::InvalidAudience => JwtError::InvalidAudience {
-                    expected: validation.audience.clone().unwrap_or_default(),
-                },
-                jsonwebtoken::errors::ErrorKind::InvalidIssuer => JwtError::InvalidIssuer {
-                    expected: validation.issuer.clone().unwrap_or_default(),
-                    actual: "<unknown>".to_string(),
-                },
-                _ => JwtError::InvalidFormat {
-                    message: format!("token validation failed: {e}"),
-                },
+    let token_data = jsonwebtoken::decode::<TokenClaims>(token, &decoding_key, &jwt_validation)
+        .map_err(|e| match e.kind() {
+            jsonwebtoken::errors::ErrorKind::ExpiredSignature => JwtError::Expired,
+            jsonwebtoken::errors::ErrorKind::ImmatureSignature => JwtError::NotYetValid,
+            jsonwebtoken::errors::ErrorKind::InvalidSignature => JwtError::InvalidSignature {
+                message: "signature verification failed".to_string(),
             },
-        )?;
+            jsonwebtoken::errors::ErrorKind::InvalidAudience => JwtError::InvalidAudience {
+                expected: validation.audience.clone().unwrap_or_default(),
+            },
+            jsonwebtoken::errors::ErrorKind::InvalidIssuer => JwtError::InvalidIssuer {
+                expected: validation.issuer.clone().unwrap_or_default(),
+                actual: "<unknown>".to_string(),
+            },
+            _ => JwtError::InvalidFormat {
+                message: format!("token validation failed: {e}"),
+            },
+        })?;
 
     // Additional scope validation (jsonwebtoken doesn't handle this)
     let claims = token_data.claims;
@@ -805,9 +800,11 @@ pub fn validate_token(
 /// - The response cannot be parsed as a JWKS
 #[cfg(feature = "jwt")]
 pub async fn fetch_jwks(jwks_uri: &str) -> Result<JwksSet, JwtError> {
-    let response = reqwest::get(jwks_uri).await.map_err(|e| JwtError::JwksFetchError {
-        message: format!("HTTP request failed: {e}"),
-    })?;
+    let response = reqwest::get(jwks_uri)
+        .await
+        .map_err(|e| JwtError::JwksFetchError {
+            message: format!("HTTP request failed: {e}"),
+        })?;
 
     if !response.status().is_success() {
         return Err(JwtError::JwksFetchError {
@@ -893,7 +890,10 @@ mod tests {
             .with_required_scope("mcp:read")
             .with_leeway(120);
 
-        assert_eq!(validation.issuer, Some("https://auth.example.com".to_string()));
+        assert_eq!(
+            validation.issuer,
+            Some("https://auth.example.com".to_string())
+        );
         assert_eq!(
             validation.audience,
             Some("https://mcp.example.com".to_string())
@@ -1194,9 +1194,9 @@ mod signature_tests {
     #[test]
     fn test_validate_token_rs256() {
         // Generate RSA key pair for testing
+        use base64::Engine;
         use rand::rngs::OsRng;
         use rsa::RsaPrivateKey;
-        use base64::Engine;
 
         let mut rng = OsRng;
         let private_key = RsaPrivateKey::new(&mut rng, 2048).expect("failed to generate key");
@@ -1249,16 +1249,19 @@ mod signature_tests {
 
         let validated_claims = result.unwrap();
         assert_eq!(validated_claims.sub, Some("user123".to_string()));
-        assert_eq!(validated_claims.iss, Some("https://auth.example.com".to_string()));
+        assert_eq!(
+            validated_claims.iss,
+            Some("https://auth.example.com".to_string())
+        );
     }
 
     #[test]
     fn test_validate_token_es256() {
+        use base64::Engine;
         use p256::ecdsa::{SigningKey, VerifyingKey};
         use p256::elliptic_curve::sec1::ToEncodedPoint;
         use p256::pkcs8::EncodePrivateKey as EcEncodePrivateKey;
         use rand::rngs::OsRng;
-        use base64::Engine;
 
         // Generate EC P-256 key pair
         let signing_key = SigningKey::random(&mut OsRng);
@@ -1305,7 +1308,11 @@ mod signature_tests {
             .with_audience("https://mcp.example.com");
 
         let result = validate_token(&token, &jwks, &validation);
-        assert!(result.is_ok(), "ES256 validation failed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "ES256 validation failed: {:?}",
+            result.err()
+        );
 
         let validated_claims = result.unwrap();
         assert_eq!(validated_claims.sub, Some("user123".to_string()));
@@ -1313,9 +1320,9 @@ mod signature_tests {
 
     #[test]
     fn test_validate_token_invalid_signature() {
+        use base64::Engine;
         use rand::rngs::OsRng;
         use rsa::RsaPrivateKey;
-        use base64::Engine;
 
         let mut rng = OsRng;
 
@@ -1366,7 +1373,10 @@ mod signature_tests {
 
         let result = validate_token(&token, &jwks, &validation);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), JwtError::InvalidSignature { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            JwtError::InvalidSignature { .. }
+        ));
     }
 
     #[test]
@@ -1394,7 +1404,10 @@ mod signature_tests {
         let result = validate_token(token, &jwks, &validation);
 
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), JwtError::NoMatchingKey { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            JwtError::NoMatchingKey { .. }
+        ));
     }
 
     #[test]
@@ -1409,14 +1422,17 @@ mod signature_tests {
         let result = validate_token(token, &jwks, &validation);
 
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), JwtError::UnsupportedAlgorithm { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            JwtError::UnsupportedAlgorithm { .. }
+        ));
     }
 
     #[test]
     fn test_validate_token_scope_validation() {
+        use base64::Engine;
         use rand::rngs::OsRng;
         use rsa::RsaPrivateKey;
-        use base64::Engine;
 
         let mut rng = OsRng;
         let private_key = RsaPrivateKey::new(&mut rng, 2048).expect("failed to generate key");
@@ -1466,14 +1482,17 @@ mod signature_tests {
 
         let result = validate_token(&token, &jwks, &validation);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), JwtError::InsufficientScope { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            JwtError::InsufficientScope { .. }
+        ));
     }
 
     #[test]
     fn test_validate_token_expired() {
+        use base64::Engine;
         use rand::rngs::OsRng;
         use rsa::RsaPrivateKey;
-        use base64::Engine;
 
         let mut rng = OsRng;
         let private_key = RsaPrivateKey::new(&mut rng, 2048).expect("failed to generate key");
@@ -1526,9 +1545,9 @@ mod signature_tests {
 
     #[test]
     fn test_validate_token_key_selection_by_algorithm() {
+        use base64::Engine;
         use rand::rngs::OsRng;
         use rsa::RsaPrivateKey;
-        use base64::Engine;
 
         let mut rng = OsRng;
         let private_key = RsaPrivateKey::new(&mut rng, 2048).expect("failed to generate key");
@@ -1541,19 +1560,17 @@ mod signature_tests {
 
         // JWKS with multiple keys - one without kid
         let jwks = JwksSet {
-            keys: vec![
-                Jwk {
-                    kty: "RSA".to_string(),
-                    kid: None, // No kid
-                    key_use: Some("sig".to_string()),
-                    alg: Some("RS256".to_string()),
-                    n: Some(n),
-                    e: Some(e),
-                    crv: None,
-                    x: None,
-                    y: None,
-                },
-            ],
+            keys: vec![Jwk {
+                kty: "RSA".to_string(),
+                kid: None, // No kid
+                key_use: Some("sig".to_string()),
+                alg: Some("RS256".to_string()),
+                n: Some(n),
+                e: Some(e),
+                crv: None,
+                x: None,
+                y: None,
+            }],
         };
 
         let pem = private_key
@@ -1576,7 +1593,11 @@ mod signature_tests {
             .with_audience("https://mcp.example.com");
 
         let result = validate_token(&token, &jwks, &validation);
-        assert!(result.is_ok(), "key selection by algorithm failed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "key selection by algorithm failed: {:?}",
+            result.err()
+        );
     }
 
     #[test]
@@ -1595,7 +1616,10 @@ mod signature_tests {
 
         let result = create_decoding_key(&incomplete_jwk, JwtAlgorithm::RS256);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), JwtError::InvalidFormat { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            JwtError::InvalidFormat { .. }
+        ));
     }
 
     #[test]
@@ -1614,6 +1638,9 @@ mod signature_tests {
 
         let result = create_decoding_key(&incomplete_jwk, JwtAlgorithm::ES256);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), JwtError::InvalidFormat { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            JwtError::InvalidFormat { .. }
+        ));
     }
 }

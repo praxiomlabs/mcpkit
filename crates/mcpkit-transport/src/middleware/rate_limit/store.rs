@@ -45,8 +45,8 @@
 use super::{RateLimitAlgorithm, RateLimitConfig};
 use async_lock::Mutex;
 use async_trait::async_trait;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 /// Result of a rate limit check.
@@ -344,8 +344,7 @@ impl RateLimitStore for InMemoryStore {
     }
 
     async fn reset(&self, _key: &str) -> Result<(), RateLimitStoreError> {
-        self.tokens
-            .store(self.burst_size * 1000, Ordering::Relaxed);
+        self.tokens.store(self.burst_size * 1000, Ordering::Relaxed);
         self.window_count.store(0, Ordering::Relaxed);
         self.total_requests.store(0, Ordering::Relaxed);
         self.total_rejected.store(0, Ordering::Relaxed);
@@ -373,11 +372,7 @@ mod tests {
         // Should allow first 10 requests
         for i in 0..10 {
             let decision = store.check_and_consume("", &config).await.unwrap();
-            assert!(
-                decision.is_allowed(),
-                "Request {} should be allowed",
-                i + 1
-            );
+            assert!(decision.is_allowed(), "Request {} should be allowed", i + 1);
         }
 
         // 11th request should be denied
