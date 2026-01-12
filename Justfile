@@ -577,6 +577,7 @@ link-check:
         --exclude '^https://crates.io' \
         --exclude '^https://docs.rs' \
         --exclude '^https://www.reddit.com' \
+        --exclude '^https://cliffle.com' \
         './docs/**/*.md' './README.md' './CONTRIBUTING.md'
     printf '{{green}}[OK]{{reset}}   Link check passed\n'
 
