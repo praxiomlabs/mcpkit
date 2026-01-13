@@ -1,36 +1,11 @@
-//! OAuth 2.1 Authorization for MCP.
+//! OAuth 2.1 types and utilities.
 //!
-//! This module implements OAuth 2.1 authorization per the MCP specification
-//! (2025-06-18), including:
-//!
+//! This submodule contains OAuth 2.1 protocol types including:
 //! - Protected Resource Metadata (RFC 9728)
-//! - Resource Indicators (RFC 8707)
 //! - Authorization Server Metadata (RFC 8414)
-//! - PKCE (RFC 7636)
+//! - PKCE support (RFC 7636)
 //! - Dynamic Client Registration (RFC 7591)
-//!
-//! # Overview
-//!
-//! MCP authorization follows OAuth 2.1 with MCP servers acting as OAuth
-//! Resource Servers that validate tokens issued by external Authorization
-//! Servers.
-//!
-//! # Example
-//!
-//! ```rust
-//! use mcpkit_core::auth::{ProtectedResourceMetadata, AuthorizationConfig};
-//!
-//! // Server-side: Expose protected resource metadata
-//! let metadata = ProtectedResourceMetadata::new("https://mcp.example.com")
-//!     .with_authorization_server("https://auth.example.com");
-//! assert!(metadata.validate().is_ok());
-//!
-//! // Client-side: Configure authorization
-//! let config = AuthorizationConfig::new("https://auth.example.com")
-//!     .with_client_id("my-client")
-//!     .with_resource("https://mcp.example.com");
-//! assert_eq!(config.client_id, "my-client");
-//! ```
+//! - Token request/response types
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

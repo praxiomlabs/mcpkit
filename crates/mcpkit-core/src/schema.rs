@@ -759,4 +759,176 @@ mod tests {
         );
         Ok(())
     }
+
+    #[test]
+    fn test_schema_type_display() {
+        assert_eq!(SchemaType::String.to_string(), "string");
+        assert_eq!(SchemaType::Number.to_string(), "number");
+        assert_eq!(SchemaType::Integer.to_string(), "integer");
+        assert_eq!(SchemaType::Boolean.to_string(), "boolean");
+        assert_eq!(SchemaType::Array.to_string(), "array");
+        assert_eq!(SchemaType::Object.to_string(), "object");
+        assert_eq!(SchemaType::Null.to_string(), "null");
+    }
+
+    #[test]
+    fn test_schema_any() {
+        let schema = Schema::any();
+        assert!(schema.schema_type.is_none());
+    }
+
+    #[test]
+    fn test_schema_null() {
+        let schema = Schema::null();
+        assert_eq!(schema.schema_type, Some(SchemaType::Null));
+    }
+
+    #[test]
+    fn test_schema_boolean() {
+        let schema = SchemaBuilder::boolean().build();
+        assert_eq!(schema.schema_type, Some(SchemaType::Boolean));
+    }
+
+    #[test]
+    fn test_string_format() {
+        let schema = SchemaBuilder::string().format(formats::EMAIL).build();
+        assert_eq!(schema.format, Some("email".to_string()));
+    }
+
+    #[test]
+    fn test_exclusive_bounds() {
+        let schema = SchemaBuilder::number()
+            .exclusive_minimum(0)
+            .exclusive_maximum(100)
+            .build();
+
+        assert_eq!(schema.exclusive_minimum, Some(0.0));
+        assert_eq!(schema.exclusive_maximum, Some(100.0));
+    }
+
+    #[test]
+    fn test_multiple_of() {
+        let schema = SchemaBuilder::integer().multiple_of(5).build();
+
+        assert_eq!(schema.multiple_of, Some(5.0));
+    }
+
+    #[test]
+    fn test_const_value() {
+        let schema = SchemaBuilder::string().const_value("constant").build();
+
+        assert_eq!(
+            schema.const_value,
+            Some(Value::String("constant".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_min_max_properties() {
+        let schema = SchemaBuilder::object()
+            .min_properties(1)
+            .max_properties(10)
+            .build();
+
+        assert_eq!(schema.min_properties, Some(1));
+        assert_eq!(schema.max_properties, Some(10));
+    }
+
+    #[test]
+    fn test_max_items() {
+        let schema = SchemaBuilder::array()
+            .items(SchemaBuilder::string())
+            .max_items(5)
+            .build();
+
+        assert_eq!(schema.max_items, Some(5));
+    }
+
+    #[test]
+    fn test_additional_properties_schema() {
+        let schema = SchemaBuilder::object()
+            .additional_properties_schema(SchemaBuilder::string())
+            .build();
+
+        assert!(schema.additional_properties.is_some());
+        match schema.additional_properties {
+            Some(AdditionalProperties::Schema(s)) => {
+                assert_eq!(s.schema_type, Some(SchemaType::String));
+            }
+            _ => panic!("Expected schema for additional properties"),
+        }
+    }
+
+    #[test]
+    fn test_all_of_composition() {
+        let schema = SchemaBuilder::new()
+            .all_of([
+                SchemaBuilder::object().property("name", SchemaBuilder::string()),
+                SchemaBuilder::object().property("age", SchemaBuilder::integer()),
+            ])
+            .build();
+
+        assert!(schema.all_of.is_some());
+        assert_eq!(schema.all_of.as_ref().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_any_of_composition() {
+        let schema = SchemaBuilder::new()
+            .any_of([SchemaBuilder::string(), SchemaBuilder::null()])
+            .build();
+
+        assert!(schema.any_of.is_some());
+        assert_eq!(schema.any_of.as_ref().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_not_composition() {
+        let schema = SchemaBuilder::new().not(SchemaBuilder::null()).build();
+
+        assert!(schema.not.is_some());
+        assert_eq!(
+            schema.not.as_ref().unwrap().schema_type,
+            Some(SchemaType::Null)
+        );
+    }
+
+    #[test]
+    fn test_integer_schema() {
+        let schema = SchemaBuilder::integer().minimum(0).maximum(100).build();
+
+        assert_eq!(schema.schema_type, Some(SchemaType::Integer));
+    }
+
+    #[test]
+    fn test_schema_serialization() {
+        let schema = SchemaBuilder::object()
+            .property("id", SchemaBuilder::integer())
+            .required(["id"])
+            .build();
+
+        let json = serde_json::to_string(&schema).unwrap();
+        let parsed: Schema = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed.schema_type, Some(SchemaType::Object));
+        assert!(parsed.properties.is_some());
+        assert!(parsed.required.is_some());
+    }
+
+    #[test]
+    fn test_formats_constants() {
+        assert_eq!(formats::EMAIL, "email");
+        assert_eq!(formats::URI, "uri");
+        assert_eq!(formats::URI_REFERENCE, "uri-reference");
+        assert_eq!(formats::DATE_TIME, "date-time");
+        assert_eq!(formats::DATE, "date");
+        assert_eq!(formats::TIME, "time");
+        assert_eq!(formats::DURATION, "duration");
+        assert_eq!(formats::UUID, "uuid");
+        assert_eq!(formats::HOSTNAME, "hostname");
+        assert_eq!(formats::IPV4, "ipv4");
+        assert_eq!(formats::IPV6, "ipv6");
+        assert_eq!(formats::JSON_POINTER, "json-pointer");
+        assert_eq!(formats::REGEX, "regex");
+    }
 }

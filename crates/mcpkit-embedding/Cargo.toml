@@ -1,0 +1,52 @@
+[package]
+name = "mcpkit-embedding"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Vector storage and similarity search for mcpkit-forge orchestration layer"
+readme = "README.md"
+keywords = ["embeddings", "vector-store", "similarity-search", "semantic-search"]
+categories = ["data-structures", "science"]
+
+[lints]
+workspace = true
+
+[dependencies]
+# Provider types for Embedding struct
+mcpkit-provider.workspace = true
+
+# Serialization
+serde.workspace = true
+serde_json.workspace = true
+
+# Error handling
+thiserror.workspace = true
+
+# Async support
+async-trait.workspace = true
+futures.workspace = true
+
+# Tokio for RwLock (optional)
+tokio = { workspace = true, optional = true }
+
+# Tracing
+tracing.workspace = true
+
+# SQLite with sqlite-vec (optional)
+rusqlite = { workspace = true, optional = true }
+sqlite-vec = { workspace = true, optional = true }
+
+# PostgreSQL with pgvector (optional)
+sqlx = { workspace = true, optional = true }
+pgvector = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+
+[features]
+default = ["tokio"]
+tokio = ["dep:tokio"]
+sqlite = ["rusqlite", "sqlite-vec"]
+postgres = ["sqlx", "pgvector", "tokio"]

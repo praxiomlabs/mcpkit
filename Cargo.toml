@@ -12,6 +12,16 @@ members = [
     "crates/mcpkit-actix",
     "crates/mcpkit-rocket",
     "crates/mcpkit-warp",
+    # mcpkit-forge orchestration layer
+    "crates/mcpkit-provider",
+    "crates/mcpkit-template",
+    "crates/mcpkit-template-derive",
+    "crates/mcpkit-memory",
+    "crates/mcpkit-embedding",
+    "crates/mcpkit-chain",
+    "crates/mcpkit-agent",
+    "crates/mcpkit-rag",
+    "crates/mcpkit-eval",
     "mcpkit",
     "examples/minimal-server",
     "examples/full-server",
@@ -26,6 +36,7 @@ members = [
     "examples/rocket-server",
     "examples/warp-server",
     "examples/grpc-client",
+    "examples/knowledge-agent",
     "benches",
 ]
 
@@ -64,6 +75,10 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 axum = { version = "0.8" }
 tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
 hyper = { version = "1.0", features = ["full"] }
+tokio-stream = "0.1"
+
+# Text processing
+regex = "1.11"
 
 # Utilities
 uuid = { version = "1.0", features = ["v4", "serde", "js"] }
@@ -73,6 +88,9 @@ url = { version = "2.5", features = ["serde"] }
 bytes = "1.5"
 rand = "0.8"
 sha2 = "0.10"
+
+# JWT validation
+jsonwebtoken = { version = "10.0", features = ["rust_crypto"] }
 
 # Tracing/Logging
 tracing = "0.1"
@@ -93,9 +111,16 @@ quote = "1.0"
 proc-macro2 = "1.0"
 darling = "0.20"
 
+# Database support
+rusqlite = { version = "0.32", features = ["bundled"] }
+sqlite-vec = "0.1"
+sqlx = { version = "0.8", features = ["runtime-tokio", "postgres"] }
+pgvector = { version = "0.4", features = ["sqlx"] }
+
 # Testing
 tokio-test = "0.4"
 pretty_assertions = "1.4"
+proptest = "1.6"
 
 # Benchmarking
 criterion = { version = "0.5", features = ["html_reports", "async_tokio"] }
@@ -107,6 +132,17 @@ mcpkit-server = { version = "0.5.0", path = "crates/mcpkit-server" }
 mcpkit-client = { version = "0.5.0", path = "crates/mcpkit-client" }
 mcpkit-macros = { version = "0.5.0", path = "crates/mcpkit-macros" }
 mcpkit-testing = { version = "0.5.0", path = "crates/mcpkit-testing" }
+
+# mcpkit-forge orchestration layer crates
+mcpkit-provider = { version = "0.5.0", path = "crates/mcpkit-provider" }
+mcpkit-template = { version = "0.5.0", path = "crates/mcpkit-template" }
+mcpkit-template-derive = { version = "0.5.0", path = "crates/mcpkit-template-derive" }
+mcpkit-memory = { version = "0.5.0", path = "crates/mcpkit-memory" }
+mcpkit-embedding = { version = "0.5.0", path = "crates/mcpkit-embedding" }
+mcpkit-chain = { version = "0.5.0", path = "crates/mcpkit-chain" }
+mcpkit-agent = { version = "0.5.0", path = "crates/mcpkit-agent" }
+mcpkit-rag = { version = "0.5.0", path = "crates/mcpkit-rag" }
+mcpkit-eval = { version = "0.5.0", path = "crates/mcpkit-eval" }
 
 [workspace.lints.rust]
 unsafe_code = "deny"
@@ -222,6 +258,16 @@ float_cmp = "allow"
 # Lock scopes are intentionally designed; drop order is correct
 significant_drop_tightening = "allow"
 significant_drop_in_scrutinee = "allow"
+
+# --- Documentation formatting ---
+# False positives for proper nouns (OpenAI, ReAct, etc.) that aren't code identifiers
+doc_markdown = "allow"
+# False positives for template placeholders like {input} in string replacement
+literal_string_with_formatting_args = "allow"
+# The str lifetime warning for trait impls can't be fixed without changing trait signature
+unnecessary_literal_bound = "allow"
+# Type complexity is acceptable for closures in complex async patterns
+type_complexity = "allow"
 
 # --- Miscellaneous ---
 # Some functions are legitimately long (e.g., server initialization)

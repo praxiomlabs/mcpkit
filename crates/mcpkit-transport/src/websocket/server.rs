@@ -30,24 +30,93 @@ use std::sync::atomic::AtomicU64;
 
 use crate::error::TransportError;
 
+/// Origin validation mode for DNS rebinding protection.
+///
+/// See [`crate::http::OriginValidationMode`] for detailed documentation.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum OriginValidationMode {
+    /// Validate against an allow list.
+    AllowList,
+    /// Log a warning but allow all requests (development mode).
+    #[default]
+    WarnAndAllow,
+    /// Strict mode: reject requests without a valid Origin header.
+    Strict,
+    /// Disable origin validation entirely.
+    Disabled,
+}
+
 /// Server-side configuration for WebSocket listeners.
-#[derive(Debug, Clone, Default)]
+///
+/// # Security Warning
+///
+/// **DNS rebinding attacks** can allow malicious websites to execute commands
+/// on local MCP servers. Always configure origin validation for production:
+///
+/// ```rust
+/// use mcpkit_transport::websocket::{WebSocketServerConfig, OriginValidationMode};
+///
+/// // Production configuration
+/// let config = WebSocketServerConfig::production()
+///     .with_allowed_origin("https://trusted-app.com");
+/// ```
+#[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct WebSocketServerConfig {
     /// Allowed origins for DNS rebinding protection.
-    /// If empty, origin validation is disabled.
     pub allowed_origins: Vec<String>,
     /// Maximum message size in bytes.
     pub max_message_size: usize,
+    /// Origin validation mode.
+    pub origin_validation_mode: OriginValidationMode,
+    /// Whether the security warning has been acknowledged.
+    pub security_warning_acknowledged: bool,
+}
+
+impl Default for WebSocketServerConfig {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl WebSocketServerConfig {
     /// Create a new server configuration.
+    ///
+    /// By default, origin validation is set to [`OriginValidationMode::WarnAndAllow`]
+    /// which is not secure for production.
     #[must_use]
     pub const fn new() -> Self {
         Self {
             allowed_origins: Vec::new(),
             max_message_size: 16 * 1024 * 1024, // 16 MB
+            origin_validation_mode: OriginValidationMode::WarnAndAllow,
+            security_warning_acknowledged: false,
         }
+    }
+
+    /// Create a production-ready configuration.
+    #[must_use]
+    pub const fn production() -> Self {
+        Self {
+            allowed_origins: Vec::new(),
+            max_message_size: 16 * 1024 * 1024,
+            origin_validation_mode: OriginValidationMode::AllowList,
+            security_warning_acknowledged: true,
+        }
+    }
+
+    /// Set the origin validation mode.
+    #[must_use]
+    pub const fn with_origin_validation(mut self, mode: OriginValidationMode) -> Self {
+        self.origin_validation_mode = mode;
+        self
+    }
+
+    /// Acknowledge the security warning for development mode.
+    #[must_use]
+    pub const fn acknowledge_security_warning(mut self) -> Self {
+        self.security_warning_acknowledged = true;
+        self
     }
 
     /// Add an allowed origin for DNS rebinding protection.
@@ -75,10 +144,51 @@ impl WebSocketServerConfig {
         self
     }
 
-    /// Check if an origin is allowed.
+    /// Check if an origin is allowed based on the current validation mode.
     #[must_use]
-    pub fn is_origin_allowed(&self, origin: &str) -> bool {
-        self.allowed_origins.is_empty() || self.allowed_origins.iter().any(|o| o == origin)
+    pub fn is_origin_allowed(&self, origin: Option<&str>) -> bool {
+        match self.origin_validation_mode {
+            OriginValidationMode::Disabled => true,
+            OriginValidationMode::WarnAndAllow => true,
+            OriginValidationMode::AllowList => {
+                if self.allowed_origins.is_empty() {
+                    return true;
+                }
+                origin.is_some_and(|o| self.allowed_origins.iter().any(|allowed| allowed == o))
+            }
+            OriginValidationMode::Strict => {
+                origin.is_some_and(|o| self.allowed_origins.iter().any(|allowed| allowed == o))
+            }
+        }
+    }
+
+    /// Log security warnings based on configuration.
+    pub fn log_security_warnings(&self) {
+        if self.security_warning_acknowledged {
+            return;
+        }
+
+        match self.origin_validation_mode {
+            OriginValidationMode::Disabled => {
+                tracing::warn!(
+                    target: "mcpkit::security",
+                    "⚠️  SECURITY WARNING: WebSocket origin validation is DISABLED."
+                );
+            }
+            OriginValidationMode::WarnAndAllow => {
+                tracing::warn!(
+                    target: "mcpkit::security",
+                    "⚠️  SECURITY WARNING: WebSocket origin validation is in development mode."
+                );
+            }
+            OriginValidationMode::AllowList if self.allowed_origins.is_empty() => {
+                tracing::warn!(
+                    target: "mcpkit::security",
+                    "⚠️  SECURITY WARNING: WebSocket origin validation is AllowList but no origins configured."
+                );
+            }
+            _ => {}
+        }
     }
 }
 
@@ -377,6 +487,7 @@ impl Drop for ActiveConnectionGuard {
 
 /// Stub listener when websocket feature is disabled.
 #[cfg(not(feature = "websocket"))]
+#[allow(dead_code)]
 pub struct WebSocketListener {
     bind_addr: String,
     config: WebSocketServerConfig,
@@ -385,11 +496,13 @@ pub struct WebSocketListener {
 
 /// Stub for `AcceptedConnection` when websocket feature is disabled.
 #[cfg(not(feature = "websocket"))]
+#[allow(dead_code)]
 pub struct AcceptedConnection {
     _private: (),
 }
 
 #[cfg(not(feature = "websocket"))]
+#[allow(dead_code)]
 impl WebSocketListener {
     /// Create a new WebSocket listener.
     #[must_use]
@@ -464,5 +577,185 @@ mod tests {
         let listener = WebSocketListener::new("0.0.0.0:8080");
         assert_eq!(listener.bind_addr(), "0.0.0.0:8080");
         assert!(!listener.is_running());
+    }
+
+    // OriginValidationMode tests
+
+    #[test]
+    fn test_origin_validation_mode_default() {
+        let mode = OriginValidationMode::default();
+        assert_eq!(mode, OriginValidationMode::WarnAndAllow);
+    }
+
+    #[test]
+    fn test_origin_validation_mode_all_variants() {
+        let _ = OriginValidationMode::AllowList;
+        let _ = OriginValidationMode::WarnAndAllow;
+        let _ = OriginValidationMode::Strict;
+        let _ = OriginValidationMode::Disabled;
+    }
+
+    // WebSocketServerConfig tests
+
+    #[test]
+    fn test_websocket_server_config_default() {
+        let config = WebSocketServerConfig::default();
+        assert_eq!(
+            config.origin_validation_mode,
+            OriginValidationMode::WarnAndAllow
+        );
+        assert!(!config.security_warning_acknowledged);
+        assert!(config.allowed_origins.is_empty());
+    }
+
+    #[test]
+    fn test_websocket_server_config_production() {
+        let config = WebSocketServerConfig::production();
+        assert_eq!(
+            config.origin_validation_mode,
+            OriginValidationMode::AllowList
+        );
+        assert!(config.security_warning_acknowledged);
+    }
+
+    #[test]
+    fn test_websocket_server_config_with_origin_validation() {
+        let config =
+            WebSocketServerConfig::new().with_origin_validation(OriginValidationMode::Strict);
+        assert_eq!(config.origin_validation_mode, OriginValidationMode::Strict);
+    }
+
+    #[test]
+    fn test_websocket_server_config_acknowledge_warning() {
+        let config = WebSocketServerConfig::new().acknowledge_security_warning();
+        assert!(config.security_warning_acknowledged);
+    }
+
+    #[test]
+    fn test_websocket_server_config_with_allowed_origin() {
+        let config = WebSocketServerConfig::new().with_allowed_origin("https://trusted.com");
+        assert_eq!(config.allowed_origins.len(), 1);
+        assert_eq!(config.allowed_origins[0], "https://trusted.com");
+    }
+
+    #[test]
+    fn test_websocket_server_config_with_allowed_origins() {
+        let origins = vec!["https://app1.com", "https://app2.com"];
+        let config = WebSocketServerConfig::new().with_allowed_origins(origins);
+        assert_eq!(config.allowed_origins.len(), 2);
+    }
+
+    #[test]
+    fn test_websocket_server_config_max_message_size() {
+        let config = WebSocketServerConfig::new().with_max_message_size(1024);
+        assert_eq!(config.max_message_size, 1024);
+    }
+
+    // Origin validation behavior tests
+
+    #[test]
+    fn test_origin_validation_disabled_allows_all() {
+        let config = WebSocketServerConfig::new()
+            .with_origin_validation(OriginValidationMode::Disabled)
+            .with_allowed_origin("https://trusted.com");
+
+        assert!(config.is_origin_allowed(Some("https://trusted.com")));
+        assert!(config.is_origin_allowed(Some("https://untrusted.com")));
+        assert!(config.is_origin_allowed(None));
+    }
+
+    #[test]
+    fn test_origin_validation_warn_and_allow_allows_all() {
+        let config = WebSocketServerConfig::new()
+            .with_origin_validation(OriginValidationMode::WarnAndAllow)
+            .with_allowed_origin("https://trusted.com");
+
+        assert!(config.is_origin_allowed(Some("https://trusted.com")));
+        assert!(config.is_origin_allowed(Some("https://untrusted.com")));
+        assert!(config.is_origin_allowed(None));
+    }
+
+    #[test]
+    fn test_origin_validation_allowlist_with_origins() {
+        let config = WebSocketServerConfig::new()
+            .with_origin_validation(OriginValidationMode::AllowList)
+            .with_allowed_origin("https://trusted.com");
+
+        assert!(config.is_origin_allowed(Some("https://trusted.com")));
+        assert!(!config.is_origin_allowed(Some("https://untrusted.com")));
+        assert!(!config.is_origin_allowed(None));
+    }
+
+    #[test]
+    fn test_origin_validation_allowlist_empty_allows_all() {
+        let config =
+            WebSocketServerConfig::new().with_origin_validation(OriginValidationMode::AllowList);
+
+        // Empty allowlist permits all (backwards compatibility)
+        assert!(config.is_origin_allowed(Some("https://anything.com")));
+        assert!(config.is_origin_allowed(None));
+    }
+
+    #[test]
+    fn test_origin_validation_strict_with_origins() {
+        let config = WebSocketServerConfig::new()
+            .with_origin_validation(OriginValidationMode::Strict)
+            .with_allowed_origin("https://trusted.com");
+
+        assert!(config.is_origin_allowed(Some("https://trusted.com")));
+        assert!(!config.is_origin_allowed(Some("https://untrusted.com")));
+        assert!(!config.is_origin_allowed(None));
+    }
+
+    #[test]
+    fn test_origin_validation_strict_empty_rejects_all() {
+        let config =
+            WebSocketServerConfig::new().with_origin_validation(OriginValidationMode::Strict);
+
+        // Strict mode with no allowed origins rejects everything
+        assert!(!config.is_origin_allowed(Some("https://anything.com")));
+        assert!(!config.is_origin_allowed(None));
+    }
+
+    // WebSocketListener configuration tests
+
+    #[test]
+    fn test_listener_with_config() {
+        let config = WebSocketServerConfig::production().with_allowed_origin("https://trusted.com");
+        let listener = WebSocketListener::with_config("0.0.0.0:8080", config);
+
+        assert_eq!(listener.bind_addr(), "0.0.0.0:8080");
+        assert!(!listener.is_running());
+    }
+
+    #[test]
+    fn test_listener_with_production_config() {
+        let config = WebSocketServerConfig::production();
+        let listener = WebSocketListener::with_config("0.0.0.0:8080", config);
+        assert_eq!(listener.bind_addr(), "0.0.0.0:8080");
+    }
+
+    #[test]
+    fn test_listener_config_accessor() {
+        let config = WebSocketServerConfig::new().with_allowed_origin("https://trusted.com");
+        let listener = WebSocketListener::with_config("0.0.0.0:8080", config);
+
+        // Access config through the listener
+        assert_eq!(listener.config().allowed_origins.len(), 1);
+    }
+
+    #[test]
+    fn test_listener_with_custom_message_size() {
+        let config = WebSocketServerConfig::new().with_max_message_size(1024 * 1024);
+        let listener = WebSocketListener::with_config("0.0.0.0:8080", config);
+
+        assert_eq!(listener.config().max_message_size, 1024 * 1024);
+    }
+
+    #[test]
+    fn test_listener_active_connections() {
+        let listener = WebSocketListener::new("0.0.0.0:8080");
+        // Initial connection count should be 0
+        assert_eq!(listener.active_connections(), 0);
     }
 }

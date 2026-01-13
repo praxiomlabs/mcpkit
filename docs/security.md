@@ -458,23 +458,64 @@ let config = UnixSocketConfig::new("/tmp/mcp.sock")
 
 #### WebSocket Origin Validation
 
-Protect against DNS rebinding attacks by validating origins:
+Protect against DNS rebinding attacks by validating origins. The SDK provides multiple validation modes for different security requirements:
+
+##### Origin Validation Modes
 
 ```rust
-// Server-side WebSocket origin validation
-async fn handle_connection(
-    ws: WebSocket,
-    origin: Option<HeaderValue>,
-) -> Result<(), Error> {
-    // Validate origin header
-    if let Some(origin) = origin {
-        let allowed_origins = ["https://trusted-client.com"];
-        if !allowed_origins.contains(&origin.to_str().unwrap_or("")) {
-            return Err(Error::ForbiddenOrigin);
-        }
-    }
-    // Continue with connection...
-}
+use mcpkit_transport::websocket::{WebSocketServerConfig, OriginValidationMode};
+
+// Production mode: Strict validation with explicit allow list (RECOMMENDED)
+let config = WebSocketServerConfig::production()
+    .with_allowed_origin("https://trusted-client.com")
+    .with_allowed_origin("https://another-trusted.com");
+
+// Available validation modes:
+let config = WebSocketServerConfig::new()
+    .with_origin_validation(OriginValidationMode::Strict);
+```
+
+| Mode | Behavior | Use Case |
+|------|----------|----------|
+| `AllowList` | Allows origins in list, rejects others (empty list allows all) | Default - flexible development |
+| `Strict` | Only allows origins in list, rejects if list empty | Production with explicit whitelist |
+| `WarnAndAllow` | Logs warning for unlisted origins but allows | Migration/debugging |
+| `Disabled` | No origin validation | Testing only (INSECURE) |
+
+##### Security Recommendations
+
+**Production deployments should use `production()` constructor or `Strict` mode:**
+
+```rust
+// Recommended: Use production constructor
+let config = WebSocketServerConfig::production()
+    .with_allowed_origin("https://your-app.com");
+
+// Alternative: Explicit strict mode
+let config = WebSocketServerConfig::new()
+    .with_origin_validation(OriginValidationMode::Strict)
+    .with_allowed_origin("https://your-app.com");
+
+// Start listener with secure config
+let listener = WebSocketListener::with_config("0.0.0.0:8080", config);
+```
+
+**Warning**: Empty allow list with `AllowList` mode allows all origins. Use `Strict` mode for fail-closed security.
+
+##### HTTP Origin Validation
+
+The same validation modes apply to HTTP transports:
+
+```rust
+use mcpkit_transport::http::{HttpServerConfig, OriginValidationMode};
+
+// Production HTTP server
+let config = HttpServerConfig::production()
+    .with_allowed_origin("https://trusted-client.com");
+
+// Acknowledge development mode security trade-offs explicitly
+let dev_config = HttpServerConfig::new()
+    .acknowledge_origin_security_warning();  // Required for non-production configs
 ```
 
 ### 2. Input Validation

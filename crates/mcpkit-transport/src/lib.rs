@@ -132,8 +132,10 @@ pub use http::HttpTransportListener;
 pub use http::{HttpTransport, HttpTransportBuilder, HttpTransportConfig};
 
 // WebSocket transport
+#[cfg(feature = "websocket")]
+pub use websocket::WebSocketListener;
 pub use websocket::{
-    ConnectionState, ExponentialBackoff, WebSocketConfig, WebSocketListener, WebSocketServerConfig,
+    ConnectionState, ExponentialBackoff, WebSocketConfig, WebSocketServerConfig,
     WebSocketTransport, WebSocketTransportBuilder,
 };
 

@@ -49,8 +49,12 @@
 //!
 //! # Feature Flags
 //!
-//! This crate currently has no optional features. All functionality is
-//! included by default.
+//! - **`fancy-errors`**: Enable miette's fancy error reporting with terminal
+//!   colors and formatting.
+//!
+//! - **`jwt`**: Enable JWT validation helpers with JWKS fetching. This adds
+//!   the `auth::jwt` module with functions for validating JWT access tokens
+//!   and fetching JSON Web Key Sets from authorization servers.
 
 #![deny(missing_docs)]
 

@@ -118,7 +118,17 @@ mcpkit/
 │   ├── mcpkit-axum/            # Axum web framework integration
 │   ├── mcpkit-actix/           # Actix-web framework integration
 │   ├── mcpkit-rocket/          # Rocket web framework integration
-│   └── mcpkit-warp/            # Warp web framework integration
+│   ├── mcpkit-warp/            # Warp web framework integration
+│   │
+│   │ # Forge Orchestration Layer (optional)
+│   ├── mcpkit-provider/        # Multi-LLM provider abstraction
+│   ├── mcpkit-template/        # Compile-time validated prompt templates
+│   ├── mcpkit-memory/          # Conversation memory management
+│   ├── mcpkit-embedding/       # Vector storage and similarity search
+│   ├── mcpkit-chain/           # LCEL-inspired composable pipelines
+│   ├── mcpkit-agent/           # ReAct agent pattern with tool execution
+│   ├── mcpkit-rag/             # Retrieval-Augmented Generation
+│   └── mcpkit-eval/            # LLM evaluation and testing framework
 └── examples/                   # Example servers
 ```
 
@@ -256,6 +266,111 @@ let transport = StdioTransport::new();
 let stack = LayerStack::new(transport)
     .with(LoggingLayer::new(Level::Debug))
     .with(TimeoutLayer::new(Duration::from_secs(30)));
+```
+
+## Forge Orchestration Layer
+
+mcpkit includes an optional orchestration layer for building LLM applications. Enable these features as needed:
+
+```toml
+[dependencies]
+# Enable all forge features
+mcpkit = { version = "0.5", features = ["forge"] }
+
+# Or select specific features
+mcpkit = { version = "0.5", features = ["provider-openai", "memory", "chain"] }
+```
+
+### Available Features
+
+| Feature | Description |
+|---------|-------------|
+| `provider` | Multi-LLM provider abstraction |
+| `provider-openai` | OpenAI provider (includes `provider`) |
+| `provider-anthropic` | Anthropic provider (includes `provider`) |
+| `provider-ollama` | Ollama provider (includes `provider`) |
+| `provider-all` | All providers |
+| `template` | Compile-time validated prompt templates |
+| `memory` | Conversation memory management |
+| `embedding` | Vector storage and similarity search |
+| `embedding-sqlite` | SQLite-backed vector store |
+| `embedding-postgres` | PostgreSQL-backed vector store |
+| `chain` | LCEL-inspired composable pipelines |
+| `agent` | ReAct agent pattern with tool execution |
+| `rag` | Retrieval-Augmented Generation |
+| `eval` | LLM evaluation and testing framework |
+| `forge` | All orchestration features |
+
+### Provider Example
+
+```rust
+use mcpkit::provider::{Provider, openai::OpenAiProvider, Message};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let provider = OpenAiProvider::new(std::env::var("OPENAI_API_KEY")?)?;
+
+    let messages = vec![
+        Message::system("You are a helpful assistant."),
+        Message::user("What is Rust?"),
+    ];
+
+    let response = provider.complete(&messages).await?;
+    println!("{}", response.content);
+    Ok(())
+}
+```
+
+### Memory Example
+
+```rust
+use mcpkit::memory::{Memory, WindowMemory};
+use mcpkit::provider::Message;
+
+let mut memory = WindowMemory::new(10); // Keep last 10 messages
+
+memory.add(Message::user("Hello!")).await?;
+memory.add(Message::assistant("Hi there!")).await?;
+
+let context = memory.messages().await?;
+```
+
+### Chain Example
+
+```rust
+use mcpkit::chain::{Chain, LlmChain};
+use mcpkit::template::Template;
+use mcpkit::provider::openai::OpenAiProvider;
+
+let template = Template::new("Answer this question: {{question}}")?;
+let provider = OpenAiProvider::new(api_key)?;
+
+let chain = LlmChain::new(provider)
+    .prompt(template);
+
+let response = chain
+    .invoke(json!({"question": "What is Rust?"}))
+    .await?;
+```
+
+### RAG Example
+
+```rust
+use mcpkit::rag::{RagPipeline, DocumentLoader, CharacterSplitter};
+use mcpkit::embedding::{InMemoryStore, EmbeddingModel};
+
+// Build a RAG pipeline
+let pipeline = RagPipeline::builder()
+    .loader(DocumentLoader::text())
+    .splitter(CharacterSplitter::new(500, 50))
+    .store(InMemoryStore::new())
+    .build()?;
+
+// Add documents
+pipeline.add_documents(&["doc1.txt", "doc2.txt"]).await?;
+
+// Query
+let results = pipeline.query("What is Rust?", 5).await?;
 ```
 
 ## Error Handling

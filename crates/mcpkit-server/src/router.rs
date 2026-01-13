@@ -757,6 +757,23 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_tools_list_with_cursor() -> Result<(), Box<dyn std::error::Error>> {
+        let request = make_request(
+            "tools/list",
+            Some(serde_json::json!({ "cursor": "abc123" })),
+        );
+        let parsed = parse_request(&request)?;
+
+        if let ParsedRequest::ToolsList(params) = parsed {
+            assert_eq!(params.cursor, Some("abc123".to_string()));
+        } else {
+            panic!("Expected ToolsList");
+        }
+
+        Ok(())
+    }
+
+    #[test]
     fn test_parse_tools_call() -> Result<(), Box<dyn std::error::Error>> {
         let request = make_request(
             "tools/call",
@@ -769,11 +786,26 @@ mod tests {
 
         if let ParsedRequest::ToolsCall(params) = parsed {
             assert_eq!(params.name, "search");
+            assert_eq!(params.arguments["query"], "test");
         } else {
             panic!("Expected ToolsCall");
         }
 
         Ok(())
+    }
+
+    #[test]
+    fn test_parse_tools_call_missing_params() {
+        let request = make_request("tools/call", None);
+        let result = parse_request(&request);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_tools_call_missing_name() {
+        let request = make_request("tools/call", Some(serde_json::json!({"arguments": {}})));
+        let result = parse_request(&request);
+        assert!(result.is_err());
     }
 
     #[test]
@@ -808,10 +840,402 @@ mod tests {
         if let ParsedRequest::Initialize(params) = parsed {
             assert_eq!(params.protocol_version, "2025-11-25");
             assert_eq!(params.client_info.name, "test-client");
+            assert_eq!(params.client_info.version, "1.0.0");
         } else {
             panic!("Expected Initialize");
         }
 
         Ok(())
+    }
+
+    #[test]
+    fn test_parse_initialize_missing_params() {
+        let request = make_request("initialize", None);
+        let result = parse_request(&request);
+        assert!(result.is_err());
+    }
+
+    // =========================================================================
+    // Resource Methods
+    // =========================================================================
+
+    #[test]
+    fn test_parse_resources_list() -> Result<(), Box<dyn std::error::Error>> {
+        let request = make_request("resources/list", None);
+        let parsed = parse_request(&request)?;
+        assert!(matches!(parsed, ParsedRequest::ResourcesList(_)));
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_resources_list_with_cursor() -> Result<(), Box<dyn std::error::Error>> {
+        let request = make_request(
+            "resources/list",
+            Some(serde_json::json!({ "cursor": "page2" })),
+        );
+        let parsed = parse_request(&request)?;
+
+        if let ParsedRequest::ResourcesList(params) = parsed {
+            assert_eq!(params.cursor, Some("page2".to_string()));
+        } else {
+            panic!("Expected ResourcesList");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_resources_read() -> Result<(), Box<dyn std::error::Error>> {
+        let request = make_request(
+            "resources/read",
+            Some(serde_json::json!({ "uri": "file:///etc/hosts" })),
+        );
+        let parsed = parse_request(&request)?;
+
+        if let ParsedRequest::ResourcesRead(params) = parsed {
+            assert_eq!(params.uri, "file:///etc/hosts");
+        } else {
+            panic!("Expected ResourcesRead");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_resources_read_missing_uri() {
+        let request = make_request("resources/read", Some(serde_json::json!({})));
+        let result = parse_request(&request);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_resources_templates_list() -> Result<(), Box<dyn std::error::Error>> {
+        let request = make_request("resources/templates/list", None);
+        let parsed = parse_request(&request)?;
+        assert!(matches!(parsed, ParsedRequest::ResourcesTemplatesList(_)));
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_resources_subscribe() -> Result<(), Box<dyn std::error::Error>> {
+        let request = make_request(
+            "resources/subscribe",
+            Some(serde_json::json!({ "uri": "file:///var/log/app.log" })),
+        );
+        let parsed = parse_request(&request)?;
+
+        if let ParsedRequest::ResourcesSubscribe(params) = parsed {
+            assert_eq!(params.uri, "file:///var/log/app.log");
+        } else {
+            panic!("Expected ResourcesSubscribe");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_resources_unsubscribe() -> Result<(), Box<dyn std::error::Error>> {
+        let request = make_request(
+            "resources/unsubscribe",
+            Some(serde_json::json!({ "uri": "file:///var/log/app.log" })),
+        );
+        let parsed = parse_request(&request)?;
+
+        if let ParsedRequest::ResourcesUnsubscribe(params) = parsed {
+            assert_eq!(params.uri, "file:///var/log/app.log");
+        } else {
+            panic!("Expected ResourcesUnsubscribe");
+        }
+        Ok(())
+    }
+
+    // =========================================================================
+    // Prompt Methods
+    // =========================================================================
+
+    #[test]
+    fn test_parse_prompts_list() -> Result<(), Box<dyn std::error::Error>> {
+        let request = make_request("prompts/list", None);
+        let parsed = parse_request(&request)?;
+        assert!(matches!(parsed, ParsedRequest::PromptsList(_)));
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_prompts_get() -> Result<(), Box<dyn std::error::Error>> {
+        let request = make_request(
+            "prompts/get",
+            Some(serde_json::json!({
+                "name": "code-review",
+                "arguments": { "language": "rust" }
+            })),
+        );
+        let parsed = parse_request(&request)?;
+
+        if let ParsedRequest::PromptsGet(params) = parsed {
+            assert_eq!(params.name, "code-review");
+            assert!(params.arguments.is_some());
+        } else {
+            panic!("Expected PromptsGet");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_prompts_get_without_arguments() -> Result<(), Box<dyn std::error::Error>> {
+        let request = make_request(
+            "prompts/get",
+            Some(serde_json::json!({ "name": "simple-prompt" })),
+        );
+        let parsed = parse_request(&request)?;
+
+        if let ParsedRequest::PromptsGet(params) = parsed {
+            assert_eq!(params.name, "simple-prompt");
+            assert!(params.arguments.is_none());
+        } else {
+            panic!("Expected PromptsGet");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_prompts_get_missing_name() {
+        let request = make_request("prompts/get", Some(serde_json::json!({})));
+        let result = parse_request(&request);
+        assert!(result.is_err());
+    }
+
+    // =========================================================================
+    // Task Methods
+    // =========================================================================
+
+    #[test]
+    fn test_parse_tasks_list() -> Result<(), Box<dyn std::error::Error>> {
+        let request = make_request("tasks/list", None);
+        let parsed = parse_request(&request)?;
+        assert!(matches!(parsed, ParsedRequest::TasksList(_)));
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_tasks_get() -> Result<(), Box<dyn std::error::Error>> {
+        let request = make_request(
+            "tasks/get",
+            Some(serde_json::json!({ "taskId": "task-123" })),
+        );
+        let parsed = parse_request(&request)?;
+
+        if let ParsedRequest::TasksGet(params) = parsed {
+            assert_eq!(params.task_id, "task-123");
+        } else {
+            panic!("Expected TasksGet");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_tasks_get_missing_id() {
+        let request = make_request("tasks/get", Some(serde_json::json!({})));
+        let result = parse_request(&request);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_tasks_cancel() -> Result<(), Box<dyn std::error::Error>> {
+        let request = make_request(
+            "tasks/cancel",
+            Some(serde_json::json!({ "taskId": "task-456" })),
+        );
+        let parsed = parse_request(&request)?;
+
+        if let ParsedRequest::TasksCancel(params) = parsed {
+            assert_eq!(params.task_id, "task-456");
+        } else {
+            panic!("Expected TasksCancel");
+        }
+        Ok(())
+    }
+
+    // =========================================================================
+    // Sampling Methods
+    // =========================================================================
+
+    #[test]
+    fn test_parse_sampling_create_message() -> Result<(), Box<dyn std::error::Error>> {
+        let request = make_request(
+            "sampling/createMessage",
+            Some(serde_json::json!({
+                "messages": [
+                    { "role": "user", "content": { "type": "text", "text": "Hello" } }
+                ],
+                "maxTokens": 100,
+                "systemPrompt": "You are a helpful assistant."
+            })),
+        );
+        let parsed = parse_request(&request)?;
+
+        if let ParsedRequest::SamplingCreateMessage(params) = parsed {
+            assert_eq!(params.messages.len(), 1);
+            assert_eq!(params.max_tokens, Some(100));
+            assert_eq!(
+                params.system_prompt,
+                Some("You are a helpful assistant.".to_string())
+            );
+        } else {
+            panic!("Expected SamplingCreateMessage");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_sampling_create_message_missing_messages() {
+        let request = make_request("sampling/createMessage", Some(serde_json::json!({})));
+        let result = parse_request(&request);
+        assert!(result.is_err());
+    }
+
+    // =========================================================================
+    // Completion Methods
+    // =========================================================================
+
+    #[test]
+    fn test_parse_completion_complete() -> Result<(), Box<dyn std::error::Error>> {
+        let request = make_request(
+            "completion/complete",
+            Some(serde_json::json!({
+                "ref": {
+                    "type": "ref/resource",
+                    "uri": "file:///home"
+                },
+                "argument": {
+                    "name": "path",
+                    "value": "/home/user"
+                }
+            })),
+        );
+        let parsed = parse_request(&request)?;
+
+        if let ParsedRequest::CompletionComplete(params) = parsed {
+            assert_eq!(params.ref_type, "ref/resource");
+            assert_eq!(params.ref_value, "file:///home");
+            assert!(params.argument.is_some());
+            let arg = params.argument.unwrap();
+            assert_eq!(arg.name, "path");
+            assert_eq!(arg.value, "/home/user");
+        } else {
+            panic!("Expected CompletionComplete");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_completion_complete_prompt_ref() -> Result<(), Box<dyn std::error::Error>> {
+        let request = make_request(
+            "completion/complete",
+            Some(serde_json::json!({
+                "ref": {
+                    "type": "ref/prompt",
+                    "name": "code-review"
+                }
+            })),
+        );
+        let parsed = parse_request(&request)?;
+
+        if let ParsedRequest::CompletionComplete(params) = parsed {
+            assert_eq!(params.ref_type, "ref/prompt");
+            assert_eq!(params.ref_value, "code-review");
+            assert!(params.argument.is_none());
+        } else {
+            panic!("Expected CompletionComplete");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_completion_complete_missing_ref() {
+        let request = make_request("completion/complete", Some(serde_json::json!({})));
+        let result = parse_request(&request);
+        assert!(result.is_err());
+    }
+
+    // =========================================================================
+    // Logging Methods
+    // =========================================================================
+
+    #[test]
+    fn test_parse_logging_set_level() -> Result<(), Box<dyn std::error::Error>> {
+        let request = make_request(
+            "logging/setLevel",
+            Some(serde_json::json!({ "level": "debug" })),
+        );
+        let parsed = parse_request(&request)?;
+
+        if let ParsedRequest::LoggingSetLevel(params) = parsed {
+            assert_eq!(params.level, "debug");
+        } else {
+            panic!("Expected LoggingSetLevel");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_logging_set_level_missing_level() {
+        let request = make_request("logging/setLevel", Some(serde_json::json!({})));
+        let result = parse_request(&request);
+        assert!(result.is_err());
+    }
+
+    // =========================================================================
+    // Method Constants
+    // =========================================================================
+
+    #[test]
+    fn test_method_constants() {
+        // Verify method constants match the strings used in parsing
+        assert_eq!(methods::INITIALIZE, "initialize");
+        assert_eq!(methods::PING, "ping");
+        assert_eq!(methods::TOOLS_LIST, "tools/list");
+        assert_eq!(methods::TOOLS_CALL, "tools/call");
+        assert_eq!(methods::RESOURCES_LIST, "resources/list");
+        assert_eq!(methods::RESOURCES_READ, "resources/read");
+        assert_eq!(
+            methods::RESOURCES_TEMPLATES_LIST,
+            "resources/templates/list"
+        );
+        assert_eq!(methods::RESOURCES_SUBSCRIBE, "resources/subscribe");
+        assert_eq!(methods::RESOURCES_UNSUBSCRIBE, "resources/unsubscribe");
+        assert_eq!(methods::PROMPTS_LIST, "prompts/list");
+        assert_eq!(methods::PROMPTS_GET, "prompts/get");
+        assert_eq!(methods::TASKS_LIST, "tasks/list");
+        assert_eq!(methods::TASKS_GET, "tasks/get");
+        assert_eq!(methods::TASKS_CANCEL, "tasks/cancel");
+        assert_eq!(methods::SAMPLING_CREATE_MESSAGE, "sampling/createMessage");
+        assert_eq!(methods::COMPLETION_COMPLETE, "completion/complete");
+        assert_eq!(methods::LOGGING_SET_LEVEL, "logging/setLevel");
+    }
+
+    // =========================================================================
+    // Notification Constants
+    // =========================================================================
+
+    #[test]
+    fn test_notification_constants() {
+        assert_eq!(notifications::INITIALIZED, "notifications/initialized");
+        assert_eq!(notifications::CANCELLED, "notifications/cancelled");
+        assert_eq!(notifications::PROGRESS, "notifications/progress");
+        assert_eq!(notifications::MESSAGE, "notifications/message");
+        assert_eq!(
+            notifications::RESOURCES_UPDATED,
+            "notifications/resources/updated"
+        );
+        assert_eq!(
+            notifications::RESOURCES_LIST_CHANGED,
+            "notifications/resources/list_changed"
+        );
+        assert_eq!(
+            notifications::TOOLS_LIST_CHANGED,
+            "notifications/tools/list_changed"
+        );
+        assert_eq!(
+            notifications::PROMPTS_LIST_CHANGED,
+            "notifications/prompts/list_changed"
+        );
     }
 }

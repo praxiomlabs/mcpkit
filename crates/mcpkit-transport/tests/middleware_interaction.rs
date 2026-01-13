@@ -485,3 +485,147 @@ fn test_timeout_layer_disable_timeouts() {
     assert!(transport.send_timeout().is_none());
     assert!(transport.recv_timeout().is_none());
 }
+
+// =============================================================================
+// Rate Limiting Integration Tests
+// =============================================================================
+
+use mcpkit_transport::middleware::{RateLimitConfig, RateLimitLayer, RateLimitedTransport};
+
+#[tokio::test]
+async fn test_rate_limit_allows_within_limit() -> Result<(), Box<dyn std::error::Error>> {
+    let (client, server) = MemoryTransport::pair_with_capacity(100);
+
+    let config = RateLimitConfig::new(10, Duration::from_secs(60));
+    let layer = RateLimitLayer::new(config);
+    let stack = LayerStack::new(client).with(layer);
+    let transport = stack.into_inner();
+
+    // Send messages within the limit
+    for i in 0..10 {
+        let msg = Message::Notification(Notification::with_params(
+            "test",
+            serde_json::json!({"seq": i}),
+        ));
+        transport.send(msg).await?;
+    }
+
+    // Verify all messages were received
+    for _ in 0..10 {
+        let result = server.recv().await?;
+        assert!(result.is_some());
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_rate_limit_blocks_excess_messages() -> Result<(), Box<dyn std::error::Error>> {
+    let (client, _server) = MemoryTransport::pair_with_capacity(100);
+
+    let config = RateLimitConfig::new(5, Duration::from_secs(60));
+    let layer = RateLimitLayer::new(config);
+    let stack = LayerStack::new(client).with(layer);
+    let transport = stack.into_inner();
+
+    // Send messages up to the limit
+    for i in 0..5 {
+        let msg = Message::Notification(Notification::with_params(
+            "test",
+            serde_json::json!({"seq": i}),
+        ));
+        transport.send(msg).await?;
+    }
+
+    // 6th message should be rate limited
+    let msg = Message::Notification(Notification::new("excess"));
+    let result = transport.send(msg).await;
+    assert!(result.is_err(), "6th message should be rate limited");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_rate_limited_transport_stats() -> Result<(), Box<dyn std::error::Error>> {
+    let (client, _server) = MemoryTransport::pair_with_capacity(100);
+
+    let config = RateLimitConfig::new(5, Duration::from_secs(60));
+    let transport = RateLimitedTransport::new(client, config);
+
+    // Send some messages
+    for i in 0..7 {
+        let msg = Message::Notification(Notification::with_params(
+            "test",
+            serde_json::json!({"seq": i}),
+        ));
+        let _ = transport.send(msg).await;
+    }
+
+    // Check stats
+    let stats = transport.stats().await;
+    assert_eq!(stats.total_requests, 7);
+    assert_eq!(stats.total_rejected, 2); // Last 2 should be rejected
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_rate_limit_with_metrics_layer() -> Result<(), Box<dyn std::error::Error>> {
+    let (client, server) = MemoryTransport::pair_with_capacity(100);
+
+    // Stack: metrics -> rate_limit -> transport
+    let (metrics_layer, handle) = MetricsLayer::new_with_handle();
+    let rate_config = RateLimitConfig::new(5, Duration::from_secs(60));
+    let rate_layer = RateLimitLayer::new(rate_config);
+
+    let stack = LayerStack::new(client).with(rate_layer).with(metrics_layer);
+    let transport = stack.into_inner();
+
+    // Send messages up to limit
+    for i in 0..5 {
+        let msg = Message::Notification(Notification::with_params(
+            "test",
+            serde_json::json!({"seq": i}),
+        ));
+        transport.send(msg).await?;
+    }
+
+    // Receive them
+    for _ in 0..5 {
+        let _ = server.recv().await?;
+    }
+
+    // Metrics should show 5 sent
+    assert_eq!(handle.messages_sent(), 5);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_rate_limit_reset_after_window() -> Result<(), Box<dyn std::error::Error>> {
+    let (client, _server) = MemoryTransport::pair_with_capacity(100);
+
+    // Short window for testing
+    let config = RateLimitConfig::new(3, Duration::from_millis(100));
+    let transport = RateLimitedTransport::new(client, config);
+
+    // Exhaust the limit
+    for _ in 0..3 {
+        let msg = Message::Notification(Notification::new("test"));
+        transport.send(msg).await?;
+    }
+
+    // 4th should fail
+    let msg = Message::Notification(Notification::new("fail"));
+    assert!(transport.send(msg).await.is_err());
+
+    // Wait for window to pass
+    tokio::time::sleep(Duration::from_millis(150)).await;
+
+    // Should be able to send again after window reset
+    let msg = Message::Notification(Notification::new("success"));
+    let result = transport.send(msg).await;
+    assert!(result.is_ok(), "Should be able to send after window reset");
+
+    Ok(())
+}
