@@ -61,6 +61,7 @@ prometheus = { workspace = true, optional = true }
 tokio = { version = "1", features = ["full", "test-util"] }
 
 [build-dependencies]
+# These are only needed for regenerating proto code (development use)
 tonic-build = { version = "0.12", optional = true }
 prost-build = { version = "0.13", optional = true }
 protobuf-src = { version = "2", optional = true }
@@ -71,7 +72,11 @@ tokio-runtime = ["tokio"]
 smol-runtime = ["smol", "async-io"]
 http = ["reqwest", "axum", "hyper", "tokio-runtime"]
 websocket = ["tokio-tungstenite", "tokio-runtime"]
-grpc = ["tonic", "prost", "tokio-stream", "tokio-runtime", "tonic-build", "prost-build", "protobuf-src"]
+# gRPC transport - uses pre-generated protobuf code for cross-platform builds
+grpc = ["tonic", "prost", "tokio-stream", "tokio-runtime"]
+# Feature for regenerating protobuf code (requires protoc or protobuf-src)
+# Use: cargo build -p mcpkit-transport --features grpc,regenerate-proto
+regenerate-proto = ["grpc", "tonic-build", "prost-build", "protobuf-src"]
 opentelemetry = ["dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-otlp", "dep:tracing-opentelemetry", "dep:tracing-subscriber", "tokio-runtime"]
 prometheus = ["dep:prometheus"]
 full = ["http", "websocket", "grpc", "opentelemetry", "prometheus"]

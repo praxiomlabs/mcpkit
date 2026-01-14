@@ -20,17 +20,10 @@ use tonic::transport::{Channel, Endpoint, Server, Uri};
 use tonic::{Request, Response, Status, Streaming};
 use tracing::{debug, error, info, warn};
 
-// Include the generated protobuf code
-// Allow clippy lints for generated code that we cannot control
-#[allow(
-    clippy::derive_partial_eq_without_eq,
-    clippy::doc_markdown,
-    clippy::default_trait_access,
-    clippy::map_unwrap_or
-)]
-pub mod proto {
-    tonic::include_proto!("mcp");
-}
+// Use pre-generated protobuf code to avoid build-time protoc dependency.
+// This enables builds on Windows where protobuf-src has known linker issues.
+// See: crates/mcpkit-transport/src/grpc/mcp_proto.rs for regeneration instructions.
+pub use super::mcp_proto as proto;
 
 /// gRPC transport errors.
 #[derive(Debug, Error)]
