@@ -54,26 +54,11 @@
 //!
 //! ## Crate Organization
 //!
-//! ### Core MCP Protocol
-//!
 //! - [`mcpkit_core`] - Protocol types and traits (no async runtime)
 //! - [`mcpkit_transport`] - Transport abstractions (stdio, HTTP, WebSocket)
 //! - [`mod@mcpkit_server`] - Server implementation with composable handlers
 //! - [`mcpkit_client`] - Client implementation
 //! - [`mcpkit_macros`] - Procedural macros for `#[mcp_server]` etc.
-//!
-//! ### Forge Orchestration Layer (optional features)
-//!
-//! Enable with `features = ["forge"]` or individual features:
-//!
-//! - [`provider`] - Multi-LLM provider abstraction (OpenAI, Anthropic, Ollama)
-//! - [`template`] - Compile-time validated prompt templates
-//! - [`memory`] - Conversation memory management
-//! - [`embedding`] - Vector storage and similarity search
-//! - [`chain`] - LCEL-inspired composable pipelines
-//! - [`agent`] - ReAct agent pattern with tool execution
-//! - [`rag`] - Retrieval-Augmented Generation components
-//! - [`eval`] - LLM evaluation and testing framework
 
 #![deny(missing_docs)]
 
@@ -136,92 +121,6 @@ pub mod transport {
 #[cfg(feature = "client")]
 pub mod client {
     pub use mcpkit_client::*;
-}
-
-// ============================================================================
-// Forge Orchestration Layer
-// ============================================================================
-
-/// Multi-LLM provider abstraction.
-///
-/// Provides a unified interface for interacting with various LLM providers
-/// including OpenAI, Anthropic, and Ollama.
-///
-/// Enable with `features = ["provider"]` or specific providers like `["provider-openai"]`.
-#[cfg(feature = "provider")]
-pub mod provider {
-    pub use mcpkit_provider::*;
-}
-
-/// Compile-time validated prompt templates.
-///
-/// Type-safe prompt templates with compile-time validation of template variables.
-///
-/// Enable with `features = ["template"]`.
-#[cfg(feature = "template")]
-pub mod template {
-    pub use mcpkit_template::*;
-}
-
-/// Conversation memory management.
-///
-/// Various strategies for managing conversation history including buffer,
-/// window, token-based, and summary memory.
-///
-/// Enable with `features = ["memory"]`.
-#[cfg(feature = "memory")]
-pub mod memory {
-    pub use mcpkit_memory::*;
-}
-
-/// Vector storage and similarity search.
-///
-/// In-memory and persistent vector stores for semantic search and RAG applications.
-///
-/// Enable with `features = ["embedding"]`, `["embedding-sqlite"]`, or `["embedding-postgres"]`.
-#[cfg(feature = "embedding")]
-pub mod embedding {
-    pub use mcpkit_embedding::*;
-}
-
-/// LCEL-inspired composable pipelines.
-///
-/// Build complex LLM workflows using composable chain primitives.
-///
-/// Enable with `features = ["chain"]`.
-#[cfg(feature = "chain")]
-pub mod chain {
-    pub use mcpkit_chain::*;
-}
-
-/// ReAct agent pattern with tool execution.
-///
-/// Autonomous agents that can reason, use tools, and accomplish complex tasks.
-///
-/// Enable with `features = ["agent"]`.
-#[cfg(feature = "agent")]
-pub mod agent {
-    pub use mcpkit_agent::*;
-}
-
-/// Retrieval-Augmented Generation components.
-///
-/// Document loaders, text splitters, retrievers, and RAG pipelines.
-///
-/// Enable with `features = ["rag"]`.
-#[cfg(feature = "rag")]
-pub mod rag {
-    pub use mcpkit_rag::*;
-}
-
-/// LLM evaluation and testing framework.
-///
-/// Metrics, test cases, and evaluation runners for assessing LLM outputs.
-///
-/// Enable with `features = ["eval"]`.
-#[cfg(feature = "eval")]
-pub mod eval {
-    pub use mcpkit_eval::*;
 }
 
 #[cfg(test)]

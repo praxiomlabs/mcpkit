@@ -20,16 +20,6 @@ mcpkit-server = { version = "0.5.0", path = "../crates/mcpkit-server" }
 mcpkit-client = { version = "0.5.0", path = "../crates/mcpkit-client" }
 mcpkit-macros = { version = "0.5.0", path = "../crates/mcpkit-macros" }
 
-# Forge orchestration crates (optional)
-mcpkit-provider = { version = "0.5.0", path = "../crates/mcpkit-provider", optional = true }
-mcpkit-template = { version = "0.5.0", path = "../crates/mcpkit-template", optional = true }
-mcpkit-memory = { version = "0.5.0", path = "../crates/mcpkit-memory", optional = true }
-mcpkit-embedding = { version = "0.5.0", path = "../crates/mcpkit-embedding", optional = true }
-mcpkit-chain = { version = "0.5.0", path = "../crates/mcpkit-chain", optional = true }
-mcpkit-agent = { version = "0.5.0", path = "../crates/mcpkit-agent", optional = true }
-mcpkit-rag = { version = "0.5.0", path = "../crates/mcpkit-rag", optional = true }
-mcpkit-eval = { version = "0.5.0", path = "../crates/mcpkit-eval", optional = true }
-
 [features]
 default = ["server", "client", "tokio-runtime"]
 server = []
@@ -38,25 +28,6 @@ tokio-runtime = ["mcpkit-transport/tokio-runtime", "mcpkit-server/tokio-runtime"
 websocket = ["mcpkit-transport/websocket"]
 http = ["mcpkit-transport/http"]
 full = ["websocket", "http"]
-
-# Forge orchestration features
-provider = ["mcpkit-provider"]
-provider-openai = ["provider", "mcpkit-provider/openai"]
-provider-anthropic = ["provider", "mcpkit-provider/anthropic"]
-provider-ollama = ["provider", "mcpkit-provider/ollama"]
-provider-all = ["provider", "mcpkit-provider/all-providers"]
-template = ["mcpkit-template"]
-memory = ["mcpkit-memory"]
-embedding = ["mcpkit-embedding"]
-embedding-sqlite = ["embedding", "mcpkit-embedding/sqlite"]
-embedding-postgres = ["embedding", "mcpkit-embedding/postgres"]
-chain = ["mcpkit-chain"]
-agent = ["mcpkit-agent"]
-rag = ["mcpkit-rag"]
-eval = ["mcpkit-eval"]
-
-# Convenience feature for all forge crates
-forge = ["provider-all", "template", "memory", "embedding", "chain", "agent", "rag", "eval"]
 
 [dev-dependencies]
 serde = { workspace = true }

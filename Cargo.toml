@@ -12,16 +12,6 @@ members = [
     "crates/mcpkit-actix",
     "crates/mcpkit-rocket",
     "crates/mcpkit-warp",
-    # mcpkit-forge orchestration layer
-    "crates/mcpkit-provider",
-    "crates/mcpkit-template",
-    "crates/mcpkit-template-derive",
-    "crates/mcpkit-memory",
-    "crates/mcpkit-embedding",
-    "crates/mcpkit-chain",
-    "crates/mcpkit-agent",
-    "crates/mcpkit-rag",
-    "crates/mcpkit-eval",
     "mcpkit",
     "examples/minimal-server",
     "examples/full-server",
@@ -36,7 +26,6 @@ members = [
     "examples/rocket-server",
     "examples/warp-server",
     "examples/grpc-client",
-    "examples/knowledge-agent",
     "benches",
 ]
 
@@ -132,17 +121,6 @@ mcpkit-server = { version = "0.5.0", path = "crates/mcpkit-server" }
 mcpkit-client = { version = "0.5.0", path = "crates/mcpkit-client" }
 mcpkit-macros = { version = "0.5.0", path = "crates/mcpkit-macros" }
 mcpkit-testing = { version = "0.5.0", path = "crates/mcpkit-testing" }
-
-# mcpkit-forge orchestration layer crates
-mcpkit-provider = { version = "0.5.0", path = "crates/mcpkit-provider" }
-mcpkit-template = { version = "0.5.0", path = "crates/mcpkit-template" }
-mcpkit-template-derive = { version = "0.5.0", path = "crates/mcpkit-template-derive" }
-mcpkit-memory = { version = "0.5.0", path = "crates/mcpkit-memory" }
-mcpkit-embedding = { version = "0.5.0", path = "crates/mcpkit-embedding" }
-mcpkit-chain = { version = "0.5.0", path = "crates/mcpkit-chain" }
-mcpkit-agent = { version = "0.5.0", path = "crates/mcpkit-agent" }
-mcpkit-rag = { version = "0.5.0", path = "crates/mcpkit-rag" }
-mcpkit-eval = { version = "0.5.0", path = "crates/mcpkit-eval" }
 
 [workspace.lints.rust]
 unsafe_code = "deny"
