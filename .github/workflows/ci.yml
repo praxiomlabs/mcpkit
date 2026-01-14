@@ -198,7 +198,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test --all-features
+      # Use --features full instead of --all-features to exclude regenerate-proto
+      # (protobuf-src fails to build on Windows due to abseil-cpp linker issues)
+      - run: cargo test -p mcpkit-transport --features full
+      - run: cargo test --workspace --exclude mcpkit-transport
 
   # ==========================================================================
   # Semver check - ensure no accidental breaking changes
