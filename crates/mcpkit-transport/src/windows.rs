@@ -132,6 +132,7 @@ impl NamedPipeConfig {
 }
 
 /// Internal state for reading/writing.
+#[allow(dead_code)]
 struct NamedPipeState {
     /// Line buffer for reading complete messages.
     line_buffer: String,
