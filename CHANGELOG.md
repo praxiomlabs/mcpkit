@@ -7,51 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+### Changed
 
-- **Forge Orchestration Layer** - 8 new crates for building LLM applications:
-  - `mcpkit-provider` - Multi-LLM provider abstraction (OpenAI, Anthropic, Ollama)
-    - Unified `Provider` trait for chat completions, streaming, and embeddings
-    - Automatic retry with exponential backoff
-    - Request/response middleware support
-  - `mcpkit-template` - Compile-time validated prompt templates
-    - Handlebars-style syntax with `{{variable}}` placeholders
-    - Type-safe template rendering
-    - Chat message template support
-  - `mcpkit-memory` - Conversation memory management
-    - `BufferMemory` for unbounded storage
-    - `WindowMemory` for sliding window of N messages
-    - `TokenMemory` for token-budget management
-    - `SummaryMemory` for LLM-powered summarization
-  - `mcpkit-embedding` - Vector storage and similarity search
-    - `InMemoryStore` for development and testing
-    - `SqliteStore` for persistent local storage
-    - `PostgresStore` for production deployments
-    - Cosine similarity and other distance metrics
-  - `mcpkit-chain` - LCEL-inspired composable pipelines
-    - `LlmChain` for prompt → LLM → output workflows
-    - `SequentialChain` for multi-step pipelines
-    - `MapReduceChain` for parallel processing
-    - Branching and conditional execution
-  - `mcpkit-agent` - ReAct agent pattern with tool execution
-    - Thought → Action → Observation reasoning loop
-    - Tool registry with automatic schema generation
-    - Configurable iteration limits and timeouts
-  - `mcpkit-rag` - Retrieval-Augmented Generation
-    - Document loaders (text, JSON, CSV, web)
-    - Text splitters (character, recursive, semantic)
-    - Retriever interface with vector store backends
-    - End-to-end RAG pipeline builder
-  - `mcpkit-eval` - LLM evaluation and testing framework
-    - Built-in metrics (BLEU, ROUGE, semantic similarity)
-    - Custom evaluator support
-    - Batch evaluation with detailed reports
-- **Feature flags** for selective forge crate inclusion:
-  - `provider`, `provider-openai`, `provider-anthropic`, `provider-ollama`, `provider-all`
-  - `template`, `memory`, `embedding`, `embedding-sqlite`, `embedding-postgres`
-  - `chain`, `agent`, `rag`, `eval`
-  - `forge` convenience feature for all orchestration crates
-- **knowledge-agent example** demonstrating RAG-powered agent with MCP tools
+- **Extracted LLM orchestration crates to separate [llmtk](https://github.com/praxiomlabs/llmtk) project**
+  - The forge orchestration layer (provider, template, memory, embedding, chain, agent, rag, eval)
+    has been moved to a dedicated LLM Toolkit workspace to maintain clear separation of concerns
+  - mcpkit now focuses solely on MCP protocol implementation
+  - See llmtk for LLM provider abstractions, RAG pipelines, agents, and related functionality
 
 ### Fixed
 
