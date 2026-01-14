@@ -132,6 +132,7 @@ impl NamedPipeConfig {
 }
 
 /// Internal state for reading/writing.
+#[allow(dead_code)]
 struct NamedPipeState {
     /// Line buffer for reading complete messages.
     line_buffer: String,
@@ -503,7 +504,7 @@ impl TransportListener for NamedPipeServer {
         // Create a new pipe instance for this connection
         let pipe = ServerOptions::new()
             .first_pipe_instance(false)
-            .max_instances(self.config.max_instances)
+            .max_instances(self.config.max_instances as usize)
             .in_buffer_size(self.config.in_buffer_size as u32)
             .out_buffer_size(self.config.out_buffer_size as u32)
             .create(&self.config.name)

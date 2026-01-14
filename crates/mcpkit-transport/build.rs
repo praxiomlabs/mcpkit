@@ -1,16 +1,43 @@
 //! Build script for mcpkit-transport.
 //!
-//! This script compiles protobuf definitions when the `grpc` feature is enabled.
-//! It uses protobuf-src to compile protoc from source if it's not available in the system.
+//! This script compiles protobuf definitions when the `regenerate-proto` feature is enabled.
+//! The generated code is checked into the repository at `src/grpc/mcp_proto.rs`, so
+//! normal builds do not require protoc or protobuf-src.
+//!
+//! ## Why Pre-generated Code?
+//!
+//! The `protobuf-src` crate builds protobuf from source using CMake, which fails on
+//! Windows due to abseil-cpp linker issues with UCRT math functions (ceilf, ldexp, etc.).
+//! By pre-generating the code, we enable cross-platform builds without requiring protoc.
+//!
+//! ## Regenerating Proto Code
+//!
+//! When you modify `proto/mcp.proto`, regenerate the Rust code:
+//!
+//! ```bash
+//! just generate-proto
+//! ```
+//!
+//! Or manually:
+//!
+//! ```bash
+//! cargo build -p mcpkit-transport --features regenerate-proto
+//! # Then copy the generated file:
+//! cp target/debug/build/mcpkit-transport-*/out/mcp.rs \
+//!    crates/mcpkit-transport/src/grpc/mcp_proto.rs
+//! ```
+//!
+//! Don't forget to add the header comment back to the file after copying.
 
 fn main() {
-    #[cfg(feature = "grpc")]
+    // Only compile protos when explicitly regenerating
+    #[cfg(feature = "regenerate-proto")]
     {
         compile_protos();
     }
 }
 
-#[cfg(feature = "grpc")]
+#[cfg(feature = "regenerate-proto")]
 fn compile_protos() {
     use std::path::PathBuf;
 
@@ -42,4 +69,8 @@ fn compile_protos() {
         .unwrap_or_else(|e| panic!("Failed to compile proto files: {e}"));
 
     println!("cargo:info=Generated gRPC code to {}", out_dir.display());
+    println!(
+        "cargo:warning=Proto code regenerated. Copy {}/mcp.rs to src/grpc/mcp_proto.rs",
+        out_dir.display()
+    );
 }

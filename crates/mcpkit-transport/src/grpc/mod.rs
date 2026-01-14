@@ -59,6 +59,9 @@
 //! }
 //! ```
 
+// Pre-generated protobuf code (see mcp_proto.rs for regeneration instructions)
+#[doc(hidden)]
+pub mod mcp_proto;
 mod transport;
 
 pub use transport::{
