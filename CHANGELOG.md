@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Updated `Cargo.lock` to patched versions of vulnerable transitive and direct
+  dependencies flagged by Dependabot / `cargo audit`:
+  `openssl` 0.10.75 → 0.10.80, `rustls-webpki` → 0.103.13, `quinn-proto` →
+  0.11.14, `jsonwebtoken` → 10.3.0, `actix-http` → 3.12.1, `bytes` → 1.11.1,
+  `time` → 0.3.47, `rsa` → 0.9.10, and `rand` → 0.8.6 / 0.9.3. The remaining
+  advisories (`rsa` Marvin timing sidechannel and `rustls-pemfile` unmaintained)
+  are dev-only/unfixed and already documented as ignores in `deny.toml`.
+
 ### Changed
 
 - **Extracted LLM orchestration crates to separate [llmtk](https://github.com/praxiomlabs/llmtk) project**
