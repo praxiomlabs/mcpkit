@@ -21,7 +21,7 @@ serde_json = { workspace = true }
 
 # Async
 futures = { workspace = true }
-tokio = { workspace = true, optional = true, features = ["sync", "rt"] }
+tokio = { workspace = true, optional = true, features = ["sync", "rt", "time"] }
 
 # Runtime-agnostic sync primitives
 async-lock = "3.4"

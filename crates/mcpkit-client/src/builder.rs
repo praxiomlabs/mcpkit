@@ -3,11 +3,16 @@
 //! The [`ClientBuilder`] provides a fluent API for constructing MCP clients
 //! with customizable options.
 
+use std::time::Duration;
+
 use mcpkit_core::capability::{ClientCapabilities, ClientInfo};
 use mcpkit_core::error::McpError;
 use mcpkit_transport::Transport;
 
 use crate::client::{Client, initialize};
+
+/// Default per-request timeout applied when none is configured.
+pub const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Builder for constructing MCP clients.
 ///
@@ -35,6 +40,7 @@ pub struct ClientBuilder {
     name: String,
     version: String,
     capabilities: ClientCapabilities,
+    request_timeout: Duration,
 }
 
 impl Default for ClientBuilder {
@@ -51,6 +57,7 @@ impl ClientBuilder {
             name: "mcp-client".to_string(),
             version: env!("CARGO_PKG_VERSION").to_string(),
             capabilities: ClientCapabilities::default(),
+            request_timeout: DEFAULT_REQUEST_TIMEOUT,
         }
     }
 
@@ -109,6 +116,20 @@ impl ClientBuilder {
         self
     }
 
+    /// Set the per-request timeout.
+    ///
+    /// Each request waits at most this long for a response before failing with a
+    /// [`TransportErrorKind::Timeout`] error. Defaults to
+    /// [`DEFAULT_REQUEST_TIMEOUT`] (60 seconds). For long-running work, prefer the
+    /// Tasks API, or raise this value for clients that issue legitimately slow calls.
+    ///
+    /// [`TransportErrorKind::Timeout`]: mcpkit_core::error::TransportErrorKind::Timeout
+    #[must_use]
+    pub const fn request_timeout(mut self, timeout: Duration) -> Self {
+        self.request_timeout = timeout;
+        self
+    }
+
     /// Build and connect the client using the given transport.
     ///
     /// This performs the MCP handshake and returns a connected client.
@@ -124,6 +145,7 @@ impl ClientBuilder {
             init_result,
             client_info,
             self.capabilities,
+            self.request_timeout,
         ))
     }
 
@@ -150,6 +172,7 @@ impl ClientBuilder {
             client_info,
             self.capabilities,
             handler,
+            self.request_timeout,
         ))
     }
 }

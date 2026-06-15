@@ -33,6 +33,7 @@ use mcpkit_transport::Transport;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::time::Duration;
 use tracing::{debug, error, info, trace, warn};
 
 // Runtime-agnostic sync primitives
@@ -100,6 +101,8 @@ pub struct Client<T: Transport, H: ClientHandler = crate::handler::NoOpHandler> 
     handler: Arc<H>,
     /// Sender for outgoing messages to the background task.
     outgoing_tx: mpsc::Sender<Message>,
+    /// Maximum time to wait for a response to a request before timing out.
+    request_timeout: Duration,
     /// Flag indicating if the client is running.
     running: Arc<AtomicBool>,
     /// Handle to the background task.
@@ -113,6 +116,7 @@ impl<T: Transport + 'static> Client<T, crate::handler::NoOpHandler> {
         init_result: InitializeResult,
         client_info: ClientInfo,
         client_caps: ClientCapabilities,
+        request_timeout: Duration,
     ) -> Self {
         Self::with_handler(
             transport,
@@ -120,6 +124,7 @@ impl<T: Transport + 'static> Client<T, crate::handler::NoOpHandler> {
             client_info,
             client_caps,
             crate::handler::NoOpHandler,
+            request_timeout,
         )
     }
 }
@@ -132,6 +137,7 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
         client_info: ClientInfo,
         client_caps: ClientCapabilities,
         handler: H,
+        request_timeout: Duration,
     ) -> Self {
         let transport = Arc::new(transport);
         let pending = Arc::new(RwLock::new(HashMap::new()));
@@ -181,6 +187,7 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
             instructions: init_result.instructions,
             handler,
             outgoing_tx,
+            request_timeout,
             running,
             _background_handle: Some(background_handle),
         }
@@ -238,12 +245,18 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
                             Ok(None) => {
                                 info!("Connection closed by server");
                                 running.store(false, Ordering::SeqCst);
+                                // Drop pending senders so in-flight requests fail
+                                // fast instead of waiting out their timeout.
+                                pending.write().await.clear();
                                 handler.on_disconnected().await;
                                 break;
                             }
                             Err(e) => {
                                 error!(?e, "Transport error in message router");
                                 running.store(false, Ordering::SeqCst);
+                                // Drop pending senders so in-flight requests fail
+                                // fast instead of waiting out their timeout.
+                                pending.write().await.clear();
                                 handler.on_disconnected().await;
                                 break;
                             }
@@ -990,15 +1003,34 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
                 }))
             })?;
 
-        // Wait for the response with a timeout
-        let response = rx.await.map_err(|_| {
-            McpError::Transport(Box::new(TransportDetails {
-                kind: TransportErrorKind::ConnectionClosed,
-                message: "Response channel closed (server may have disconnected)".to_string(),
-                context: TransportContext::default(),
-                source: None,
-            }))
-        })?;
+        // Wait for the response, bounded by the configured request timeout.
+        // On either elapse or a dropped sender we must remove our entry from
+        // `pending`, otherwise stale senders accumulate without bound.
+        let response = match tokio::time::timeout(self.request_timeout, rx).await {
+            Ok(Ok(response)) => response,
+            Ok(Err(_)) => {
+                // Sender was dropped (router exited / connection closed).
+                self.pending.write().await.remove(&id);
+                return Err(McpError::Transport(Box::new(TransportDetails {
+                    kind: TransportErrorKind::ConnectionClosed,
+                    message: "Response channel closed (server may have disconnected)".to_string(),
+                    context: TransportContext::default(),
+                    source: None,
+                })));
+            }
+            Err(_elapsed) => {
+                self.pending.write().await.remove(&id);
+                return Err(McpError::Transport(Box::new(TransportDetails {
+                    kind: TransportErrorKind::Timeout,
+                    message: format!(
+                        "Request '{method}' timed out after {:?}",
+                        self.request_timeout
+                    ),
+                    context: TransportContext::default(),
+                    source: None,
+                })));
+            }
+        };
 
         // Process the response
         if let Some(error) = response.error {
@@ -1191,11 +1223,159 @@ pub(crate) async fn initialize<T: Transport>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mcpkit_transport::TransportMetadata;
 
     #[test]
     fn test_request_id_generation() {
         let next_id = AtomicU64::new(1);
         assert_eq!(next_id.fetch_add(1, Ordering::SeqCst), 1);
         assert_eq!(next_id.fetch_add(1, Ordering::SeqCst), 2);
+    }
+
+    fn test_init_result() -> InitializeResult {
+        InitializeResult {
+            protocol_version: PROTOCOL_VERSION.to_string(),
+            capabilities: ServerCapabilities::new(),
+            server_info: ServerInfo::new("test-server", "1.0.0"),
+            instructions: None,
+        }
+    }
+
+    /// A transport that accepts sends but never delivers a response.
+    struct SilentTransport;
+
+    impl Transport for SilentTransport {
+        type Error = std::convert::Infallible;
+
+        async fn send(&self, _msg: Message) -> Result<(), Self::Error> {
+            Ok(())
+        }
+
+        async fn recv(&self) -> Result<Option<Message>, Self::Error> {
+            std::future::pending().await
+        }
+
+        async fn close(&self) -> Result<(), Self::Error> {
+            Ok(())
+        }
+
+        fn is_connected(&self) -> bool {
+            true
+        }
+
+        fn metadata(&self) -> TransportMetadata {
+            TransportMetadata::new("silent-test")
+        }
+    }
+
+    /// A transport that reports a clean close (`recv` -> `Ok(None)`) as soon as
+    /// the first message is sent, simulating a server that disconnects while a
+    /// request is in flight.
+    struct ClosingTransport {
+        on_send: Arc<tokio::sync::Notify>,
+    }
+
+    impl ClosingTransport {
+        fn new() -> Self {
+            Self {
+                on_send: Arc::new(tokio::sync::Notify::new()),
+            }
+        }
+    }
+
+    impl Transport for ClosingTransport {
+        type Error = std::convert::Infallible;
+
+        async fn send(&self, _msg: Message) -> Result<(), Self::Error> {
+            self.on_send.notify_one();
+            Ok(())
+        }
+
+        async fn recv(&self) -> Result<Option<Message>, Self::Error> {
+            self.on_send.notified().await;
+            Ok(None)
+        }
+
+        async fn close(&self) -> Result<(), Self::Error> {
+            Ok(())
+        }
+
+        fn is_connected(&self) -> bool {
+            true
+        }
+
+        fn metadata(&self) -> TransportMetadata {
+            TransportMetadata::new("closing-test")
+        }
+    }
+
+    /// Regression test for #5: a request to a server that never responds must
+    /// fail with a timeout (not hang forever) and must remove its entry from the
+    /// pending map so it cannot accumulate without bound.
+    #[tokio::test(start_paused = true)]
+    async fn request_times_out_and_drains_pending() {
+        let client = Client::new(
+            SilentTransport,
+            test_init_result(),
+            ClientInfo::new("test-client", "1.0.0"),
+            ClientCapabilities::default(),
+            Duration::from_secs(5),
+        );
+
+        let err = client
+            .request::<serde_json::Value>("tools/list", None)
+            .await
+            .expect_err("request should time out");
+
+        match err {
+            McpError::Transport(details) => {
+                assert!(
+                    matches!(details.kind, TransportErrorKind::Timeout),
+                    "expected Timeout, got {:?}",
+                    details.kind
+                );
+            }
+            other => panic!("expected transport timeout, got {other:?}"),
+        }
+
+        assert!(
+            client.pending.read().await.is_empty(),
+            "timed-out request must be removed from the pending map"
+        );
+    }
+
+    /// Regression test for #5: when the connection closes while a request is in
+    /// flight, the request must fail fast rather than wait out the timeout. The
+    /// generous timeout below means a regression of the drain would hang the test.
+    #[tokio::test]
+    async fn in_flight_request_fails_fast_when_connection_closes() {
+        let client = Client::new(
+            ClosingTransport::new(),
+            test_init_result(),
+            ClientInfo::new("test-client", "1.0.0"),
+            ClientCapabilities::default(),
+            Duration::from_secs(3600),
+        );
+
+        let err = client
+            .request::<serde_json::Value>("tools/list", None)
+            .await
+            .expect_err("request should fail when the connection closes");
+
+        match err {
+            McpError::Transport(details) => {
+                assert!(
+                    matches!(details.kind, TransportErrorKind::ConnectionClosed),
+                    "expected ConnectionClosed, got {:?}",
+                    details.kind
+                );
+            }
+            other => panic!("expected transport connection-closed, got {other:?}"),
+        }
+
+        assert!(
+            client.pending.read().await.is_empty(),
+            "pending requests must be drained when the connection closes"
+        );
     }
 }
