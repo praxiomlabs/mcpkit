@@ -227,7 +227,7 @@ impl SessionRecorder {
     /// Check if recording is active.
     #[must_use]
     pub fn is_recording(&self) -> bool {
-        self.state.read().map(|s| s.recording).unwrap_or(false)
+        self.state.read().is_ok_and(|s| s.recording)
     }
 
     /// Stop recording.
@@ -295,7 +295,7 @@ impl SessionRecorder {
     /// Get the number of recorded events.
     #[must_use]
     pub fn event_count(&self) -> usize {
-        self.state.read().map(|s| s.events.len()).unwrap_or(0)
+        self.state.read().map_or(0, |s| s.events.len())
     }
 
     /// Finalize and return the recorded session.

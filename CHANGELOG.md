@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Resolved Clippy lints surfaced by newer stable toolchains (`map_unwrap_or`,
+  `unnecessary_map_or`, `unnecessary_sort_by`) across `mcpkit-core`,
+  `mcpkit-transport`, `mcpkit-server`, and `mcpkit-testing`, restoring a clean
+  `clippy -D warnings` on current stable Rust
 - Clippy warning for `from_str` method naming in `mcpkit-core::auth::jwt` (renamed to `parse`)
 - Clippy warnings in `mcpkit-transport` for single-pattern match expressions
 

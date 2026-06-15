@@ -444,8 +444,7 @@ pub fn decode_claims_unverified(token: &str) -> Result<TokenClaims, JwtError> {
 pub fn validate_claims(claims: &TokenClaims, validation: &TokenValidation) -> Result<(), JwtError> {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
+        .map_or(0, |d| d.as_secs());
 
     // Validate expiration (use saturating arithmetic to prevent overflow)
     if validation.validate_exp {

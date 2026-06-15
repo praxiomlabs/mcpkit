@@ -276,19 +276,19 @@ impl MockClient {
     /// Get pending request count.
     #[must_use]
     pub fn pending_count(&self) -> usize {
-        self.pending.read().map(|p| p.len()).unwrap_or(0)
+        self.pending.read().map_or(0, |p| p.len())
     }
 
     /// Get the total request count.
     #[must_use]
     pub fn request_count(&self) -> usize {
-        self.requests.read().map(|r| r.len()).unwrap_or(0)
+        self.requests.read().map_or(0, |r| r.len())
     }
 
     /// Get the total response count.
     #[must_use]
     pub fn response_count(&self) -> usize {
-        self.responses.read().map(|r| r.len()).unwrap_or(0)
+        self.responses.read().map_or(0, |r| r.len())
     }
 
     /// Clear all recorded data.

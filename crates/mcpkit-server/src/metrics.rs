@@ -248,7 +248,7 @@ impl MetricsSnapshot {
     #[must_use]
     pub fn top_methods(&self, limit: usize) -> Vec<(&String, &MethodStats)> {
         let mut methods: Vec<_> = self.per_method.iter().collect();
-        methods.sort_by(|a, b| b.1.requests.cmp(&a.1.requests));
+        methods.sort_by_key(|m| std::cmp::Reverse(m.1.requests));
         methods.into_iter().take(limit).collect()
     }
 
