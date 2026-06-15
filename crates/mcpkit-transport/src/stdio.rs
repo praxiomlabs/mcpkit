@@ -320,7 +320,14 @@ impl SyncStdioTransport {
             message: "stdin lock poisoned".to_string(),
         })?;
 
-        let bytes_read = stdin.read_line(&mut line)?;
+        // Bound the read to one byte past the limit so a peer that never sends a
+        // newline cannot grow `line` without bound before the size check below.
+        let bytes_read = {
+            use std::io::Read as _;
+            (&mut *stdin)
+                .take(MAX_MESSAGE_SIZE as u64 + 1)
+                .read_line(&mut line)?
+        };
 
         if bytes_read == 0 {
             self.connected.store(false, Ordering::SeqCst);

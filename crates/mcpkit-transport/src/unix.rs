@@ -36,7 +36,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 #[cfg(feature = "tokio-runtime")]
 use tokio::{
-    io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter},
+    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
     net::{UnixListener as TokioUnixListener, UnixStream},
 };
 
@@ -297,10 +297,18 @@ impl Transport for UnixTransport {
         // Clear the buffer and read a line
         state.line_buffer.clear();
 
-        // We need to read into a separate buffer to avoid borrow issues
+        // We need to read into a separate buffer to avoid borrow issues.
+        // Bound the read to one byte past the limit so a peer that never sends a
+        // newline cannot grow `line_buffer` without bound; the size check below
+        // then rejects it. Without this, `read_line` would buffer unboundedly
+        // before the post-read check could fire.
+        let max = self.config.max_message_size;
         let (result, reader) = {
             let mut reader = reader;
-            let result = reader.read_line(&mut state.line_buffer).await;
+            let result = {
+                let mut limited = (&mut reader).take(max as u64 + 1);
+                limited.read_line(&mut state.line_buffer).await
+            };
             (result, reader)
         };
 
@@ -633,6 +641,31 @@ mod tests {
         let path = socket.to_path();
         assert_eq!(path[0], 0u8);
         assert_eq!(&path[1..], b"mcp-test");
+    }
+
+    /// Regression test for #7: a peer that sends more than `max_message_size`
+    /// without a newline must get a `MessageTooLarge` error rather than causing
+    /// `read_line` to buffer the input without bound.
+    #[cfg(feature = "tokio-runtime")]
+    #[tokio::test]
+    async fn recv_rejects_oversized_line() {
+        let (server_stream, mut client_stream) = UnixStream::pair().expect("socketpair");
+        let config = UnixSocketConfig::new("/unused").with_max_message_size(1024);
+        let transport = UnixTransport::from_stream(config, server_stream, true);
+
+        // Client sends 8 KiB with no newline and keeps the stream open.
+        let writer = tokio::spawn(async move {
+            let data = vec![b'a'; 8192];
+            let _ = client_stream.write_all(&data).await;
+            tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+        });
+
+        let result = transport.recv().await;
+        assert!(
+            matches!(result, Err(TransportError::MessageTooLarge { .. })),
+            "oversized line must be rejected, got {result:?}"
+        );
+        writer.abort();
     }
 
     /// Integration test: Test Unix socket client-server communication.

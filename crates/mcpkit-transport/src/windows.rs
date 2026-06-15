@@ -377,6 +377,21 @@ impl NamedPipeTransport {
         })?;
         state.line_buffer.push_str(chunk);
 
+        // Reject a partial line that already exceeds the limit without a
+        // newline, so `line_buffer` cannot grow without bound across recv calls.
+        // Drop the accumulated data so a stuck oversized stream doesn't keep
+        // growing the buffer on every subsequent read.
+        if state.line_buffer.len() > self.config.max_message_size
+            && !state.line_buffer.contains('\n')
+        {
+            let size = state.line_buffer.len();
+            state.line_buffer.clear();
+            return Err(TransportError::MessageTooLarge {
+                size,
+                max: self.config.max_message_size,
+            });
+        }
+
         // Check if we now have a complete line
         if let Some(newline_pos) = state.line_buffer.find('\n') {
             let line = state.line_buffer[..newline_pos].to_string();
