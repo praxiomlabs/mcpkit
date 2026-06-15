@@ -2644,6 +2644,7 @@ name = "mcpkit-server"
 version = "0.5.0"
 dependencies = [
  "chrono",
+ "event-listener",
  "futures",
  "mcpkit-core",
  "mcpkit-transport",

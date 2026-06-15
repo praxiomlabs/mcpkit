@@ -42,6 +42,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `Context::cancelled()` no longer busy-spins at 100% CPU while waiting
+  ([#8](https://github.com/praxiomlabs/mcpkit/issues/8)). The cancellation
+  future now parks on an `event_listener::Event` and is woken by `cancel()`,
+  instead of re-waking itself on every poll.
 - Connection pool no longer leaks `in_use` capacity
   ([#6](https://github.com/praxiomlabs/mcpkit/issues/6)). A failing connection
   factory now rolls back its reserved slot, and dropping a

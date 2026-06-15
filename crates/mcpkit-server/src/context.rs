@@ -51,6 +51,9 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::task::{Context as TaskContext, Poll};
+
+use event_listener::Event;
 
 /// Trait for sending messages to the peer (client or server).
 ///
@@ -66,11 +69,12 @@ pub trait Peer: Send + Sync {
 
 /// A cancellation token for tracking request cancellation.
 ///
-/// This is a simple wrapper around an atomic boolean that can be
-/// shared across threads and checked for cancellation.
-#[derive(Debug, Clone)]
+/// Wraps an atomic flag plus an [`event_listener::Event`] so waiters can park
+/// until cancellation instead of busy-polling the flag.
+#[derive(Clone)]
 pub struct CancellationToken {
     cancelled: Arc<AtomicBool>,
+    event: Arc<Event>,
 }
 
 impl CancellationToken {
@@ -79,6 +83,7 @@ impl CancellationToken {
     pub fn new() -> Self {
         Self {
             cancelled: Arc::new(AtomicBool::new(false)),
+            event: Arc::new(Event::new()),
         }
     }
 
@@ -91,20 +96,26 @@ impl CancellationToken {
     /// Request cancellation.
     pub fn cancel(&self) {
         self.cancelled.store(true, Ordering::SeqCst);
+        // Wake every task currently waiting in `cancelled()`.
+        self.event.notify(usize::MAX);
     }
 
     /// Wait for cancellation.
     ///
-    /// Returns a future that completes when cancellation is requested.
-    ///
-    /// Note: In a production implementation, this would integrate with the
-    /// runtime's notification system. This simple implementation polls
-    /// the atomic flag.
+    /// Returns a future that completes when cancellation is requested. The
+    /// future parks on an [`event_listener::Event`] and is woken by
+    /// [`cancel`](Self::cancel); it does not busy-poll.
     #[must_use]
     pub fn cancelled(&self) -> CancelledFuture {
-        CancelledFuture {
-            cancelled: self.cancelled.clone(),
-        }
+        CancelledFuture::new(self.cancelled.clone(), self.event.clone())
+    }
+}
+
+impl std::fmt::Debug for CancellationToken {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CancellationToken")
+            .field("cancelled", &self.is_cancelled())
+            .finish()
     }
 }
 
@@ -115,25 +126,41 @@ impl Default for CancellationToken {
 }
 
 /// A future that completes when cancellation is requested.
+///
+/// Parks on the token's [`event_listener::Event`] until cancellation, rather
+/// than waking itself on every poll.
 pub struct CancelledFuture {
-    cancelled: Arc<AtomicBool>,
+    inner: Pin<Box<dyn Future<Output = ()> + Send>>,
+}
+
+impl CancelledFuture {
+    fn new(cancelled: Arc<AtomicBool>, event: Arc<Event>) -> Self {
+        Self {
+            inner: Box::pin(async move {
+                loop {
+                    if cancelled.load(Ordering::SeqCst) {
+                        return;
+                    }
+                    // Register a listener *before* the final flag check so a
+                    // `cancel()` that races with us cannot be missed: if it set
+                    // the flag after our first check, the re-check below catches
+                    // it; if it fires after, the listener is woken.
+                    let listener = event.listen();
+                    if cancelled.load(Ordering::SeqCst) {
+                        return;
+                    }
+                    listener.await;
+                }
+            }),
+        }
+    }
 }
 
 impl Future for CancelledFuture {
     type Output = ();
 
-    fn poll(
-        self: Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Self::Output> {
-        if self.cancelled.load(Ordering::SeqCst) {
-            std::task::Poll::Ready(())
-        } else {
-            // Wake up later to check again
-            // In production, this would register with a proper notification system
-            cx.waker().wake_by_ref();
-            std::task::Poll::Pending
-        }
+    fn poll(mut self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<Self::Output> {
+        self.inner.as_mut().poll(cx)
     }
 }
 
@@ -380,6 +407,63 @@ mod tests {
         assert!(!token.is_cancelled());
         token.cancel();
         assert!(token.is_cancelled());
+    }
+
+    /// Regression test for #8: `cancelled()` must park on a waker instead of
+    /// busy-spinning (the old impl called `wake_by_ref()` on every poll). We
+    /// poll with a waker that counts wake-ups and assert the future does not
+    /// wake itself, then that `cancel()` wakes it and it resolves.
+    #[test]
+    fn cancelled_future_parks_and_wakes_on_cancel() {
+        use std::sync::atomic::AtomicUsize;
+        use std::task::{Wake, Waker};
+
+        struct CountingWaker(AtomicUsize);
+        impl Wake for CountingWaker {
+            fn wake(self: Arc<Self>) {
+                self.0.fetch_add(1, Ordering::SeqCst);
+            }
+            fn wake_by_ref(self: &Arc<Self>) {
+                self.0.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        let counter = Arc::new(CountingWaker(AtomicUsize::new(0)));
+        let waker = Waker::from(counter.clone());
+        let mut cx = TaskContext::from_waker(&waker);
+
+        let token = CancellationToken::new();
+        let mut fut = Box::pin(token.cancelled());
+
+        // First poll: not cancelled -> must be Pending and must NOT have woken
+        // itself (a busy-spin would wake immediately).
+        assert_eq!(fut.as_mut().poll(&mut cx), Poll::Pending);
+        assert_eq!(
+            counter.0.load(Ordering::SeqCst),
+            0,
+            "cancelled future must park, not busy-spin (no self-wake)"
+        );
+
+        // Cancelling wakes the registered waker and the future resolves.
+        token.cancel();
+        assert!(
+            counter.0.load(Ordering::SeqCst) >= 1,
+            "cancel() must wake the parked waiter"
+        );
+        assert_eq!(fut.as_mut().poll(&mut cx), Poll::Ready(()));
+    }
+
+    /// A token already cancelled before `cancelled()` is awaited resolves
+    /// immediately.
+    #[test]
+    fn cancelled_future_ready_when_already_cancelled() {
+        let waker = std::task::Waker::noop();
+        let mut cx = TaskContext::from_waker(waker);
+
+        let token = CancellationToken::new();
+        token.cancel();
+        let mut fut = Box::pin(token.cancelled());
+        assert_eq!(fut.as_mut().poll(&mut cx), Poll::Ready(()));
     }
 
     #[test]

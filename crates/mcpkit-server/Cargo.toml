@@ -17,6 +17,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 futures = { workspace = true }
+event-listener = "5.4"
 tokio = { version = "1", features = ["sync", "rt"], optional = true }
 tracing = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
