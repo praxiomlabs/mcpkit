@@ -254,6 +254,14 @@ impl std::error::Error for TimeoutError {}
 
 use bytes::{Bytes, BytesMut};
 
+/// Default maximum size (16 MiB) of a single line/message accepted by
+/// [`BufReader::read_line_bytes`].
+///
+/// Matches the per-transport `MAX_MESSAGE_SIZE` constants. Reads that accumulate
+/// more than this without a newline are rejected during accumulation so a peer
+/// cannot exhaust memory.
+pub const DEFAULT_MAX_MESSAGE_SIZE: usize = 16 * 1024 * 1024;
+
 /// A runtime-agnostic buffered reader with zero-copy support.
 ///
 /// This implementation uses `BytesMut` internally for efficient buffer management
@@ -263,6 +271,7 @@ pub struct BufReader<R> {
     inner: R,
     buffer: BytesMut,
     capacity: usize,
+    max_message_size: usize,
 }
 
 impl<R> BufReader<R> {
@@ -277,7 +286,19 @@ impl<R> BufReader<R> {
             inner,
             buffer: BytesMut::with_capacity(capacity),
             capacity,
+            max_message_size: DEFAULT_MAX_MESSAGE_SIZE,
         }
+    }
+
+    /// Set the maximum size of a single line/message.
+    ///
+    /// A read that accumulates more than this many bytes without encountering a
+    /// newline fails with [`io::ErrorKind::InvalidData`] instead of growing the
+    /// buffer without bound.
+    #[must_use]
+    pub const fn with_max_message_size(mut self, max_message_size: usize) -> Self {
+        self.max_message_size = max_message_size;
+        self
     }
 
     /// Get a reference to the underlying reader.
@@ -343,6 +364,21 @@ impl<R: AsyncRead + Unpin> BufReader<R> {
         let mut line_buf: Option<BytesMut> = None;
 
         loop {
+            // Enforce the maximum message size *during* accumulation so a peer
+            // that never sends a newline cannot exhaust memory. Each iteration
+            // reads at most `capacity` bytes, so the buffer can overshoot the
+            // limit by at most one chunk before this check fires.
+            let accumulated = line_buf.as_ref().map_or(0, BytesMut::len) + self.buffer.len();
+            if accumulated > self.max_message_size {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "incoming message exceeds maximum size of {} bytes",
+                        self.max_message_size
+                    ),
+                ));
+            }
+
             // Look for newline in current buffer
             if let Some(newline_pos) = self.buffer.iter().position(|&b| b == b'\n') {
                 // Found a newline - split the buffer at this position
@@ -511,6 +547,46 @@ mod tests {
         let eof = reader.read_line_bytes().await?;
         assert!(eof.is_empty());
         Ok(())
+    }
+
+    /// Regression test for #7: a line that exceeds `max_message_size` without a
+    /// newline must be rejected during accumulation, not buffered in full.
+    #[cfg(feature = "tokio-runtime")]
+    #[tokio::test]
+    async fn read_line_bytes_rejects_oversized_line() {
+        use futures::io::Cursor;
+
+        // 10_000 bytes, no newline, with a 100-byte cap and small read chunks.
+        let data = vec![b'a'; 10_000];
+        let cursor = Cursor::new(data);
+        let mut reader = BufReader::with_capacity(64, cursor).with_max_message_size(100);
+
+        let err = reader
+            .read_line_bytes()
+            .await
+            .expect_err("oversized line must be rejected");
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+        // The buffer must not have grown anywhere near the full input: at most
+        // the cap plus one read chunk.
+        assert!(reader.buffered() <= 100 + 64);
+    }
+
+    /// A line at or below the limit (and with a trailing newline) is still read.
+    #[cfg(feature = "tokio-runtime")]
+    #[tokio::test]
+    async fn read_line_bytes_accepts_line_within_limit() {
+        use futures::io::Cursor;
+
+        let mut data = vec![b'a'; 90];
+        data.push(b'\n');
+        let cursor = Cursor::new(data);
+        let mut reader = BufReader::with_capacity(64, cursor).with_max_message_size(100);
+
+        let line = reader
+            .read_line_bytes()
+            .await
+            .expect("line within limit should be read");
+        assert_eq!(line.len(), 91);
     }
 
     /// Test that JSON can be parsed directly from `Bytes` without intermediate String.

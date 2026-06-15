@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `time` → 0.3.47, `rsa` → 0.9.10, and `rand` → 0.8.6 / 0.9.3. The remaining
   advisories (`rsa` Marvin timing sidechannel and `rustls-pemfile` unmaintained)
   are dev-only/unfixed and already documented as ignores in `deny.toml`.
+- Newline-framed transports now enforce the message-size limit **during** the
+  read instead of after, so a peer that streams data without a newline can no
+  longer exhaust memory before the cap is checked
+  ([#7](https://github.com/praxiomlabs/mcpkit/issues/7)). Covers stdio, spawned
+  subprocess, Unix sockets, and Windows named pipes.
 
 ### Changed
 
