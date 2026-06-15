@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `ClientBuilder::request_timeout` to configure the per-request response timeout
+  (`mcpkit-client`). Defaults to 60 seconds.
+
 ### Security
 
 - Updated `Cargo.lock` to patched versions of vulnerable transitive and direct
@@ -19,6 +24,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Client requests now time out** instead of waiting indefinitely
+  ([#5](https://github.com/praxiomlabs/mcpkit/issues/5)). Each request waits at
+  most `request_timeout` (default 60s) for a response and then fails with
+  `TransportErrorKind::Timeout`. Clients that issue legitimately long-running
+  calls should raise the timeout or use the Tasks API.
 - **Extracted LLM orchestration crates to separate [llmtk](https://github.com/praxiomlabs/llmtk) project**
   - The forge orchestration layer (provider, template, memory, embedding, chain, agent, rag, eval)
     has been moved to a dedicated LLM Toolkit workspace to maintain clear separation of concerns
@@ -33,6 +43,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `PooledConnectionGuard` releases its slot, so the pool can no longer drain to
   permanent exhaustion. `in_use`/`peak_in_use` are tracked with atomics so a
   slot can be freed from synchronous (drop) contexts.
+- In-flight client requests now fail fast with `ConnectionClosed` when the
+  connection drops, instead of hanging until their timeout; pending response
+  slots are reclaimed on timeout and disconnect to prevent unbounded growth
+  ([#5](https://github.com/praxiomlabs/mcpkit/issues/5))
 - Resolved Clippy lints surfaced by newer stable toolchains (`map_unwrap_or`,
   `unnecessary_map_or`, `unnecessary_sort_by`) across `mcpkit-core`,
   `mcpkit-transport`, `mcpkit-server`, and `mcpkit-testing`, restoring a clean
