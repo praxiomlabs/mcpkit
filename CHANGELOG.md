@@ -27,6 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Connection pool no longer leaks `in_use` capacity
+  ([#6](https://github.com/praxiomlabs/mcpkit/issues/6)). A failing connection
+  factory now rolls back its reserved slot, and dropping a
+  `PooledConnectionGuard` releases its slot, so the pool can no longer drain to
+  permanent exhaustion. `in_use`/`peak_in_use` are tracked with atomics so a
+  slot can be freed from synchronous (drop) contexts.
 - Resolved Clippy lints surfaced by newer stable toolchains (`map_unwrap_or`,
   `unnecessary_map_or`, `unnecessary_sort_by`) across `mcpkit-core`,
   `mcpkit-transport`, `mcpkit-server`, and `mcpkit-testing`, restoring a clean

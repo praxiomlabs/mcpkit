@@ -17,12 +17,8 @@ use super::connection::PooledConnection;
 pub struct PoolState<T> {
     /// Available connections.
     pub available: VecDeque<PooledConnection<T>>,
-    /// Number of connections currently in use.
-    pub in_use: usize,
     /// Whether the pool is closed.
     pub closed: bool,
-    /// Peak number of concurrent connections ever in use.
-    pub peak_in_use: usize,
 }
 
 /// A connection pool for managing MCP transport connections.
@@ -38,6 +34,15 @@ where
     config: PoolConfig,
     factory: F,
     pub(crate) state: AsyncMutex<PoolState<T>>,
+    /// Number of connections currently in use.
+    ///
+    /// Kept outside [`PoolState`] (which is behind an async mutex) so the
+    /// `in_use` count can be decremented from synchronous contexts such as
+    /// `Drop` and factory-error rollback. Increments happen while holding the
+    /// state lock so the `max_connections` invariant is preserved.
+    in_use: AtomicUsize,
+    /// Peak number of concurrent connections ever in use.
+    peak_in_use: AtomicUsize,
     /// Notification for waiters when a connection becomes available.
     notify: Notify,
     next_id: AtomicU64,
@@ -68,10 +73,10 @@ where
             factory,
             state: AsyncMutex::new(PoolState {
                 available: VecDeque::new(),
-                in_use: 0,
                 closed: false,
-                peak_in_use: 0,
             }),
+            in_use: AtomicUsize::new(0),
+            peak_in_use: AtomicUsize::new(0),
             notify: Notify::new(),
             next_id: AtomicU64::new(1),
             stats_created: AtomicU64::new(0),
@@ -83,6 +88,44 @@ where
             stats_recycled_lifetime: AtomicU64::new(0),
             stats_recycled_health: AtomicU64::new(0),
         }
+    }
+
+    /// Reserve one `in_use` slot and update the peak counter.
+    ///
+    /// Callers must hold the state lock when calling this so the reservation is
+    /// serialized against the `max_connections` capacity check.
+    fn inc_in_use(&self) {
+        let new_in_use = self.in_use.fetch_add(1, Ordering::AcqRel) + 1;
+        self.peak_in_use.fetch_max(new_in_use, Ordering::AcqRel);
+    }
+
+    /// Release one `in_use` slot, saturating at zero so a double release can
+    /// never underflow the counter.
+    fn dec_in_use(&self) {
+        let mut cur = self.in_use.load(Ordering::Acquire);
+        while cur > 0 {
+            match self.in_use.compare_exchange_weak(
+                cur,
+                cur - 1,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => return,
+                Err(actual) => cur = actual,
+            }
+        }
+    }
+
+    /// Release a reserved `in_use` slot without returning a connection to the
+    /// pool, then wake one waiter.
+    ///
+    /// Used by `Drop` of [`PooledConnectionGuard`] and by factory-error rollback,
+    /// where the connection cannot be returned for reuse (those paths are
+    /// synchronous / have no connection to return). The slot is freed so pool
+    /// capacity is not leaked.
+    pub(crate) fn release_slot(&self) {
+        self.dec_in_use();
+        self.notify.notify(1);
     }
 
     /// Warm up the pool by pre-creating connections.
@@ -98,7 +141,7 @@ where
 
         for _ in 0..min_connections {
             let state = self.state.lock().await;
-            let total = state.available.len() + state.in_use;
+            let total = state.available.len() + self.in_use.load(Ordering::Acquire);
             drop(state);
 
             if total >= min_connections {
@@ -135,12 +178,12 @@ where
             acquires: self.stats_acquires.load(Ordering::Relaxed),
             releases: self.stats_releases.load(Ordering::Relaxed),
             timeouts: self.stats_timeouts.load(Ordering::Relaxed),
-            in_use: state.in_use,
+            in_use: self.in_use.load(Ordering::Acquire),
             idle: state.available.len(),
             waiters: self.stats_waiters.load(Ordering::Relaxed),
             recycled_lifetime: self.stats_recycled_lifetime.load(Ordering::Relaxed),
             recycled_health: self.stats_recycled_health.load(Ordering::Relaxed),
-            peak_in_use: state.peak_in_use,
+            peak_in_use: self.peak_in_use.load(Ordering::Acquire),
         }
     }
 
@@ -194,31 +237,32 @@ where
                 }
 
                 conn.touch();
-                state.in_use += 1;
-
-                // Track peak usage
-                if state.in_use > state.peak_in_use {
-                    state.peak_in_use = state.in_use;
-                }
+                // Reserve the slot while holding the lock so the capacity check
+                // stays serialized against other acquirers.
+                self.inc_in_use();
 
                 self.stats_acquires.fetch_add(1, Ordering::Relaxed);
                 return Ok(conn);
             }
 
             // Check if we can create a new connection
-            let total = state.available.len() + state.in_use;
+            let total = state.available.len() + self.in_use.load(Ordering::Acquire);
             if total < self.config.max_connections {
-                state.in_use += 1;
-
-                // Track peak usage
-                if state.in_use > state.peak_in_use {
-                    state.peak_in_use = state.in_use;
-                }
+                // Reserve the slot under the lock to preserve the
+                // max_connections invariant, then create outside the lock.
+                self.inc_in_use();
 
                 drop(state);
 
-                // Create new connection outside the lock
-                let connection = (self.factory)().await?;
+                // Create new connection outside the lock. On failure, roll back
+                // the reserved slot so a failing factory cannot leak capacity.
+                let connection = match (self.factory)().await {
+                    Ok(connection) => connection,
+                    Err(e) => {
+                        self.release_slot();
+                        return Err(e);
+                    }
+                };
                 let id = self.next_id.fetch_add(1, Ordering::Relaxed);
 
                 self.stats_created.fetch_add(1, Ordering::Relaxed);
@@ -260,9 +304,7 @@ where
     pub async fn release(&self, mut conn: PooledConnection<T>) {
         let mut state = self.state.lock().await;
 
-        if state.in_use > 0 {
-            state.in_use -= 1;
-        }
+        self.dec_in_use();
 
         // Check if pool is closed or connection is unhealthy
         if state.closed {

@@ -76,19 +76,22 @@ impl<T> PooledConnection<T> {
     }
 }
 
-/// A simple wrapper for pools that provides automatic connection release.
+/// A guard that frees its pool slot when dropped.
 ///
-/// When dropped, the connection is released. For proper async release back to
-/// the pool, use the `take()` method to extract the connection and call
-/// `Pool::release()` directly.
+/// When the guard is dropped without first calling [`take`](Self::take), the
+/// reserved `in_use` slot is released back to the pool so capacity is not
+/// leaked. The connection itself is closed rather than returned for reuse,
+/// because release in a `Drop` context cannot be async.
+///
+/// To return a connection to the pool **for reuse**, call [`take`](Self::take)
+/// to extract it and pass it to [`Pool::release`] directly.
 pub struct PooledConnectionGuard<'a, T, F, Fut>
 where
     T: Transport,
     F: Fn() -> Fut + Send + Sync,
     Fut: Future<Output = Result<T, TransportError>> + Send,
 {
-    /// Reference to the pool (kept for future async release support).
-    #[allow(dead_code)]
+    /// Pool the slot belongs to, used to release the slot on drop.
     pool: &'a Pool<T, F, Fut>,
     conn: Option<PooledConnection<T>>,
 }
@@ -134,16 +137,15 @@ where
             .expect("take() called twice on PooledConnectionGuard")
     }
 
-    /// Release the connection back to the pool.
+    /// Release the reserved pool slot in a synchronous (drop) context.
     ///
-    /// This is a best-effort operation in synchronous context.
-    /// For proper async release, use `Pool::release()` directly.
+    /// We cannot await here to return the connection to the pool's idle set, so
+    /// the connection is dropped (closed) and only its `in_use` slot is freed.
+    /// If [`take`](Self::take) was already called there is nothing to release.
     fn release_sync(&mut self) {
-        // In drop context, we cannot await, so we just drop the connection.
-        // Proper async release should use Pool::release() before dropping.
-        // The connection count will be decremented when the Pool detects
-        // the connection is no longer available.
-        self.conn.take();
+        if self.conn.take().is_some() {
+            self.pool.release_slot();
+        }
     }
 }
 
