@@ -308,8 +308,7 @@ impl RateLimiter {
         self.store
             .get_stats(&self.key)
             .await
-            .map(|s| s.current_tokens)
-            .unwrap_or(0)
+            .map_or(0, |s| s.current_tokens)
     }
 
     /// Get statistics about rate limiting.

@@ -27,9 +27,7 @@ impl MessageRecord {
     /// Create a new message record.
     #[must_use]
     pub fn new(direction: MessageDirection, message: Message) -> Self {
-        let size_bytes = serde_json::to_string(&message)
-            .map(|s| s.len())
-            .unwrap_or(0);
+        let size_bytes = serde_json::to_string(&message).map_or(0, |s| s.len());
 
         Self {
             timestamp: Instant::now(),
@@ -184,7 +182,7 @@ impl MessageInspector {
     /// Check if capturing is enabled.
     #[must_use]
     pub fn is_enabled(&self) -> bool {
-        self.enabled.read().map(|e| *e).unwrap_or(false)
+        self.enabled.read().is_ok_and(|e| *e)
     }
 
     /// Record an outbound message.
@@ -245,7 +243,7 @@ impl MessageInspector {
     /// Get the number of captured records.
     #[must_use]
     pub fn len(&self) -> usize {
-        self.records.read().map(|r| r.len()).unwrap_or(0)
+        self.records.read().map_or(0, |r| r.len())
     }
 
     /// Check if there are no captured records.

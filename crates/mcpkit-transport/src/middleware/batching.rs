@@ -259,7 +259,7 @@ impl<T: Transport> BatchingTransport<T> {
     /// Estimate the size of a message.
     fn estimate_size(msg: &Message) -> usize {
         // Simple estimate based on JSON serialization
-        serde_json::to_string(msg).map(|s| s.len()).unwrap_or(100)
+        serde_json::to_string(msg).map_or(100, |s| s.len())
     }
 }
 

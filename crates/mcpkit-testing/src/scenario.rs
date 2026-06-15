@@ -462,25 +462,25 @@ impl MessageQueue {
     /// Check if there are pending outgoing messages.
     #[must_use]
     pub fn has_outgoing(&self) -> bool {
-        self.outgoing.read().map(|q| !q.is_empty()).unwrap_or(false)
+        self.outgoing.read().is_ok_and(|q| !q.is_empty())
     }
 
     /// Check if there are pending incoming messages.
     #[must_use]
     pub fn has_incoming(&self) -> bool {
-        self.incoming.read().map(|q| !q.is_empty()).unwrap_or(false)
+        self.incoming.read().is_ok_and(|q| !q.is_empty())
     }
 
     /// Get count of outgoing messages.
     #[must_use]
     pub fn outgoing_count(&self) -> usize {
-        self.outgoing.read().map(|q| q.len()).unwrap_or(0)
+        self.outgoing.read().map_or(0, |q| q.len())
     }
 
     /// Get count of incoming messages.
     #[must_use]
     pub fn incoming_count(&self) -> usize {
-        self.incoming.read().map(|q| q.len()).unwrap_or(0)
+        self.incoming.read().map_or(0, |q| q.len())
     }
 
     /// Clear all messages.
