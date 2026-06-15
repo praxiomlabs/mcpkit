@@ -640,4 +640,82 @@ mod stress_tests {
         assert!(stats.idle > 0, "Should have idle connections");
         assert_eq!(stats.timeouts, 0, "Should have no timeouts");
     }
+
+    // =========================================================================
+    // Capacity-leak regression tests (#6)
+    // =========================================================================
+
+    /// Regression test for #6: a failing connection factory must not leak an
+    /// `in_use` slot. Otherwise the pool drains to permanent exhaustion.
+    #[tokio::test]
+    async fn factory_error_does_not_leak_capacity() {
+        let config = PoolConfig::new()
+            .max_connections(2)
+            .acquire_timeout(Duration::from_millis(200));
+
+        // Fail the first two factory calls, then succeed.
+        let attempts = Arc::new(AtomicU64::new(0));
+        let factory: Box<dyn Fn() -> MockFuture + Send + Sync> = {
+            let attempts = Arc::clone(&attempts);
+            Box::new(move || {
+                let n = attempts.fetch_add(1, Ordering::Relaxed);
+                Box::pin(async move {
+                    if n < 2 {
+                        Err(TransportError::Connection {
+                            message: "factory boom".to_string(),
+                        })
+                    } else {
+                        Ok(MockTransport::new(n))
+                    }
+                }) as MockFuture
+            })
+        };
+        let pool = Pool::new(config, factory);
+
+        assert!(pool.acquire().await.is_err(), "first factory call fails");
+        assert!(pool.acquire().await.is_err(), "second factory call fails");
+
+        assert_eq!(
+            pool.stats().await.in_use,
+            0,
+            "a failed factory call must roll back the reserved in_use slot"
+        );
+
+        // The pool must still be able to create connections (not deadlocked at
+        // capacity because of leaked slots).
+        let conn = pool
+            .acquire()
+            .await
+            .expect("pool should still hand out connections after factory failures");
+        pool.release(conn).await;
+    }
+
+    /// Regression test for #6: dropping a `PooledConnectionGuard` must free the
+    /// `in_use` slot, otherwise guard users silently exhaust the pool.
+    #[tokio::test]
+    async fn dropping_guard_frees_the_slot() {
+        let config = PoolConfig::new()
+            .max_connections(1)
+            .acquire_timeout(Duration::from_millis(200));
+        let pool = create_mock_pool(config);
+
+        {
+            let conn = pool.acquire().await.expect("acquire");
+            let _guard = PooledConnectionGuard::new(&pool, conn);
+            assert_eq!(pool.stats().await.in_use, 1, "slot is in use while held");
+        } // guard dropped here
+
+        assert_eq!(
+            pool.stats().await.in_use,
+            0,
+            "dropping the guard must release the in_use slot"
+        );
+
+        // Pool is at max_connections=1; this only succeeds if the slot was freed.
+        let conn = pool
+            .acquire()
+            .await
+            .expect("should reacquire after the guard frees the slot");
+        pool.release(conn).await;
+    }
 }
