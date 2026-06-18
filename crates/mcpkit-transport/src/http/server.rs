@@ -5,6 +5,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
+use mcpkit_core::ProtocolVersion;
 use mcpkit_core::protocol::Message;
 
 use crate::error::TransportError;
@@ -652,17 +653,25 @@ async fn handle_mcp_post_with_state(
             .into_response();
     }
 
-    // Check protocol version
-    let version = headers
-        .get(MCP_PROTOCOL_VERSION_HEADER)
-        .and_then(|v| v.to_str().ok());
-
-    if version != Some(MCP_PROTOCOL_VERSION) {
-        return (
-            StatusCode::BAD_REQUEST,
-            format!("Missing or invalid {MCP_PROTOCOL_VERSION_HEADER} header"),
-        )
-            .into_response();
+    // Validate the protocol version header.
+    //
+    // A request that omits the header is assumed to use protocol version
+    // `2025-03-26` (the header was introduced in `2025-06-18`), so a missing
+    // header is accepted for backwards compatibility. A header that is present
+    // but names an unsupported version is rejected with `400 Bad Request`.
+    if let Some(raw) = headers.get(MCP_PROTOCOL_VERSION_HEADER) {
+        let supported = raw
+            .to_str()
+            .ok()
+            .and_then(|v| v.parse::<ProtocolVersion>().ok())
+            .is_some();
+        if !supported {
+            return (
+                StatusCode::BAD_REQUEST,
+                format!("Unsupported {MCP_PROTOCOL_VERSION_HEADER} header"),
+            )
+                .into_response();
+        }
     }
 
     // Parse message
@@ -976,5 +985,54 @@ mod tests {
         // Strict mode with no configured origins rejects all
         assert!(!config.is_origin_allowed(Some("https://anything.com")));
         assert!(!config.is_origin_allowed(None));
+    }
+
+    // Protocol version header validation (POST handler)
+
+    fn post_request(
+        headers: axum::http::HeaderMap,
+    ) -> impl std::future::Future<Output = axum::http::StatusCode> {
+        let config = std::sync::Arc::new(HttpServerConfig::new());
+        let body = r#"{"jsonrpc":"2.0","method":"ping","id":1}"#.to_string();
+        async move {
+            handle_mcp_post_with_state(axum::extract::State(config), headers, body)
+                .await
+                .status()
+        }
+    }
+
+    #[tokio::test]
+    async fn post_accepts_missing_protocol_version_header() {
+        // The header was introduced in 2025-06-18; an absent header is assumed
+        // to mean 2025-03-26 and must be accepted for backwards compatibility.
+        let status = post_request(axum::http::HeaderMap::new()).await;
+        assert_eq!(status, axum::http::StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn post_accepts_supported_older_protocol_version() {
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert(MCP_PROTOCOL_VERSION_HEADER, "2025-06-18".parse().unwrap());
+        let status = post_request(headers).await;
+        assert_eq!(status, axum::http::StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn post_accepts_current_protocol_version() {
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert(
+            MCP_PROTOCOL_VERSION_HEADER,
+            MCP_PROTOCOL_VERSION.parse().unwrap(),
+        );
+        let status = post_request(headers).await;
+        assert_eq!(status, axum::http::StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn post_rejects_unsupported_protocol_version() {
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert(MCP_PROTOCOL_VERSION_HEADER, "1999-01-01".parse().unwrap());
+        let status = post_request(headers).await;
+        assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
     }
 }
