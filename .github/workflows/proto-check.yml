@@ -1,0 +1,35 @@
+name: Proto Drift Check
+
+# Fail if the committed gRPC bindings (src/grpc/mcp_proto.rs) no longer match a
+# fresh generation from proto/mcp.proto. Runs only when the proto, the generated
+# file, or the build script changes, since regenerating compiles protobuf-src.
+on:
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'crates/mcpkit-transport/proto/**'
+      - 'crates/mcpkit-transport/src/grpc/mcp_proto.rs'
+      - 'crates/mcpkit-transport/build.rs'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  proto-drift:
+    name: Proto Drift Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@1.96
+        with:
+          components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@just
+      - name: Regenerate proto bindings
+        run: just generate-proto
+      - name: Fail if committed bindings drifted from proto/mcp.proto
+        run: git diff --exit-code crates/mcpkit-transport/src/grpc/mcp_proto.rs
