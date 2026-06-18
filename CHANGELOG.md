@@ -49,6 +49,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The default in-memory rate limiter now isolates clients per key
+  ([#11](https://github.com/praxiomlabs/mcpkit/issues/11)). `InMemoryStore`
+  previously used a single global bucket and ignored the key, so one noisy
+  client throttled everyone. It now keeps an independent bucket per key, bounded
+  by an LRU-evicted map (default 10,000 keys) to cap memory.
 - JWT `required_claims` are now actually enforced by the signature-verifying
   validator ([#10](https://github.com/praxiomlabs/mcpkit/issues/10)). Previously
   custom claims were silently ignored and configuring any `required_claims`
