@@ -428,6 +428,21 @@ impl From<ToolOutput> for CallToolResult {
     }
 }
 
+/// Typed structured-output wrapper for tool return values.
+///
+/// Returning `Json(value)` from a tool serializes `value` into the result's
+/// `structuredContent`, with a pretty-printed JSON fallback in `content`.
+#[derive(Debug, Clone)]
+pub struct Json<T>(pub T);
+
+impl<T: Serialize> From<Json<T>> for ToolOutput {
+    fn from(json: Json<T>) -> Self {
+        let structured = serde_json::to_value(&json.0).unwrap_or(serde_json::Value::Null);
+        let text = serde_json::to_string_pretty(&json.0).unwrap_or_default();
+        Self::Success(CallToolResult::text(text).with_structured_content(structured))
+    }
+}
+
 impl From<String> for ToolOutput {
     /// Convert a string into a text `ToolOutput`.
     ///
