@@ -4,7 +4,7 @@ This guide helps you migrate from mcpkit 0.x to the stable 1.0 release.
 
 ## TL;DR
 
-**If you're on 0.5.x**: No migration required. The 1.0 API is identical to 0.5.x.
+**If you're on 0.6.x**: No migration required. The 1.0 API is identical to 0.6.x.
 
 **If you're on 0.4.x or earlier**: Follow the version-specific guides below.
 
@@ -39,15 +39,15 @@ See [API Stability](api-stability.md) for the complete tier definitions.
 
 ## Migration by Version
 
-### From 0.5.x to 1.0
+### From 0.6.x to 1.0
 
-**No changes required.** The 0.5.x API is the 1.0 API.
+**No changes required.** The 0.6.x API is the 1.0 API.
 
 Simply update your dependency:
 
 ```toml
 # Before
-mcpkit = "0.5"
+mcpkit = "0.6"
 
 # After
 mcpkit = "1"
@@ -229,11 +229,11 @@ Test with clients that use different protocol versions to ensure negotiation wor
 
 If migration causes critical issues, you can roll back to your previous version.
 
-### Rolling Back to 0.5.x
+### Rolling Back to 0.6.x
 
 ```toml
 # Revert Cargo.toml
-mcpkit = "0.5"
+mcpkit = "0.6"
 ```
 
 ```bash
@@ -332,7 +332,7 @@ If you encounter issues during migration:
 | mcpkit | MCP Protocol | Rust | Status |
 |--------|--------------|------|--------|
 | 1.0.x  | 2024-11-05 → 2025-11-25 | 1.85+ | Stable |
-| 0.5.x  | 2024-11-05 → 2025-11-25 | 1.85+ | Current RC |
+| 0.6.x  | 2024-11-05 → 2025-11-25 | 1.85+ | Current RC |
 | 0.4.x  | 2024-11-05 → 2025-11-25 | 1.85+ | Maintenance |
 | 0.3.x  | 2024-11-05 → 2025-11-25 | 1.85+ | Security Only |
 | 0.2.x  | 2024-11-05 → 2025-06-18 | 1.82+ | End of Life |
