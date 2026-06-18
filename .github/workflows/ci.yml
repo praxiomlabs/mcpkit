@@ -6,6 +6,13 @@ on:
   pull_request:
     branches: [main, master]
 
+# Cancel superseded in-progress runs for the same PR/branch so rapid pushes
+# don't pile up and contend for runners. Pushes to the default branch are not
+# cancelled (so post-merge runs always complete).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -Dwarnings
