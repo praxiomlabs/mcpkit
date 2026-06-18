@@ -62,6 +62,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ([#18](https://github.com/praxiomlabs/mcpkit/issues/18)). `with_*_param`
   previously indexed a non-object `properties` (or `input_schema`) and panicked;
   it now coerces non-object values to a fresh object.
+- Macro schema fidelity ([#19](https://github.com/praxiomlabs/mcpkit/issues/19)):
+  tool parameter types are now resolved by their last path segment, so qualified
+  paths like `std::string::String` and `core::option::Option<T>` map to the
+  correct schema instead of a confusing compile error; the dead `Option`
+  "nullable" code was removed (optionality is conveyed by omitting the parameter
+  from `required`); and `#[mcp_server]` on a generic impl block now fails with a
+  clear error rather than emitting malformed impls.
 - `McpError::ResourceAccessDenied` now has a distinct JSON-RPC error code
   ([#17](https://github.com/praxiomlabs/mcpkit/issues/17)); it previously
   collided with `ResourceNotFound` at `-32002`, so clients couldn't tell the two

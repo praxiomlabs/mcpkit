@@ -200,72 +200,60 @@ impl ToolMethod {
 /// compilation will fail with a clear error message.
 fn type_to_json_schema(ty: &Type) -> TokenStream {
     if let Type::Path(path) = ty {
-        let path_str = quote!(#path).to_string().replace(' ', "");
+        // Match on the *last* path segment ident so qualified paths such as
+        // `std::string::String` or `core::option::Option<T>` resolve correctly,
+        // rather than stringifying the whole path (which only matched bare names).
+        let Some(segment) = path.path.segments.last() else {
+            return quote!(::serde_json::json!({}));
+        };
 
-        // Handle common types
-        match path_str.as_str() {
-            "String" | "&str" | "str" => quote!(::serde_json::json!({"type": "string"})),
+        match segment.ident.to_string().as_str() {
+            "String" | "str" => quote!(::serde_json::json!({"type": "string"})),
             "i8" | "i16" | "i32" | "i64" | "i128" | "isize" | "u8" | "u16" | "u32" | "u64"
             | "u128" | "usize" => {
                 quote!(::serde_json::json!({"type": "integer"}))
             }
             "f32" | "f64" => quote!(::serde_json::json!({"type": "number"})),
             "bool" => quote!(::serde_json::json!({"type": "boolean"})),
-            _ if path_str.starts_with("Option<") => {
-                // Extract inner type and make it nullable
-                if let Some(segment) = path.path.segments.last() {
-                    if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                        if let Some(syn::GenericArgument::Type(inner)) = args.args.first() {
-                            let inner_schema = type_to_json_schema(inner);
-                            return quote! {
-                                {
-                                    let mut schema = #inner_schema;
-                                    // Option types are nullable
-                                    schema
-                                }
-                            };
-                        }
-                    }
-                }
-                quote!(::serde_json::json!({}))
+            "Option" => {
+                // Optionality is conveyed by omitting the parameter from the
+                // schema's `required` array (see `generate_input_schema`); the
+                // value schema is just the inner type's schema.
+                first_type_arg(segment)
+                    .map_or_else(|| quote!(::serde_json::json!({})), type_to_json_schema)
             }
-            _ if path_str.starts_with("Vec<") => {
-                // Handle Vec<T>
-                if let Some(segment) = path.path.segments.last() {
-                    if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                        if let Some(syn::GenericArgument::Type(inner)) = args.args.first() {
-                            let inner_schema = type_to_json_schema(inner);
-                            return quote! {
-                                ::serde_json::json!({
-                                    "type": "array",
-                                    "items": #inner_schema
-                                })
-                            };
-                        }
-                    }
-                }
-                quote!(::serde_json::json!({"type": "array"}))
+            "Vec" => first_type_arg(segment).map_or_else(
+                || quote!(::serde_json::json!({"type": "array"})),
+                |inner| {
+                    let inner_schema = type_to_json_schema(inner);
+                    quote!(::serde_json::json!({"type": "array", "items": #inner_schema}))
+                },
+            ),
+            "HashMap" | "BTreeMap" => {
+                quote!(::serde_json::json!({"type": "object", "additionalProperties": true}))
             }
-            _ if path_str.starts_with("HashMap<") || path_str.starts_with("BTreeMap<") => {
-                quote!(::serde_json::json!({
-                    "type": "object",
-                    "additionalProperties": true
-                }))
-            }
-            "serde_json::Value" | "Value" => {
-                // JSON Value can be any type
-                quote!(::serde_json::json!({}))
-            }
+            "Value" => quote!(::serde_json::json!({})),
             _ => {
                 // For custom struct types, call their tool_input_schema() method.
-                // This requires the type to derive ToolInput.
-                // If it doesn't, the user gets a compile error with a helpful message.
+                // This requires the type to derive ToolInput; otherwise the user
+                // gets a compile error pointing at the type.
                 quote!(#path::tool_input_schema())
             }
         }
     } else {
         quote!(::serde_json::json!({}))
     }
+}
+
+/// Return the first generic type argument of a path segment (e.g. `T` in
+/// `Option<T>` or `Vec<T>`), if present.
+fn first_type_arg(segment: &syn::PathSegment) -> Option<&Type> {
+    if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+        if let Some(syn::GenericArgument::Type(inner)) = args.args.first() {
+            return Some(inner);
+        }
+    }
+    None
 }
 
 /// Extract parameter information from a function argument.
