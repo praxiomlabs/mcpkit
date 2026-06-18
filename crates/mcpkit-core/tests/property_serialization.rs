@@ -326,9 +326,14 @@ proptest! {
     #[test]
     fn notification_has_no_id(notification in arb_notification()) {
         let json = serde_json::to_string(&notification)?;
-        // Notifications must not have an id field
-        // Note: We check that there's no "id": pattern (with colon)
-        prop_assert!(!json.contains(r#""id":"#));
+        // Notifications must not have a top-level `id` field. Check the parsed
+        // structure rather than a substring: a substring check false-positives
+        // when the (arbitrary) params happen to contain an "id" key.
+        let value: serde_json::Value = serde_json::from_str(&json)?;
+        prop_assert!(
+            value.get("id").is_none(),
+            "notification must not serialize a top-level id: {json}"
+        );
     }
 
     // -------------------------------------------------------------------------
