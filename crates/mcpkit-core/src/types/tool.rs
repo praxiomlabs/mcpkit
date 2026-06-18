@@ -98,11 +98,8 @@ impl Tool {
 
     /// Add a string parameter to the tool's input schema.
     ///
-    /// # Panics
-    ///
-    /// Panics if the input schema doesn't have a "properties" object.
-    /// This should not happen unless `input_schema()` was called with
-    /// a schema that lacks the "properties" field.
+    /// If `input_schema` is not an object (or its `properties` is not an
+    /// object), it is coerced to a fresh object first.
     #[must_use]
     pub fn with_string_param(
         mut self,
@@ -126,10 +123,6 @@ impl Tool {
     }
 
     /// Add a number parameter to the tool's input schema.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the input schema doesn't have a "properties" object.
     #[must_use]
     pub fn with_number_param(
         mut self,
@@ -153,10 +146,6 @@ impl Tool {
     }
 
     /// Add a boolean parameter to the tool's input schema.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the input schema doesn't have a "properties" object.
     #[must_use]
     pub fn with_boolean_param(
         mut self,
@@ -179,9 +168,15 @@ impl Tool {
         self
     }
 
-    /// Ensure the `input_schema` has a "properties" object.
+    /// Ensure `input_schema` is an object with an object `properties` field.
+    ///
+    /// Coerces non-object values (missing, or set to a non-object by a caller)
+    /// rather than panicking when a parameter is subsequently inserted.
     fn ensure_properties(&mut self) {
-        if self.input_schema.get("properties").is_none() {
+        if !self.input_schema.is_object() {
+            self.input_schema = serde_json::json!({});
+        }
+        if !self.input_schema["properties"].is_object() {
             self.input_schema["properties"] = serde_json::json!({});
         }
     }
@@ -458,6 +453,29 @@ pub struct CallToolRequest {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn with_param_coerces_non_object_properties_instead_of_panicking() {
+        // #18: `properties` present but not an object used to panic on insert.
+        let tool = Tool::new("t")
+            .input_schema(serde_json::json!({ "properties": 5 }))
+            .with_string_param("name", "the name", true);
+
+        assert!(tool.input_schema["properties"].is_object());
+        assert_eq!(tool.input_schema["properties"]["name"]["type"], "string");
+        assert_eq!(tool.input_schema["required"], serde_json::json!(["name"]));
+    }
+
+    #[test]
+    fn with_param_coerces_non_object_input_schema() {
+        // #18: a non-object input_schema must be coerced, not panicked on.
+        let tool = Tool::new("t")
+            .input_schema(serde_json::json!(42))
+            .with_number_param("x", "a number", false);
+
+        assert!(tool.input_schema.is_object());
+        assert_eq!(tool.input_schema["properties"]["x"]["type"], "number");
+    }
 
     #[test]
     fn test_tool_builder() {
