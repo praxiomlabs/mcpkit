@@ -2615,6 +2615,7 @@ name = "mcpkit-macros-tests"
 version = "0.0.0"
 dependencies = [
  "mcpkit",
+ "mcpkit-core",
  "mcpkit-macros",
  "serde_json",
  "tokio",

@@ -4,9 +4,12 @@
 
 #![allow(dead_code)]
 
+use darling::FromMeta;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{FnArg, Ident, Pat, PatIdent, PatType, ReturnType, Type};
+
+use crate::attrs::ParamAttrs;
 
 /// Information about a tool method extracted from the AST.
 #[derive(Debug)]
@@ -42,8 +45,12 @@ pub struct ToolParam {
     pub doc: Option<String>,
     /// Whether the parameter is optional (Option<T>)
     pub is_optional: bool,
-    /// Default value if specified
+    /// Default value, from `#[mcp(default = ...)]`.
     pub default: Option<syn::Lit>,
+    /// Minimum value, from `#[mcp(min = ...)]`.
+    pub min: Option<i64>,
+    /// Maximum value, from `#[mcp(max = ...)]`.
+    pub max: Option<i64>,
 }
 
 impl ToolMethod {
@@ -63,6 +70,21 @@ impl ToolMethod {
                 |d| quote!(::serde_json::Value::String(#d.to_string())),
             );
 
+            // `#[mcp(default = ..., min = ..., max = ...)]` -> JSON Schema
+            // `default` / `minimum` / `maximum`.
+            let default_insert = param.default.as_ref().map_or_else(
+                || quote!(),
+                |lit| quote!(obj.insert("default".to_string(), ::serde_json::json!(#lit));),
+            );
+            let min_insert = param.min.map_or_else(
+                || quote!(),
+                |m| quote!(obj.insert("minimum".to_string(), ::serde_json::json!(#m));),
+            );
+            let max_insert = param.max.map_or_else(
+                || quote!(),
+                |m| quote!(obj.insert("maximum".to_string(), ::serde_json::json!(#m));),
+            );
+
             properties.push(quote! {
                 (#name.to_string(), {
                     let mut prop = #type_schema;
@@ -70,6 +92,9 @@ impl ToolMethod {
                         if #description != ::serde_json::Value::Null {
                             obj.insert("description".to_string(), #description);
                         }
+                        #default_insert
+                        #min_insert
+                        #max_insert
                     }
                     prop
                 })
@@ -244,13 +269,17 @@ fn type_to_json_schema(ty: &Type) -> TokenStream {
 }
 
 /// Extract parameter information from a function argument.
-pub fn extract_param(arg: &FnArg) -> Option<ToolParam> {
+///
+/// Parses (and strips) the `#[mcp(default = ..., min = ..., max = ...)]` helper
+/// attribute so it does not leak into the re-emitted impl block. Returns an
+/// error for a malformed `#[mcp(...)]` attribute instead of silently ignoring it.
+pub fn extract_param(arg: &mut FnArg) -> syn::Result<Option<ToolParam>> {
     match arg {
         FnArg::Typed(PatType { pat, ty, attrs, .. }) => {
             // Get the parameter name
             let name = match pat.as_ref() {
                 Pat::Ident(PatIdent { ident, .. }) => ident.clone(),
-                _ => return None,
+                _ => return Ok(None),
             };
 
             // Extract doc comment
@@ -273,18 +302,33 @@ pub fn extract_param(arg: &FnArg) -> Option<ToolParam> {
 
             let doc = if doc.is_empty() { None } else { Some(doc) };
 
+            // Parse the `#[mcp(...)]` helper attribute, if present.
+            let mut param_attrs = ParamAttrs::default();
+            for attr in attrs.iter() {
+                if attr.path().is_ident("mcp") {
+                    param_attrs = ParamAttrs::from_meta(&attr.meta)
+                        .map_err(|e| syn::Error::new_spanned(attr, e.to_string()))?;
+                }
+            }
+            // Strip the attributes the macro consumes (`#[mcp(...)]` and the doc
+            // comments read above) so they aren't re-emitted onto the parameter,
+            // where the compiler rejects all but a few built-in attributes.
+            attrs.retain(|attr| !attr.path().is_ident("mcp") && !attr.path().is_ident("doc"));
+
             // Check if optional
             let is_optional = is_option_type(ty);
 
-            Some(ToolParam {
+            Ok(Some(ToolParam {
                 name,
                 ty: (**ty).clone(),
                 doc,
                 is_optional,
-                default: None,
-            })
+                default: param_attrs.default,
+                min: param_attrs.min,
+                max: param_attrs.max,
+            }))
         }
-        FnArg::Receiver(_) => None,
+        FnArg::Receiver(_) => Ok(None),
     }
 }
 

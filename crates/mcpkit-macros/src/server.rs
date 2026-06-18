@@ -196,20 +196,18 @@ fn find_tool_attr(attrs: &[Attribute]) -> Result<Option<(usize, ToolAttrs)>> {
 
 /// Extract tool information from a method.
 #[allow(clippy::unnecessary_wraps)] // Returns Result for future validation extensibility
-fn extract_tool_info(method: &ImplItemFn, attrs: ToolAttrs) -> Result<ToolMethod> {
+fn extract_tool_info(method: &mut ImplItemFn, attrs: ToolAttrs) -> Result<ToolMethod> {
     let name = method.sig.ident.clone();
     let tool_name = attrs.name.unwrap_or_else(|| name.to_string());
 
-    // Extract parameters (skip &self)
-    let params: Vec<ToolParam> = method
-        .sig
-        .inputs
-        .iter()
-        .filter_map(|arg| match arg {
-            FnArg::Receiver(_) => None,
-            FnArg::Typed(_) => extract_param(arg),
-        })
-        .collect();
+    // Extract parameters (skip &self). `extract_param` also strips the
+    // `#[mcp(...)]` helper attribute from each parameter so it isn't re-emitted.
+    let mut params: Vec<ToolParam> = Vec::new();
+    for arg in &mut method.sig.inputs {
+        if let Some(param) = extract_param(arg)? {
+            params.push(param);
+        }
+    }
 
     let is_async = method.sig.asyncness.is_some();
     let returns_result = is_result_type(&method.sig.output);

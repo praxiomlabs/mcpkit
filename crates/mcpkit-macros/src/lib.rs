@@ -305,7 +305,7 @@ pub fn prompt(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///     /// The search query
 ///     query: String,
 ///     /// Maximum results (1-100)
-///     #[mcp(default = 10, range(1, 100))]
+///     #[mcp(default = 10, min = 1, max = 100)]
 ///     limit: usize,
 ///     /// Optional filters
 ///     filters: Option<Vec<String>>,
