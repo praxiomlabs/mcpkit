@@ -1,8 +1,11 @@
 name: CI
 
 on:
+  # Only run on pushes to the trunk; feature/fix/refactor branches get CI via
+  # their pull request instead, so a branch with an open PR runs CI once, not
+  # twice (a push-event run plus a pull_request-event run).
   push:
-    branches: [main, master, 'feature/**', 'fix/**', 'refactor/**']
+    branches: [main, master]
   pull_request:
     branches: [main, master]
 
@@ -26,7 +29,7 @@ jobs:
     name: Format
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@1.96
         with:
           components: rustfmt
@@ -36,7 +39,7 @@ jobs:
     name: Clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@1.96
         with:
           components: clippy
@@ -47,7 +50,7 @@ jobs:
     name: Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@1.96
       - uses: Swatinem/rust-cache@v2
       - run: cargo check --all-features --all-targets
@@ -56,7 +59,7 @@ jobs:
     name: Version Sync
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Check documentation versions match Cargo.toml
         run: |
           VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "mcpkit") | .version')
@@ -82,13 +85,15 @@ jobs:
     name: Link Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Check markdown links
         uses: lycheeverse/lychee-action@v2
         with:
           args: >
             --verbose
             --no-progress
+            --max-retries 6
+            --retry-wait-time 3
             --accept 200,204,206
             --exclude "^https://crates.io"
             --exclude "^https://docs.rs"
@@ -109,7 +114,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [fmt, clippy, check]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@1.96
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --all-features
@@ -124,7 +129,7 @@ jobs:
     needs: [test]
     if: github.event_name == 'pull_request'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@1.96
         with:
           components: llvm-tools-preview
@@ -134,7 +139,7 @@ jobs:
       - name: Generate coverage report
         run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
       - name: Upload to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v7
         with:
           files: lcov.info
           fail_ci_if_error: false
@@ -150,7 +155,7 @@ jobs:
     name: Cargo Deny
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check all
@@ -164,7 +169,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [fmt, clippy, check]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@1.96
       - uses: Swatinem/rust-cache@v2
       - name: Build documentation
@@ -181,7 +186,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [fmt, clippy, check]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@1.85
       - uses: Swatinem/rust-cache@v2
       # Only check library code compiles with MSRV, not tests/dev-dependencies
@@ -202,7 +207,7 @@ jobs:
       matrix:
         os: [macos-latest, windows-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@1.96
       - uses: Swatinem/rust-cache@v2
       # Use --features full instead of --all-features to exclude regenerate-proto
@@ -221,7 +226,7 @@ jobs:
     # Only run on PRs (not pushes to main) to compare against baseline
     if: github.event_name == 'pull_request'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@1.96
       - uses: Swatinem/rust-cache@v2
       - name: Install cargo-semver-checks
