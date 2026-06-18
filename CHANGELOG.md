@@ -30,6 +30,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ping` is now answered before the `initialize` handshake completes, instead of
   being rejected with "Server not initialized". Other requests still require
   initialization first.
+- `CallToolResult` now deserializes when the `content` field is absent (defaults
+  to empty), so results carrying only `isError` (or `{}`) from other peers parse
+  instead of failing.
 
 ## [0.6.0] - 2026-06-18
 
