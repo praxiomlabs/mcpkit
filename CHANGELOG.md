@@ -54,6 +54,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   backwards compatibility), rejecting only unsupported versions with
   `400 Bad Request`. Previously it rejected every request whose header was not
   the single latest version, breaking older but supported clients.
+- The framework adapters (`mcpkit-axum`, `mcpkit-actix`, `mcpkit-warp`,
+  `mcpkit-rocket`) now accept requests that omit the `MCP-Protocol-Version`
+  header, assuming `2025-03-26` for backwards compatibility per the MCP
+  Streamable HTTP specification. Previously a missing header was rejected with
+  `400 Bad Request`; a present-but-unsupported value is still rejected.
 
 ## [0.6.0] - 2026-06-18
 
