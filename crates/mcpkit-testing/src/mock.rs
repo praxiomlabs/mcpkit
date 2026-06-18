@@ -113,6 +113,7 @@ impl MockTool {
             description: self.description.clone(),
             input_schema: self.input_schema.clone(),
             annotations: self.annotations.clone(),
+            output_schema: None,
         }
     }
 

@@ -246,6 +246,7 @@ impl ToolBuilder {
             description: self.description,
             input_schema: self.input_schema,
             annotations,
+            output_schema: None,
         }
     }
 }
