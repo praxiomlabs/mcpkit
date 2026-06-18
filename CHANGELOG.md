@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   methods may now return any type that converts into `ToolOutput`.
 - A `#[tool]` returning `Json<T>` now also advertises the tool's `outputSchema`,
   derived from `T` (which should derive `ToolInput` in addition to `Serialize`).
+- `SessionStore::with_init_timeout` and `Session::is_reapable` in the
+  `mcpkit-axum` and `mcpkit-actix` adapters, plus a `DEFAULT_INIT_TIMEOUT`
+  constant, to bound how long a session created but never initialized is kept.
 
 ### Security
 
@@ -59,6 +62,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   header, assuming `2025-03-26` for backwards compatibility per the MCP
   Streamable HTTP specification. Previously a missing header was rejected with
   `400 Bad Request`; a present-but-unsupported value is still rejected.
+- The `mcpkit-axum` and `mcpkit-actix` session stores now reap expired sessions
+  when a new one is created, so the store stays bounded without a background
+  cleanup task; previously sessions accumulated indefinitely because the
+  cleanup routines were never invoked on the default request path. Sessions are
+  also reaped if created but not initialized within the initialization timeout,
+  and the `initialize` request now marks its session initialized.
 
 ## [0.6.0] - 2026-06-18
 
