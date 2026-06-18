@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   leak them into logs or traces; the secret fields now render as `<redacted>`
   while non-secret metadata and `Some`/`None` presence stay visible.
 
+### Fixed
+
+- Generated tool input schemas now emit their `properties` in a deterministic
+  order. The `#[mcp_server]` macro previously collected properties through a
+  `HashMap`, so `tools/list` returned schemas whose property order varied per
+  run — breaking response caching and snapshot tests. Properties are now
+  inserted in declaration order.
+
 ## [0.6.0] - 2026-06-18
 
 ### Added
