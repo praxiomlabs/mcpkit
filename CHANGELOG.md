@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Structured tool output (MCP `outputSchema` / `structuredContent`): `Tool` gains
+  an `output_schema` field + `Tool::output_schema(..)`, and `CallToolResult` gains
+  a `structured_content` field + `CallToolResult::with_structured_content(..)`.
+  (Ergonomic typed-return `Json<T>` derivation lands in a follow-up.)
+
 ### Security
 
 - OAuth/token types (`TokenResponse`, `TokenRequest`, `AuthorizationConfig`,

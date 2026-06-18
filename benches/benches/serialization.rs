@@ -111,6 +111,7 @@ fn tool_definition() -> Tool {
             idempotent_hint: Some(true),
             open_world_hint: None,
         }),
+        output_schema: None,
     }
 }
 

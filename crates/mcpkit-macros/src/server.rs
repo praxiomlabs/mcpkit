@@ -540,6 +540,7 @@ fn generate_tool_handler(tools: &[ToolMethod], self_ty: &syn::Type) -> TokenStre
                         idempotent_hint: Some(#idempotent),
                         open_world_hint: None,
                     }),
+                    output_schema: None,
                 }
             }
         })

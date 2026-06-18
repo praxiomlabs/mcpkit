@@ -233,6 +233,7 @@ fn test_call_tool_result_is_error_field_casing() -> Result<(), Box<dyn std::erro
     let error_result = CallToolResult {
         content: vec![Content::text("Error message")],
         is_error: Some(true),
+        structured_content: None,
     };
 
     let json_str = serde_json::to_string(&error_result)?;

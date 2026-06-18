@@ -40,6 +40,12 @@ pub struct Tool {
     /// Optional annotations providing hints about tool behavior.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub annotations: Option<ToolAnnotations>,
+    /// JSON Schema describing the tool's structured output, if it produces any.
+    ///
+    /// When set, a successful result's `structuredContent` is expected to
+    /// conform to this schema (MCP structured output).
+    #[serde(rename = "outputSchema", skip_serializing_if = "Option::is_none")]
+    pub output_schema: Option<serde_json::Value>,
 }
 
 impl Tool {
@@ -54,7 +60,15 @@ impl Tool {
                 "properties": {}
             }),
             annotations: None,
+            output_schema: None,
         }
+    }
+
+    /// Set the tool's output schema (`outputSchema`).
+    #[must_use]
+    pub fn output_schema(mut self, schema: serde_json::Value) -> Self {
+        self.output_schema = Some(schema);
+        self
     }
 
     /// Set the tool's description.
@@ -280,6 +294,13 @@ pub struct CallToolResult {
     /// If true, this result represents an error.
     #[serde(rename = "isError", skip_serializing_if = "Option::is_none")]
     pub is_error: Option<bool>,
+    /// Structured result conforming to the tool's `outputSchema`, if any.
+    #[serde(
+        rename = "structuredContent",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub structured_content: Option<serde_json::Value>,
 }
 
 impl CallToolResult {
@@ -289,6 +310,7 @@ impl CallToolResult {
         Self {
             content: vec![Content::text(text)],
             is_error: None,
+            structured_content: None,
         }
     }
 
@@ -298,6 +320,7 @@ impl CallToolResult {
         Self {
             content,
             is_error: None,
+            structured_content: None,
         }
     }
 
@@ -307,7 +330,15 @@ impl CallToolResult {
         Self {
             content: vec![Content::text(message)],
             is_error: Some(true),
+            structured_content: None,
         }
+    }
+
+    /// Attach structured content (matching the tool's `outputSchema`).
+    #[must_use]
+    pub fn with_structured_content(mut self, value: serde_json::Value) -> Self {
+        self.structured_content = Some(value);
+        self
     }
 
     /// Check if this result indicates an error.
@@ -508,6 +539,27 @@ mod tests {
 
         let error = CallToolResult::error("Query failed");
         assert!(error.is_error());
+    }
+
+    #[test]
+    fn test_output_schema_and_structured_content_serde() {
+        // Omitted by default.
+        let tool = Tool::new("t");
+        let j = serde_json::to_value(&tool).unwrap();
+        assert!(j.get("outputSchema").is_none());
+
+        // Present + camelCase when set.
+        let tool = Tool::new("t").output_schema(serde_json::json!({"type": "object"}));
+        let j = serde_json::to_value(&tool).unwrap();
+        assert_eq!(j["outputSchema"], serde_json::json!({"type": "object"}));
+
+        let res =
+            CallToolResult::text("ok").with_structured_content(serde_json::json!({"answer": 42}));
+        let j = serde_json::to_value(&res).unwrap();
+        assert_eq!(j["structuredContent"], serde_json::json!({"answer": 42}));
+        // Round-trips and stays absent when unset.
+        let plain: CallToolResult = serde_json::from_str(r#"{"content":[]}"#).expect("deserialize");
+        assert!(plain.structured_content.is_none());
     }
 
     #[test]

@@ -28,6 +28,7 @@ impl ToolHandler {
                 description: Some("Echo back the input".to_string()),
                 input_schema: json!({"type": "object", "properties": {"message": {"type": "string"}}}),
                 annotations: None,
+                output_schema: None,
             },
         );
 
@@ -46,6 +47,7 @@ impl ToolHandler {
                     "required": ["a", "b", "op"]
                 }),
                 annotations: None,
+                output_schema: None,
             },
         );
 
