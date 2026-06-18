@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `RequestId::Null` variant so error responses to an unparseable request can use
+- `RequestId::Null` variant so error responses to an unparsable request can use
   `"id": null` as required by JSON-RPC 2.0
   ([#17](https://github.com/praxiomlabs/mcpkit/issues/17)).
 - `ClientBuilder::request_timeout` to configure the per-request response timeout

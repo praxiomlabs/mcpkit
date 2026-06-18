@@ -431,7 +431,7 @@ mod tests {
 
     #[test]
     fn request_id_null_round_trips() {
-        // #17: JSON-RPC error responses to unparseable requests use `"id": null`.
+        // #17: JSON-RPC error responses to unparsable requests use `"id": null`.
         assert_eq!(serde_json::to_string(&RequestId::Null).unwrap(), "null");
         assert_eq!(
             serde_json::from_str::<RequestId>("null").unwrap(),
