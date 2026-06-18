@@ -31,7 +31,7 @@ schemars = "1"
 
 ```toml
 [dependencies]
-mcpkit = "0.5"
+mcpkit = "0.6"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 # schemars no longer required - schemas are built-in
