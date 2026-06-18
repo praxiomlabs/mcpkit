@@ -54,6 +54,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   server build a `tungstenite::WebSocketConfig` from the configured limit and
   pass it via `connect_async_with_config` / `accept_hdr_async_with_config`;
   previously the value was dropped and tungstenite's default was always used.
+- The `#[mcp(default = ..., min = ..., max = ...)]` parameter attribute is now
+  functional ([#14](https://github.com/praxiomlabs/mcpkit/issues/14)). It was
+  documented but a no-op — the parsed attributes were never emitted, so
+  generated tool schemas omitted `default`/`minimum`/`maximum`. The macro now
+  parses these (and strips the helper attribute, along with parameter doc
+  comments, so the impl still compiles) and emits them into the JSON Schema.
 - The default in-memory rate limiter now isolates clients per key
   ([#11](https://github.com/praxiomlabs/mcpkit/issues/11)). `InMemoryStore`
   previously used a single global bucket and ignored the key, so one noisy
