@@ -463,7 +463,9 @@ impl McpError {
             Self::Transport(_) => codes::SERVER_ERROR_START,
             Self::ToolExecution(_) => codes::SERVER_ERROR_START - 1,
             Self::ResourceNotFound { .. } => codes::RESOURCE_NOT_FOUND,
-            Self::ResourceAccessDenied { .. } => codes::SERVER_ERROR_START - 2,
+            // -2 would be -32002, which collides with RESOURCE_NOT_FOUND; use a
+            // distinct code so clients can tell access-denied from not-found.
+            Self::ResourceAccessDenied { .. } => codes::SERVER_ERROR_START - 9,
             Self::ConnectionFailed { .. } => codes::SERVER_ERROR_START - 3,
             Self::SessionExpired { .. } => codes::SERVER_ERROR_START - 4,
             Self::HandshakeFailed(_) => codes::SERVER_ERROR_START - 5,
@@ -520,5 +522,28 @@ impl From<std::io::Error> for McpError {
             context: TransportContext::default(),
             source: Some(Box::new(err)),
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resource_errors_have_distinct_codes() {
+        // Regression for #17: access-denied must not share -32002 with not-found.
+        let not_found = McpError::ResourceNotFound {
+            uri: "file:///x".to_string(),
+        };
+        let denied = McpError::ResourceAccessDenied {
+            uri: "file:///x".to_string(),
+            reason: None,
+        };
+        assert_eq!(not_found.code(), codes::RESOURCE_NOT_FOUND);
+        assert_ne!(
+            denied.code(),
+            not_found.code(),
+            "access-denied and not-found must have distinct JSON-RPC codes"
+        );
     }
 }

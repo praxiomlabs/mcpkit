@@ -78,20 +78,13 @@ pub struct Completion {
     /// Suggested values.
     pub values: Vec<String>,
     /// Total number of available completions (if known).
-    pub total: Option<CompletionTotal>,
+    ///
+    /// Per the MCP spec this is a plain count; whether more are available beyond
+    /// what was returned is conveyed separately by [`has_more`](Self::has_more).
+    pub total: Option<usize>,
     /// Whether there are more completions available.
     #[serde(rename = "hasMore")]
     pub has_more: Option<bool>,
-}
-
-/// Total completion count.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum CompletionTotal {
-    /// Exact count.
-    Exact(usize),
-    /// Approximate count (with "+" suffix when serialized).
-    Approximate(usize),
 }
 
 /// Result of a completion request.
@@ -104,6 +97,23 @@ pub struct CompleteResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn completion_total_is_a_plain_number() {
+        // #17: total serializes as a bare integer and round-trips (the old
+        // CompletionTotal enum made the "approximate" variant unreachable).
+        let completion = Completion {
+            values: vec!["a".to_string()],
+            total: Some(42),
+            has_more: Some(true),
+        };
+        let json = serde_json::to_value(&completion).unwrap();
+        assert_eq!(json["total"], serde_json::json!(42));
+        assert_eq!(json["hasMore"], serde_json::json!(true));
+
+        let parsed: Completion = serde_json::from_value(json).unwrap();
+        assert_eq!(parsed.total, Some(42));
+    }
 
     #[test]
     fn test_completion_ref() {

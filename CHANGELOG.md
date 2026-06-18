@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `RequestId::Null` variant so error responses to an unparseable request can use
+  `"id": null` as required by JSON-RPC 2.0
+  ([#17](https://github.com/praxiomlabs/mcpkit/issues/17)).
 - `ClientBuilder::request_timeout` to configure the per-request response timeout
   (`mcpkit-client`). Defaults to 60 seconds.
 
@@ -29,6 +32,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **(Breaking)** `Completion.total` is now `Option<usize>` and the broken
+  `CompletionTotal` enum was removed
+  ([#17](https://github.com/praxiomlabs/mcpkit/issues/17)). Its `Approximate`
+  variant was unreachable on round-trip (both variants serialized to a bare
+  integer); the MCP spec models `total` as a plain count with a separate
+  `hasMore` flag.
 - **The server now processes requests concurrently** instead of strictly one at
   a time ([#9](https://github.com/praxiomlabs/mcpkit/issues/9)). Requests are
   interleaved on the connection task up to `RuntimeConfig::max_concurrent_requests`
@@ -48,6 +57,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - See llmtk for LLM provider abstractions, RAG pipelines, agents, and related functionality
 
 ### Fixed
+
+- `McpError::ResourceAccessDenied` now has a distinct JSON-RPC error code
+  ([#17](https://github.com/praxiomlabs/mcpkit/issues/17)); it previously
+  collided with `ResourceNotFound` at `-32002`, so clients couldn't tell the two
+  apart.
 
 - Retry middleware: jitter is now actually randomized, and timeouts are no
   longer retried by default ([#15](https://github.com/praxiomlabs/mcpkit/issues/15)).
