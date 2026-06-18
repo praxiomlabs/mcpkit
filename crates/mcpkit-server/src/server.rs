@@ -215,8 +215,7 @@ where
     server: S,
     transport: Arc<Tr>,
     state: Arc<ServerState>,
-    /// Runtime configuration (request timeouts, etc.) - will be used by advanced features.
-    #[allow(dead_code)]
+    /// Runtime configuration (concurrency limit, etc.).
     config: RuntimeConfig,
 }
 
@@ -234,68 +233,119 @@ where
     /// Run the server message loop.
     ///
     /// This method runs until the connection is closed or an error occurs.
+    ///
+    /// Requests are processed concurrently (interleaved on this task) up to
+    /// `config.max_concurrent_requests` in flight at once; once that limit is
+    /// reached, no new messages are accepted until an in-flight request
+    /// completes (backpressure). Each request runs with panic isolation, so a
+    /// panicking handler returns a JSON-RPC internal error instead of tearing
+    /// down the connection. Notifications are handled inline.
     pub async fn run(&self) -> Result<(), McpError> {
-        loop {
-            match self.transport.recv().await {
-                Ok(Some(message)) => {
-                    if let Err(e) = self.handle_message(message).await {
-                        tracing::error!(error = %e, "Error handling message");
+        use futures::future::{Either, select};
+        use futures::stream::{FuturesUnordered, StreamExt};
+
+        let max = self.config.max_concurrent_requests.max(1);
+        let mut in_flight = FuturesUnordered::new();
+
+        let outcome = loop {
+            // Obtain the next incoming message, making progress on in-flight
+            // requests in the meantime. `in_flight.next()` is only awaited while
+            // the set is non-empty, so it never spuriously yields `None`.
+            let message = if in_flight.is_empty() {
+                match self.transport.recv().await {
+                    Ok(opt) => opt,
+                    Err(e) => break Err(e.into()),
+                }
+            } else if in_flight.len() < max {
+                // Race the next message against in-flight completions.
+                let recv = std::pin::pin!(self.transport.recv());
+                match select(recv, in_flight.next()).await {
+                    Either::Left((Ok(opt), _)) => opt,
+                    Either::Left((Err(e), _)) => break Err(e.into()),
+                    // An in-flight request finished; its response was already
+                    // sent. Loop to keep accepting work.
+                    Either::Right((_, _)) => continue,
+                }
+            } else {
+                // At the concurrency limit: drain one in-flight request before
+                // accepting any new message (backpressure).
+                in_flight.next().await;
+                continue;
+            };
+
+            match message {
+                Some(Message::Request(request)) => {
+                    in_flight.push(self.handle_request_isolated(request));
+                }
+                Some(Message::Notification(notification)) => {
+                    if let Err(e) = self.handle_notification(notification).await {
+                        tracing::error!(error = %e, "Error handling notification");
                     }
                 }
-                Ok(None) => {
-                    // Connection closed cleanly
+                Some(Message::Response(_)) => {
+                    tracing::warn!("Received unexpected response message");
+                }
+                None => {
                     tracing::info!("Connection closed");
-                    break;
-                }
-                Err(e) => {
-                    let err: McpError = e.into();
-                    tracing::error!(error = %err, "Transport error");
-                    return Err(err);
+                    break Ok(());
                 }
             }
-        }
+        };
 
-        Ok(())
+        // Drain any still-running requests so their responses are delivered
+        // before we return.
+        while in_flight.next().await.is_some() {}
+
+        if let Err(ref err) = outcome {
+            tracing::error!(error = %err, "Transport error");
+        }
+        outcome
     }
 
-    /// Handle a single message.
-    async fn handle_message(&self, message: Message) -> Result<(), McpError> {
-        match message {
-            Message::Request(request) => self.handle_request(request).await,
-            Message::Notification(notification) => self.handle_notification(notification).await,
-            Message::Response(_) => {
-                // Servers don't typically receive responses
-                tracing::warn!("Received unexpected response message");
-                Ok(())
-            }
-        }
-    }
-
-    /// Handle a request.
-    async fn handle_request(&self, request: Request) -> Result<(), McpError> {
-        let method = request.method.to_string();
-        let id = request.id.clone();
-
-        tracing::debug!(method = %method, id = %id, "Handling request");
-
-        let response = match method.as_str() {
-            "initialize" => self.handle_initialize(&request).await,
+    /// Compute the result for a request without sending it.
+    async fn compute_response(&self, request: &Request) -> Result<serde_json::Value, McpError> {
+        match request.method.as_ref() {
+            "initialize" => self.handle_initialize(request).await,
             _ if !self.state.is_initialized() => {
                 Err(McpError::invalid_request("Server not initialized"))
             }
-            _ => self.route_request(&request).await,
+            _ => self.route_request(request).await,
+        }
+    }
+
+    /// Handle a request with panic isolation, sending the response when done.
+    ///
+    /// A panic in the handler is caught and converted into a JSON-RPC internal
+    /// error response so a single misbehaving handler cannot tear down the
+    /// whole connection.
+    async fn handle_request_isolated(&self, request: Request) {
+        use futures::FutureExt;
+        use std::panic::AssertUnwindSafe;
+
+        let id = request.id.clone();
+        tracing::debug!(method = %request.method, id = %id, "Handling request");
+
+        let computed = AssertUnwindSafe(self.compute_response(&request))
+            .catch_unwind()
+            .await;
+
+        let response_msg = match computed {
+            Ok(Ok(result)) => Response::success(id, result),
+            Ok(Err(e)) => Response::error(id, e.into()),
+            Err(panic) => {
+                let detail = panic_message(&*panic);
+                tracing::error!(method = %request.method, panic = %detail, "Handler panicked");
+                Response::error(
+                    id,
+                    McpError::internal(format!("handler panicked: {detail}")).into(),
+                )
+            }
         };
 
-        // Send response
-        let response_msg = match response {
-            Ok(result) => Response::success(id, result),
-            Err(e) => Response::error(id, e.into()),
-        };
-
-        self.transport
-            .send(Message::Response(response_msg))
-            .await
-            .map_err(std::convert::Into::into)
+        if let Err(e) = self.transport.send(Message::Response(response_msg)).await {
+            let err: McpError = e.into();
+            tracing::error!(error = %err, "Failed to send response");
+        }
     }
 
     /// Handle the initialize request.
@@ -928,6 +978,17 @@ impl_request_router!(tools_resources_prompts;);
 ///   "arguments": {}
 /// }
 /// ```
+/// Extract a human-readable message from a caught panic payload.
+fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
+    if let Some(s) = panic.downcast_ref::<&str>() {
+        (*s).to_string()
+    } else if let Some(s) = panic.downcast_ref::<String>() {
+        s.clone()
+    } else {
+        "unknown panic".to_string()
+    }
+}
+
 fn extract_progress_token(params: Option<&serde_json::Value>) -> Option<ProgressToken> {
     params?
         .get("_meta")?
@@ -938,6 +999,208 @@ fn extract_progress_token(params: Option<&serde_json::Value>) -> Option<Progress
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use mcpkit_core::capability::ServerInfo;
+    use mcpkit_core::protocol::RequestId;
+    use mcpkit_transport::MemoryTransport;
+    use std::time::Duration;
+    use tokio::sync::Notify;
+    use tokio::time::timeout;
+
+    /// A minimal router whose `route` can panic, succeed, or 404.
+    struct PanicRouter;
+
+    impl RequestRouter for PanicRouter {
+        fn server_info(&self) -> ServerInfo {
+            ServerInfo::new("panic-test", "0.0.0")
+        }
+        async fn route(
+            &self,
+            method: &str,
+            _params: Option<&serde_json::Value>,
+            _ctx: &Context<'_>,
+        ) -> Result<serde_json::Value, McpError> {
+            match method {
+                "panic" => panic!("boom in handler"),
+                "ok" => Ok(serde_json::json!("ok")),
+                other => Err(McpError::method_not_found(other)),
+            }
+        }
+    }
+
+    /// A router that parks the "blocker" request until released, to prove
+    /// requests are processed concurrently rather than serially.
+    struct CoordRouter {
+        started: Arc<Notify>,
+        release: Arc<Notify>,
+    }
+
+    impl RequestRouter for CoordRouter {
+        fn server_info(&self) -> ServerInfo {
+            ServerInfo::new("coord-test", "0.0.0")
+        }
+        async fn route(
+            &self,
+            method: &str,
+            _params: Option<&serde_json::Value>,
+            _ctx: &Context<'_>,
+        ) -> Result<serde_json::Value, McpError> {
+            match method {
+                "blocker" => {
+                    self.started.notify_one();
+                    self.release.notified().await;
+                    Ok(serde_json::json!("blocked-done"))
+                }
+                "fast" => Ok(serde_json::json!("fast-done")),
+                other => Err(McpError::method_not_found(other)),
+            }
+        }
+    }
+
+    fn req(method: &'static str, id: u64) -> Message {
+        Message::Request(Request::new(method, id))
+    }
+
+    async fn next_response(transport: &MemoryTransport) -> Response {
+        let msg = timeout(Duration::from_secs(2), transport.recv())
+            .await
+            .expect("no response (connection died?)")
+            .expect("recv ok")
+            .expect("some message");
+        match msg {
+            Message::Response(r) => r,
+            other => panic!("expected response, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn panic_in_handler_returns_internal_error_and_keeps_connection() {
+        let (client, server) = MemoryTransport::pair();
+        let state = Arc::new(ServerState::new(ServerCapabilities::default()));
+        state.set_initialized();
+        let runtime = ServerRuntime {
+            server: PanicRouter,
+            transport: Arc::new(server),
+            state,
+            config: RuntimeConfig::default(),
+        };
+        let handle = tokio::spawn(async move { runtime.run().await });
+
+        // A panicking handler must yield a JSON-RPC error, not kill the loop.
+        client.send(req("panic", 1)).await.expect("send");
+        let resp = next_response(&client).await;
+        assert_eq!(resp.id, RequestId::Number(1));
+        let err = resp.error.expect("expected error response");
+        assert!(
+            err.message.contains("panicked"),
+            "unexpected error message: {}",
+            err.message
+        );
+
+        // The connection must still be alive for subsequent requests.
+        client.send(req("ok", 2)).await.expect("send");
+        let resp = next_response(&client).await;
+        assert_eq!(resp.id, RequestId::Number(2));
+        assert!(
+            resp.result.is_some(),
+            "expected success after a prior panic"
+        );
+
+        drop(client);
+        let _ = timeout(Duration::from_secs(2), handle).await;
+    }
+
+    #[tokio::test]
+    async fn requests_are_processed_concurrently() {
+        let (client, server) = MemoryTransport::pair();
+        let started = Arc::new(Notify::new());
+        let release = Arc::new(Notify::new());
+        let state = Arc::new(ServerState::new(ServerCapabilities::default()));
+        state.set_initialized();
+        let runtime = ServerRuntime {
+            server: CoordRouter {
+                started: started.clone(),
+                release: release.clone(),
+            },
+            transport: Arc::new(server),
+            state,
+            config: RuntimeConfig::default(),
+        };
+        let handle = tokio::spawn(async move { runtime.run().await });
+
+        client.send(req("blocker", 1)).await.expect("send");
+        client.send(req("fast", 2)).await.expect("send");
+
+        // Wait until the blocker is in-flight and parked.
+        timeout(Duration::from_secs(2), started.notified())
+            .await
+            .expect("blocker never started");
+
+        // If processing were serial, the parked blocker would prevent the fast
+        // request from completing. Concurrency means the fast response (id 2)
+        // arrives while the blocker is still parked.
+        let resp = next_response(&client).await;
+        assert_eq!(
+            resp.id,
+            RequestId::Number(2),
+            "fast request should finish first"
+        );
+
+        // Release the blocker; its response should now arrive.
+        release.notify_one();
+        let resp = next_response(&client).await;
+        assert_eq!(resp.id, RequestId::Number(1));
+
+        drop(client);
+        let _ = timeout(Duration::from_secs(2), handle).await;
+    }
+
+    #[tokio::test]
+    async fn max_concurrent_requests_limits_in_flight() {
+        // With a limit of 1, a parked blocker must prevent a second request
+        // from being picked up until the blocker completes.
+        let (client, server) = MemoryTransport::pair();
+        let started = Arc::new(Notify::new());
+        let release = Arc::new(Notify::new());
+        let state = Arc::new(ServerState::new(ServerCapabilities::default()));
+        state.set_initialized();
+        let runtime = ServerRuntime {
+            server: CoordRouter {
+                started: started.clone(),
+                release: release.clone(),
+            },
+            transport: Arc::new(server),
+            state,
+            config: RuntimeConfig {
+                auto_initialized: true,
+                max_concurrent_requests: 1,
+            },
+        };
+        let handle = tokio::spawn(async move { runtime.run().await });
+
+        client.send(req("blocker", 1)).await.expect("send");
+        client.send(req("fast", 2)).await.expect("send");
+
+        timeout(Duration::from_secs(2), started.notified())
+            .await
+            .expect("blocker never started");
+
+        // The fast request must NOT be processed while the blocker holds the
+        // single slot: no response should arrive yet.
+        let early = timeout(Duration::from_millis(200), client.recv()).await;
+        assert!(
+            early.is_err(),
+            "fast request was processed despite max_concurrent_requests = 1"
+        );
+
+        // Release the blocker; both responses arrive, blocker first.
+        release.notify_one();
+        assert_eq!(next_response(&client).await.id, RequestId::Number(1));
+        assert_eq!(next_response(&client).await.id, RequestId::Number(2));
+
+        drop(client);
+        let _ = timeout(Duration::from_secs(2), handle).await;
+    }
 
     #[test]
     fn test_server_state_initialization() {
