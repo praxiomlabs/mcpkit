@@ -49,6 +49,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   status as responses to the awaiting request, instead of failing the whole
   transport with "unexpected status code"; and it clears the session on
   `401 Unauthorized` so a retry re-establishes one.
+- The HTTP server now accepts any supported `MCP-Protocol-Version` header value
+  (and a request that omits the header, assumed to be `2025-03-26` for
+  backwards compatibility), rejecting only unsupported versions with
+  `400 Bad Request`. Previously it rejected every request whose header was not
+  the single latest version, breaking older but supported clients.
 
 ## [0.6.0] - 2026-06-18
 
