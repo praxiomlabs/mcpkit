@@ -357,7 +357,7 @@ impl std::fmt::Display for CodeChallengeMethod {
 }
 
 /// PKCE code verifier and challenge.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct PkceChallenge {
     /// The code verifier (random string).
     pub verifier: String,
@@ -537,7 +537,7 @@ impl AuthorizationRequest {
 }
 
 /// Token request for authorization code exchange.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct TokenRequest {
     /// The grant type.
     pub grant_type: String,
@@ -640,7 +640,7 @@ impl TokenRequest {
 }
 
 /// Token response from the authorization server.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct TokenResponse {
     /// The access token.
     pub access_token: String,
@@ -826,7 +826,7 @@ impl WwwAuthenticate {
 }
 
 /// Client authorization configuration.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct AuthorizationConfig {
     /// The authorization server URL.
     pub authorization_server: String,
@@ -972,7 +972,7 @@ impl Default for ClientRegistrationRequest {
 }
 
 /// Dynamic Client Registration response per RFC 7591.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct ClientRegistrationResponse {
     /// The assigned client identifier.
     pub client_id: String,
@@ -990,9 +990,132 @@ pub struct ClientRegistrationResponse {
     pub metadata: HashMap<String, serde_json::Value>,
 }
 
+// Redacted `Debug` impls for the secret-bearing OAuth types. Deriving `Debug`
+// would write bearer tokens, client secrets, authorization codes, and PKCE
+// verifiers verbatim into logs/traces; these redact the secret fields while
+// preserving presence (`Some`/`None`) for diagnostics.
+
+impl std::fmt::Debug for TokenResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TokenResponse")
+            .field("access_token", &"<redacted>")
+            .field("token_type", &self.token_type)
+            .field("expires_in", &self.expires_in)
+            .field(
+                "refresh_token",
+                &self.refresh_token.as_ref().map(|_| "<redacted>"),
+            )
+            .field("scope", &self.scope)
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for TokenRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TokenRequest")
+            .field("grant_type", &self.grant_type)
+            .field("code", &self.code.as_ref().map(|_| "<redacted>"))
+            .field("redirect_uri", &self.redirect_uri)
+            .field("client_id", &self.client_id)
+            .field(
+                "client_secret",
+                &self.client_secret.as_ref().map(|_| "<redacted>"),
+            )
+            .field(
+                "code_verifier",
+                &self.code_verifier.as_ref().map(|_| "<redacted>"),
+            )
+            .field("resource", &self.resource)
+            .field(
+                "refresh_token",
+                &self.refresh_token.as_ref().map(|_| "<redacted>"),
+            )
+            .field("scope", &self.scope)
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for AuthorizationConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AuthorizationConfig")
+            .field("authorization_server", &self.authorization_server)
+            .field("client_id", &self.client_id)
+            .field(
+                "client_secret",
+                &self.client_secret.as_ref().map(|_| "<redacted>"),
+            )
+            .field("redirect_uri", &self.redirect_uri)
+            .field("resource", &self.resource)
+            .field("scopes", &self.scopes)
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for PkceChallenge {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PkceChallenge")
+            .field("verifier", &"<redacted>")
+            .field("challenge", &self.challenge)
+            .field("method", &self.method)
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for ClientRegistrationResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ClientRegistrationResponse")
+            .field("client_id", &self.client_id)
+            .field(
+                "client_secret",
+                &self.client_secret.as_ref().map(|_| "<redacted>"),
+            )
+            .field("client_secret_expires_at", &self.client_secret_expires_at)
+            .field("client_id_issued_at", &self.client_id_issued_at)
+            .field("metadata", &self.metadata)
+            .finish()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_secret_bearing_debug_is_redacted() {
+        let token = TokenResponse {
+            access_token: "super-secret-access".to_string(),
+            token_type: "Bearer".to_string(),
+            expires_in: Some(3600),
+            refresh_token: Some("super-secret-refresh".to_string()),
+            scope: Some("mcp:read".to_string()),
+        };
+        let dbg = format!("{token:?}");
+        assert!(
+            !dbg.contains("super-secret-access"),
+            "access_token leaked: {dbg}"
+        );
+        assert!(
+            !dbg.contains("super-secret-refresh"),
+            "refresh_token leaked: {dbg}"
+        );
+        assert!(dbg.contains("<redacted>"));
+        // Non-secret metadata is still visible.
+        assert!(dbg.contains("Bearer"));
+
+        let pkce = PkceChallenge::new();
+        let pkce_dbg = format!("{pkce:?}");
+        assert!(
+            !pkce_dbg.contains(&pkce.verifier),
+            "PKCE verifier leaked: {pkce_dbg}"
+        );
+
+        let cfg = AuthorizationConfig::new("https://auth.example.com");
+        let cfg2 = AuthorizationConfig {
+            client_secret: Some("super-secret-client".to_string()),
+            ..cfg
+        };
+        assert!(!format!("{cfg2:?}").contains("super-secret-client"));
+    }
 
     #[test]
     fn test_protected_resource_metadata() {

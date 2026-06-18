@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- OAuth/token types (`TokenResponse`, `TokenRequest`, `AuthorizationConfig`,
+  `PkceChallenge`, `ClientRegistrationResponse`) now redact their secret fields
+  in `Debug` output. Previously deriving `Debug` printed access/refresh tokens,
+  client secrets, authorization codes, and PKCE verifiers verbatim, which could
+  leak them into logs or traces; the secret fields now render as `<redacted>`
+  while non-secret metadata and `Some`/`None` presence stay visible.
+
 ## [0.6.0] - 2026-06-18
 
 ### Added
