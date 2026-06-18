@@ -271,6 +271,11 @@ impl ToolAnnotations {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CallToolResult {
     /// The content returned by the tool.
+    ///
+    /// Defaults to empty when omitted, so a result that carries only `isError`
+    /// (or is `{}`) still deserializes — some peers send empty results without a
+    /// `content` field.
+    #[serde(default)]
     pub content: Vec<Content>,
     /// If true, this result represents an error.
     #[serde(rename = "isError", skip_serializing_if = "Option::is_none")]
@@ -503,6 +508,19 @@ mod tests {
 
         let error = CallToolResult::error("Query failed");
         assert!(error.is_error());
+    }
+
+    #[test]
+    fn test_tool_result_deserializes_without_content() {
+        // A peer may send an empty result with no `content` field.
+        let empty: CallToolResult = serde_json::from_str("{}").expect("empty object");
+        assert!(empty.content.is_empty());
+        assert_eq!(empty.is_error, None);
+
+        let only_flag: CallToolResult =
+            serde_json::from_str(r#"{"isError":true}"#).expect("isError only");
+        assert!(only_flag.content.is_empty());
+        assert_eq!(only_flag.is_error, Some(true));
     }
 
     #[test]
