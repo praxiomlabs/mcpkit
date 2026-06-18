@@ -620,4 +620,28 @@ mod tests {
         assert_eq!(parsed, ProtocolVersion::V2024_11_05);
         Ok(())
     }
+
+    // The following preserve unique coverage from the deleted orphaned root
+    // `tests/protocol_compliance/` suite (#16), which targeted these APIs but
+    // never compiled (and so never ran).
+
+    #[test]
+    fn test_version_try_from() {
+        assert!(ProtocolVersion::try_from("2024-11-05".to_string()).is_ok());
+        assert!(ProtocolVersion::try_from("invalid").is_err());
+    }
+
+    #[test]
+    fn test_version_default_is_latest() {
+        assert_eq!(ProtocolVersion::default(), ProtocolVersion::LATEST);
+    }
+
+    #[test]
+    fn test_all_constant_is_ascending() {
+        let all = ProtocolVersion::ALL;
+        assert!(all.len() >= 4);
+        for i in 1..all.len() {
+            assert!(all[i - 1] < all[i], "ALL must be in ascending order");
+        }
+    }
 }
