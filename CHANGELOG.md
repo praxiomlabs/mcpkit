@@ -29,6 +29,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The server now processes requests concurrently** instead of strictly one at
+  a time ([#9](https://github.com/praxiomlabs/mcpkit/issues/9)). Requests are
+  interleaved on the connection task up to `RuntimeConfig::max_concurrent_requests`
+  in flight (default 100); reaching the limit applies backpressure. This also
+  makes `max_concurrent_requests` a live setting
+  ([#21](https://github.com/praxiomlabs/mcpkit/issues/21)) — set it via
+  `ServerRuntime::with_config`.
 - **Client requests now time out** instead of waiting indefinitely
   ([#5](https://github.com/praxiomlabs/mcpkit/issues/5)). Each request waits at
   most `request_timeout` (default 60s) for a response and then fails with
@@ -42,6 +49,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A panicking request handler no longer tears down the whole connection
+  ([#9](https://github.com/praxiomlabs/mcpkit/issues/9)). Each request runs with
+  panic isolation; a panic is caught and returned as a JSON-RPC internal error,
+  and the server keeps serving subsequent requests.
 - `Context::cancelled()` no longer busy-spins at 100% CPU while waiting
   ([#8](https://github.com/praxiomlabs/mcpkit/issues/8)). The cancellation
   future now parks on an `event_listener::Event` and is woken by `cancel()`,
