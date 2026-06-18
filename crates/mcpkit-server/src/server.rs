@@ -306,6 +306,9 @@ where
     async fn compute_response(&self, request: &Request) -> Result<serde_json::Value, McpError> {
         match request.method.as_ref() {
             "initialize" => self.handle_initialize(request).await,
+            // `ping` is a liveness check and is valid at any time, including
+            // before the initialize handshake completes.
+            "ping" => self.route_request(request).await,
             _ if !self.state.is_initialized() => {
                 Err(McpError::invalid_request("Server not initialized"))
             }
@@ -1057,6 +1060,27 @@ mod tests {
         }
     }
 
+    /// A router that answers `ping` and nothing else (like the macro-generated
+    /// router's ping handling), for testing pre-initialize behavior.
+    struct PingRouter;
+
+    impl RequestRouter for PingRouter {
+        fn server_info(&self) -> ServerInfo {
+            ServerInfo::new("ping-test", "0.0.0")
+        }
+        async fn route(
+            &self,
+            method: &str,
+            _params: Option<&serde_json::Value>,
+            _ctx: &Context<'_>,
+        ) -> Result<serde_json::Value, McpError> {
+            match method {
+                "ping" => Ok(serde_json::json!({})),
+                other => Err(McpError::method_not_found(other)),
+            }
+        }
+    }
+
     fn req(method: &'static str, id: u64) -> Message {
         Message::Request(Request::new(method, id))
     }
@@ -1104,6 +1128,43 @@ mod tests {
         assert!(
             resp.result.is_some(),
             "expected success after a prior panic"
+        );
+
+        drop(client);
+        let _ = timeout(Duration::from_secs(2), handle).await;
+    }
+
+    #[tokio::test]
+    async fn ping_is_answered_before_initialize() {
+        let (client, server) = MemoryTransport::pair();
+        // Deliberately NOT initialized: the server is mid-handshake.
+        let state = Arc::new(ServerState::new(ServerCapabilities::default()));
+        let runtime = ServerRuntime {
+            server: PingRouter,
+            transport: Arc::new(server),
+            state,
+            config: RuntimeConfig::default(),
+        };
+        let handle = tokio::spawn(async move { runtime.run().await });
+
+        // `ping` must be answered even before `initialize`.
+        client.send(req("ping", 1)).await.expect("send");
+        let resp = next_response(&client).await;
+        assert_eq!(resp.id, RequestId::Number(1));
+        assert!(
+            resp.error.is_none(),
+            "ping before initialize must not error: {:?}",
+            resp.error
+        );
+        assert!(resp.result.is_some(), "ping should return a result");
+
+        // ...but other requests are still rejected until initialized.
+        client.send(req("tools/list", 2)).await.expect("send");
+        let resp = next_response(&client).await;
+        assert_eq!(resp.id, RequestId::Number(2));
+        assert!(
+            resp.error.is_some(),
+            "non-ping requests before initialize must still be rejected"
         );
 
         drop(client);

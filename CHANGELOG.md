@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   connection. `StdioTransport` now replies with a JSON-RPC parse error
   (`-32700`, `id: null`) and keeps serving, instead of returning a transport
   error that ended the server's message loop.
+- `ping` is now answered before the `initialize` handshake completes, instead of
+  being rejected with "Server not initialized". Other requests still require
+  initialization first.
 
 ## [0.6.0] - 2026-06-18
 
