@@ -19,11 +19,6 @@ yanked = "warn"
 
 # Advisory ignores with documented rationale
 ignore = [
-    # RUSTSEC-2024-0436: paste crate no longer maintained
-    # - Only pulled in through rmcp (dev-dependency for comparison benchmarks)
-    # - Not used in production code paths
-    "RUSTSEC-2024-0436",
-
     # RUSTSEC-2023-0071: RSA Marvin Attack timing sidechannel vulnerability
     # - Affects rsa crate via jsonwebtoken and sqlx-mysql transitive dependencies
     # - No fix available yet (RustCrypto team working on constant-time implementation)

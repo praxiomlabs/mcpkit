@@ -51,78 +51,57 @@ jobs:
       # Publish crates in dependency order
       # Order matters: each crate must have its dependencies published first
       # mcpkit-macros has mcpkit-server as a dev-dependency, so server must come first
-      - name: Publish mcpkit-core
-        run: cargo publish -p mcpkit-core --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        continue-on-error: true
+      # A real publish failure aborts the release. The only tolerated error is
+      # "already uploaded", so re-running after a partial publish skips the
+      # crates already on crates.io instead of masking every failure (the old
+      # `continue-on-error: true` hid genuine errors on all but the last crate).
+      - name: Publish crates to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          set -uo pipefail
 
-      - name: Wait for crates.io index update
-        run: sleep 30
+          publish() {
+            echo "::group::publish $1"
+            local out status
+            out=$(cargo publish -p "$1" 2>&1); status=$?
+            echo "$out"
+            echo "::endgroup::"
+            if [ "$status" -eq 0 ]; then
+              return 0
+            fi
+            if echo "$out" | grep -qiE "already (exists|uploaded)"; then
+              echo "::notice::$1 already published at this version — skipping"
+              return 0
+            fi
+            echo "::error::failed to publish $1"
+            exit 1
+          }
 
-      - name: Publish mcpkit-transport
-        run: cargo publish -p mcpkit-transport --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        continue-on-error: true
+          # Let the crates.io index propagate before publishing dependents.
+          wait_index() { echo "waiting 30s for crates.io index..."; sleep 30; }
 
-      - name: Wait for crates.io index update
-        run: sleep 30
-
-      - name: Publish mcpkit-server
-        run: cargo publish -p mcpkit-server --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        continue-on-error: true
-
-      - name: Wait for crates.io index update
-        run: sleep 30
-
-      - name: Publish mcpkit-macros
-        run: cargo publish -p mcpkit-macros --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        continue-on-error: true
-
-      - name: Wait for crates.io index update
-        run: sleep 30
-
-      - name: Publish mcpkit-client
-        run: cargo publish -p mcpkit-client --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        continue-on-error: true
-
-      - name: Wait for crates.io index update
-        run: sleep 30
-
-      - name: Publish mcpkit-testing
-        run: cargo publish -p mcpkit-testing --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        continue-on-error: true
-
-      - name: Wait for crates.io index update
-        run: sleep 30
-
-      - name: Publish mcpkit-axum
-        run: cargo publish -p mcpkit-axum --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        continue-on-error: true
-
-      - name: Wait for crates.io index update
-        run: sleep 30
-
-      - name: Publish mcpkit-actix
-        run: cargo publish -p mcpkit-actix --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        continue-on-error: true
-
-      - name: Wait for crates.io index update
-        run: sleep 30
-
-      - name: Publish mcpkit-rocket
-        run: cargo publish -p mcpkit-rocket --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        continue-on-error: true
-
-      - name: Wait for crates.io index update
-        run: sleep 30
-
-      - name: Publish mcpkit-warp
-        run: cargo publish -p mcpkit-warp --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        continue-on-error: true
-
-      - name: Wait for crates.io index update
-        run: sleep 30
-
-      - name: Publish mcpkit (facade)
-        run: cargo publish -p mcpkit --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          publish mcpkit-core
+          wait_index
+          publish mcpkit-transport
+          wait_index
+          publish mcpkit-server
+          wait_index
+          publish mcpkit-macros
+          wait_index
+          publish mcpkit-client
+          wait_index
+          publish mcpkit-testing
+          wait_index
+          publish mcpkit-axum
+          wait_index
+          publish mcpkit-actix
+          wait_index
+          publish mcpkit-rocket
+          wait_index
+          publish mcpkit-warp
+          wait_index
+          publish mcpkit
 
   github-release:
     name: Create GitHub Release

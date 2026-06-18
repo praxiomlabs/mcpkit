@@ -2,7 +2,7 @@
 
 This document outlines the path to a stable 1.0 release of mcpkit.
 
-## Current Status: v0.5.0 (Release Candidate)
+## Current Status: v0.6.0
 
 mcpkit is feature-complete and ready for 1.0. The SDK implements the full MCP 2025-11-25 specification with comprehensive transport and framework support. All 1.0 release criteria have been met.
 
@@ -80,6 +80,7 @@ mcpkit is feature-complete and ready for 1.0. The SDK implements the full MCP 20
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| 0.6.0 | 2026-06-18 | Concurrency & panic isolation, JWT/OAuth & transport hardening, macro fixes (#5–#24) |
 | 0.5.0 | 2025-12-25 | gRPC transport, Rocket/Warp integrations, deployment configs |
 | 0.4.0 | 2025-12-24 | `#[mcp_client]` macro, protocol extensions, debug tooling |
 | 0.3.0 | 2025-12-23 | Zero-copy messages, filesystem server, stress testing |

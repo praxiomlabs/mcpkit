@@ -2,7 +2,7 @@
 
 Comprehensive guide for releasing new versions of MCPkit to crates.io.
 
-**Version:** 0.5.0 | **MSRV:** 1.85 | **Edition:** 2024
+**Version:** 0.6.0 | **MSRV:** 1.85 | **Edition:** 2024
 
 ---
 
