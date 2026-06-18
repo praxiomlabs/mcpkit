@@ -230,10 +230,13 @@ impl HttpTransport {
                 // 202 Accepted - no response body (for notifications)
                 Ok(())
             }
-            StatusCode::BAD_REQUEST => {
+            StatusCode::UNAUTHORIZED => {
+                // 401: credentials/session are stale. Clear the session so a
+                // retry re-establishes one, and surface an authorization error.
+                self.state.lock().await.session_id = None;
                 let body = response.text().await.unwrap_or_default();
-                Err(TransportError::Protocol {
-                    message: format!("Bad request: {body}"),
+                Err(TransportError::Connection {
+                    message: format!("Unauthorized (401): {body}"),
                 })
             }
             StatusCode::NOT_FOUND => {
@@ -243,9 +246,22 @@ impl HttpTransport {
                     message: "Session expired or not found".to_string(),
                 })
             }
-            _ => Err(TransportError::Protocol {
-                message: format!("Unexpected status code: {status}"),
-            }),
+            _ => {
+                // Other non-success codes may still carry a JSON-RPC response
+                // (e.g. an error object) in the body. Deliver it to the awaiting
+                // caller instead of tearing down the transport; only a body we
+                // cannot parse as a JSON-RPC message becomes a transport error.
+                let body = response.text().await.unwrap_or_default();
+                if let Ok(msg) = serde_json::from_str::<Message>(&body) {
+                    self.state.lock().await.message_queue.push_back(msg);
+                    self.messages_received.fetch_add(1, Ordering::Relaxed);
+                    Ok(())
+                } else {
+                    Err(TransportError::Protocol {
+                        message: format!("HTTP {status}: {body}"),
+                    })
+                }
+            }
         }
     }
 
@@ -447,5 +463,85 @@ mod tests {
             Some("test-session-123".to_string())
         );
         Ok(())
+    }
+
+    #[cfg(feature = "http")]
+    mod error_handling {
+        use super::super::HttpTransport;
+        use crate::http::config::HttpTransportConfig;
+        use crate::traits::Transport;
+        use mcpkit_core::protocol::{Message, Request, RequestId};
+        use wiremock::matchers::method;
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        async fn connect(uri: String) -> HttpTransport {
+            HttpTransport::connect(HttpTransportConfig::new(uri))
+                .await
+                .expect("connect")
+        }
+
+        #[tokio::test]
+        async fn jsonrpc_error_body_on_4xx_is_delivered_as_response() {
+            let server = MockServer::start().await;
+            let body =
+                r#"{"jsonrpc":"2.0","id":1,"error":{"code":-32601,"message":"method not found"}}"#;
+            Mock::given(method("POST"))
+                .respond_with(ResponseTemplate::new(400).set_body_string(body))
+                .mount(&server)
+                .await;
+
+            let t = connect(server.uri()).await;
+            // A 4xx carrying a JSON-RPC error must be delivered as a response,
+            // not fail the whole transport.
+            t.send(Message::Request(Request::new("tools/list", 1u64)))
+                .await
+                .expect("send should not error when the body is a JSON-RPC error");
+            let msg = t.recv().await.expect("recv ok").expect("a message");
+            match msg {
+                Message::Response(r) => {
+                    assert_eq!(r.id, RequestId::Number(1));
+                    assert!(r.error.is_some(), "expected an error response");
+                }
+                other => panic!("expected response, got {other:?}"),
+            }
+        }
+
+        #[tokio::test]
+        async fn unauthorized_clears_session_and_errors() {
+            let server = MockServer::start().await;
+            Mock::given(method("POST"))
+                .respond_with(ResponseTemplate::new(401).set_body_string("nope"))
+                .mount(&server)
+                .await;
+
+            let t = connect(server.uri()).await;
+            t.set_session_id("stale").await;
+            let res = t
+                .send(Message::Request(Request::new("tools/list", 1u64)))
+                .await;
+            assert!(res.is_err(), "401 must surface as an error");
+            assert!(
+                t.session_id().await.is_none(),
+                "session must be cleared on 401"
+            );
+        }
+
+        #[tokio::test]
+        async fn unparseable_non_2xx_body_is_transport_error() {
+            let server = MockServer::start().await;
+            Mock::given(method("POST"))
+                .respond_with(ResponseTemplate::new(500).set_body_string("boom"))
+                .mount(&server)
+                .await;
+
+            let t = connect(server.uri()).await;
+            let res = t
+                .send(Message::Request(Request::new("tools/list", 1u64)))
+                .await;
+            assert!(
+                res.is_err(),
+                "an unparseable non-2xx body should be a transport error"
+            );
+        }
     }
 }

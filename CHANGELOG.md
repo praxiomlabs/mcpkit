@@ -33,6 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `CallToolResult` now deserializes when the `content` field is absent (defaults
   to empty), so results carrying only `isError` (or `{}`) from other peers parse
   instead of failing.
+- The HTTP client now delivers JSON-RPC error bodies returned with a non-2xx
+  status as responses to the awaiting request, instead of failing the whole
+  transport with "unexpected status code"; and it clears the session on
+  `401 Unauthorized` so a retry re-establishes one.
 
 ## [0.6.0] - 2026-06-18
 
