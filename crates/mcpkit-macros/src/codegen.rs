@@ -179,10 +179,14 @@ impl ToolMethod {
             quote!(self.#method_name(#(#param_names),*))
         };
 
+        // Convert the return value into `ToolOutput` via `Into`, so a tool may
+        // return `ToolOutput` directly or any type that converts into it (e.g.
+        // `Json<T>` for structured output). `ToolOutput -> ToolOutput` is the
+        // identity conversion, so existing tools are unaffected.
         let call_with_conversion = if self.returns_result {
-            quote!(#call)
+            quote!(#call.map(::core::convert::Into::into))
         } else {
-            quote!(Ok(#call))
+            quote!(Ok(::core::convert::Into::into(#call)))
         };
 
         quote! {

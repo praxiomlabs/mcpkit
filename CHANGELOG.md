@@ -12,7 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Structured tool output (MCP `outputSchema` / `structuredContent`): `Tool` gains
   an `output_schema` field + `Tool::output_schema(..)`, and `CallToolResult` gains
   a `structured_content` field + `CallToolResult::with_structured_content(..)`.
-  (Ergonomic typed-return `Json<T>` derivation lands in a follow-up.)
+- `Json<T>` tool-return wrapper: a `#[tool]` method may return `Json(value)` (or
+  `Result<Json<T>, McpError>`) to populate the result's `structuredContent` from
+  a serializable `T`, with a pretty-printed JSON text fallback in `content`. Tool
+  methods may now return any type that converts into `ToolOutput`.
 
 ### Security
 

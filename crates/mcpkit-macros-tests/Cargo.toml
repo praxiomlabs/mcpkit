@@ -12,6 +12,7 @@ workspace = true
 mcpkit = { path = "../../mcpkit" }
 mcpkit-macros = { path = "../mcpkit-macros" }
 mcpkit-core = { path = "../mcpkit-core" }
+serde.workspace = true
 serde_json.workspace = true
 trybuild = "1.0"
 tokio = { workspace = true, features = ["rt", "macros"] }

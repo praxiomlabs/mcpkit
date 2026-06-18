@@ -2644,6 +2644,7 @@ dependencies = [
  "mcpkit",
  "mcpkit-core",
  "mcpkit-macros",
+ "serde",
  "serde_json",
  "tokio",
  "trybuild",
