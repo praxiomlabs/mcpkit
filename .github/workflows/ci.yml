@@ -118,6 +118,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.96
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --all-features
+      # trybuild spins up a throwaway cargo project under target/tests; remove it
+      # so the rust-cache save step doesn't trip over its torn-down scratch dirs
+      # (harmless ENOENT annotations otherwise).
+      - name: Remove trybuild scratch before cache save
+        if: always()
+        shell: bash
+        run: rm -rf target/tests
 
   # ==========================================================================
   # Code Coverage - PRs only (to save CI minutes)
@@ -146,6 +153,10 @@ jobs:
           verbose: true
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+      - name: Remove trybuild scratch before cache save
+        if: always()
+        shell: bash
+        run: rm -rf target/tests
 
   # ==========================================================================
   # Security & compliance
@@ -213,7 +224,14 @@ jobs:
       # Use --features full instead of --all-features to exclude regenerate-proto
       # (protobuf-src fails to build on Windows due to abseil-cpp linker issues)
       - run: cargo test -p mcpkit-transport --features full
-      - run: cargo test --workspace --exclude mcpkit-transport
+      # --all-features here is safe: regenerate-proto is only reachable through
+      # mcpkit-transport (excluded), so the rest of the workspace gets its
+      # feature-gated code (e.g. jwt) exercised cross-platform.
+      - run: cargo test --workspace --exclude mcpkit-transport --all-features
+      - name: Remove trybuild scratch before cache save
+        if: always()
+        shell: bash
+        run: rm -rf target/tests
 
   # ==========================================================================
   # Semver check - ensure no accidental breaking changes
@@ -230,6 +248,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.96
       - uses: Swatinem/rust-cache@v2
       - name: Install cargo-semver-checks
-        run: cargo install cargo-semver-checks --locked
+        uses: taiki-e/install-action@cargo-semver-checks
       - name: Check semver
         run: cargo semver-checks check-release --package mcpkit
