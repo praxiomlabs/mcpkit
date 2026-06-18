@@ -76,7 +76,7 @@ jobs:
             --sample-size ${{ github.event.inputs.sample_size || '100' }} \
             --measurement-time ${{ github.event.inputs.measurement_time || '10' }}
 
-      - name: Run comparison benchmarks (mcpkit vs rmcp)
+      - name: Run comparison benchmarks (mcpkit vs serde_json baseline + rmcp)
         run: |
           cargo bench --package mcpkit-core --bench comparison -- \
             --sample-size ${{ github.event.inputs.sample_size || '100' }} \
