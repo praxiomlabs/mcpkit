@@ -62,9 +62,12 @@ pub const MAX_MESSAGE_SIZE: usize = 16 * 1024 * 1024;
 ///
 /// # Lifecycle
 ///
-/// When the transport is closed or dropped, the child process is terminated.
-/// The process receives a graceful shutdown signal first, then is forcefully
-/// killed if it doesn't exit within a timeout.
+/// The child process is spawned with `kill_on_drop`, so if the transport is
+/// dropped without an explicit shutdown the child is killed (SIGKILL) rather
+/// than orphaned. For an orderly shutdown, call `kill()` to terminate the child
+/// explicitly; a well-behaved server also exits when its stdin is closed as the
+/// transport is dropped. `close()` marks the transport disconnected but does
+/// not by itself terminate the child.
 ///
 /// # Example
 ///
@@ -254,8 +257,9 @@ impl Transport for SpawnedTransport {
     async fn close(&self) -> Result<(), Self::Error> {
         self.connected.store(false, Ordering::SeqCst);
 
-        // Try graceful shutdown by closing stdin (server should detect EOF and exit)
-        // The child will be killed when dropped if it hasn't exited
+        // Mark disconnected only. We don't force-kill here: the child receives
+        // EOF on stdin and SIGKILL via `kill_on_drop` once the transport is
+        // dropped. Call `kill()` for immediate, deterministic termination.
 
         Ok(())
     }
@@ -269,14 +273,12 @@ impl Transport for SpawnedTransport {
     }
 }
 
-// Note: We don't implement Drop because:
-// 1. We can't do async operations in Drop
-// 2. Tokio's Child already handles cleanup when dropped
-// 3. Users who need graceful shutdown should call close() or kill() explicitly
-//
-// When SpawnedTransport is dropped, the stdin handle is dropped first,
-// which sends EOF to the child process. Most well-behaved MCP servers
-// will exit gracefully when they receive EOF on stdin.
+// Note: We don't implement Drop manually because async operations aren't
+// possible in Drop. Cleanup is instead handled by `kill_on_drop(true)` on the
+// spawned Command: when SpawnedTransport (and its Child handle) is dropped,
+// tokio kills the child with SIGKILL so it is not orphaned. The stdin handle is
+// also dropped, sending EOF, which lets a well-behaved server exit on its own
+// before the SIGKILL is needed. Call kill() for deterministic termination.
 
 /// Builder for creating spawned transports with custom configuration.
 ///
@@ -391,7 +393,11 @@ impl SpawnedTransportBuilder {
             .args(&self.args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit()); // Let stderr pass through for debugging
+            .stderr(Stdio::inherit()) // Let stderr pass through for debugging
+            // Safety net: if the transport (and its Child handle) is dropped
+            // without an explicit kill(), tokio sends SIGKILL so the child is
+            // not orphaned.
+            .kill_on_drop(true);
 
         if self.clear_env {
             command.env_clear();
@@ -471,6 +477,41 @@ mod tests {
     async fn test_spawn_nonexistent_program() {
         let result = SpawnedTransport::spawn("nonexistent-program-12345", &[] as &[&str]).await;
         assert!(result.is_err());
+    }
+
+    /// Regression test for #12: dropping the transport must terminate the child
+    /// (via `kill_on_drop`), matching the documented lifecycle. Uses `sleep`,
+    /// which ignores stdin EOF, so only the kill actually ends it.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn dropping_transport_kills_child() {
+        use std::time::Duration;
+
+        let transport = SpawnedTransport::spawn("sleep", &["30"])
+            .await
+            .expect("spawn sleep");
+        let pid = transport.pid().await.expect("child should have a pid");
+
+        drop(transport);
+
+        // kill_on_drop sends SIGKILL; poll with `kill -0` until the process is
+        // gone (and reaped by tokio's process driver).
+        let mut alive = true;
+        for _ in 0..100 {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            let still_there = std::process::Command::new("kill")
+                .args(["-0", &pid.to_string()])
+                .status()
+                .is_ok_and(|s| s.success());
+            if !still_there {
+                alive = false;
+                break;
+            }
+        }
+        assert!(
+            !alive,
+            "child process {pid} should be killed when the transport is dropped"
+        );
     }
 
     #[tokio::test]
