@@ -415,8 +415,26 @@ impl PkceChallenge {
             CodeChallengeMethod::Plain => verifier.to_string(),
         };
 
-        computed == challenge
+        // Constant-time compare so the matching is not short-circuited on the
+        // first differing byte, which could leak the challenge via timing.
+        constant_time_eq(computed.as_bytes(), challenge.as_bytes())
     }
+}
+
+/// Compare two byte slices without short-circuiting on the first mismatch.
+///
+/// Returns `false` immediately for differing lengths (the PKCE challenge length
+/// is not secret); for equal lengths the time taken does not depend on where
+/// the first differing byte is.
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for (x, y) in a.iter().zip(b.iter()) {
+        diff |= x ^ y;
+    }
+    diff == 0
 }
 
 impl Default for PkceChallenge {
@@ -1028,6 +1046,15 @@ mod tests {
             &pkce.challenge,
             CodeChallengeMethod::S256
         ));
+    }
+
+    #[test]
+    fn test_constant_time_eq() {
+        assert!(constant_time_eq(b"abc", b"abc"));
+        assert!(constant_time_eq(b"", b""));
+        assert!(!constant_time_eq(b"abc", b"abd"));
+        assert!(!constant_time_eq(b"abc", b"abcd"));
+        assert!(!constant_time_eq(b"abc", b""));
     }
 
     #[test]

@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- JWT/OAuth hardening ([#20](https://github.com/praxiomlabs/mcpkit/issues/20)):
+  `TokenValidation::with_allowed_algorithms` lets a relying party pin the
+  accepted signing algorithms so a token cannot dictate its own (RFC 8725
+  §3.1); `fetch_jwks` now refuses non-`https://` URIs to prevent key
+  substitution over plaintext transport; and `PkceChallenge::verify` compares
+  the challenge in constant time.
 - Updated `Cargo.lock` to patched versions of vulnerable transitive and direct
   dependencies flagged by Dependabot / `cargo audit`:
   `openssl` 0.10.75 → 0.10.80, `rustls-webpki` → 0.103.13, `quinn-proto` →
