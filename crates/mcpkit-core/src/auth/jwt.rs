@@ -114,6 +114,13 @@ pub enum JwtError {
         /// The algorithm.
         algorithm: String,
     },
+
+    /// The token's algorithm is not in the relying party's allowlist.
+    #[error("algorithm not allowed: {algorithm}")]
+    AlgorithmNotAllowed {
+        /// The rejected algorithm.
+        algorithm: String,
+    },
 }
 
 /// JWT validation configuration.
@@ -131,6 +138,13 @@ pub struct TokenValidation {
     pub leeway_seconds: u64,
     /// Custom claims that must be present.
     pub required_claims: Vec<String>,
+    /// Accepted signing algorithms by name (e.g. `"RS256"`).
+    ///
+    /// When non-empty, the token header's `alg` must be one of these, letting
+    /// the relying party pin acceptable algorithms rather than trusting the
+    /// value in the token header (RFC 8725 §3.1). Empty accepts any supported
+    /// algorithm.
+    pub allowed_algorithms: Vec<String>,
 }
 
 impl TokenValidation {
@@ -144,6 +158,7 @@ impl TokenValidation {
             validate_exp: true,
             leeway_seconds: 60, // 1 minute default leeway
             required_claims: Vec::new(),
+            allowed_algorithms: Vec::new(),
         }
     }
 
@@ -196,6 +211,19 @@ impl TokenValidation {
     #[must_use]
     pub fn with_required_claim(mut self, claim: impl Into<String>) -> Self {
         self.required_claims.push(claim.into());
+        self
+    }
+
+    /// Restrict accepted signing algorithms to the given names (e.g. `"RS256"`).
+    ///
+    /// Pins the algorithms the relying party will accept so a token cannot
+    /// dictate its own verification algorithm (RFC 8725 §3.1).
+    #[must_use]
+    pub fn with_allowed_algorithms(
+        mut self,
+        algorithms: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
+        self.allowed_algorithms = algorithms.into_iter().map(Into::into).collect();
         self
     }
 }
@@ -723,6 +751,20 @@ pub fn validate_token(
     // Decode header to get algorithm and key ID
     let header = decode_header(token)?;
 
+    // Enforce the relying party's algorithm allowlist before trusting the
+    // header's `alg` (RFC 8725 §3.1). An empty allowlist accepts any supported
+    // algorithm.
+    if !validation.allowed_algorithms.is_empty()
+        && !validation
+            .allowed_algorithms
+            .iter()
+            .any(|a| a == &header.alg)
+    {
+        return Err(JwtError::AlgorithmNotAllowed {
+            algorithm: header.alg,
+        });
+    }
+
     // Parse algorithm
     let alg = JwtAlgorithm::parse(&header.alg).ok_or_else(|| JwtError::UnsupportedAlgorithm {
         algorithm: header.alg.clone(),
@@ -809,10 +851,19 @@ pub fn validate_token(
 /// # Errors
 ///
 /// Returns `JwtError::JwksFetchError` if:
+/// - The URI is not an `https://` URL
 /// - The HTTP request fails
 /// - The response cannot be parsed as a JWKS
 #[cfg(feature = "jwt")]
 pub async fn fetch_jwks(jwks_uri: &str) -> Result<JwksSet, JwtError> {
+    // Refuse plaintext transport: a JWKS fetched over HTTP can be tampered with
+    // in transit, letting an attacker swap in their own signing keys.
+    if !jwks_uri.starts_with("https://") {
+        return Err(JwtError::JwksFetchError {
+            message: format!("JWKS URI must use https://, got: {jwks_uri}"),
+        });
+    }
+
     let response = reqwest::get(jwks_uri)
         .await
         .map_err(|e| JwtError::JwksFetchError {
@@ -1266,6 +1317,72 @@ mod signature_tests {
             validated_claims.iss,
             Some("https://auth.example.com".to_string())
         );
+    }
+
+    #[test]
+    fn test_validate_token_algorithm_allowlist() {
+        use base64::Engine;
+        use rand::rngs::OsRng;
+        use rsa::RsaPrivateKey;
+
+        let mut rng = OsRng;
+        let private_key = RsaPrivateKey::new(&mut rng, 2048).expect("failed to generate key");
+        let public_key = private_key.to_public_key();
+        let n =
+            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(public_key.n().to_bytes_be());
+        let e =
+            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(public_key.e().to_bytes_be());
+
+        let jwks = JwksSet {
+            keys: vec![Jwk {
+                kty: "RSA".to_string(),
+                kid: Some("test-key-1".to_string()),
+                key_use: Some("sig".to_string()),
+                alg: Some("RS256".to_string()),
+                n: Some(n),
+                e: Some(e),
+                crv: None,
+                x: None,
+                y: None,
+            }],
+        };
+
+        let pem = private_key
+            .to_pkcs8_pem(rsa::pkcs8::LineEnding::LF)
+            .expect("failed to encode private key");
+        let encoding_key = jsonwebtoken::EncodingKey::from_rsa_pem(pem.as_bytes())
+            .expect("failed to create encoding key");
+        let token = create_test_jwt(
+            jsonwebtoken::Algorithm::RS256,
+            &encoding_key,
+            Some("test-key-1"),
+            &make_test_claims(),
+        );
+
+        // Allowlist contains the token's algorithm: accepted.
+        let allowed = TokenValidation::new()
+            .with_issuer("https://auth.example.com")
+            .with_audience("https://mcp.example.com")
+            .with_allowed_algorithms(["RS256"]);
+        assert!(validate_token(&token, &jwks, &allowed).is_ok());
+
+        // Allowlist excludes the token's algorithm: rejected up front.
+        let disallowed = TokenValidation::new()
+            .with_issuer("https://auth.example.com")
+            .with_audience("https://mcp.example.com")
+            .with_allowed_algorithms(["ES256"]);
+        assert!(matches!(
+            validate_token(&token, &jwks, &disallowed),
+            Err(JwtError::AlgorithmNotAllowed { .. })
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_fetch_jwks_rejects_non_https() {
+        let err = fetch_jwks("http://auth.example.com/.well-known/jwks.json")
+            .await
+            .expect_err("non-https JWKS URI must be rejected");
+        assert!(matches!(err, JwtError::JwksFetchError { .. }));
     }
 
     #[test]
