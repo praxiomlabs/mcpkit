@@ -96,6 +96,14 @@ where
                 "Handling MCP request"
             );
 
+            // Mark the session initialized so it is no longer subject to the
+            // initialization timeout.
+            if request.method.as_ref() == "initialize" {
+                state
+                    .sessions
+                    .update(&session_id, |s| s.mark_initialized(None));
+            }
+
             // Create a basic response using the handler's capabilities
             // In a full implementation, this would route to the handler's methods
             let response = create_response_for_request(&state, &request).await;

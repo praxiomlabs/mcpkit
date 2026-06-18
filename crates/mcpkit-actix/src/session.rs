@@ -12,6 +12,10 @@ use tokio::sync::broadcast;
 /// Default session timeout duration (1 hour).
 pub const DEFAULT_SESSION_TIMEOUT: Duration = Duration::from_secs(3600);
 
+/// Default timeout after which a session created but never initialized is
+/// reaped.
+pub const DEFAULT_INIT_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// Default SSE broadcast channel capacity.
 pub const DEFAULT_SSE_CAPACITY: usize = 100;
 
@@ -48,6 +52,19 @@ impl Session {
     #[must_use]
     pub fn is_expired(&self, timeout: Duration) -> bool {
         self.last_active.elapsed() >= timeout
+    }
+
+    /// Check whether the session should be reaped, given idle and
+    /// initialization timeouts.
+    ///
+    /// A session is reaped when it has been idle longer than `idle_timeout`, or
+    /// when it has not completed initialization within `init_timeout` of being
+    /// created. The latter bounds resources held by half-open sessions that are
+    /// created but never initialized.
+    #[must_use]
+    pub fn is_reapable(&self, idle_timeout: Duration, init_timeout: Duration) -> bool {
+        self.is_expired(idle_timeout)
+            || (!self.initialized && self.created_at.elapsed() >= init_timeout)
     }
 
     /// Mark the session as active.
@@ -456,27 +473,44 @@ impl SessionManager {
 pub struct SessionStore {
     sessions: DashMap<String, Session>,
     timeout: Duration,
+    init_timeout: Duration,
 }
 
 impl SessionStore {
-    /// Create a new session store with the given timeout.
+    /// Create a new session store with the given idle timeout.
+    ///
+    /// The initialization timeout defaults to [`DEFAULT_INIT_TIMEOUT`]; use
+    /// [`Self::with_init_timeout`] to change it.
     #[must_use]
     pub fn new(timeout: Duration) -> Self {
         Self {
             sessions: DashMap::new(),
             timeout,
+            init_timeout: DEFAULT_INIT_TIMEOUT,
         }
     }
 
-    /// Create a new session store with a default 1-hour timeout.
+    /// Create a new session store with a default 1-hour idle timeout.
     #[must_use]
     pub fn with_default_timeout() -> Self {
         Self::new(DEFAULT_SESSION_TIMEOUT)
     }
 
+    /// Set the timeout after which a session that never completed
+    /// initialization is reaped.
+    #[must_use]
+    pub const fn with_init_timeout(mut self, init_timeout: Duration) -> Self {
+        self.init_timeout = init_timeout;
+        self
+    }
+
     /// Create a new session and return its ID.
+    ///
+    /// Expired sessions are reaped first, so the store stays bounded without a
+    /// background cleanup task.
     #[must_use]
     pub fn create(&self) -> String {
+        self.cleanup_expired();
         let id = uuid::Uuid::new_v4().to_string();
         self.sessions.insert(id.clone(), Session::new(id.clone()));
         id
@@ -505,10 +539,13 @@ impl SessionStore {
         }
     }
 
-    /// Remove expired sessions.
+    /// Remove expired sessions (idle past the timeout, or never initialized
+    /// past the initialization timeout).
     pub fn cleanup_expired(&self) {
         let timeout = self.timeout;
-        self.sessions.retain(|_, s| !s.is_expired(timeout));
+        let init_timeout = self.init_timeout;
+        self.sessions
+            .retain(|_, s| !s.is_reapable(timeout, init_timeout));
     }
 
     /// Remove a session.
@@ -569,6 +606,52 @@ mod tests {
 
         let _ = store.remove(&id);
         assert!(store.get(&id).is_none());
+    }
+
+    #[test]
+    fn uninitialized_session_is_reapable_after_init_timeout()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut session = Session::new("s".to_string());
+        let idle = Duration::from_secs(3600);
+        let init = Duration::from_secs(30);
+
+        // A fresh, uninitialized session is not yet reapable.
+        assert!(!session.is_reapable(idle, init));
+
+        // Once it has existed longer than the init timeout without
+        // initializing, it becomes reapable.
+        session.created_at = Instant::now()
+            .checked_sub(Duration::from_secs(60))
+            .ok_or("Failed to subtract duration")?;
+        assert!(session.is_reapable(idle, init));
+
+        // After initialization, the init timeout no longer applies.
+        session.mark_initialized(None);
+        assert!(!session.is_reapable(idle, init));
+        Ok(())
+    }
+
+    #[test]
+    fn create_reaps_uninitialized_sessions_past_init_timeout() {
+        let store = SessionStore::new(Duration::from_secs(3600)).with_init_timeout(Duration::ZERO);
+        let id = store.create();
+
+        // A zero init timeout makes the uninitialized session reapable, so the
+        // next create() sweeps it away.
+        let _other = store.create();
+        assert!(store.get(&id).is_none());
+    }
+
+    #[test]
+    fn create_keeps_initialized_sessions() {
+        let store = SessionStore::new(Duration::from_secs(3600)).with_init_timeout(Duration::ZERO);
+        let id = store.create();
+        store.update(&id, |s| s.mark_initialized(None));
+
+        // An initialized session is not subject to the init timeout and is well
+        // within the idle timeout, so it survives create-time reaping.
+        let _other = store.create();
+        assert!(store.get(&id).is_some());
     }
 
     #[tokio::test]
