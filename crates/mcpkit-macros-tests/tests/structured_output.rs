@@ -1,5 +1,6 @@
 //! A `#[tool]` returning `Json<T>` populates the result's `structuredContent`.
 
+use mcpkit::ToolInput;
 use mcpkit::mcp_server;
 use mcpkit::server::{Context, NoOpPeer, ToolHandler};
 use mcpkit::types::{CallToolResult, Json};
@@ -8,8 +9,9 @@ use mcpkit_core::protocol::RequestId;
 use mcpkit_core::protocol_version::ProtocolVersion;
 use serde::Serialize;
 
-#[derive(Serialize)]
+#[derive(Serialize, ToolInput)]
 struct Sum {
+    /// The sum of the two operands.
     total: i64,
 }
 
@@ -60,4 +62,31 @@ async fn json_return_populates_structured_content() {
         !result.content.is_empty(),
         "expected a text content fallback"
     );
+}
+
+#[tokio::test]
+async fn json_return_advertises_output_schema() {
+    let handler = Calc;
+    let request_id = RequestId::Number(1);
+    let client_caps = ClientCapabilities::default();
+    let server_caps = ServerCapabilities::default();
+    let peer = NoOpPeer;
+    let ctx = Context::new(
+        &request_id,
+        None,
+        &client_caps,
+        &server_caps,
+        ProtocolVersion::LATEST,
+        &peer,
+    );
+
+    let tools = <Calc as ToolHandler>::list_tools(&handler, &ctx)
+        .await
+        .expect("list_tools");
+    let add = tools.iter().find(|t| t.name == "add").expect("add tool");
+    let schema = add
+        .output_schema
+        .as_ref()
+        .expect("output_schema should be derived from the Json<Sum> return");
+    assert_eq!(schema["properties"]["total"]["type"], "integer");
 }

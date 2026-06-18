@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Result<Json<T>, McpError>`) to populate the result's `structuredContent` from
   a serializable `T`, with a pretty-printed JSON text fallback in `content`. Tool
   methods may now return any type that converts into `ToolOutput`.
+- A `#[tool]` returning `Json<T>` now also advertises the tool's `outputSchema`,
+  derived from `T` (which should derive `ToolInput` in addition to `Serialize`).
 
 ### Security
 

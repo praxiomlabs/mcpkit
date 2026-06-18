@@ -32,6 +32,8 @@ pub struct ToolMethod {
     pub is_async: bool,
     /// Whether the return type is Result
     pub returns_result: bool,
+    /// The `T` of a `Json<T>` return, whose schema is the tool's `outputSchema`.
+    pub output_type: Option<Type>,
 }
 
 /// Information about a tool parameter.
@@ -350,6 +352,34 @@ pub fn is_result_type(ret: &ReturnType) -> bool {
         }
         ReturnType::Default => false,
     }
+}
+
+/// If a tool returns `Json<T>` (optionally wrapped in `Result<_, E>`), return
+/// the inner `T`. Its schema becomes the tool's `outputSchema`.
+pub fn output_schema_type(ret: &ReturnType) -> Option<Type> {
+    let ReturnType::Type(_, ty) = ret else {
+        return None;
+    };
+    // Unwrap `Result<X, _>` to `X`, otherwise use the type directly.
+    let inner = match ty.as_ref() {
+        Type::Path(path) => {
+            let seg = path.path.segments.last()?;
+            if seg.ident == "Result" {
+                first_type_arg(seg)?
+            } else {
+                ty.as_ref()
+            }
+        }
+        _ => return None,
+    };
+    // `inner` must be `Json<T>`.
+    if let Type::Path(path) = inner {
+        let seg = path.path.segments.last()?;
+        if seg.ident == "Json" {
+            return first_type_arg(seg).cloned();
+        }
+    }
+    None
 }
 
 /// Generate a unique identifier.

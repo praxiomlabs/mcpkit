@@ -7,7 +7,7 @@ use quote::quote;
 use syn::{Attribute, Error, FnArg, ImplItem, ImplItemFn, ItemImpl, Result, parse2};
 
 use crate::attrs::{PromptAttrs, ResourceAttrs, ServerAttrs, ToolAttrs};
-use crate::codegen::{ToolMethod, ToolParam, extract_param, is_result_type};
+use crate::codegen::{ToolMethod, ToolParam, extract_param, is_result_type, output_schema_type};
 
 /// Information about a resource method extracted from the AST.
 #[derive(Debug)]
@@ -222,6 +222,7 @@ fn extract_tool_info(method: &mut ImplItemFn, attrs: ToolAttrs) -> Result<ToolMe
 
     let is_async = method.sig.asyncness.is_some();
     let returns_result = is_result_type(&method.sig.output);
+    let output_type = output_schema_type(&method.sig.output);
 
     Ok(ToolMethod {
         name,
@@ -233,6 +234,7 @@ fn extract_tool_info(method: &mut ImplItemFn, attrs: ToolAttrs) -> Result<ToolMe
         params,
         is_async,
         returns_result,
+        output_type,
     })
 }
 
@@ -528,6 +530,13 @@ fn generate_tool_handler(tools: &[ToolMethod], self_ty: &syn::Type) -> TokenStre
             let idempotent = tool.idempotent;
             let read_only = tool.read_only;
 
+            // Derive the output schema from a `Json<T>` return type, if present.
+            let output_schema = if let Some(ty) = &tool.output_type {
+                quote!(Some(<#ty>::tool_input_schema()))
+            } else {
+                quote!(None)
+            };
+
             quote! {
                 ::mcpkit::types::Tool {
                     name: #name.to_string(),
@@ -540,7 +549,7 @@ fn generate_tool_handler(tools: &[ToolMethod], self_ty: &syn::Type) -> TokenStre
                         idempotent_hint: Some(#idempotent),
                         open_world_hint: None,
                     }),
-                    output_schema: None,
+                    output_schema: #output_schema,
                 }
             }
         })
