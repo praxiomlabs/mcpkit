@@ -20,7 +20,7 @@ A Rust SDK for the Model Context Protocol (MCP) that simplifies server developme
 
 ## Why mcpkit?
 
-mcpkit implements **MCP 2025-11-25** — the latest protocol specification. As of December 2025, the official `rmcp` SDK documentation references protocol version 2024-11-05 (always [verify current status](https://github.com/modelcontextprotocol/rust-sdk)). mcpkit supports the newest MCP features:
+mcpkit implements **MCP 2025-11-25** — the latest protocol specification — and negotiates all four published protocol versions. The official `rmcp` SDK now ships the same latest version, so protocol coverage is at parity; mcpkit's differentiation is its developer experience: a single unified `#[mcp_server]` macro, a runtime-agnostic core (Tokio or smol), and a broader built-in transport list (stdio, WebSocket, HTTP, Unix sockets, in-memory). mcpkit supports the newest MCP features:
 
 | Feature | Added In | Description |
 |---------|----------|-------------|
