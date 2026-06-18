@@ -1,10 +1,13 @@
 #![allow(missing_docs)]
-//! Comparison benchmarks between rust-mcp-sdk and rmcp.
+//! Serialization benchmarks for mcpkit's protocol types.
 //!
 //! Run with: `cargo bench --bench comparison`
 //!
-//! These benchmarks compare protocol operations between this SDK and the
-//! official rmcp SDK to track relative performance.
+//! Most groups compare mcpkit against a hand-built `serde_json::Value` baseline
+//! (labeled `serde_json_baseline`) rather than an rmcp type, so they measure
+//! mcpkit's typed serialization against raw untyped JSON — not a like-for-like
+//! SDK comparison. The `CallToolRequestParam` group is the exception: it
+//! benchmarks mcpkit against the real `rmcp::model::CallToolRequestParam`.
 
 use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 use serde_json::{Value, json};
@@ -35,7 +38,7 @@ fn bench_request_serialization_comparison(c: &mut Criterion) {
         "params": {}
     });
 
-    group.bench_function("rmcp_json_baseline", |b| {
+    group.bench_function("serde_json_baseline", |b| {
         b.iter(|| serde_json::to_string(black_box(&rmcp_json)).unwrap());
     });
 
@@ -53,8 +56,8 @@ fn bench_request_deserialization_comparison(c: &mut Criterion) {
         b.iter(|| serde_json::from_str::<OurRequest>(black_box(json_str)).unwrap());
     });
 
-    // rmcp JSON baseline
-    group.bench_function("rmcp_json_baseline", |b| {
+    // serde_json baseline (untyped JSON, stands in for rmcp's wire format)
+    group.bench_function("serde_json_baseline", |b| {
         b.iter(|| serde_json::from_str::<Value>(black_box(json_str)).unwrap());
     });
 
@@ -82,16 +85,16 @@ fn bench_message_parsing_comparison(c: &mut Criterion) {
         b.iter(|| serde_json::from_str::<OurMessage>(black_box(notification_json)).unwrap());
     });
 
-    // rmcp JSON baseline
-    group.bench_function("rmcp_json_baseline_request", |b| {
+    // serde_json baseline (untyped JSON, stands in for rmcp's wire format)
+    group.bench_function("serde_json_baseline_request", |b| {
         b.iter(|| serde_json::from_str::<Value>(black_box(request_json)).unwrap());
     });
 
-    group.bench_function("rmcp_json_baseline_response", |b| {
+    group.bench_function("serde_json_baseline_response", |b| {
         b.iter(|| serde_json::from_str::<Value>(black_box(response_json)).unwrap());
     });
 
-    group.bench_function("rmcp_json_baseline_notification", |b| {
+    group.bench_function("serde_json_baseline_notification", |b| {
         b.iter(|| serde_json::from_str::<Value>(black_box(notification_json)).unwrap());
     });
 
@@ -117,7 +120,7 @@ fn bench_tool_operations_comparison(c: &mut Criterion) {
         });
     });
 
-    // rmcp tool creation (if available - using JSON baseline)
+    // serde_json baseline (untyped JSON, stands in for an rmcp Tool)
     let tool_json = json!({
         "name": "search",
         "description": "Search for items",
@@ -130,7 +133,7 @@ fn bench_tool_operations_comparison(c: &mut Criterion) {
         }
     });
 
-    group.bench_function("rmcp_json_baseline_tool", |b| {
+    group.bench_function("serde_json_baseline_tool", |b| {
         b.iter(|| serde_json::to_string(black_box(&tool_json)).unwrap());
     });
 
@@ -153,7 +156,7 @@ fn bench_payload_sizes_comparison(c: &mut Criterion) {
             |b, req| b.iter(|| serde_json::to_string(black_box(req)).unwrap()),
         );
 
-        // rmcp JSON baseline
+        // serde_json baseline (untyped JSON, stands in for rmcp's wire format)
         let rmcp_json = json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -162,7 +165,7 @@ fn bench_payload_sizes_comparison(c: &mut Criterion) {
         });
 
         group.bench_with_input(
-            BenchmarkId::new("rmcp_json_baseline_serialize", size),
+            BenchmarkId::new("serde_json_baseline_serialize", size),
             &rmcp_json,
             |b, json_val| b.iter(|| serde_json::to_string(black_box(json_val)).unwrap()),
         );
