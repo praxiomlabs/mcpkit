@@ -8,4 +8,6 @@
 fn expand_tests() {
     let t = trybuild::TestCases::new();
     t.pass("tests/expand/*.rs");
+    // #19: generic impl blocks must be rejected with a clear error.
+    t.compile_fail("tests/compile_fail/*.rs");
 }

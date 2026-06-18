@@ -1,0 +1,5 @@
+error: #[mcp_server] does not support generic impl blocks; implement it on a concrete type
+ --> tests/compile_fail/generic_impl.rs:9:5
+  |
+9 | impl<T> Handler<T> {
+  |     ^^^

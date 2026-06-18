@@ -67,6 +67,17 @@ pub fn expand_mcp_server(attr: TokenStream, item: TokenStream) -> Result<TokenSt
     // Parse the impl block
     let mut impl_block: ItemImpl = parse2(item)?;
 
+    // Generic impl blocks aren't supported: the generated trait impls reference
+    // the concrete self type and would otherwise produce confusing "undefined
+    // type parameter" errors. Fail with a clear message instead.
+    if !impl_block.generics.params.is_empty() {
+        return Err(Error::new_spanned(
+            &impl_block.generics,
+            "#[mcp_server] does not support generic impl blocks; \
+             implement it on a concrete type",
+        ));
+    }
+
     // Find all tool methods
     let tool_methods = extract_tool_methods(&mut impl_block)?;
 
