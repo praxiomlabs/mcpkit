@@ -124,8 +124,36 @@ pub mod prelude {
 /// Protocol versions supported by this extension.
 pub const SUPPORTED_VERSIONS: &[&str] = &["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"];
 
-/// Check if a protocol version is supported.
+/// Check whether a request's protocol version is acceptable.
+///
+/// Returns `true` if `version` names a supported protocol version, or if it is
+/// `None`: a request that omits the `MCP-Protocol-Version` header is assumed to
+/// use `2025-03-26` (the version predating the header) for backwards
+/// compatibility, per the MCP Streamable HTTP specification.
 #[must_use]
 pub fn is_supported_version(version: Option<&str>) -> bool {
-    version.is_some_and(|v| SUPPORTED_VERSIONS.contains(&v))
+    version.is_none_or(|v| SUPPORTED_VERSIONS.contains(&v))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_supported_version;
+
+    #[test]
+    fn missing_protocol_version_header_is_accepted() {
+        // An absent header is assumed to be 2025-03-26 for backwards compatibility.
+        assert!(is_supported_version(None));
+    }
+
+    #[test]
+    fn supported_protocol_versions_are_accepted() {
+        assert!(is_supported_version(Some("2024-11-05")));
+        assert!(is_supported_version(Some("2025-03-26")));
+        assert!(is_supported_version(Some("2025-11-25")));
+    }
+
+    #[test]
+    fn unsupported_protocol_version_is_rejected() {
+        assert!(!is_supported_version(Some("1999-01-01")));
+    }
 }

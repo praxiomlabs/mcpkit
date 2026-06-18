@@ -28,7 +28,9 @@ use tracing::{debug, info, warn};
 ///
 /// # Headers
 ///
-/// - `mcp-protocol-version`: Required. Must be a supported protocol version.
+/// - `mcp-protocol-version`: Optional. If present, must name a supported
+///   protocol version; if absent, `2025-03-26` is assumed for backwards
+///   compatibility.
 /// - `mcp-session-id`: Optional. Used to track sessions.
 /// - `Content-Type`: Should be `application/json`.
 ///
