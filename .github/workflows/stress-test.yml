@@ -20,13 +20,10 @@ on:
         required: false
         default: 'false'
         type: boolean
-  # Run on PRs that modify benchmarks or core performance code
-  pull_request:
-    paths:
-      - 'benches/**'
-      - 'crates/mcpkit-core/src/**'
-      - 'crates/mcpkit-transport/src/**'
-      - 'crates/mcpkit-server/src/**'
+  # NOTE: benchmarks intentionally do NOT run on pull_request. Criterion timings
+  # on shared CI runners are too noisy to gate PRs on, and a full run adds ~18
+  # minutes per PR. Run them on the weekly schedule or manually via
+  # workflow_dispatch instead.
 
 env:
   CARGO_TERM_COLOR: always
