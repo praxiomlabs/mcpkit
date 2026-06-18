@@ -6,11 +6,15 @@ use std::time::{Duration, Instant};
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
+/// Default idle timeout after which an inactive session is reaped.
+pub const DEFAULT_SESSION_TIMEOUT: Duration = Duration::from_secs(3600);
+
 /// Session manager for tracking MCP client sessions.
 #[derive(Clone)]
 pub struct SessionStore {
     sessions: Arc<DashMap<String, SessionState>>,
     sse_channels: Arc<DashMap<String, broadcast::Sender<String>>>,
+    idle_timeout: Duration,
 }
 
 struct SessionState {
@@ -32,12 +36,25 @@ impl SessionStore {
         Self {
             sessions: Arc::new(DashMap::new()),
             sse_channels: Arc::new(DashMap::new()),
+            idle_timeout: DEFAULT_SESSION_TIMEOUT,
         }
     }
 
+    /// Set the idle timeout after which an inactive session is reaped on the
+    /// next [`create`](Self::create).
+    #[must_use]
+    pub const fn with_idle_timeout(mut self, idle_timeout: Duration) -> Self {
+        self.idle_timeout = idle_timeout;
+        self
+    }
+
     /// Create a new session and return its ID.
+    ///
+    /// Sessions idle past the idle timeout are reaped first, so the store stays
+    /// bounded without a background cleanup task.
     #[must_use]
     pub fn create(&self) -> String {
+        self.cleanup(self.idle_timeout);
         let id = Uuid::new_v4().to_string();
         let now = Instant::now();
         self.sessions.insert(
@@ -178,6 +195,28 @@ mod tests {
         // Cleanup with 0 duration should remove all sessions
         store.cleanup(Duration::from_secs(0));
         assert!(!store.exists(&id));
+    }
+
+    #[test]
+    fn create_reaps_idle_sessions() {
+        let store = SessionStore::new().with_idle_timeout(Duration::ZERO);
+        let id = store.create();
+
+        // A zero idle timeout makes the previous session reapable, so the next
+        // create() sweeps it away.
+        let _other = store.create();
+        assert!(!store.exists(&id));
+    }
+
+    #[test]
+    fn create_keeps_recent_sessions() {
+        // The default idle timeout is an hour, so a freshly created session
+        // survives create-time reaping.
+        let store = SessionStore::new();
+        let id = store.create();
+
+        let _other = store.create();
+        assert!(store.exists(&id));
     }
 
     #[tokio::test]

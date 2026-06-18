@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SessionStore::with_init_timeout` and `Session::is_reapable` in the
   `mcpkit-axum` and `mcpkit-actix` adapters, plus a `DEFAULT_INIT_TIMEOUT`
   constant, to bound how long a session created but never initialized is kept.
+- `SessionStore::with_idle_timeout` and a `DEFAULT_SESSION_TIMEOUT` constant in
+  the `mcpkit-warp` and `mcpkit-rocket` adapters, to configure the idle timeout
+  used when reaping inactive sessions.
 
 ### Security
 
@@ -68,6 +71,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cleanup routines were never invoked on the default request path. Sessions are
   also reaped if created but not initialized within the initialization timeout,
   and the `initialize` request now marks its session initialized.
+- The `mcpkit-warp` and `mcpkit-rocket` session stores now reap sessions idle
+  past the idle timeout when a new one is created, so the store stays bounded;
+  previously their cleanup routine was never invoked on the default request
+  path and sessions accumulated indefinitely.
 
 ## [0.6.0] - 2026-06-18
 

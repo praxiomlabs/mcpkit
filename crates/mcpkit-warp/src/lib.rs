@@ -46,7 +46,7 @@ mod state;
 pub use error::WarpError;
 pub use handler::{handle_mcp_post, handle_sse};
 pub use router::McpRouter;
-pub use session::{SessionManager, SessionStore};
+pub use session::{DEFAULT_SESSION_TIMEOUT, SessionManager, SessionStore};
 pub use state::McpState;
 
 /// Prelude module for convenient imports.
@@ -54,7 +54,7 @@ pub mod prelude {
     pub use crate::error::WarpError;
     pub use crate::handler::{handle_mcp_post, handle_sse};
     pub use crate::router::McpRouter;
-    pub use crate::session::{SessionManager, SessionStore};
+    pub use crate::session::{DEFAULT_SESSION_TIMEOUT, SessionManager, SessionStore};
     pub use crate::state::McpState;
 }
 
