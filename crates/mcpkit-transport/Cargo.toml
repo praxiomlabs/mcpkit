@@ -60,6 +60,7 @@ prometheus = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }
+wiremock = "0.6"
 
 [build-dependencies]
 # These are only needed for regenerating proto code (development use)
