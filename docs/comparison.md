@@ -2,17 +2,17 @@
 
 This document provides an honest, transparent comparison between `mcpkit` and `rmcp` (the official Rust MCP SDK) to help you choose the right tool for your project.
 
-> **Last verified**: December 2025. SDK ecosystems evolve rapidly—always check the respective repositories for the latest information.
+> **Last verified**: June 2026 (rmcp 1.7.0). SDK ecosystems evolve rapidly—always check the respective repositories for the latest information.
 
 ## Executive Summary
 
 | Aspect | mcpkit | rmcp |
 |--------|--------|------|
 | **Macro Approach** | Single `#[mcp_server]` macro | Multiple macros (`#[tool_router]`, etc.) |
-| **Transport Options** | 5 built-in (stdio, WebSocket, HTTP, Unix, Memory) | 2 (stdio, SSE) |
+| **Transport Options** | 5 built-in (stdio, WebSocket, HTTP, Unix, Memory) | 4 (stdio, Streamable HTTP, SSE [legacy], child-process) |
 | **Error Handling** | `McpError` + `ToolOutput::error()` | `Result<CallToolResult, Error>` |
-| **Maturity** | Pre-1.0 | Established (0.11.x) |
-| **Protocol Version** | 2025-11-25 (per docs) | 2024-11-05 (per docs) |
+| **Maturity** | Pre-1.0 | Established (1.7.x) |
+| **Protocol Version** | 2025-11-25 (all 4 versions) | 2025-11-25 (all 4 versions) |
 
 ## Code Size Comparison
 
@@ -150,7 +150,7 @@ Both SDKs use Rust's ownership system, ensuring no memory leaks by design. mcpki
 
 mcpkit includes automatic version negotiation and capability negotiation.
 
-**rmcp protocol support:** Check [rmcp's repository](https://github.com/modelcontextprotocol/rust-sdk) for current protocol version support. As of December 2025, their README references version 2024-11-05.
+**rmcp protocol support:** As of June 2026 (rmcp 1.7.0), rmcp ships the same four protocol versions and defaults to the latest, `2025-11-25` — the two SDKs are at protocol parity. Check [rmcp's repository](https://github.com/modelcontextprotocol/rust-sdk) for the current status.
 
 ### mcpkit-Specific Features
 
@@ -210,7 +210,7 @@ The Rust MCP ecosystem includes several implementations beyond mcpkit and rmcp. 
 
 | SDK | Protocol Versions | Key Differentiators |
 |-----|-------------------|---------------------|
-| **[rmcp](https://github.com/modelcontextprotocol/rust-sdk)** | 2024-11-05 (per docs) | Official SDK, wide adoption |
+| **[rmcp](https://github.com/modelcontextprotocol/rust-sdk)** | All versions (default: 2025-11-25) | Official SDK, wide adoption |
 | **[rust-mcp-sdk](https://github.com/rust-mcp-stack/rust-mcp-sdk)** | All versions (default: 2025-06-18) | DNS rebinding protection, OAuth providers, batch messages |
 | **[mcp-protocol-sdk](https://docs.rs/mcp-protocol-sdk)** | 2025-06-18 | Audio support, annotations, autocompletion |
 | **mcpkit** | All versions (default: 2025-11-25) | Unified macro, runtime-agnostic, Tasks support |

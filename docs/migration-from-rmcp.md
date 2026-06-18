@@ -2,7 +2,7 @@
 
 This guide helps you migrate from the `rmcp` crate (the official Rust MCP SDK) to `mcpkit`. Both SDKs implement the same MCP protocol and are wire-compatible.
 
-> **Note**: This guide reflects rmcp's API as of December 2025. Check [rmcp's documentation](https://github.com/modelcontextprotocol/rust-sdk) for the latest API details.
+> **Note**: This guide reflects rmcp's API as of June 2026 (rmcp 1.7.0). Check [rmcp's documentation](https://github.com/modelcontextprotocol/rust-sdk) for the latest API details.
 
 ## Quick Comparison
 
@@ -12,8 +12,8 @@ This guide helps you migrate from the `rmcp` crate (the official Rust MCP SDK) t
 | Schema generation | `schemars` crate | Built-in JSON Schema |
 | Server builder | Custom builder | Typestate builder |
 | Error handling | `CallToolResult` | `ToolOutput` + `McpError` |
-| Protocol versions | 2024-11-05 | 2024-11-05, 2025-11-25 |
-| Transport | stdio, SSE | stdio, WebSocket, HTTP, Unix, Memory |
+| Protocol versions | All 4 (2024-11-05 … 2025-11-25) | All 4 (2024-11-05 … 2025-11-25) |
+| Transport | stdio, Streamable HTTP, SSE, child-process | stdio, WebSocket, HTTP, Unix, Memory |
 
 ## Dependency Changes
 
@@ -21,7 +21,7 @@ This guide helps you migrate from the `rmcp` crate (the official Rust MCP SDK) t
 
 ```toml
 [dependencies]
-rmcp = "0.1"
+rmcp = "1.7"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 schemars = "1"
@@ -303,10 +303,11 @@ let caps = ServerCapabilities {
 
 ## Protocol Version Compatibility
 
-Both SDKs are wire-compatible. mcpkit supports:
+Both SDKs are wire-compatible and support all four protocol versions, defaulting to the latest:
 
-- `2024-11-05` (rmcp's version)
-- `2025-11-25` (latest)
+- `2024-11-05` (original spec)
+- `2025-03-26`, `2025-06-18`
+- `2025-11-25` (latest; default for both SDKs)
 
 Version negotiation happens automatically during initialization.
 
@@ -334,8 +335,8 @@ Replace `rmcp` with `mcpkit`:
 
 ```toml
 [dependencies]
-- rmcp = "0.1"
-+ mcpkit = "0.5"
+- rmcp = "1.7"
++ mcpkit = "0.6"
 ```
 
 Remove `schemars` if only used for tool schemas.
