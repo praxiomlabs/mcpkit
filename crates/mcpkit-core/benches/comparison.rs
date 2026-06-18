@@ -17,7 +17,7 @@ use mcpkit_core::protocol::{Message as OurMessage, Request as OurRequest};
 use mcpkit_core::types::Tool as OurTool;
 
 // rmcp SDK types (from the official MCP Rust SDK)
-use rmcp::model::CallToolRequestParam;
+use rmcp::model::CallToolRequestParams;
 
 /// Benchmark JSON-RPC request serialization: our SDK vs rmcp
 fn bench_request_serialization_comparison(c: &mut Criterion) {
@@ -174,7 +174,7 @@ fn bench_payload_sizes_comparison(c: &mut Criterion) {
     group.finish();
 }
 
-/// Benchmark `CallToolRequestParam`: our SDK representation vs rmcp
+/// Benchmark `CallToolRequestParams`: our SDK representation vs rmcp
 fn bench_tool_call_params_comparison(c: &mut Criterion) {
     let mut group = c.benchmark_group("tool_call_params_comparison");
 
@@ -202,11 +202,10 @@ fn bench_tool_call_params_comparison(c: &mut Criterion) {
         b.iter(|| serde_json::to_string(black_box(&our_params)).unwrap());
     });
 
-    // rmcp uses CallToolRequestParam
-    let rmcp_params = CallToolRequestParam {
-        name: "search".into(),
-        arguments: Some(args.as_object().unwrap().clone()),
-    };
+    // rmcp's CallToolRequestParams is #[non_exhaustive], so build it by
+    // deserializing the equivalent JSON rather than with a struct literal.
+    let rmcp_params: CallToolRequestParams =
+        serde_json::from_value(our_params.clone()).expect("valid CallToolRequestParams");
 
     group.bench_function("rmcp_serialize", |b| {
         b.iter(|| serde_json::to_string(black_box(&rmcp_params)).unwrap());
@@ -221,7 +220,7 @@ fn bench_tool_call_params_comparison(c: &mut Criterion) {
 
     let rmcp_json = serde_json::to_string(&rmcp_params).unwrap();
     group.bench_function("rmcp_deserialize", |b| {
-        b.iter(|| serde_json::from_str::<CallToolRequestParam>(black_box(&rmcp_json)).unwrap());
+        b.iter(|| serde_json::from_str::<CallToolRequestParams>(black_box(&rmcp_json)).unwrap());
     });
 
     group.finish();

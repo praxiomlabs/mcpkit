@@ -51,7 +51,7 @@ rsa = { version = "0.9", features = ["pkcs5"] }
 p256 = { version = "0.13", features = ["ecdsa", "pkcs8"] }
 
 # For comparison benchmarks
-rmcp = "0.9"
+rmcp = "1.7"
 
 [features]
 default = []
