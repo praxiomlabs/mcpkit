@@ -343,6 +343,7 @@ impl WebSocketListener {
                             tracing::debug!(peer = %addr, "Accepting WebSocket connection");
 
                             let allowed_origins = self.config.allowed_origins.clone();
+                            let max_message_size = self.config.max_message_size;
                             let tx = self.connection_tx.clone();
                             let conn_id = connection_id.fetch_add(1, Ordering::Relaxed);
                             let active_conns_counter = Arc::clone(&self.active_connections);
@@ -392,7 +393,21 @@ impl WebSocketListener {
                                     Ok(response)
                                 };
 
-                                match tokio_tungstenite::accept_hdr_async(stream, callback).await {
+                                // Apply the configured message-size limit to
+                                // tungstenite (otherwise its own default is used
+                                // and our setting is ignored).
+                                let ws_config = tokio_tungstenite::tungstenite::protocol::WebSocketConfig {
+                                    max_message_size: Some(max_message_size),
+                                    max_frame_size: Some(max_message_size),
+                                    ..Default::default()
+                                };
+                                match tokio_tungstenite::accept_hdr_async_with_config(
+                                    stream,
+                                    callback,
+                                    Some(ws_config),
+                                )
+                                .await
+                                {
                                     Ok(ws_stream) => {
                                         tracing::info!(
                                             peer = %addr,

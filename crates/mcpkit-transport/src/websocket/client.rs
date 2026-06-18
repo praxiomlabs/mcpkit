@@ -17,7 +17,8 @@ use {
     futures::{SinkExt, StreamExt},
     tokio::net::TcpStream,
     tokio_tungstenite::{
-        MaybeTlsStream, WebSocketStream, connect_async, tungstenite::protocol::Message as WsMessage,
+        MaybeTlsStream, WebSocketStream, connect_async_with_config,
+        tungstenite::protocol::{Message as WsMessage, WebSocketConfig as TungsteniteConfig},
     },
 };
 
@@ -102,8 +103,16 @@ impl WebSocketTransport {
             message: format!("Invalid WebSocket URL: {e}"),
         })?;
 
+        // Apply the configured message-size limit to tungstenite (it is
+        // otherwise ignored, leaving tungstenite's own default in effect).
+        let ws_config = TungsteniteConfig {
+            max_message_size: Some(self.config.max_message_size),
+            max_frame_size: Some(self.config.max_message_size),
+            ..Default::default()
+        };
+
         // Connect with timeout
-        let connect_future = connect_async(url.as_str());
+        let connect_future = connect_async_with_config(url.as_str(), Some(ws_config), false);
         let result = tokio::time::timeout(self.config.connect_timeout, connect_future)
             .await
             .map_err(|_| TransportError::Timeout {

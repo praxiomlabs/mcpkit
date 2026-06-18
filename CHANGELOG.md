@@ -49,6 +49,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The WebSocket `max_message_size` setting is now actually applied
+  ([#13](https://github.com/praxiomlabs/mcpkit/issues/13)). Both the client and
+  server build a `tungstenite::WebSocketConfig` from the configured limit and
+  pass it via `connect_async_with_config` / `accept_hdr_async_with_config`;
+  previously the value was dropped and tungstenite's default was always used.
 - The default in-memory rate limiter now isolates clients per key
   ([#11](https://github.com/praxiomlabs/mcpkit/issues/11)). `InMemoryStore`
   previously used a single global bucket and ignored the key, so one noisy
