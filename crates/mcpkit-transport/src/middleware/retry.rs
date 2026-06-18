@@ -63,10 +63,10 @@ impl ExponentialBackoff {
         let delay = base.min(self.max_delay.as_secs_f64());
 
         let delay = if let Some(jitter) = self.jitter {
-            // Add jitter: delay * (1 - jitter + 2*jitter*random)
-            // Since we don't have random access here, we use a simple deterministic jitter
-            let jitter_factor =
-                (2.0 * jitter).mul_add((f64::from(attempt) % 1.0).fract(), 1.0 - jitter);
+            // Scale the delay by a random factor in [1 - jitter, 1 + jitter) so
+            // coordinated retries spread out (thundering-herd protection).
+            let random = rand::random::<f64>(); // [0, 1)
+            let jitter_factor = (2.0 * jitter).mul_add(random, 1.0 - jitter);
             delay * jitter_factor
         } else {
             delay
@@ -91,7 +91,13 @@ pub trait RetryPolicy: Send + Sync {
     fn clone_box(&self) -> Box<dyn RetryPolicy>;
 }
 
-/// Default retry policy that retries transient errors.
+/// Default retry policy that retries connection-level transient errors.
+///
+/// Timeouts are **not** retried by default: a send that timed out may already
+/// have been delivered to the peer, so retrying it could duplicate a
+/// non-idempotent operation (e.g. a `tools/call` with side effects). Callers who
+/// know their requests are idempotent can supply a custom [`RetryPolicy`] that
+/// also retries [`TransportError::Timeout`].
 #[derive(Debug, Clone, Default)]
 pub struct DefaultRetryPolicy;
 
@@ -99,8 +105,7 @@ impl RetryPolicy for DefaultRetryPolicy {
     fn should_retry(&self, error: &TransportError) -> bool {
         matches!(
             error,
-            TransportError::Timeout { .. }
-                | TransportError::IoError(_)
+            TransportError::IoError(_)
                 | TransportError::Io { .. }
                 | TransportError::ConnectionClosed
                 | TransportError::Connection { .. }
@@ -280,18 +285,47 @@ mod tests {
     fn test_default_retry_policy() {
         let policy = DefaultRetryPolicy;
 
-        assert!(policy.should_retry(&TransportError::Timeout {
+        // Connection-level errors are retried.
+        assert!(policy.should_retry(&TransportError::ConnectionClosed));
+        assert!(policy.should_retry(&TransportError::Connection {
+            message: "reset".to_string(),
+        }));
+
+        // Timeouts are NOT retried by default (#15): a timed-out send may have
+        // already been delivered, so retrying could duplicate a non-idempotent op.
+        assert!(!policy.should_retry(&TransportError::Timeout {
             operation: "send".to_string(),
             duration: Duration::from_secs(1),
         }));
-
-        assert!(policy.should_retry(&TransportError::ConnectionClosed));
 
         assert!(!policy.should_retry(&TransportError::NotConnected));
 
         assert!(!policy.should_retry(&TransportError::Protocol {
             message: "invalid".to_string(),
         }));
+    }
+
+    #[test]
+    fn jitter_is_randomized_and_within_bounds() {
+        // multiplier 1.0 keeps the base delay constant at 1000ms across attempts;
+        // jitter 0.5 scales it into [500ms, 1500ms).
+        let backoff = ExponentialBackoff::new(Duration::from_secs(1), Duration::from_secs(60))
+            .multiplier(1.0)
+            .jitter(0.5);
+
+        let mut seen = std::collections::HashSet::new();
+        for _ in 0..50 {
+            let ms = backoff.delay_for_attempt(1).as_secs_f64() * 1000.0;
+            assert!(
+                (500.0..1500.0).contains(&ms),
+                "jittered delay {ms}ms outside [500, 1500)"
+            );
+            seen.insert(ms.to_bits());
+        }
+        assert!(
+            seen.len() > 1,
+            "jitter must vary delays across calls (was constant)"
+        );
     }
 
     #[test]
