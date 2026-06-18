@@ -432,6 +432,10 @@ impl From<ToolOutput> for CallToolResult {
 ///
 /// Returning `Json(value)` from a tool serializes `value` into the result's
 /// `structuredContent`, with a pretty-printed JSON fallback in `content`.
+///
+/// When a `#[tool]` method returns `Json<T>`, the `#[mcp_server]` macro also
+/// derives the tool's `outputSchema` from `T`, so `T` should derive `ToolInput`
+/// in addition to `serde::Serialize`.
 #[derive(Debug, Clone)]
 pub struct Json<T>(pub T);
 
