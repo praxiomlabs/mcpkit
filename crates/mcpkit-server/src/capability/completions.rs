@@ -7,7 +7,7 @@ use crate::context::Context;
 use crate::handler::CompletionHandler;
 use mcpkit_core::error::McpError;
 use mcpkit_core::types::completion::{
-    CompleteRequest, CompleteResult, Completion, CompletionArgument, CompletionRef, CompletionTotal,
+    CompleteRequest, CompleteResult, Completion, CompletionArgument, CompletionRef,
 };
 use std::collections::HashMap;
 use std::future::Future;
@@ -135,7 +135,7 @@ impl CompletionService {
             Ok(CompleteResult {
                 completion: Completion {
                     values,
-                    total: Some(CompletionTotal::Exact(total)),
+                    total: Some(total),
                     has_more: Some(false),
                 },
             })
@@ -144,7 +144,7 @@ impl CompletionService {
             Ok(CompleteResult {
                 completion: Completion {
                     values: Vec::new(),
-                    total: Some(CompletionTotal::Exact(0)),
+                    total: Some(0),
                     has_more: Some(false),
                 },
             })

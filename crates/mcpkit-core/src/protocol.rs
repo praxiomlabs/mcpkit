@@ -43,6 +43,11 @@ pub enum RequestId {
     Number(u64),
     /// String request ID.
     String(String),
+    /// A `null` request ID.
+    ///
+    /// JSON-RPC 2.0 requires error responses to a request that could not be
+    /// parsed (so its id is unknown) to use `"id": null`.
+    Null,
 }
 
 impl RequestId {
@@ -82,6 +87,7 @@ impl std::fmt::Display for RequestId {
         match self {
             Self::Number(n) => write!(f, "{n}"),
             Self::String(s) => write!(f, "{s}"),
+            Self::Null => write!(f, "null"),
         }
     }
 }
@@ -422,6 +428,25 @@ impl From<&str> for Cursor {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn request_id_null_round_trips() {
+        // #17: JSON-RPC error responses to unparseable requests use `"id": null`.
+        assert_eq!(serde_json::to_string(&RequestId::Null).unwrap(), "null");
+        assert_eq!(
+            serde_json::from_str::<RequestId>("null").unwrap(),
+            RequestId::Null
+        );
+        // Numbers and strings still take precedence over null.
+        assert_eq!(
+            serde_json::from_str::<RequestId>("7").unwrap(),
+            RequestId::Number(7)
+        );
+        assert_eq!(
+            serde_json::from_str::<RequestId>("\"abc\"").unwrap(),
+            RequestId::String("abc".to_string())
+        );
+    }
 
     #[test]
     fn test_request_serialization() -> Result<(), Box<dyn std::error::Error>> {

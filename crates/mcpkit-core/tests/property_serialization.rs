@@ -228,6 +228,7 @@ proptest! {
         match &id {
             RequestId::Number(n) => prop_assert_eq!(display, n.to_string()),
             RequestId::String(s) => prop_assert_eq!(display, s.clone()),
+            RequestId::Null => prop_assert_eq!(display, "null".to_string()),
         }
     }
 
