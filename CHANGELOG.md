@@ -54,6 +54,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   previously used a single global bucket and ignored the key, so one noisy
   client throttled everyone. It now keeps an independent bucket per key, bounded
   by an LRU-evicted map (default 10,000 keys) to cap memory.
+- `SpawnedTransport` now actually terminates the child process when dropped
+  ([#12](https://github.com/praxiomlabs/mcpkit/issues/12)). The child is spawned
+  with `kill_on_drop`, so dropping the transport kills it instead of leaking a
+  process; the rustdoc was corrected to match (it previously promised a
+  graceful-then-timeout shutdown that wasn't implemented).
 - JWT `required_claims` are now actually enforced by the signature-verifying
   validator ([#10](https://github.com/praxiomlabs/mcpkit/issues/10)). Previously
   custom claims were silently ignored and configuring any `required_claims`
