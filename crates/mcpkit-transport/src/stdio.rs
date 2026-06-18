@@ -35,7 +35,8 @@ use crate::error::TransportError;
 use crate::runtime::{AsyncMutex, BufReader};
 use crate::traits::{Transport, TransportMetadata};
 use futures::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
-use mcpkit_core::protocol::Message;
+use mcpkit_core::error::JsonRpcError;
+use mcpkit_core::protocol::{Message, RequestId, Response};
 use std::io::{BufRead, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -148,6 +149,24 @@ where
                 .connected_now(),
         }
     }
+
+    /// Write a JSON-RPC parse error (`-32700`) with a null id to stdout.
+    ///
+    /// Used when an incoming line cannot be parsed, so the connection stays
+    /// open and keeps serving instead of being torn down by one malformed
+    /// message.
+    async fn send_parse_error(&self) -> Result<(), TransportError> {
+        let response = Message::Response(Response::error(
+            RequestId::Null,
+            JsonRpcError::parse_error("failed to parse message as JSON-RPC"),
+        ));
+        let json = serde_json::to_string(&response)?;
+        let mut stdout = self.stdout.lock().await;
+        stdout.write_all(json.as_bytes()).await?;
+        stdout.write_all(b"\n").await?;
+        stdout.flush().await?;
+        Ok(())
+    }
 }
 
 #[cfg(any(feature = "tokio-runtime", feature = "smol-runtime"))]
@@ -223,8 +242,14 @@ where
                 continue;
             }
 
-            // Parse JSON directly from bytes - avoids String allocation
-            let msg: Message = serde_json::from_slice(trimmed)?;
+            // Parse JSON directly from bytes - avoids String allocation. A
+            // malformed line is a JSON-RPC parse error: reply -32700 with a null
+            // id and keep reading, rather than tearing down the connection on a
+            // single bad message.
+            let Ok(msg) = serde_json::from_slice::<Message>(trimmed) else {
+                self.send_parse_error().await?;
+                continue;
+            };
             return Ok(Some(msg));
         }
     }
@@ -394,5 +419,26 @@ mod tests {
     #[test]
     fn test_max_message_size() {
         assert_eq!(MAX_MESSAGE_SIZE, 16 * 1024 * 1024);
+    }
+
+    #[cfg(feature = "tokio-runtime")]
+    #[tokio::test]
+    async fn malformed_line_does_not_close_connection() {
+        use futures::io::Cursor;
+        // A malformed line followed by a valid request on the next line.
+        let input =
+            b"this is not json\n{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}\n".to_vec();
+        let transport = StdioTransport::with_streams(Cursor::new(input), Cursor::new(Vec::new()));
+
+        // The malformed line must not tear down the connection: recv replies
+        // -32700 to stdout, skips it, and returns the following valid request.
+        let msg = transport
+            .recv()
+            .await
+            .expect("a malformed line must not error out the connection");
+        match msg {
+            Some(Message::Request(req)) => assert_eq!(req.method, "ping"),
+            other => panic!("expected the ping request after the bad line, got {other:?}"),
+        }
     }
 }

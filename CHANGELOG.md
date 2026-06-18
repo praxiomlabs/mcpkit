@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `HashMap`, so `tools/list` returned schemas whose property order varied per
   run — breaking response caching and snapshot tests. Properties are now
   inserted in declaration order.
+- A malformed message on the stdio transport no longer tears down the
+  connection. `StdioTransport` now replies with a JSON-RPC parse error
+  (`-32700`, `id: null`) and keeps serving, instead of returning a transport
+  error that ended the server's message loop.
 
 ## [0.6.0] - 2026-06-18
 
