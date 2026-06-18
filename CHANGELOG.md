@@ -58,6 +58,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The `Tool` builder no longer panics on a malformed `input_schema`
+  ([#18](https://github.com/praxiomlabs/mcpkit/issues/18)). `with_*_param`
+  previously indexed a non-object `properties` (or `input_schema`) and panicked;
+  it now coerces non-object values to a fresh object.
 - `McpError::ResourceAccessDenied` now has a distinct JSON-RPC error code
   ([#17](https://github.com/praxiomlabs/mcpkit/issues/17)); it previously
   collided with `ResourceNotFound` at `-32002`, so clients couldn't tell the two
