@@ -49,6 +49,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Retry middleware: jitter is now actually randomized, and timeouts are no
+  longer retried by default ([#15](https://github.com/praxiomlabs/mcpkit/issues/15)).
+  The previous jitter term was always zero (`attempt % 1.0`), so coordinated
+  retries didn't spread out; it now uses a real RNG. `DefaultRetryPolicy` no
+  longer retries `Timeout` (a timed-out send may already have been delivered, so
+  retrying could duplicate a non-idempotent operation) — only connection-level
+  errors are retried; supply a custom `RetryPolicy` to opt back in.
 - The WebSocket `max_message_size` setting is now actually applied
   ([#13](https://github.com/praxiomlabs/mcpkit/issues/13)). Both the client and
   server build a `tungstenite::WebSocketConfig` from the configured limit and

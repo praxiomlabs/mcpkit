@@ -46,6 +46,7 @@ tokio-stream = { version = "0.1", optional = true }
 # Utilities
 uuid = { workspace = true }
 url = { workspace = true }
+rand = { workspace = true }
 
 # OpenTelemetry integration (optional)
 opentelemetry = { workspace = true, optional = true }
