@@ -112,11 +112,14 @@ impl ToolMethod {
                     "properties": {},
                 });
                 if let ::serde_json::Value::Object(ref mut obj) = schema {
-                    let properties: std::collections::HashMap<String, ::serde_json::Value> =
-                        vec![#(#properties),*].into_iter().collect();
-                    obj.insert("properties".to_string(), ::serde_json::Value::Object(
-                        properties.into_iter().collect()
-                    ));
+                    // Insert in declaration order rather than collecting through a
+                    // HashMap, whose iteration order is randomized per run and would
+                    // make tools/list emit non-deterministically ordered schemas.
+                    let mut properties = ::serde_json::Map::new();
+                    for (name, value) in vec![#(#properties),*] {
+                        properties.insert(name, value);
+                    }
+                    obj.insert("properties".to_string(), ::serde_json::Value::Object(properties));
                     let required: Vec<String> = vec![#(#required.to_string()),*];
                     if !required.is_empty() {
                         obj.insert("required".to_string(), ::serde_json::Value::Array(
