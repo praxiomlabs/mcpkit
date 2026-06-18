@@ -49,6 +49,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- JWT `required_claims` are now actually enforced by the signature-verifying
+  validator ([#10](https://github.com/praxiomlabs/mcpkit/issues/10)). Previously
+  custom claims were silently ignored and configuring any `required_claims`
+  dropped the default `exp`-presence requirement (a per-item
+  `set_required_spec_claims` loop that only handled registered claims and
+  replaced the set). Required claims are now checked on the decoded token.
 - A panicking request handler no longer tears down the whole connection
   ([#9](https://github.com/praxiomlabs/mcpkit/issues/9)). Each request runs with
   panic isolation; a panic is caught and returned as a JSON-RPC internal error,

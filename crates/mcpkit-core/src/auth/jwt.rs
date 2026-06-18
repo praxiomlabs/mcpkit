@@ -507,10 +507,23 @@ pub fn validate_claims(claims: &TokenClaims, validation: &TokenValidation) -> Re
     }
 
     // Validate required custom claims
-    for claim_name in &validation.required_claims {
-        if !claims.extra.contains_key(claim_name) {
-            // Check standard claims too
-            let has_claim = match claim_name.as_str() {
+    check_required_claims(claims, &validation.required_claims)?;
+
+    Ok(())
+}
+
+/// Ensure every configured required claim is present on the token.
+///
+/// Checks custom claims (in `extra`) as well as the registered claims, so
+/// `required_claims` works for arbitrary names. We enforce this ourselves
+/// rather than delegating to `jsonwebtoken::Validation::set_required_spec_claims`,
+/// which only understands the five registered claims and *replaces* (rather
+/// than extends) the required set — silently ignoring custom claims and
+/// dropping the default `exp`-presence requirement.
+fn check_required_claims(claims: &TokenClaims, required: &[String]) -> Result<(), JwtError> {
+    for claim_name in required {
+        let present = claims.extra.contains_key(claim_name)
+            || match claim_name.as_str() {
                 "iss" => claims.iss.is_some(),
                 "sub" => claims.sub.is_some(),
                 "aud" => claims.aud.is_some(),
@@ -521,14 +534,12 @@ pub fn validate_claims(claims: &TokenClaims, validation: &TokenValidation) -> Re
                 "scope" => claims.scope.is_some(),
                 _ => false,
             };
-            if !has_claim {
-                return Err(JwtError::MissingClaim {
-                    claim: claim_name.clone(),
-                });
-            }
+        if !present {
+            return Err(JwtError::MissingClaim {
+                claim: claim_name.clone(),
+            });
         }
     }
-
     Ok(())
 }
 
@@ -648,10 +659,11 @@ fn build_jwt_validation(
     // Set expiration validation
     jwt_validation.validate_exp = validation.validate_exp;
 
-    // Add required claims
-    for claim in &validation.required_claims {
-        jwt_validation.set_required_spec_claims(&[claim.as_str()]);
-    }
+    // Required custom claims are enforced after decoding (see
+    // `check_required_claims` in `validate_token`). We deliberately do not call
+    // `set_required_spec_claims` here: it only handles registered claims and
+    // replaces the required set, which would silently drop the default
+    // `exp`-presence requirement.
 
     jwt_validation
 }
@@ -758,7 +770,8 @@ pub fn validate_token(
             },
         })?;
 
-    // Additional scope validation (jsonwebtoken doesn't handle this)
+    // Additional validation jsonwebtoken doesn't handle: required scopes and
+    // required custom claims.
     let claims = token_data.claims;
     for required_scope in &validation.required_scopes {
         if !claims.has_scope(required_scope) {
@@ -767,6 +780,7 @@ pub fn validate_token(
             });
         }
     }
+    check_required_claims(&claims, &validation.required_claims)?;
 
     Ok(claims)
 }
@@ -1315,6 +1329,94 @@ mod signature_tests {
 
         let validated_claims = result.unwrap();
         assert_eq!(validated_claims.sub, Some("user123".to_string()));
+    }
+
+    /// Regression test for #10: custom required claims must actually be
+    /// enforced by the signature-verifying path (the old code delegated to
+    /// `set_required_spec_claims`, which ignores non-registered claims and
+    /// dropped the default `exp` requirement).
+    #[test]
+    fn test_validate_token_enforces_custom_required_claims() {
+        use base64::Engine;
+        use p256::ecdsa::{SigningKey, VerifyingKey};
+        use p256::elliptic_curve::sec1::ToEncodedPoint;
+        use p256::pkcs8::EncodePrivateKey as EcEncodePrivateKey;
+        use rand::rngs::OsRng;
+
+        let signing_key = SigningKey::random(&mut OsRng);
+        let verifying_key = VerifyingKey::from(&signing_key);
+        let point = verifying_key.as_affine().to_encoded_point(false);
+        let x = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(point.x().expect("x"));
+        let y = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(point.y().expect("y"));
+
+        let jwks = JwksSet {
+            keys: vec![Jwk {
+                kty: "EC".to_string(),
+                kid: Some("ec-1".to_string()),
+                key_use: Some("sig".to_string()),
+                alg: Some("ES256".to_string()),
+                n: None,
+                e: None,
+                crv: Some("P-256".to_string()),
+                x: Some(x),
+                y: Some(y),
+            }],
+        };
+        let pkcs8 = signing_key.to_pkcs8_der().expect("encode EC key");
+        let encoding_key = jsonwebtoken::EncodingKey::from_ec_der(pkcs8.as_bytes());
+
+        let validation = TokenValidation::new()
+            .with_issuer("https://auth.example.com")
+            .with_audience("https://mcp.example.com")
+            .with_required_claim("tenant_id");
+
+        // A signed, otherwise-valid token WITHOUT the custom claim must be
+        // rejected (the old code accepted it).
+        let token = create_test_jwt(
+            jsonwebtoken::Algorithm::ES256,
+            &encoding_key,
+            Some("ec-1"),
+            &make_test_claims(),
+        );
+        match validate_token(&token, &jwks, &validation) {
+            Err(JwtError::MissingClaim { claim }) => assert_eq!(claim.as_str(), "tenant_id"),
+            other => panic!("expected MissingClaim(tenant_id), got {other:?}"),
+        }
+
+        // The same token WITH the custom claim present is accepted.
+        let mut claims = make_test_claims();
+        claims
+            .extra
+            .insert("tenant_id".to_string(), serde_json::json!("acme"));
+        let token = create_test_jwt(
+            jsonwebtoken::Algorithm::ES256,
+            &encoding_key,
+            Some("ec-1"),
+            &claims,
+        );
+        assert!(
+            validate_token(&token, &jwks, &validation).is_ok(),
+            "token with the required custom claim should validate"
+        );
+
+        // Configuring a custom required claim must NOT drop the default
+        // exp-presence requirement: a token with the claim but no `exp` is
+        // still rejected.
+        let mut claims = make_test_claims();
+        claims
+            .extra
+            .insert("tenant_id".to_string(), serde_json::json!("acme"));
+        claims.exp = None;
+        let token = create_test_jwt(
+            jsonwebtoken::Algorithm::ES256,
+            &encoding_key,
+            Some("ec-1"),
+            &claims,
+        );
+        assert!(
+            validate_token(&token, &jwks, &validation).is_err(),
+            "missing exp must still be rejected when required_claims is set"
+        );
     }
 
     #[test]
