@@ -58,6 +58,7 @@ pub mod state {
 }
 
 /// Internal connection data shared across states.
+#[doc(hidden)]
 #[derive(Debug)]
 pub struct ConnectionData {
     /// Client capabilities (set after initialization).
