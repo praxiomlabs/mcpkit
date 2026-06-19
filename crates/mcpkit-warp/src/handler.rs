@@ -97,7 +97,24 @@ where
                 "Handling MCP request"
             );
 
-            let response = create_response_for_request(&state, &request).await;
+            // On initialize, negotiate the protocol version and record it (and
+            // the client's capabilities) on the session, so subsequent requests
+            // observe the negotiated values.
+            if request.method.as_ref() == "initialize" {
+                let (negotiated, caps) = negotiate_initialize(request.params.as_ref());
+                state.sessions.set_negotiated(&session_id, negotiated, caps);
+            }
+
+            // Resolve the session's negotiated values for the request context,
+            // falling back to defaults before initialization completes.
+            let (protocol_version, client_caps) =
+                state.sessions.negotiated(&session_id).map_or_else(
+                    || (ProtocolVersion::LATEST, ClientCapabilities::default()),
+                    |(v, c)| (v, c.unwrap_or_default()),
+                );
+
+            let response =
+                create_response_for_request(&state, &request, protocol_version, &client_caps).await;
 
             match serde_json::to_value(Message::Response(response)) {
                 Ok(body) => Ok(warp::reply::with_status(
@@ -145,10 +162,33 @@ where
     }
 }
 
+/// Negotiate the protocol version and extract client capabilities from an
+/// `initialize` request's params.
+///
+/// The negotiated version is the highest supported version not exceeding the
+/// client's requested version, falling back to the latest supported version
+/// when the request omits or names an unknown version.
+fn negotiate_initialize(
+    params: Option<&serde_json::Value>,
+) -> (ProtocolVersion, Option<ClientCapabilities>) {
+    let requested = params
+        .and_then(|p| p.get("protocolVersion"))
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("");
+    let version = ProtocolVersion::negotiate(requested, ProtocolVersion::ALL)
+        .unwrap_or(ProtocolVersion::LATEST);
+    let capabilities = params
+        .and_then(|p| p.get("capabilities"))
+        .and_then(|c| serde_json::from_value::<ClientCapabilities>(c.clone()).ok());
+    (version, capabilities)
+}
+
 /// Create a response for a request.
 async fn create_response_for_request<H>(
     state: &McpState<H>,
     request: &mcpkit_core::protocol::Request,
+    protocol_version: ProtocolVersion,
+    client_caps: &ClientCapabilities,
 ) -> mcpkit_core::protocol::Response
 where
     H: ServerHandler + ToolHandler + ResourceHandler + PromptHandler + Send + Sync + 'static,
@@ -161,14 +201,12 @@ where
 
     // Create a context for the request
     let req_id = request.id.clone();
-    let client_caps = ClientCapabilities::default();
     let server_caps = state.handler.capabilities();
-    let protocol_version = ProtocolVersion::LATEST;
     let peer = NoOpPeer;
     let ctx = Context::new(
         &req_id,
         None,
-        &client_caps,
+        client_caps,
         &server_caps,
         protocol_version,
         &peer,
@@ -178,7 +216,7 @@ where
         "ping" => Response::success(request.id.clone(), serde_json::json!({})),
         "initialize" => {
             let init_result = serde_json::json!({
-                "protocolVersion": ProtocolVersion::LATEST.as_str(),
+                "protocolVersion": protocol_version.as_str(),
                 "serverInfo": state.server_info,
                 "capabilities": state.handler.capabilities(),
             });
@@ -282,6 +320,31 @@ pub fn with_session_id() -> impl Filter<Extract = (Option<String>,), Error = war
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn negotiate_uses_requested_supported_version() {
+        let params = serde_json::json!({
+            "protocolVersion": "2025-06-18",
+            "capabilities": {}
+        });
+        let (version, caps) = negotiate_initialize(Some(&params));
+        assert_eq!(version, ProtocolVersion::V2025_06_18);
+        assert!(caps.is_some());
+    }
+
+    #[test]
+    fn negotiate_defaults_to_latest_when_absent() {
+        let (version, caps) = negotiate_initialize(None);
+        assert_eq!(version, ProtocolVersion::LATEST);
+        assert!(caps.is_none());
+    }
+
+    #[test]
+    fn negotiate_unknown_version_falls_back_to_latest() {
+        let params = serde_json::json!({ "protocolVersion": "2099-01-01" });
+        let (version, _caps) = negotiate_initialize(Some(&params));
+        assert_eq!(version, ProtocolVersion::LATEST);
+    }
     use mcpkit_core::capability::{ServerCapabilities, ServerInfo};
     use mcpkit_core::error::McpError;
     use mcpkit_core::types::{

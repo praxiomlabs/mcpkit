@@ -1,6 +1,8 @@
 //! Session management for MCP Rocket integration.
 
 use dashmap::DashMap;
+use mcpkit_core::capability::ClientCapabilities;
+use mcpkit_core::protocol_version::ProtocolVersion;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::broadcast;
@@ -21,6 +23,10 @@ struct SessionState {
     #[allow(dead_code)] // Reserved for future session metadata/debugging
     created_at: Instant,
     last_seen: Instant,
+    /// Protocol version negotiated during initialization.
+    protocol_version: Option<ProtocolVersion>,
+    /// Client capabilities from initialization.
+    client_capabilities: Option<ClientCapabilities>,
 }
 
 impl Default for SessionStore {
@@ -62,6 +68,8 @@ impl SessionStore {
             SessionState {
                 created_at: now,
                 last_seen: now,
+                protocol_version: None,
+                client_capabilities: None,
             },
         );
         id
@@ -72,6 +80,32 @@ impl SessionStore {
         if let Some(mut session) = self.sessions.get_mut(id) {
             session.last_seen = Instant::now();
         }
+    }
+
+    /// Record the protocol version and client capabilities negotiated during
+    /// initialization for a session.
+    pub fn set_negotiated(
+        &self,
+        id: &str,
+        protocol_version: ProtocolVersion,
+        capabilities: Option<ClientCapabilities>,
+    ) {
+        if let Some(mut session) = self.sessions.get_mut(id) {
+            session.protocol_version = Some(protocol_version);
+            session.client_capabilities = capabilities;
+        }
+    }
+
+    /// Get the negotiated protocol version and client capabilities for a
+    /// session, defaulting the version to the latest before initialization.
+    #[must_use]
+    pub fn negotiated(&self, id: &str) -> Option<(ProtocolVersion, Option<ClientCapabilities>)> {
+        self.sessions.get(id).map(|s| {
+            (
+                s.protocol_version.unwrap_or(ProtocolVersion::LATEST),
+                s.client_capabilities.clone(),
+            )
+        })
     }
 
     /// Check if a session exists.
