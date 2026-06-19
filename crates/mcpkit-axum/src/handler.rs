@@ -96,17 +96,32 @@ where
                 "Handling MCP request"
             );
 
-            // Mark the session initialized so it is no longer subject to the
-            // initialization timeout.
+            // On initialize, negotiate the protocol version and record it (and
+            // the client's capabilities) on the session, so subsequent requests
+            // observe the negotiated values and the session is no longer subject
+            // to the initialization timeout.
             if request.method.as_ref() == "initialize" {
+                let (version, caps) = negotiate_initialize(request.params.as_ref());
                 state
                     .sessions
-                    .update(&session_id, |s| s.mark_initialized(None));
+                    .update(&session_id, |s| s.mark_initialized(version, caps.clone()));
             }
+
+            // Resolve the session's negotiated values for the request context,
+            // falling back to defaults before initialization completes.
+            let session = state.sessions.get(&session_id);
+            let protocol_version = session
+                .as_ref()
+                .and_then(|s| s.protocol_version)
+                .unwrap_or(ProtocolVersion::LATEST);
+            let client_caps = session
+                .and_then(|s| s.client_capabilities)
+                .unwrap_or_default();
 
             // Create a basic response using the handler's capabilities
             // In a full implementation, this would route to the handler's methods
-            let response = create_response_for_request(&state, &request).await;
+            let response =
+                create_response_for_request(&state, &request, protocol_version, &client_caps).await;
 
             match serde_json::to_string(&Message::Response(response)) {
                 Ok(body) => (
@@ -141,12 +156,35 @@ where
     }
 }
 
+/// Negotiate the protocol version and extract client capabilities from an
+/// `initialize` request's params.
+///
+/// The negotiated version is the highest supported version not exceeding the
+/// client's requested version, falling back to the latest supported version
+/// when the request omits or names an unknown version.
+fn negotiate_initialize(
+    params: Option<&serde_json::Value>,
+) -> (ProtocolVersion, Option<ClientCapabilities>) {
+    let requested = params
+        .and_then(|p| p.get("protocolVersion"))
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("");
+    let version = ProtocolVersion::negotiate(requested, ProtocolVersion::ALL)
+        .unwrap_or(ProtocolVersion::LATEST);
+    let capabilities = params
+        .and_then(|p| p.get("capabilities"))
+        .and_then(|c| serde_json::from_value::<ClientCapabilities>(c.clone()).ok());
+    (version, capabilities)
+}
+
 /// Create a response for a request.
 ///
 /// Routes all MCP methods through the appropriate handler traits.
 async fn create_response_for_request<H>(
     state: &McpState<H>,
     request: &mcpkit_core::protocol::Request,
+    protocol_version: ProtocolVersion,
+    client_caps: &ClientCapabilities,
 ) -> mcpkit_core::protocol::Response
 where
     H: ServerHandler + ToolHandler + ResourceHandler + PromptHandler + Send + Sync + 'static,
@@ -159,14 +197,12 @@ where
 
     // Create a context for the request
     let req_id = request.id.clone();
-    let client_caps = ClientCapabilities::default();
     let server_caps = state.handler.capabilities();
-    let protocol_version = ProtocolVersion::LATEST;
     let peer = NoOpPeer;
     let ctx = Context::new(
         &req_id,
         None,
-        &client_caps,
+        client_caps,
         &server_caps,
         protocol_version,
         &peer,
@@ -176,7 +212,7 @@ where
         "ping" => Response::success(request.id.clone(), serde_json::json!({})),
         "initialize" => {
             let init_result = serde_json::json!({
-                "protocolVersion": ProtocolVersion::LATEST.as_str(),
+                "protocolVersion": protocol_version.as_str(),
                 "serverInfo": state.server_info,
                 "capabilities": state.handler.capabilities(),
             });
@@ -394,4 +430,35 @@ pub async fn handle_oauth_protected_resource(State(state): State<OAuthState>) ->
         [("content-type", "application/json")],
         Json(state.metadata),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::negotiate_initialize;
+    use mcpkit_core::protocol_version::ProtocolVersion;
+
+    #[test]
+    fn negotiate_uses_requested_supported_version() {
+        let params = serde_json::json!({
+            "protocolVersion": "2025-06-18",
+            "capabilities": {}
+        });
+        let (version, caps) = negotiate_initialize(Some(&params));
+        assert_eq!(version, ProtocolVersion::V2025_06_18);
+        assert!(caps.is_some());
+    }
+
+    #[test]
+    fn negotiate_defaults_to_latest_when_absent() {
+        let (version, caps) = negotiate_initialize(None);
+        assert_eq!(version, ProtocolVersion::LATEST);
+        assert!(caps.is_none());
+    }
+
+    #[test]
+    fn negotiate_unknown_version_falls_back_to_latest() {
+        let params = serde_json::json!({ "protocolVersion": "2099-01-01" });
+        let (version, _caps) = negotiate_initialize(Some(&params));
+        assert_eq!(version, ProtocolVersion::LATEST);
+    }
 }
