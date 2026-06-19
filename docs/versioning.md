@@ -20,7 +20,7 @@ During the 0.x.y phase, the API is considered unstable:
 - Patch versions (0.0.x) remain backward compatible
 - We aim to minimize churn, but cannot guarantee API stability
 
-**Current Status:** 0.5.x (Release Candidate)
+**Current Status:** 0.7.x
 
 ### Crate Versioning
 
@@ -28,17 +28,17 @@ All crates in the workspace are versioned together:
 
 | Crate | Version |
 |-------|---------|
-| `mcpkit` | 0.5.x |
-| `mcpkit-core` | 0.5.x |
-| `mcpkit-server` | 0.5.x |
-| `mcpkit-client` | 0.5.x |
-| `mcpkit-transport` | 0.5.x |
-| `mcpkit-macros` | 0.5.x |
-| `mcpkit-testing` | 0.5.x |
-| `mcpkit-axum` | 0.5.x |
-| `mcpkit-actix` | 0.5.x |
-| `mcpkit-rocket` | 0.5.x |
-| `mcpkit-warp` | 0.5.x |
+| `mcpkit` | 0.7.x |
+| `mcpkit-core` | 0.7.x |
+| `mcpkit-server` | 0.7.x |
+| `mcpkit-client` | 0.7.x |
+| `mcpkit-transport` | 0.7.x |
+| `mcpkit-macros` | 0.7.x |
+| `mcpkit-testing` | 0.7.x |
+| `mcpkit-axum` | 0.7.x |
+| `mcpkit-actix` | 0.7.x |
+| `mcpkit-rocket` | 0.7.x |
+| `mcpkit-warp` | 0.7.x |
 
 This simplifies dependency management and ensures compatibility.
 

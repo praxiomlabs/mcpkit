@@ -45,6 +45,14 @@ No stability guarantees (may change in any release):
 | **Build Internals** | Build scripts, CI configuration |
 | **Benchmarks** | Benchmark implementation details |
 
+### Framework Adapter Crates
+
+The framework adapter crates — `mcpkit-axum`, `mcpkit-actix`, `mcpkit-warp`, and
+`mcpkit-rocket` — are published and follow the same tier rules above. Their HTTP
+integration surface (`McpRouter`, `McpState`, the session types, `EventStore`)
+is still stabilizing ahead of 1.0 and is treated as **Tier 2 (Unstable)** until
+the 1.0 release.
+
 ## What Constitutes a Breaking Change
 
 Based on [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/) and [Cargo SemVer](https://doc.rust-lang.org/cargo/reference/semver.html):
