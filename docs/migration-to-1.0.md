@@ -32,7 +32,6 @@ After 1.0, mcpkit follows strict semantic versioning. See [API Stability](api-st
 
 **Tier 2 - Unstable** (may change in minor versions):
 - Items marked `#[doc(hidden)]`
-- Feature-gated experimental features
 - Internal implementation details
 
 See [API Stability](api-stability.md) for the complete tier definitions.
