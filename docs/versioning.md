@@ -58,12 +58,11 @@ These APIs are covered by semver guarantees:
 - Transport trait implementations
 - JSON-RPC wire format
 
-### Tier 2: Unstable (marked with `#[doc(hidden)]` or feature flags)
+### Tier 2: Unstable (marked with `#[doc(hidden)]`)
 
 These may change without major version bumps:
 
 - Internal implementation details
-- Feature-gated experimental features
 - Items marked `#[doc(hidden)]`
 - Private modules
 - Metrics types
@@ -199,21 +198,6 @@ These are enabled by default and covered by stability guarantees:
 ```toml
 [features]
 default = ["server", "client", "tokio-runtime"]
-```
-
-### Experimental Features
-
-These may change without notice:
-
-```toml
-[features]
-experimental = []  # Experimental features
-```
-
-Enable experimental features at your own risk:
-
-```toml
-mcpkit = { version = "0.5", features = ["experimental"] }
 ```
 
 ### Optional Transports

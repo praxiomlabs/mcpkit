@@ -31,7 +31,6 @@ These APIs may change in minor versions (1.1, 1.2, etc.):
 | Category | Items |
 |----------|-------|
 | **Hidden Items** | Anything marked `#[doc(hidden)]` |
-| **Feature-Gated** | APIs behind `experimental` feature flag |
 | **Internal Modules** | Private module internals |
 | **Metrics Types** | `ServerMetrics`, `MetricsSnapshot`, `MethodStats` |
 
@@ -268,13 +267,6 @@ mcpkit = "1"
 
 # To upgrade, explicitly opt in
 mcpkit = "2"
-```
-
-### Using Unstable Features
-
-```toml
-# Opt in to unstable features (may break in minor versions)
-mcpkit = { version = "1", features = ["experimental"] }
 ```
 
 ## Commitment
