@@ -2,6 +2,7 @@
 
 use dashmap::DashMap;
 use mcpkit_core::capability::ClientCapabilities;
+use mcpkit_core::protocol_version::ProtocolVersion;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -22,6 +23,8 @@ pub struct Session {
     pub initialized: bool,
     /// Client capabilities from initialization.
     pub client_capabilities: Option<ClientCapabilities>,
+    /// Protocol version negotiated during initialization.
+    pub protocol_version: Option<ProtocolVersion>,
 }
 
 impl Session {
@@ -35,6 +38,7 @@ impl Session {
             last_active: now,
             initialized: false,
             client_capabilities: None,
+            protocol_version: None,
         }
     }
 
@@ -62,9 +66,15 @@ impl Session {
         self.last_active = Instant::now();
     }
 
-    /// Mark the session as initialized.
-    pub fn mark_initialized(&mut self, capabilities: Option<ClientCapabilities>) {
+    /// Mark the session as initialized, recording the negotiated protocol
+    /// version and the client's capabilities.
+    pub fn mark_initialized(
+        &mut self,
+        protocol_version: ProtocolVersion,
+        capabilities: Option<ClientCapabilities>,
+    ) {
         self.initialized = true;
+        self.protocol_version = Some(protocol_version);
         self.client_capabilities = capabilities;
     }
 }
@@ -646,7 +656,7 @@ mod tests {
         assert!(session.is_reapable(idle, init));
 
         // After initialization, the init timeout no longer applies.
-        session.mark_initialized(None);
+        session.mark_initialized(ProtocolVersion::LATEST, None);
         assert!(!session.is_reapable(idle, init));
         Ok(())
     }
@@ -666,7 +676,7 @@ mod tests {
     fn create_keeps_initialized_sessions() {
         let store = SessionStore::new(Duration::from_secs(3600)).with_init_timeout(Duration::ZERO);
         let id = store.create();
-        store.update(&id, |s| s.mark_initialized(None));
+        store.update(&id, |s| s.mark_initialized(ProtocolVersion::LATEST, None));
 
         // An initialized session is not subject to the init timeout and is well
         // within the idle timeout, so it survives create-time reaping.

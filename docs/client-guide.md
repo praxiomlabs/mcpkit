@@ -14,7 +14,7 @@ Add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-mcpkit = "0.6"
+mcpkit = "0.7"
 tokio = { version = "1", features = ["full"] }
 serde_json = "1"
 ```

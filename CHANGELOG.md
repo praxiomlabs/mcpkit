@@ -25,6 +25,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the `mcpkit-warp` and `mcpkit-rocket` adapters, to configure the idle timeout
   used when reaping inactive sessions.
 
+### Changed
+
+- **Breaking:** `Session::mark_initialized` in the `mcpkit-axum` and
+  `mcpkit-actix` adapters now takes the negotiated `ProtocolVersion` in addition
+  to the client capabilities, and `Session` gains a `protocol_version` field.
+
 ### Security
 
 - OAuth/token types (`TokenResponse`, `TokenRequest`, `AuthorizationConfig`,
@@ -75,6 +81,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   past the idle timeout when a new one is created, so the store stays bounded;
   previously their cleanup routine was never invoked on the default request
   path and sessions accumulated indefinitely.
+- The `mcpkit-axum` and `mcpkit-actix` adapters now record the protocol version
+  and client capabilities negotiated at `initialize` and surface them in the
+  `Context` passed to tools, resources, and prompts (and echo the negotiated
+  version in the `initialize` response), instead of always reporting the latest
+  protocol version and empty client capabilities.
 
 ## [0.6.0] - 2026-06-18
 
