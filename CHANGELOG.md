@@ -30,6 +30,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `Session::mark_initialized` in the `mcpkit-axum` and
   `mcpkit-actix` adapters now takes the negotiated `ProtocolVersion` in addition
   to the client capabilities, and `Session` gains a `protocol_version` field.
+- `ConnectionInner` (`mcpkit-core`) and `ConnectionData` (`mcpkit-server`) are
+  now `#[doc(hidden)]`. They are internal implementation details of
+  `Connection` and were never intended as stable API.
 
 ### Security
 

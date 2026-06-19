@@ -58,6 +58,7 @@ pub struct Ready;
 pub struct Closing;
 
 /// Internal connection data shared across states.
+#[doc(hidden)]
 #[derive(Debug)]
 pub struct ConnectionInner {
     /// Unique connection identifier.
