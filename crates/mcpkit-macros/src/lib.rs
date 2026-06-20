@@ -364,7 +364,7 @@ pub fn derive_tool_input(input: TokenStream) -> TokenStream {
 /// The following attributes mark methods as handlers:
 ///
 /// - `#[sampling]` - Handle `sampling/createMessage` requests
-/// - `#[elicitation]` - Handle `elicitation/elicit` requests
+/// - `#[elicitation]` - Handle `elicitation/create` requests
 /// - `#[roots]` - Handle `roots/list` requests
 /// - `#[on_connected]` - Called when connection is established
 /// - `#[on_disconnected]` - Called when connection is closed
