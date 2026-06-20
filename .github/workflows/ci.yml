@@ -22,6 +22,33 @@ env:
 
 jobs:
   # ==========================================================================
+  # Change detection - lets PRs that touch no Rust/build files skip the heavy
+  # compile/test/semver jobs. Pushes to the trunk always run everything (the
+  # `|| github.event_name == 'push'` guards below), so trunk coverage is never
+  # reduced by this filter.
+  # ==========================================================================
+
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            code:
+              - '**/*.rs'
+              - '**/Cargo.toml'
+              - 'Cargo.lock'
+              - '**/build.rs'
+              - 'crates/mcpkit-transport/proto/**'
+              - 'deny.toml'
+              - '.github/workflows/ci.yml'
+
+  # ==========================================================================
   # Fast checks - run first, fail fast
   # ==========================================================================
 
@@ -38,21 +65,32 @@ jobs:
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
+    needs: [changes]
+    if: ${{ needs.changes.outputs.code == 'true' || github.event_name == 'push' }}
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@1.96
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
+        with:
+          # PR branches restore the trunk cache but don't save their own
+          # (per-branch caches just churn the 10 GB ceiling). Only the
+          # default-branch run writes the shared cache.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo clippy --all-features --all-targets -- -D warnings
 
   check:
     name: Check
     runs-on: ubuntu-latest
+    needs: [changes]
+    if: ${{ needs.changes.outputs.code == 'true' || github.event_name == 'push' }}
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@1.96
       - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo check --all-features --all-targets
 
   version-sync:
@@ -113,11 +151,14 @@ jobs:
   test:
     name: Test Suite
     runs-on: ubuntu-latest
-    needs: [fmt, clippy, check]
+    needs: [changes, fmt, clippy, check]
+    if: ${{ needs.changes.outputs.code == 'true' || github.event_name == 'push' }}
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@1.96
       - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo test --all-features
       # trybuild spins up a throwaway cargo project under target/tests; remove it
       # so the rust-cache save step doesn't trip over its torn-down scratch dirs
@@ -128,14 +169,16 @@ jobs:
         run: rm -rf target/tests
 
   # ==========================================================================
-  # Code Coverage - PRs only (to save CI minutes)
+  # Code Coverage - runs on the trunk (push) only. Keeping it off the PR path
+  # removes ~8.5 min of interactive wait; the trunk run still publishes the
+  # coverage trend to Codecov and warms the (branch-scoped) coverage cache.
   # ==========================================================================
 
   coverage:
     name: Code Coverage
     runs-on: ubuntu-latest
     needs: [test]
-    if: github.event_name == 'pull_request'
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@1.96
@@ -166,6 +209,8 @@ jobs:
   deny:
     name: Cargo Deny
     runs-on: ubuntu-latest
+    needs: [changes]
+    if: ${{ needs.changes.outputs.code == 'true' || github.event_name == 'push' }}
     steps:
       - uses: actions/checkout@v6
       - uses: EmbarkStudios/cargo-deny-action@v2
@@ -179,11 +224,14 @@ jobs:
   docs:
     name: Documentation
     runs-on: ubuntu-latest
-    needs: [fmt, clippy, check]
+    needs: [changes, fmt, clippy, check]
+    if: ${{ needs.changes.outputs.code == 'true' || github.event_name == 'push' }}
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@1.96
       - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Build documentation
         run: cargo doc --no-deps --all-features
         env:
@@ -196,24 +244,27 @@ jobs:
   msrv:
     name: MSRV (1.85)
     runs-on: ubuntu-latest
-    needs: [fmt, clippy, check]
+    needs: [changes, fmt, clippy, check]
+    if: ${{ needs.changes.outputs.code == 'true' || github.event_name == 'push' }}
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@1.85
       - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       # Only check library code compiles with MSRV, not tests/dev-dependencies
       # (wiremock 0.6+ requires Rust 1.87 for let chains)
       - run: cargo check --all-features --lib -p mcpkit
 
   # ==========================================================================
-  # Cross-platform matrix - PRs only (to save CI minutes)
+  # Cross-platform matrix - PRs only, and only when code changed (skip docs PRs)
   # ==========================================================================
 
   test-matrix:
     name: Test (${{ matrix.os }})
-    if: github.event_name == 'pull_request'
+    needs: [changes, test]
+    if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.code == 'true' }}
     runs-on: ${{ matrix.os }}
-    needs: [test]
     strategy:
       fail-fast: false
       matrix:
@@ -241,9 +292,10 @@ jobs:
   semver:
     name: Semver Check
     runs-on: ubuntu-latest
-    needs: [fmt, clippy, check]
-    # Only run on PRs (not pushes to main) to compare against baseline
-    if: github.event_name == 'pull_request'
+    needs: [changes, fmt, clippy, check]
+    # Only run on PRs that change code (compare against the published baseline);
+    # docs-only PRs can't introduce API breaks, so they skip this entirely.
+    if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.code == 'true' }}
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@1.96
@@ -256,3 +308,43 @@ jobs:
         # macros test crate), leaving the published crates whose API consumers
         # depend on directly.
         run: cargo semver-checks check-release --workspace
+
+  # ==========================================================================
+  # Aggregate gate - a single job that summarizes the required checks. Mark
+  # THIS job as the required status check on the branch protection rule: it
+  # stays green when heavy jobs are legitimately skipped (e.g. docs-only PRs)
+  # and fails if any required job failed or was cancelled, so path-filtering
+  # never deadlocks a required check.
+  # ==========================================================================
+
+  ci-success:
+    name: CI Success
+    if: ${{ always() }}
+    needs:
+      [
+        changes,
+        fmt,
+        clippy,
+        check,
+        version-sync,
+        link-check,
+        test,
+        deny,
+        docs,
+        msrv,
+        test-matrix,
+        semver,
+      ]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify required jobs succeeded or were skipped
+        run: |
+          results="${{ join(needs.*.result, ' ') }}"
+          echo "Job results: $results"
+          for r in $results; do
+            if [ "$r" = "failure" ] || [ "$r" = "cancelled" ]; then
+              echo "::error::A required job did not pass (result: $r)"
+              exit 1
+            fi
+          done
+          echo "All required checks passed or were skipped."
