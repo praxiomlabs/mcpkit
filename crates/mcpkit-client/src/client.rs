@@ -321,7 +321,7 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
 
         let response = match request.method.as_ref() {
             "sampling/createMessage" => Self::handle_sampling_request(&request, handler).await,
-            "elicitation/elicit" => Self::handle_elicitation_request(&request, handler).await,
+            "elicitation/create" => Self::handle_elicitation_request(&request, handler).await,
             "roots/list" => Self::handle_roots_request(&request, handler).await,
             "ping" => {
                 // Respond to ping with empty result
@@ -377,7 +377,7 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
         }
     }
 
-    /// Handle an elicitation/elicit request.
+    /// Handle an elicitation/create request.
     async fn handle_elicitation_request(request: &Request, handler: &Arc<H>) -> Response {
         let params = match &request.params {
             Some(p) => match serde_json::from_value::<ElicitRequest>(p.clone()) {
@@ -392,7 +392,7 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
             None => {
                 return Response::error(
                     request.id.clone(),
-                    JsonRpcError::invalid_params("Missing params for elicitation/elicit"),
+                    JsonRpcError::invalid_params("Missing params for elicitation/create"),
                 );
             }
         };
