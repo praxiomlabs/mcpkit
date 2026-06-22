@@ -34,6 +34,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now `#[doc(hidden)]`. They are internal implementation details of
   `Connection` and were never intended as stable API.
 
+### Fixed
+
+- The client now dispatches elicitation requests on the spec method name
+  `elicitation/create` instead of `elicitation/elicit`, so requests from
+  spec-compliant servers are handled
+  ([#88](https://github.com/praxiomlabs/mcpkit/issues/88)).
+
 ### Security
 
 - OAuth/token types (`TokenResponse`, `TokenRequest`, `AuthorizationConfig`,
