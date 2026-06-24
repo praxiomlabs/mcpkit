@@ -3,6 +3,7 @@
 use crate::session::{SessionManager, SessionStore};
 use mcpkit_core::auth::ProtectedResourceMetadata;
 use mcpkit_core::capability::ServerInfo;
+use mcpkit_transport::http::OriginValidator;
 use std::fmt;
 use std::sync::Arc;
 
@@ -22,6 +23,9 @@ pub struct McpState<H> {
     pub sessions: Arc<SessionStore>,
     /// Session manager for SSE streaming.
     pub sse_sessions: Arc<SessionManager>,
+    /// Validates request `Origin` headers (DNS-rebinding protection). Defaults
+    /// to loopback-only.
+    pub origin_validator: Arc<OriginValidator>,
 }
 
 // Manual Clone implementation to avoid requiring H: Clone
@@ -32,6 +36,7 @@ impl<H> Clone for McpState<H> {
             server_info: self.server_info.clone(),
             sessions: Arc::clone(&self.sessions),
             sse_sessions: Arc::clone(&self.sse_sessions),
+            origin_validator: Arc::clone(&self.origin_validator),
         }
     }
 }
@@ -44,6 +49,7 @@ impl<H> fmt::Debug for McpState<H> {
             .field("server_info", &self.server_info)
             .field("sessions", &self.sessions)
             .field("sse_sessions", &format_args!("Arc<SessionManager>"))
+            .field("origin_validator", &self.origin_validator)
             .finish()
     }
 }
@@ -60,6 +66,7 @@ impl<H> McpState<H> {
             server_info,
             sessions: Arc::new(SessionStore::with_default_timeout()),
             sse_sessions: Arc::new(SessionManager::new()),
+            origin_validator: Arc::new(OriginValidator::default()),
         }
     }
 
@@ -74,6 +81,7 @@ impl<H> McpState<H> {
             server_info,
             sessions: Arc::new(sessions),
             sse_sessions: Arc::new(sse_sessions),
+            origin_validator: Arc::new(OriginValidator::default()),
         }
     }
 }

@@ -45,6 +45,16 @@ pub async fn handle_mcp_post<H>(
 where
     H: ServerHandler + ToolHandler + ResourceHandler + PromptHandler + Send + Sync + 'static,
 {
+    // Reject disallowed Origins (DNS-rebinding protection) before any work.
+    let origin = headers.get("origin").and_then(|v| v.to_str().ok());
+    if !state.origin_validator.is_allowed(origin) {
+        warn!(
+            origin = origin.unwrap_or("none"),
+            "Rejected: origin not allowed"
+        );
+        return (StatusCode::FORBIDDEN, "origin not allowed").into_response();
+    }
+
     // Validate protocol version
     let version = headers
         .get("mcp-protocol-version")
@@ -283,6 +293,16 @@ pub async fn handle_sse<H>(
 where
     H: HasServerInfo + Send + Sync + 'static,
 {
+    // Reject disallowed Origins (DNS-rebinding protection) before streaming.
+    let origin = headers.get("origin").and_then(|v| v.to_str().ok());
+    if !state.origin_validator.is_allowed(origin) {
+        warn!(
+            origin = origin.unwrap_or("none"),
+            "Rejected SSE: origin not allowed"
+        );
+        return (StatusCode::FORBIDDEN, "origin not allowed").into_response();
+    }
+
     let session_id = headers
         .get("mcp-session-id")
         .and_then(|v| v.to_str().ok())
@@ -328,7 +348,9 @@ where
 
     let event_store = state.sse_sessions.get_event_store(&id);
     let stream = create_sse_stream_with_replay(id, rx, replay_events, event_store);
-    Sse::new(stream).keep_alive(KeepAlive::default())
+    Sse::new(stream)
+        .keep_alive(KeepAlive::default())
+        .into_response()
 }
 
 /// Create an SSE stream with support for event replay.

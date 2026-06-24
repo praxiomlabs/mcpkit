@@ -46,6 +46,9 @@ mod sse;
 #[cfg(feature = "http")]
 mod server;
 
+#[cfg(feature = "http")]
+mod origin;
+
 // Re-export public types
 pub use client::HttpTransport;
 pub use config::{
@@ -53,6 +56,8 @@ pub use config::{
     MCP_PROTOCOL_VERSION_HEADER, MCP_SESSION_ID_HEADER,
 };
 
+#[cfg(feature = "http")]
+pub use origin::OriginValidator;
 #[cfg(feature = "http")]
 pub use server::{HttpServerConfig, HttpTransportListener, OriginValidationMode};
 

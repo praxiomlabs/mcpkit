@@ -6,6 +6,8 @@ use axum::Router;
 use axum::routing::{get, post};
 use mcpkit_core::auth::ProtectedResourceMetadata;
 use mcpkit_server::{PromptHandler, ResourceHandler, ServerHandler, ToolHandler};
+use mcpkit_transport::http::OriginValidator;
+use std::sync::Arc;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 
@@ -71,6 +73,38 @@ where
     #[must_use]
     pub const fn with_cors(mut self) -> Self {
         self.enable_cors = true;
+        self
+    }
+
+    /// Restrict which browser `Origin`s are accepted, for DNS-rebinding
+    /// protection.
+    ///
+    /// Loopback origins (`localhost`, `127.0.0.1`, `[::1]`) are always allowed;
+    /// the given origins (e.g. `https://app.example.com`) are added to the
+    /// allow-list. Requests with no `Origin` header (non-browser clients) are
+    /// allowed. By default — without calling this — only loopback origins are
+    /// accepted.
+    #[must_use]
+    pub fn with_allowed_origins<I, S>(mut self, origins: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        let mut validator = OriginValidator::allow_list();
+        for origin in origins {
+            validator = validator.allow(origin);
+        }
+        self.state.origin_validator = Arc::new(validator);
+        self
+    }
+
+    /// Disable `Origin` validation entirely, accepting every origin.
+    ///
+    /// **Insecure**: this removes DNS-rebinding protection. Only use it behind
+    /// other safeguards (mTLS, a trusted network, authenticated sessions).
+    #[must_use]
+    pub fn allow_any_origin(mut self) -> Self {
+        self.state.origin_validator = Arc::new(OriginValidator::allow_any());
         self
     }
 
@@ -270,5 +304,83 @@ mod tests {
 
         // Router should be created without panicking
         let _ = router;
+    }
+
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use tower::ServiceExt; // for `oneshot`
+
+    fn post_with_origin(origin: Option<&str>) -> Request<Body> {
+        let mut builder = Request::builder()
+            .method("POST")
+            .uri("/mcp")
+            .header("mcp-protocol-version", "2025-06-18");
+        if let Some(o) = origin {
+            builder = builder.header("origin", o);
+        }
+        builder
+            .body(Body::from(r#"{"jsonrpc":"2.0","method":"ping","id":1}"#))
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn rejects_external_origin_by_default() {
+        let router = McpRouter::new(TestHandler).into_router();
+        let resp = router
+            .oneshot(post_with_origin(Some("https://evil.example.com")))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn allows_loopback_and_missing_origin_by_default() {
+        let router = McpRouter::new(TestHandler).into_router();
+        for origin in [
+            Some("http://localhost:3000"),
+            Some("http://127.0.0.1"),
+            None,
+        ] {
+            let resp = router
+                .clone()
+                .oneshot(post_with_origin(origin))
+                .await
+                .unwrap();
+            assert_ne!(
+                resp.status(),
+                StatusCode::FORBIDDEN,
+                "origin {origin:?} should pass the origin gate"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn with_allowed_origins_permits_only_configured() {
+        let router = McpRouter::new(TestHandler)
+            .with_allowed_origins(["https://app.example.com"])
+            .into_router();
+
+        let ok = router
+            .clone()
+            .oneshot(post_with_origin(Some("https://app.example.com")))
+            .await
+            .unwrap();
+        assert_ne!(ok.status(), StatusCode::FORBIDDEN);
+
+        let blocked = router
+            .oneshot(post_with_origin(Some("https://other.example.com")))
+            .await
+            .unwrap();
+        assert_eq!(blocked.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn allow_any_origin_accepts_external() {
+        let router = McpRouter::new(TestHandler).allow_any_origin().into_router();
+        let resp = router
+            .oneshot(post_with_origin(Some("https://evil.example.com")))
+            .await
+            .unwrap();
+        assert_ne!(resp.status(), StatusCode::FORBIDDEN);
     }
 }
