@@ -39,6 +39,8 @@ futures = { workspace = true }
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }
 tokio-test.workspace = true
+# `util` enables `ServiceExt::oneshot` for driving the router in tests.
+tower = { version = "0.4", features = ["util"] }
 
 [lints]
 workspace = true
