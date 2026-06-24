@@ -1,8 +1,11 @@
 //! Router builder for MCP endpoints in Warp.
 
-use crate::handler::{handle_mcp_post, handle_sse, with_protocol_version, with_session_id};
+use crate::handler::{
+    handle_mcp_post, handle_sse, with_origin, with_protocol_version, with_session_id,
+};
 use crate::state::{HasServerInfo, McpState};
 use mcpkit_server::{PromptHandler, ResourceHandler, ServerHandler, ToolHandler};
+use mcpkit_transport::http::OriginValidator;
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -58,6 +61,46 @@ where
         self
     }
 
+    /// Restrict which browser `Origin`s are accepted, for DNS-rebinding
+    /// protection.
+    ///
+    /// Loopback origins (`localhost`, `127.0.0.1`, `[::1]`) are always allowed;
+    /// the given origins (e.g. `https://app.example.com`) are added to the
+    /// allow-list. Requests with no `Origin` header (non-browser clients) are
+    /// allowed. By default — without calling this — only loopback origins are
+    /// accepted.
+    #[must_use]
+    pub fn with_allowed_origins<I, S>(mut self, origins: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        let mut validator = OriginValidator::allow_list();
+        for origin in origins {
+            validator = validator.allow(origin);
+        }
+        self.set_origin_validator(validator);
+        self
+    }
+
+    /// Disable `Origin` validation entirely, accepting every origin.
+    ///
+    /// **Insecure**: this removes DNS-rebinding protection. Only use it behind
+    /// other safeguards (mTLS, a trusted network, authenticated sessions).
+    #[must_use]
+    pub fn allow_any_origin(mut self) -> Self {
+        self.set_origin_validator(OriginValidator::allow_any());
+        self
+    }
+
+    fn set_origin_validator(&mut self, validator: OriginValidator) {
+        // The builder owns the only reference to the state at this point, so
+        // `get_mut` succeeds.
+        if let Some(state) = Arc::get_mut(&mut self.state) {
+            state.origin_validator = Arc::new(validator);
+        }
+    }
+
     /// Build the Warp filter for MCP endpoints with CORS enabled.
     ///
     /// Returns a filter that can be combined with other Warp filters.
@@ -77,15 +120,17 @@ where
             .and(with_state(post_state))
             .and(with_protocol_version())
             .and(with_session_id())
+            .and(with_origin())
             .and(warp::body::content_length_limit(1024 * 1024)) // 1MB limit
             .and(warp::body::bytes())
             .and_then(
                 |state: Arc<McpState<H>>,
                  version: Option<String>,
                  session_id: Option<String>,
+                 origin: Option<String>,
                  bytes: bytes::Bytes| async move {
                     let body = String::from_utf8_lossy(&bytes).to_string();
-                    handle_mcp_post(state, version, session_id, body).await
+                    handle_mcp_post(state, version, session_id, origin, body).await
                 },
             );
 
@@ -96,9 +141,12 @@ where
             .and(warp::get())
             .and(with_state(sse_state))
             .and(with_session_id())
-            .map(|state: Arc<McpState<H>>, session_id: Option<String>| {
-                handle_sse(state, session_id)
-            });
+            .and(with_origin())
+            .map(
+                |state: Arc<McpState<H>>, session_id: Option<String>, origin: Option<String>| {
+                    handle_sse(state, session_id, origin)
+                },
+            );
 
         // Combine routes with CORS
         mcp_post.or(mcp_sse).with(
@@ -131,15 +179,17 @@ where
             .and(with_state(post_state))
             .and(with_protocol_version())
             .and(with_session_id())
+            .and(with_origin())
             .and(warp::body::content_length_limit(1024 * 1024)) // 1MB limit
             .and(warp::body::bytes())
             .and_then(
                 |state: Arc<McpState<H>>,
                  version: Option<String>,
                  session_id: Option<String>,
+                 origin: Option<String>,
                  bytes: bytes::Bytes| async move {
                     let body = String::from_utf8_lossy(&bytes).to_string();
-                    handle_mcp_post(state, version, session_id, body).await
+                    handle_mcp_post(state, version, session_id, origin, body).await
                 },
             );
 
@@ -150,9 +200,12 @@ where
             .and(warp::get())
             .and(with_state(sse_state))
             .and(with_session_id())
-            .map(|state: Arc<McpState<H>>, session_id: Option<String>| {
-                handle_sse(state, session_id)
-            });
+            .and(with_origin())
+            .map(
+                |state: Arc<McpState<H>>, session_id: Option<String>, origin: Option<String>| {
+                    handle_sse(state, session_id, origin)
+                },
+            );
 
         mcp_post.or(mcp_sse)
     }
@@ -264,5 +317,45 @@ mod tests {
 
         // Router should be created without panicking
         let _ = router.into_filter();
+    }
+
+    #[test]
+    fn origin_validator_defaults_to_loopback_only() {
+        let r = McpRouter::new(TestHandler);
+        assert!(
+            r.state
+                .origin_validator
+                .is_allowed(Some("http://localhost:3000"))
+        );
+        assert!(r.state.origin_validator.is_allowed(None));
+        assert!(
+            !r.state
+                .origin_validator
+                .is_allowed(Some("https://evil.example.com"))
+        );
+    }
+
+    #[test]
+    fn with_allowed_origins_and_allow_any_configure_the_validator() {
+        let allow = McpRouter::new(TestHandler).with_allowed_origins(["https://app.example.com"]);
+        assert!(
+            allow
+                .state
+                .origin_validator
+                .is_allowed(Some("https://app.example.com"))
+        );
+        assert!(
+            !allow
+                .state
+                .origin_validator
+                .is_allowed(Some("https://evil.example.com"))
+        );
+
+        let any = McpRouter::new(TestHandler).allow_any_origin();
+        assert!(
+            any.state
+                .origin_validator
+                .is_allowed(Some("https://evil.example.com"))
+        );
     }
 }

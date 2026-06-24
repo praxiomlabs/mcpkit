@@ -54,7 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ([#73](https://github.com/praxiomlabs/mcpkit/issues/73)).
 - `mcpkit_transport::http::OriginValidator` for `Origin`-header validation, and
   `McpRouter::with_allowed_origins(..)` / `McpRouter::allow_any_origin()` in the
-  `mcpkit-axum`, `mcpkit-actix`, and `mcpkit-rocket` adapters to configure it
+  `mcpkit-axum`, `mcpkit-actix`, `mcpkit-rocket`, and `mcpkit-warp` adapters to configure it
   ([#82](https://github.com/praxiomlabs/mcpkit/issues/82)).
 
 ### Changed
@@ -90,9 +90,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
-- **Breaking (behavior):** the `mcpkit-axum`, `mcpkit-actix`, and `mcpkit-rocket`
-  adapters now validate the request `Origin` header to defend against
-  DNS-rebinding attacks, and **reject non-loopback browser origins by default**
+- **Breaking (behavior):** the `mcpkit-axum`, `mcpkit-actix`, `mcpkit-rocket`,
+  and `mcpkit-warp` adapters now validate the request `Origin` header to defend
+  against DNS-rebinding attacks, and **reject non-loopback browser origins by
+  default**
   (previously all origins were accepted). Loopback origins and requests without
   an `Origin` header (non-browser clients) are still allowed; add production
   origins with `McpRouter::with_allowed_origins([..])`, or opt out with

@@ -26,6 +26,7 @@ pub async fn handle_mcp_post<H>(
     state: Arc<McpState<H>>,
     version: Option<String>,
     session_id: Option<String>,
+    origin: Option<String>,
     body: String,
 ) -> Result<impl warp::Reply, Infallible>
 where
@@ -38,6 +39,21 @@ where
         + Sync
         + 'static,
 {
+    // Reject disallowed Origins (DNS-rebinding protection) before any work.
+    if !state.origin_validator.is_allowed(origin.as_deref()) {
+        warn!(
+            origin = origin.as_deref().unwrap_or("none"),
+            "Rejected: origin not allowed"
+        );
+        let error_body = serde_json::json!({
+            "error": { "code": -32600, "message": "origin not allowed" }
+        });
+        return Ok(warp::reply::with_status(
+            warp::reply::json(&error_body),
+            StatusCode::FORBIDDEN,
+        ));
+    }
+
     // Validate protocol version
     if !is_supported_version(version.as_deref()) {
         let provided = version.as_deref().unwrap_or("none");
@@ -262,10 +278,26 @@ where
 /// Handle SSE connections for server-to-client streaming.
 ///
 /// This returns a stream of Server-Sent Events.
-pub fn handle_sse<H>(state: Arc<McpState<H>>, session_id: Option<String>) -> impl warp::Reply
+pub fn handle_sse<H>(
+    state: Arc<McpState<H>>,
+    session_id: Option<String>,
+    origin: Option<String>,
+) -> warp::reply::Response
 where
     H: HasServerInfo + Send + Sync + 'static,
 {
+    use warp::Reply;
+
+    // Reject disallowed Origins (DNS-rebinding protection) before streaming.
+    if !state.origin_validator.is_allowed(origin.as_deref()) {
+        warn!(
+            origin = origin.as_deref().unwrap_or("none"),
+            "Rejected SSE: origin not allowed"
+        );
+        return warp::reply::with_status("origin not allowed", StatusCode::FORBIDDEN)
+            .into_response();
+    }
+
     let (session_id, rx) = if let Some(id) = session_id {
         if let Some(rx) = state.sse_sessions.get_receiver(&id) {
             info!(session_id = %id, "Reconnected to SSE session");
@@ -300,7 +332,7 @@ where
         }
     });
 
-    warp::sse::reply(warp::sse::keep_alive().stream(stream))
+    warp::sse::reply(warp::sse::keep_alive().stream(stream)).into_response()
 }
 
 /// Create a filter to extract the MCP protocol version header.
@@ -315,6 +347,12 @@ pub fn with_protocol_version()
 pub fn with_session_id() -> impl Filter<Extract = (Option<String>,), Error = warp::Rejection> + Clone
 {
     warp::header::optional("mcp-session-id")
+}
+
+/// Create a filter to extract the `Origin` header (DNS-rebinding protection).
+#[must_use]
+pub fn with_origin() -> impl Filter<Extract = (Option<String>,), Error = warp::Rejection> + Clone {
+    warp::header::optional("origin")
 }
 
 #[cfg(test)]
@@ -422,6 +460,7 @@ mod tests {
             state,
             Some("unsupported-version".to_string()),
             None,
+            None,
             r#"{"jsonrpc":"2.0","method":"ping","id":1}"#.to_string(),
         )
         .await;
@@ -437,6 +476,7 @@ mod tests {
         let response = handle_mcp_post(
             state,
             Some("2025-11-25".to_string()),
+            None,
             None,
             "invalid json".to_string(),
         )
@@ -454,6 +494,7 @@ mod tests {
             state,
             Some("2025-11-25".to_string()),
             None,
+            None,
             r#"{"jsonrpc":"2.0","method":"ping","id":1}"#.to_string(),
         )
         .await;
@@ -469,6 +510,7 @@ mod tests {
         let response = handle_mcp_post(
             state,
             Some("2025-11-25".to_string()),
+            None,
             None,
             r#"{"jsonrpc":"2.0","method":"initialize","params":{},"id":1}"#.to_string(),
         )
@@ -489,6 +531,7 @@ mod tests {
             Arc::clone(&state),
             Some("2025-11-25".to_string()),
             Some(session_id.clone()),
+            None,
             r#"{"jsonrpc":"2.0","method":"ping","id":1}"#.to_string(),
         )
         .await;
@@ -505,6 +548,7 @@ mod tests {
         let response = handle_mcp_post(
             state,
             Some("2025-11-25".to_string()),
+            None,
             None,
             r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#.to_string(),
         )
