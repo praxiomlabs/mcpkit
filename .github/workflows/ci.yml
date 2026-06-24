@@ -293,21 +293,23 @@ jobs:
     name: Semver Check
     runs-on: ubuntu-latest
     needs: [changes, fmt, clippy, check]
-    # Only run on PRs that change code (compare against the published baseline);
-    # docs-only PRs can't introduce API breaks, so they skip this entirely.
-    if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.code == 'true' }}
+    # Run on code-changing PRs (compare against the published baseline), and on
+    # pushes to the trunk. The trunk run seeds the per-package baseline-rustdoc
+    # cache that the action shares back to PRs: GitHub caches are branch-scoped,
+    # so the cache has to be written on the default branch to be restorable by
+    # PR branches. Docs-only changes skip this (no API can change).
+    if: ${{ (github.event_name == 'pull_request' || github.event_name == 'push') && needs.changes.outputs.code == 'true' }}
     steps:
       - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@1.96
-      - uses: Swatinem/rust-cache@v2
-      - name: Install cargo-semver-checks
-        uses: taiki-e/install-action@cargo-semver-checks
+      # The official action caches each publishable crate's baseline rustdoc
+      # across runs, so the unchanging published baseline is not rebuilt on every
+      # PR (which was ~half the job). It installs the toolchain and checks the
+      # whole workspace (skipping `publish = false` crates) by default.
       - name: Check semver
-        # Check every publishable crate, not just the umbrella. `--workspace`
-        # skips crates marked `publish = false` (examples, benches, fuzz, the
-        # macros test crate), leaving the published crates whose API consumers
-        # depend on directly.
-        run: cargo semver-checks check-release --workspace
+        uses: obi1kenobi/cargo-semver-checks-action@v2
+        with:
+          rust-toolchain: "1.96"
+          verbose: true
 
   # ==========================================================================
   # Aggregate gate - a single job that summarizes the required checks. Mark
