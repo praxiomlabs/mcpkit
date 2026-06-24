@@ -48,6 +48,7 @@ use mcpkit_core::error::McpError;
 use mcpkit_core::protocol::{Notification, ProgressToken, RequestId, Response};
 use mcpkit_core::protocol_version::ProtocolVersion;
 use mcpkit_core::types::elicitation::{ElicitRequest, ElicitResult};
+use mcpkit_core::types::sampling::{CreateMessageRequest, CreateMessageResult};
 use std::borrow::Cow;
 use std::future::Future;
 use std::pin::Pin;
@@ -395,6 +396,31 @@ impl<'a> Context<'a> {
 
         let params = serde_json::to_value(&request).map_err(McpError::from)?;
         let result = self.request("elicitation/create", Some(params)).await?;
+        serde_json::from_value(result).map_err(McpError::from)
+    }
+
+    /// Request the client to run an LLM completion (sampling).
+    ///
+    /// Sends a `sampling/createMessage` request and awaits the generated
+    /// message. This requires the client to have declared the `sampling`
+    /// capability (sampling is available in every protocol version).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the client did not declare sampling support, the
+    /// request was cancelled or timed out, or the response could not be parsed.
+    pub async fn create_message(
+        &self,
+        request: CreateMessageRequest,
+    ) -> Result<CreateMessageResult, McpError> {
+        if !self.client_caps.has_sampling() {
+            return Err(McpError::internal(
+                "the client did not declare the sampling capability",
+            ));
+        }
+
+        let params = serde_json::to_value(&request).map_err(McpError::from)?;
+        let result = self.request("sampling/createMessage", Some(params)).await?;
         serde_json::from_value(result).map_err(McpError::from)
     }
 }

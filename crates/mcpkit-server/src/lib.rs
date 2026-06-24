@@ -44,7 +44,6 @@
 //! - [`ResourceHandler`]: Handle resource discovery and reading
 //! - [`PromptHandler`]: Handle prompt discovery and rendering
 //! - [`TaskHandler`]: Handle long-running task operations
-//! - [`SamplingHandler`]: Handle server-initiated LLM requests
 //!
 //! # Context
 //!
@@ -72,8 +71,8 @@ pub mod state;
 pub use builder::{FullServer, MinimalServer, NotRegistered, Registered, Server, ServerBuilder};
 pub use context::{CancellationToken, CancelledFuture, Context, ContextData, NoOpPeer, Peer};
 pub use handler::{
-    CompletionHandler, LogLevel, LoggingHandler, PromptHandler, ResourceHandler, SamplingHandler,
-    ServerHandler, TaskHandler, ToolHandler,
+    CompletionHandler, LogLevel, LoggingHandler, PromptHandler, ResourceHandler, ServerHandler,
+    TaskHandler, ToolHandler,
 };
 pub use health::{
     ComponentHealth, HealthChecker, HealthReport, HealthStatus, LivenessResponse, ReadinessResponse,
@@ -93,8 +92,8 @@ pub mod prelude {
         CancellationToken, CancelledFuture, Context, ContextData, NoOpPeer, Peer,
     };
     pub use crate::handler::{
-        CompletionHandler, LogLevel, LoggingHandler, PromptHandler, ResourceHandler,
-        SamplingHandler, ServerHandler, TaskHandler, ToolHandler,
+        CompletionHandler, LogLevel, LoggingHandler, PromptHandler, ResourceHandler, ServerHandler,
+        TaskHandler, ToolHandler,
     };
     pub use crate::metrics::{MethodStats, MetricsSnapshot, ServerMetrics};
 }

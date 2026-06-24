@@ -1278,7 +1278,9 @@ mod tests {
 
     use mcpkit_core::capability::{ClientCapabilities, ServerInfo};
     use mcpkit_core::protocol::RequestId;
+    use mcpkit_core::types::content::{Content, Role};
     use mcpkit_core::types::elicitation::ElicitRequest;
+    use mcpkit_core::types::sampling::{CreateMessageRequest, CreateMessageResult};
     use mcpkit_transport::MemoryTransport;
     use std::time::Duration;
     use tokio::sync::Notify;
@@ -1428,6 +1430,32 @@ mod tests {
                         "accepted": result.is_accepted(),
                         "name": result.get_string("name"),
                     }))
+                }
+                other => Err(McpError::method_not_found(other)),
+            }
+        }
+    }
+
+    /// A router whose `summarize` handler asks the client to run an LLM
+    /// completion (sampling) and returns the generated text.
+    struct SampleRouter;
+
+    impl RequestRouter for SampleRouter {
+        fn server_info(&self) -> ServerInfo {
+            ServerInfo::new("sample-test", "0.0.0")
+        }
+        async fn route(
+            &self,
+            method: &str,
+            _params: Option<&serde_json::Value>,
+            ctx: &Context<'_>,
+        ) -> Result<serde_json::Value, McpError> {
+            match method {
+                "summarize" => {
+                    let result = ctx
+                        .create_message(CreateMessageRequest::simple("hello", 100))
+                        .await?;
+                    Ok(serde_json::json!({ "text": result.as_text() }))
                 }
                 other => Err(McpError::method_not_found(other)),
             }
@@ -1854,6 +1882,87 @@ mod tests {
         assert!(
             resp.error.is_some(),
             "elicit without client capability should error"
+        );
+
+        drop(client);
+        let _ = timeout(Duration::from_secs(2), handle).await;
+    }
+
+    #[tokio::test]
+    async fn ctx_create_message_roundtrips() {
+        let (client, server) = MemoryTransport::pair();
+        let state = Arc::new(ServerState::new(ServerCapabilities::default()));
+        state.set_initialized();
+        state.set_client_caps(ClientCapabilities::default().with_sampling());
+        let runtime = ServerRuntime {
+            server: SampleRouter,
+            transport: Arc::new(server),
+            state,
+            config: RuntimeConfig::default(),
+        };
+        let handle = tokio::spawn(async move { runtime.run().await });
+
+        client.send(req("summarize", 1)).await.expect("send");
+
+        let sampling = match timeout(Duration::from_secs(2), client.recv())
+            .await
+            .expect("no sampling request")
+            .expect("recv ok")
+            .expect("some message")
+        {
+            Message::Request(r) => r,
+            other => panic!("expected sampling/createMessage, got {other:?}"),
+        };
+        assert_eq!(sampling.method.as_ref(), "sampling/createMessage");
+
+        // Reply as the client with a generated message.
+        let result = CreateMessageResult {
+            role: Role::Assistant,
+            content: Content::text("a summary"),
+            model: "test-model".to_string(),
+            stop_reason: None,
+        };
+        client
+            .send(Message::Response(Response::success(
+                sampling.id.clone(),
+                serde_json::to_value(result).expect("serialize result"),
+            )))
+            .await
+            .expect("send response");
+
+        let resp = next_response(&client).await;
+        assert_eq!(resp.id, RequestId::Number(1));
+        assert_eq!(
+            resp.result,
+            Some(serde_json::json!({ "text": "a summary" }))
+        );
+
+        drop(client);
+        let _ = timeout(Duration::from_secs(2), handle).await;
+    }
+
+    #[tokio::test]
+    async fn ctx_create_message_requires_client_capability() {
+        let (client, server) = MemoryTransport::pair();
+        let state = Arc::new(ServerState::new(ServerCapabilities::default()));
+        state.set_initialized();
+        // The client did NOT declare the sampling capability.
+        let runtime = ServerRuntime {
+            server: SampleRouter,
+            transport: Arc::new(server),
+            state,
+            config: RuntimeConfig::default(),
+        };
+        let handle = tokio::spawn(async move { runtime.run().await });
+
+        client.send(req("summarize", 1)).await.expect("send");
+
+        // No `sampling/createMessage` is sent; the handler errors immediately.
+        let resp = next_response(&client).await;
+        assert_eq!(resp.id, RequestId::Number(1));
+        assert!(
+            resp.error.is_some(),
+            "create_message without client capability should error"
         );
 
         drop(client);
