@@ -84,9 +84,9 @@ pub mod error {
 
 // Re-export server types
 pub use mcpkit_server::{
-    CancellationToken, CancelledFuture, CompletionHandler, Context, ContextData,
-    ElicitationHandler, LogLevel, LoggingHandler, NoOpPeer, Peer, PromptHandler, ResourceHandler,
-    SamplingHandler, Server, ServerBuilder, ServerHandler, TaskHandler, ToolHandler,
+    CancellationToken, CancelledFuture, CompletionHandler, Context, ContextData, LogLevel,
+    LoggingHandler, NoOpPeer, Peer, PromptHandler, ResourceHandler, SamplingHandler, Server,
+    ServerBuilder, ServerHandler, TaskHandler, ToolHandler,
 };
 
 // Re-export transport types

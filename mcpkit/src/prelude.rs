@@ -47,9 +47,9 @@ pub use mcpkit_core::prelude::*;
 
 // Server types
 pub use mcpkit_server::{
-    CompletionHandler, Context, ContextData, ElicitationHandler, LogLevel, LoggingHandler,
-    PromptHandler, ResourceHandler, SamplingHandler, Server, ServerBuilder, ServerHandler,
-    TaskHandler, ToolHandler,
+    CompletionHandler, Context, ContextData, LogLevel, LoggingHandler, PromptHandler,
+    ResourceHandler, SamplingHandler, Server, ServerBuilder, ServerHandler, TaskHandler,
+    ToolHandler,
 };
 
 // Transport types

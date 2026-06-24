@@ -1276,8 +1276,9 @@ fn extract_progress_token(params: Option<&serde_json::Value>) -> Option<Progress
 mod tests {
     use super::*;
 
-    use mcpkit_core::capability::ServerInfo;
+    use mcpkit_core::capability::{ClientCapabilities, ServerInfo};
     use mcpkit_core::protocol::RequestId;
+    use mcpkit_core::types::elicitation::ElicitRequest;
     use mcpkit_transport::MemoryTransport;
     use std::time::Duration;
     use tokio::sync::Notify;
@@ -1399,6 +1400,35 @@ mod tests {
         ) -> Result<serde_json::Value, McpError> {
             match method {
                 "ask" => ctx.request("ask/upstream", None).await,
+                other => Err(McpError::method_not_found(other)),
+            }
+        }
+    }
+
+    /// A router whose `ask_name` handler elicits a name from the user via the
+    /// client and reports the outcome.
+    struct ElicitRouter;
+
+    impl RequestRouter for ElicitRouter {
+        fn server_info(&self) -> ServerInfo {
+            ServerInfo::new("elicit-test", "0.0.0")
+        }
+        async fn route(
+            &self,
+            method: &str,
+            _params: Option<&serde_json::Value>,
+            ctx: &Context<'_>,
+        ) -> Result<serde_json::Value, McpError> {
+            match method {
+                "ask_name" => {
+                    let result = ctx
+                        .elicit(ElicitRequest::text("Your name?", "name"))
+                        .await?;
+                    Ok(serde_json::json!({
+                        "accepted": result.is_accepted(),
+                        "name": result.get_string("name"),
+                    }))
+                }
                 other => Err(McpError::method_not_found(other)),
             }
         }
@@ -1739,6 +1769,92 @@ mod tests {
         let resp = next_response(&client).await;
         assert_eq!(resp.id, RequestId::Number(1));
         assert!(resp.error.is_some(), "timed-out request should error");
+
+        drop(client);
+        let _ = timeout(Duration::from_secs(2), handle).await;
+    }
+
+    #[tokio::test]
+    async fn ctx_elicit_roundtrips() {
+        let (client, server) = MemoryTransport::pair();
+        let state = Arc::new(ServerState::new(ServerCapabilities::default()));
+        state.set_initialized();
+        state.set_client_caps(ClientCapabilities::default().with_elicitation());
+        let runtime = ServerRuntime {
+            server: ElicitRouter,
+            transport: Arc::new(server),
+            state,
+            config: RuntimeConfig::default(),
+        };
+        let handle = tokio::spawn(async move { runtime.run().await });
+
+        client.send(req("ask_name", 1)).await.expect("send");
+
+        // The server sends an `elicitation/create` request to the client.
+        let elicit = match timeout(Duration::from_secs(2), client.recv())
+            .await
+            .expect("no elicitation request")
+            .expect("recv ok")
+            .expect("some message")
+        {
+            Message::Request(r) => r,
+            other => panic!("expected elicitation/create, got {other:?}"),
+        };
+        assert_eq!(elicit.method.as_ref(), "elicitation/create");
+        assert!(
+            elicit
+                .params
+                .as_ref()
+                .and_then(|p| p.get("requestedSchema"))
+                .is_some(),
+            "elicitation request should carry a requestedSchema"
+        );
+
+        // Reply as the user accepting with a name.
+        client
+            .send(Message::Response(Response::success(
+                elicit.id.clone(),
+                serde_json::json!({ "action": "accept", "content": { "name": "Ada" } }),
+            )))
+            .await
+            .expect("send response");
+
+        let resp = next_response(&client).await;
+        assert_eq!(resp.id, RequestId::Number(1));
+        assert_eq!(
+            resp.result,
+            Some(serde_json::json!({ "accepted": true, "name": "Ada" }))
+        );
+
+        drop(client);
+        let _ = timeout(Duration::from_secs(2), handle).await;
+    }
+
+    #[tokio::test]
+    async fn ctx_elicit_requires_client_capability() {
+        let (client, server) = MemoryTransport::pair();
+        let state = Arc::new(ServerState::new(ServerCapabilities::default()));
+        state.set_initialized();
+        // The client did NOT declare the elicitation capability.
+        let runtime = ServerRuntime {
+            server: ElicitRouter,
+            transport: Arc::new(server),
+            state,
+            config: RuntimeConfig::default(),
+        };
+        let handle = tokio::spawn(async move { runtime.run().await });
+
+        client.send(req("ask_name", 1)).await.expect("send");
+
+        // No `elicitation/create` is sent; the handler errors straight away.
+        // `next_response` panics on anything other than a Response, so reaching
+        // an error response proves nothing was elicited.
+        let resp = next_response(&client).await;
+        assert_eq!(resp.id, RequestId::Number(1));
+        assert!(
+            resp.error.is_some(),
+            "elicit without client capability should error"
+        );
 
         drop(client);
         let _ = timeout(Duration::from_secs(2), handle).await;
