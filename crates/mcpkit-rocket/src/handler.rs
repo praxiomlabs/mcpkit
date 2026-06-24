@@ -50,6 +50,19 @@ impl<'r> FromRequest<'r> for SessionIdHeader {
     }
 }
 
+/// `Origin` header, for DNS-rebinding protection.
+pub struct OriginHeader(pub Option<String>);
+
+#[rocket::async_trait]
+impl<'r> FromRequest<'r> for OriginHeader {
+    type Error = ();
+
+    async fn from_request(request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
+        let origin = request.headers().get_one("origin").map(String::from);
+        Outcome::Success(OriginHeader(origin))
+    }
+}
+
 /// Last-Event-ID header for SSE reconnection.
 pub struct LastEventIdHeader(pub Option<String>);
 
@@ -165,6 +178,7 @@ pub async fn handle_mcp_post<H>(
     state: &McpState<H>,
     version: Option<&str>,
     session_id: Option<String>,
+    origin: Option<&str>,
     body: &str,
 ) -> McpResponse
 where
@@ -177,6 +191,15 @@ where
         + Sync
         + 'static,
 {
+    // Reject disallowed Origins (DNS-rebinding protection) before any work.
+    if !state.origin_validator.is_allowed(origin) {
+        warn!(
+            origin = origin.unwrap_or("none"),
+            "Rejected: origin not allowed"
+        );
+        return McpResponse::error(Status::Forbidden, "origin not allowed".to_string());
+    }
+
     // Validate protocol version
     if !is_supported_version(version) {
         let provided = version.unwrap_or("none");

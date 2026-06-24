@@ -3,6 +3,7 @@
 use crate::session::SessionStore;
 use mcpkit_core::capability::{ServerCapabilities, ServerInfo};
 use mcpkit_server::ServerHandler;
+use mcpkit_transport::http::OriginValidator;
 use std::sync::Arc;
 
 /// Trait for handlers that provide server info.
@@ -27,6 +28,9 @@ pub struct McpState<H> {
     pub sessions: SessionStore,
     /// SSE session manager for Server-Sent Events.
     pub sse_sessions: SessionStore,
+    /// Validates request `Origin` headers (DNS-rebinding protection). Defaults
+    /// to loopback-only.
+    pub origin_validator: Arc<OriginValidator>,
 }
 
 impl<H> McpState<H>
@@ -41,6 +45,7 @@ where
             server_info,
             sessions: SessionStore::new(),
             sse_sessions: SessionStore::new(),
+            origin_validator: Arc::new(OriginValidator::default()),
         }
     }
 
@@ -61,6 +66,7 @@ impl<H> Clone for McpState<H> {
             server_info: self.server_info.clone(),
             sessions: self.sessions.clone(),
             sse_sessions: self.sse_sessions.clone(),
+            origin_validator: Arc::clone(&self.origin_validator),
         }
     }
 }

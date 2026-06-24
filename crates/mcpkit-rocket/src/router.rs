@@ -2,6 +2,7 @@
 
 use crate::state::{HasServerInfo, McpState};
 use mcpkit_server::{PromptHandler, ResourceHandler, ServerHandler, ToolHandler};
+use mcpkit_transport::http::OriginValidator;
 use rocket::fairing::{Fairing, Info, Kind};
 use rocket::http::Header;
 use rocket::{Build, Request, Response, Rocket};
@@ -54,6 +55,38 @@ where
     #[must_use]
     pub const fn with_cors(mut self) -> Self {
         self.enable_cors = true;
+        self
+    }
+
+    /// Restrict which browser `Origin`s are accepted, for DNS-rebinding
+    /// protection.
+    ///
+    /// Loopback origins (`localhost`, `127.0.0.1`, `[::1]`) are always allowed;
+    /// the given origins (e.g. `https://app.example.com`) are added to the
+    /// allow-list. Requests with no `Origin` header (non-browser clients) are
+    /// allowed. By default — without calling this — only loopback origins are
+    /// accepted.
+    #[must_use]
+    pub fn with_allowed_origins<I, S>(mut self, origins: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        let mut validator = OriginValidator::allow_list();
+        for origin in origins {
+            validator = validator.allow(origin);
+        }
+        self.state.origin_validator = std::sync::Arc::new(validator);
+        self
+    }
+
+    /// Disable `Origin` validation entirely, accepting every origin.
+    ///
+    /// **Insecure**: this removes DNS-rebinding protection. Only use it behind
+    /// other safeguards (mTLS, a trusted network, authenticated sessions).
+    #[must_use]
+    pub fn allow_any_origin(mut self) -> Self {
+        self.state.origin_validator = std::sync::Arc::new(OriginValidator::allow_any());
         self
     }
 
@@ -156,18 +189,37 @@ macro_rules! create_mcp_routes {
             state: &::rocket::State<$crate::McpState<$handler_type>>,
             version: $crate::handler::ProtocolVersionHeader,
             session: $crate::handler::SessionIdHeader,
+            origin: $crate::handler::OriginHeader,
             body: String,
         ) -> $crate::handler::McpResponse {
-            $crate::handler::handle_mcp_post(state.inner(), version.0.as_deref(), session.0, &body)
-                .await
+            $crate::handler::handle_mcp_post(
+                state.inner(),
+                version.0.as_deref(),
+                session.0,
+                origin.0.as_deref(),
+                &body,
+            )
+            .await
         }
 
         #[rocket::get("/mcp/sse")]
         fn mcp_sse(
             state: &::rocket::State<$crate::McpState<$handler_type>>,
             session: $crate::handler::SessionIdHeader,
-        ) -> ::rocket::response::stream::EventStream![] {
-            $crate::handler::handle_sse(state.inner(), session.0)
+            origin: $crate::handler::OriginHeader,
+        ) -> ::std::result::Result<
+            ::rocket::response::stream::EventStream![],
+            ::rocket::http::Status,
+        > {
+            // Reject disallowed Origins (DNS-rebinding protection) before streaming.
+            if !state
+                .inner()
+                .origin_validator
+                .is_allowed(origin.0.as_deref())
+            {
+                return ::std::result::Result::Err(::rocket::http::Status::Forbidden);
+            }
+            ::std::result::Result::Ok($crate::handler::handle_sse(state.inner(), session.0))
         }
     };
 }
@@ -264,5 +316,29 @@ mod tests {
 
         assert_eq!(state.server_info.name, "test-server");
         assert_eq!(state.server_info.version, "1.0.0");
+    }
+
+    #[test]
+    fn origin_validator_defaults_to_loopback_only() {
+        let v = McpRouter::new(TestHandler).into_state().origin_validator;
+        assert!(v.is_allowed(Some("http://localhost:3000")));
+        assert!(v.is_allowed(None));
+        assert!(!v.is_allowed(Some("https://evil.example.com")));
+    }
+
+    #[test]
+    fn with_allowed_origins_and_allow_any_configure_the_validator() {
+        let allow = McpRouter::new(TestHandler)
+            .with_allowed_origins(["https://app.example.com"])
+            .into_state()
+            .origin_validator;
+        assert!(allow.is_allowed(Some("https://app.example.com")));
+        assert!(!allow.is_allowed(Some("https://evil.example.com")));
+
+        let any = McpRouter::new(TestHandler)
+            .allow_any_origin()
+            .into_state()
+            .origin_validator;
+        assert!(any.is_allowed(Some("https://evil.example.com")));
     }
 }

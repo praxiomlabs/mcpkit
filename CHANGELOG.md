@@ -54,7 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ([#73](https://github.com/praxiomlabs/mcpkit/issues/73)).
 - `mcpkit_transport::http::OriginValidator` for `Origin`-header validation, and
   `McpRouter::with_allowed_origins(..)` / `McpRouter::allow_any_origin()` in the
-  `mcpkit-axum` adapter to configure it
+  `mcpkit-axum`, `mcpkit-actix`, and `mcpkit-rocket` adapters to configure it
   ([#82](https://github.com/praxiomlabs/mcpkit/issues/82)).
 
 ### Changed
@@ -90,13 +90,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
-- **Breaking (behavior):** the `mcpkit-axum` adapter now validates the request
-  `Origin` header to defend against DNS-rebinding attacks, and **rejects
-  non-loopback browser origins by default** (previously all origins were
-  accepted). Loopback origins and requests without an `Origin` header (non-browser
-  clients) are still allowed; add production origins with
-  `McpRouter::with_allowed_origins([..])`, or opt out with `allow_any_origin()`
-  ([#82](https://github.com/praxiomlabs/mcpkit/issues/82)).
+- **Breaking (behavior):** the `mcpkit-axum`, `mcpkit-actix`, and `mcpkit-rocket`
+  adapters now validate the request `Origin` header to defend against
+  DNS-rebinding attacks, and **reject non-loopback browser origins by default**
+  (previously all origins were accepted). Loopback origins and requests without
+  an `Origin` header (non-browser clients) are still allowed; add production
+  origins with `McpRouter::with_allowed_origins([..])`, or opt out with
+  `allow_any_origin()` ([#82](https://github.com/praxiomlabs/mcpkit/issues/82)).
 - OAuth/token types (`TokenResponse`, `TokenRequest`, `AuthorizationConfig`,
   `PkceChallenge`, `ClientRegistrationResponse`) now redact their secret fields
   in `Debug` output. Previously deriving `Debug` printed access/refresh tokens,

@@ -40,6 +40,16 @@ pub async fn handle_mcp_post<H>(
 where
     H: ServerHandler + ToolHandler + ResourceHandler + PromptHandler + Send + Sync + 'static,
 {
+    // Reject disallowed Origins (DNS-rebinding protection) before any work.
+    let origin = req.headers().get("origin").and_then(|v| v.to_str().ok());
+    if !state.origin_validator.is_allowed(origin) {
+        warn!(
+            origin = origin.unwrap_or("none"),
+            "Rejected: origin not allowed"
+        );
+        return Ok(HttpResponse::Forbidden().body("origin not allowed"));
+    }
+
     // Validate protocol version
     let version = req
         .headers()
@@ -256,6 +266,16 @@ pub async fn handle_sse<H>(req: HttpRequest, state: web::Data<McpState<H>>) -> H
 where
     H: HasServerInfo + Send + Sync + 'static,
 {
+    // Reject disallowed Origins (DNS-rebinding protection) before streaming.
+    let origin = req.headers().get("origin").and_then(|v| v.to_str().ok());
+    if !state.origin_validator.is_allowed(origin) {
+        warn!(
+            origin = origin.unwrap_or("none"),
+            "Rejected SSE: origin not allowed"
+        );
+        return HttpResponse::Forbidden().body("origin not allowed");
+    }
+
     let session_id = req
         .headers()
         .get("mcp-session-id")

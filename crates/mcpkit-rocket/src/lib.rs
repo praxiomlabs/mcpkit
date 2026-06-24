@@ -99,8 +99,8 @@ mod state;
 
 pub use error::RocketError;
 pub use handler::{
-    LastEventIdHeader, McpResponse, ProtocolVersionHeader, SessionIdHeader, handle_mcp_post,
-    handle_sse,
+    LastEventIdHeader, McpResponse, OriginHeader, ProtocolVersionHeader, SessionIdHeader,
+    handle_mcp_post, handle_sse,
 };
 pub use router::{Cors, McpRouter};
 pub use session::{DEFAULT_SESSION_TIMEOUT, SessionManager, SessionStore};
