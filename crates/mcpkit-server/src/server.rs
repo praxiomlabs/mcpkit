@@ -37,7 +37,7 @@ use crate::context::{CancellationToken, Context, Peer};
 use crate::handler::{PromptHandler, ResourceHandler, ServerHandler, ToolHandler};
 use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
 use mcpkit_core::error::McpError;
-use mcpkit_core::protocol::{Message, Notification, ProgressToken, Request, Response};
+use mcpkit_core::protocol::{Message, Notification, ProgressToken, Request, RequestId, Response};
 use mcpkit_core::protocol_version::ProtocolVersion;
 use mcpkit_core::types::CallToolResult;
 use mcpkit_transport::Transport;
@@ -431,17 +431,29 @@ where
             .state
             .protocol_version()
             .unwrap_or(ProtocolVersion::LATEST);
-        let ctx = Context::new(
+
+        // Register a cancellation token for this request so a matching
+        // `notifications/cancelled` trips the handler's `ctx.cancel`. The token
+        // is removed once the handler returns.
+        let cancel = CancellationToken::new();
+        let cancel_key = request.id.to_string();
+        self.state
+            .register_cancellation(&cancel_key, cancel.clone());
+
+        let ctx = Context::with_cancellation(
             &request.id,
             progress_token.as_ref(),
             &client_caps,
             &self.state.server_caps,
             protocol_version,
             &peer,
+            cancel,
         );
 
-        // Delegate to the router
-        self.server.route(method, params, &ctx).await
+        // Delegate to the router, then drop the cancellation registration.
+        let result = self.server.route(method, params, &ctx).await;
+        self.state.remove_cancellation(&cancel_key);
+        result
     }
 
     /// Handle a notification.
@@ -456,10 +468,15 @@ where
                 Ok(())
             }
             "notifications/cancelled" => {
-                if let Some(params) = &notification.params {
-                    if let Some(request_id) = params.get("requestId").and_then(|v| v.as_str()) {
-                        self.state.cancel_request(request_id);
-                    }
+                if let Some(request_id) = notification
+                    .params
+                    .as_ref()
+                    .and_then(|p| p.get("requestId"))
+                    .and_then(|v| serde_json::from_value::<RequestId>(v.clone()).ok())
+                {
+                    // Match the canonical id form `route_request` registers with,
+                    // so numeric and string request ids both resolve.
+                    self.state.cancel_request(&request_id.to_string());
                 }
                 Ok(())
             }
@@ -1081,6 +1098,34 @@ mod tests {
         }
     }
 
+    /// A router whose handler parks on `ctx.cancelled()` and reports whether the
+    /// request was cancelled, for testing that `notifications/cancelled` trips
+    /// the in-flight handler's context.
+    struct CancelRouter {
+        started: Arc<Notify>,
+    }
+
+    impl RequestRouter for CancelRouter {
+        fn server_info(&self) -> ServerInfo {
+            ServerInfo::new("cancel-test", "0.0.0")
+        }
+        async fn route(
+            &self,
+            method: &str,
+            _params: Option<&serde_json::Value>,
+            ctx: &Context<'_>,
+        ) -> Result<serde_json::Value, McpError> {
+            match method {
+                "wait_cancel" => {
+                    self.started.notify_one();
+                    ctx.cancelled().await;
+                    Ok(serde_json::json!(ctx.is_cancelled()))
+                }
+                other => Err(McpError::method_not_found(other)),
+            }
+        }
+    }
+
     fn req(method: &'static str, id: u64) -> Message {
         Message::Request(Request::new(method, id))
     }
@@ -1258,6 +1303,48 @@ mod tests {
         release.notify_one();
         assert_eq!(next_response(&client).await.id, RequestId::Number(1));
         assert_eq!(next_response(&client).await.id, RequestId::Number(2));
+
+        drop(client);
+        let _ = timeout(Duration::from_secs(2), handle).await;
+    }
+
+    #[tokio::test]
+    async fn cancelled_notification_trips_in_flight_handler() {
+        let (client, server) = MemoryTransport::pair();
+        let started = Arc::new(Notify::new());
+        let state = Arc::new(ServerState::new(ServerCapabilities::default()));
+        state.set_initialized();
+        let runtime = ServerRuntime {
+            server: CancelRouter {
+                started: started.clone(),
+            },
+            transport: Arc::new(server),
+            state,
+            config: RuntimeConfig::default(),
+        };
+        let handle = tokio::spawn(async move { runtime.run().await });
+
+        // Start a request whose handler parks on `ctx.cancelled()`.
+        client.send(req("wait_cancel", 1)).await.expect("send");
+        timeout(Duration::from_secs(2), started.notified())
+            .await
+            .expect("handler never started");
+
+        // Cancel it by id. Before the fix this never reached the handler's token,
+        // so the handler would park forever and `next_response` would time out.
+        let cancel = Message::Notification(Notification::with_params(
+            "notifications/cancelled".to_string(),
+            serde_json::json!({ "requestId": 1 }),
+        ));
+        client.send(cancel).await.expect("send cancel");
+
+        let resp = next_response(&client).await;
+        assert_eq!(resp.id, RequestId::Number(1));
+        assert_eq!(
+            resp.result,
+            Some(serde_json::json!(true)),
+            "ctx.is_cancelled() should be true after notifications/cancelled"
+        );
 
         drop(client);
         let _ = timeout(Duration::from_secs(2), handle).await;

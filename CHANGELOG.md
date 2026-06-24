@@ -46,6 +46,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `elicitation/create` instead of `elicitation/elicit`, so requests from
   spec-compliant servers are handled
   ([#88](https://github.com/praxiomlabs/mcpkit/issues/88)).
+- Request cancellation is now wired end to end: the server registers each
+  request's cancellation token while it runs, so a `notifications/cancelled`
+  for that request id trips the handler's `ctx` (`is_cancelled()` /
+  `cancelled()`). Previously the context held an unregistered token, so cancel
+  notifications had no effect; numeric request ids are now matched as well
+  ([#87](https://github.com/praxiomlabs/mcpkit/issues/87)).
 
 ### Security
 
