@@ -328,6 +328,7 @@ test:
 [doc("Run tests with locked dependencies (reproducible)")]
 test-locked:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '\n{{bold}}{{blue}}══════ Running Tests (locked) ══════{{reset}}\n\n'
     {{cargo}} test --workspace --all-features --locked -j {{jobs}}
     printf '{{green}}[OK]{{reset}}   All tests passed (locked)\n'
@@ -484,6 +485,7 @@ fmt:
 [doc("Check code formatting")]
 fmt-check:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Checking format...\n'
     {{cargo}} fmt --all -- --check
     printf '{{green}}[OK]{{reset}}   Format check passed\n'
@@ -492,6 +494,7 @@ fmt-check:
 [doc("Run clippy lints (matches CI configuration)")]
 clippy:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Running clippy...\n'
     {{cargo}} clippy --workspace --all-features --all-targets -- -D warnings
     printf '{{green}}[OK]{{reset}}   Clippy passed\n'
@@ -625,6 +628,7 @@ doc-private:
 [doc("Check documentation for warnings")]
 doc-check:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Checking documentation...\n'
     RUSTDOCFLAGS="-D warnings" {{cargo}} doc --workspace --all-features --no-deps
     printf '{{green}}[OK]{{reset}}   Documentation check passed\n'
