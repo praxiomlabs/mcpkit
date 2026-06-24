@@ -9,13 +9,11 @@
 //! - [`resources`]: Resource discovery and reading
 //! - [`prompts`]: Prompt discovery and rendering
 //! - [`tasks`]: Long-running task management
-//! - [`sampling`]: Sampling/LLM inference requests
 //! - [`completions`]: Argument completion support
 
 pub mod completions;
 pub mod prompts;
 pub mod resources;
-pub mod sampling;
 pub mod tasks;
 pub mod tools;
 
@@ -23,6 +21,5 @@ pub mod tools;
 pub use completions::CompletionService;
 pub use prompts::PromptService;
 pub use resources::ResourceService;
-pub use sampling::SamplingService;
 pub use tasks::TaskService;
 pub use tools::ToolService;

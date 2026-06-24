@@ -11,7 +11,6 @@
 //! - [`ResourceHandler`]: Handle resource discovery and reading
 //! - [`PromptHandler`]: Handle prompt discovery and rendering
 //! - [`TaskHandler`]: Handle long-running task operations
-//! - [`SamplingHandler`]: Handle sampling requests (client-to-server)
 //!
 //! # Example
 //!
@@ -40,7 +39,6 @@ use mcpkit_core::error::McpError;
 use mcpkit_core::types::{
     GetPromptResult, Prompt, Resource, ResourceContents, ResourceTemplate, Task, TaskId, Tool,
     ToolOutput,
-    sampling::{CreateMessageRequest, CreateMessageResult},
 };
 use serde_json::Value;
 use std::future::Future;
@@ -291,62 +289,6 @@ impl std::fmt::Display for LogLevel {
     }
 }
 
-/// Handler for sampling requests (server-initiated LLM calls).
-///
-/// Implement this trait to allow the server to request LLM completions
-/// from the client. This enables agentic workflows where servers
-/// can leverage the client's AI capabilities.
-///
-/// # Example
-///
-/// ```ignore
-/// use mcpkit_server::{SamplingHandler, Context};
-/// use mcpkit_core::types::sampling::{CreateMessageRequest, CreateMessageResult};
-/// use mcpkit_core::error::McpError;
-///
-/// struct MyServer;
-///
-/// impl SamplingHandler for MyServer {
-///     async fn create_message(
-///         &self,
-///         request: CreateMessageRequest,
-///         ctx: &Context<'_>,
-///     ) -> Result<CreateMessageResult, McpError> {
-///         // The client will handle this request and invoke the LLM
-///         ctx.peer().create_message(request).await
-///     }
-/// }
-/// ```
-///
-/// # Note
-///
-/// Sampling is a client-side capability. The server sends a sampling request
-/// to the client, which then invokes the LLM and returns the result. The
-/// handler implementation typically just forwards the request through the
-/// peer interface.
-pub trait SamplingHandler: Send + Sync {
-    /// Request the client to create an LLM message.
-    ///
-    /// This allows the server to leverage the client's AI capabilities
-    /// for generating completions, answering questions, or performing
-    /// other LLM-based operations.
-    ///
-    /// # Arguments
-    ///
-    /// * `request` - The sampling request specifying messages, model preferences, etc.
-    /// * `ctx` - The request context providing access to the peer connection.
-    ///
-    /// # Returns
-    ///
-    /// The result of the LLM completion, including the generated content
-    /// and metadata about the completion.
-    fn create_message(
-        &self,
-        request: CreateMessageRequest,
-        ctx: &Context<'_>,
-    ) -> impl Future<Output = Result<CreateMessageResult, McpError>> + Send;
-}
-
 // =============================================================================
 // Blanket implementations for Arc<T>
 //
@@ -507,16 +449,6 @@ impl<T: CompletionHandler> CompletionHandler for Arc<T> {
 impl<T: LoggingHandler> LoggingHandler for Arc<T> {
     fn set_level(&self, level: LogLevel) -> impl Future<Output = Result<(), McpError>> + Send {
         (**self).set_level(level)
-    }
-}
-
-impl<T: SamplingHandler> SamplingHandler for Arc<T> {
-    fn create_message(
-        &self,
-        request: CreateMessageRequest,
-        ctx: &Context<'_>,
-    ) -> impl Future<Output = Result<CreateMessageResult, McpError>> + Send {
-        (**self).create_message(request, ctx)
     }
 }
 

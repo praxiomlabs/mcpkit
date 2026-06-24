@@ -48,14 +48,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   handler can request structured input from the user through the client and
   await the result. Gated on the client's `elicitation` capability and the
   negotiated protocol version ([#73](https://github.com/praxiomlabs/mcpkit/issues/73)).
+- `Context::create_message(CreateMessageRequest) -> CreateMessageResult` for
+  sampling: a handler can ask the client to run an LLM completion and await the
+  result. Gated on the client's `sampling` capability
+  ([#73](https://github.com/praxiomlabs/mcpkit/issues/73)).
 
 ### Changed
 
-- **Breaking:** removed the non-functional server-side elicitation scaffolding —
-  the `ElicitationHandler` trait and the `ElicitationService` builder. They
-  modelled the server *answering* its own elicitation, which is inverted from
-  the spec (the server *sends* `elicitation/create` to the client); use
-  `Context::elicit` instead.
+- **Breaking:** removed the non-functional, inverted server-side scaffolding for
+  elicitation and sampling — the `ElicitationHandler`/`SamplingHandler` traits
+  and the `ElicitationService`/`SamplingService` builders. They modelled the
+  server *answering* its own elicitation/sampling, which is backwards from the
+  spec (the server *sends* the request to the client); use `Context::elicit` and
+  `Context::create_message` instead.
 - **Breaking:** `RuntimeConfig` gains an `outbound_request_timeout` field
   (construct with `..RuntimeConfig::default()` if you build it with a struct
   literal).
