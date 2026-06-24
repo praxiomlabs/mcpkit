@@ -43,6 +43,15 @@ pub struct ToolAttrs {
     #[darling(default)]
     pub name: Option<String>,
 
+    /// Optional human-readable display title (`Tool.title`).
+    #[darling(default)]
+    pub title: Option<String>,
+
+    /// Task-augmented execution support: `"forbidden"`, `"optional"`, or
+    /// `"required"` (sets `Tool.execution.taskSupport`).
+    #[darling(default)]
+    pub task_support: Option<String>,
+
     /// Hint that the tool may cause destructive changes.
     #[darling(default)]
     pub destructive: bool,

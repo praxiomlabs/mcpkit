@@ -4,6 +4,7 @@
 //! They can be files, database entries, API responses, or any other
 //! addressable content.
 
+use super::metadata::Icon;
 use serde::{Deserialize, Serialize};
 
 /// A resource exposed by an MCP server.
@@ -16,6 +17,9 @@ pub struct Resource {
     pub uri: String,
     /// Human-readable name for the resource.
     pub name: String,
+    /// Optional human-readable display title.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
     /// Description of what the resource contains.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
@@ -25,6 +29,9 @@ pub struct Resource {
     /// Size in bytes, if known.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub size: Option<u64>,
+    /// Optional icons the client can display for this resource.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icons: Option<Vec<Icon>>,
     /// Optional annotations.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub annotations: Option<ResourceAnnotations>,
@@ -37,9 +44,11 @@ impl Resource {
         Self {
             uri: uri.into(),
             name: name.into(),
+            title: None,
             description: None,
             mime_type: None,
             size: None,
+            icons: None,
             annotations: None,
         }
     }
@@ -48,6 +57,27 @@ impl Resource {
     #[must_use]
     pub fn description(mut self, description: impl Into<String>) -> Self {
         self.description = Some(description.into());
+        self
+    }
+
+    /// Set the resource's display title.
+    #[must_use]
+    pub fn title(mut self, title: impl Into<String>) -> Self {
+        self.title = Some(title.into());
+        self
+    }
+
+    /// Add an icon the client can display for this resource.
+    #[must_use]
+    pub fn icon(mut self, icon: Icon) -> Self {
+        self.icons.get_or_insert_with(Vec::new).push(icon);
+        self
+    }
+
+    /// Set the resource's icons, replacing any already set.
+    #[must_use]
+    pub fn icons(mut self, icons: impl IntoIterator<Item = Icon>) -> Self {
+        self.icons = Some(icons.into_iter().collect());
         self
     }
 
@@ -100,12 +130,18 @@ pub struct ResourceTemplate {
     pub uri_template: String,
     /// Human-readable name for this resource type.
     pub name: String,
+    /// Optional human-readable display title.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
     /// Description of the resource template.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     /// MIME type of resources matching this template.
     #[serde(rename = "mimeType", skip_serializing_if = "Option::is_none")]
     pub mime_type: Option<String>,
+    /// Optional icons the client can display for this resource template.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icons: Option<Vec<Icon>>,
     /// Optional annotations.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub annotations: Option<ResourceAnnotations>,
@@ -118,8 +154,10 @@ impl ResourceTemplate {
         Self {
             uri_template: uri_template.into(),
             name: name.into(),
+            title: None,
             description: None,
             mime_type: None,
+            icons: None,
             annotations: None,
         }
     }
@@ -135,6 +173,27 @@ impl ResourceTemplate {
     #[must_use]
     pub fn mime_type(mut self, mime_type: impl Into<String>) -> Self {
         self.mime_type = Some(mime_type.into());
+        self
+    }
+
+    /// Set the resource template's display title.
+    #[must_use]
+    pub fn title(mut self, title: impl Into<String>) -> Self {
+        self.title = Some(title.into());
+        self
+    }
+
+    /// Add an icon the client can display for this resource template.
+    #[must_use]
+    pub fn icon(mut self, icon: Icon) -> Self {
+        self.icons.get_or_insert_with(Vec::new).push(icon);
+        self
+    }
+
+    /// Set the resource template's icons, replacing any already set.
+    #[must_use]
+    pub fn icons(mut self, icons: impl IntoIterator<Item = Icon>) -> Self {
+        self.icons = Some(icons.into_iter().collect());
         self
     }
 }

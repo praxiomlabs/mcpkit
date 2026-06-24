@@ -19,7 +19,9 @@ fn test_protocol_version() {
 fn test_client_info() {
     let info = ClientInfo {
         name: "test-client".to_string(),
+        title: None,
         version: "1.0.0".to_string(),
+        icons: None,
     };
 
     let json = serde_json::to_value(&info).unwrap();
@@ -43,7 +45,9 @@ fn test_server_info() {
 fn test_initialize_request() {
     let client_info = ClientInfo {
         name: "my-client".to_string(),
+        title: None,
         version: "1.0.0".to_string(),
+        icons: None,
     };
 
     let request = InitializeRequest {

@@ -4,6 +4,7 @@
 //! They determine what features are available in the session.
 
 use crate::extension::ExtensionRegistry;
+use crate::types::Icon;
 use serde::{Deserialize, Serialize};
 
 /// Server capabilities advertised during initialization.
@@ -359,11 +360,17 @@ pub struct ElicitationCapability {}
 pub struct ServerInfo {
     /// Server name.
     pub name: String,
+    /// Optional human-readable display title.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
     /// Server version.
     pub version: String,
     /// Protocol version supported.
     #[serde(rename = "protocolVersion", skip_serializing_if = "Option::is_none")]
     pub protocol_version: Option<String>,
+    /// Optional icons the client can display for this server.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icons: Option<Vec<Icon>>,
 }
 
 impl ServerInfo {
@@ -372,9 +379,32 @@ impl ServerInfo {
     pub fn new(name: impl Into<String>, version: impl Into<String>) -> Self {
         Self {
             name: name.into(),
+            title: None,
             version: version.into(),
             protocol_version: Some(PROTOCOL_VERSION.to_string()),
+            icons: None,
         }
+    }
+
+    /// Set the server's display title.
+    #[must_use]
+    pub fn title(mut self, title: impl Into<String>) -> Self {
+        self.title = Some(title.into());
+        self
+    }
+
+    /// Add an icon the client can display for this server.
+    #[must_use]
+    pub fn icon(mut self, icon: Icon) -> Self {
+        self.icons.get_or_insert_with(Vec::new).push(icon);
+        self
+    }
+
+    /// Set the server's icons, replacing any already set.
+    #[must_use]
+    pub fn icons(mut self, icons: impl IntoIterator<Item = Icon>) -> Self {
+        self.icons = Some(icons.into_iter().collect());
+        self
     }
 }
 
@@ -383,8 +413,14 @@ impl ServerInfo {
 pub struct ClientInfo {
     /// Client name.
     pub name: String,
+    /// Optional human-readable display title.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
     /// Client version.
     pub version: String,
+    /// Optional icons the server can display for this client.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icons: Option<Vec<Icon>>,
 }
 
 impl ClientInfo {
@@ -393,8 +429,31 @@ impl ClientInfo {
     pub fn new(name: impl Into<String>, version: impl Into<String>) -> Self {
         Self {
             name: name.into(),
+            title: None,
             version: version.into(),
+            icons: None,
         }
+    }
+
+    /// Set the client's display title.
+    #[must_use]
+    pub fn title(mut self, title: impl Into<String>) -> Self {
+        self.title = Some(title.into());
+        self
+    }
+
+    /// Add an icon the server can display for this client.
+    #[must_use]
+    pub fn icon(mut self, icon: Icon) -> Self {
+        self.icons.get_or_insert_with(Vec::new).push(icon);
+        self
+    }
+
+    /// Set the client's icons, replacing any already set.
+    #[must_use]
+    pub fn icons(mut self, icons: impl IntoIterator<Item = Icon>) -> Self {
+        self.icons = Some(icons.into_iter().collect());
+        self
     }
 }
 

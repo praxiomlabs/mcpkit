@@ -243,9 +243,12 @@ impl ToolBuilder {
 
         Tool {
             name: self.name,
+            title: None,
             description: self.description,
             input_schema: self.input_schema,
+            icons: None,
             annotations,
+            execution: None,
             output_schema: None,
         }
     }

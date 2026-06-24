@@ -206,10 +206,23 @@ fn find_tool_attr(attrs: &[Attribute]) -> Result<Option<(usize, ToolAttrs)>> {
 }
 
 /// Extract tool information from a method.
-#[allow(clippy::unnecessary_wraps)] // Returns Result for future validation extensibility
 fn extract_tool_info(method: &mut ImplItemFn, attrs: ToolAttrs) -> Result<ToolMethod> {
     let name = method.sig.ident.clone();
     let tool_name = attrs.name.unwrap_or_else(|| name.to_string());
+
+    // Validate task_support up front so a typo is a clear compile error rather
+    // than a silently dropped attribute.
+    if let Some(ts) = &attrs.task_support {
+        if !matches!(ts.as_str(), "forbidden" | "optional" | "required") {
+            return Err(Error::new_spanned(
+                &method.sig.ident,
+                format!(
+                    "invalid task_support value {ts:?}\n\
+                     help: expected \"forbidden\", \"optional\", or \"required\""
+                ),
+            ));
+        }
+    }
 
     // Extract parameters (skip &self). `extract_param` also strips the
     // `#[mcp(...)]` helper attribute from each parameter so it isn't re-emitted.
@@ -227,7 +240,9 @@ fn extract_tool_info(method: &mut ImplItemFn, attrs: ToolAttrs) -> Result<ToolMe
     Ok(ToolMethod {
         name,
         tool_name,
+        title: attrs.title,
         description: attrs.description,
+        task_support: attrs.task_support,
         destructive: attrs.destructive,
         idempotent: attrs.idempotent,
         read_only: attrs.read_only,
@@ -537,11 +552,40 @@ fn generate_tool_handler(tools: &[ToolMethod], self_ty: &syn::Type) -> TokenStre
                 quote!(None)
             };
 
+            let title = if let Some(t) = &tool.title {
+                quote!(Some(#t.to_string()))
+            } else {
+                quote!(None)
+            };
+
+            // `task_support` is validated in `extract_tool_info`, so the
+            // fallback arm is unreachable.
+            let execution = match tool.task_support.as_deref() {
+                Some("optional") => {
+                    quote!(Some(::mcpkit::types::ToolExecution::with_task_support(
+                        ::mcpkit::types::TaskSupport::Optional
+                    )))
+                }
+                Some("required") => {
+                    quote!(Some(::mcpkit::types::ToolExecution::with_task_support(
+                        ::mcpkit::types::TaskSupport::Required
+                    )))
+                }
+                Some("forbidden") => {
+                    quote!(Some(::mcpkit::types::ToolExecution::with_task_support(
+                        ::mcpkit::types::TaskSupport::Forbidden
+                    )))
+                }
+                _ => quote!(None),
+            };
+
             quote! {
                 ::mcpkit::types::Tool {
                     name: #name.to_string(),
+                    title: #title,
                     description: Some(#description.to_string()),
                     input_schema: #input_schema,
+                    icons: None,
                     annotations: Some(::mcpkit::types::ToolAnnotations {
                         title: None,
                         read_only_hint: Some(#read_only),
@@ -549,6 +593,7 @@ fn generate_tool_handler(tools: &[ToolMethod], self_ty: &syn::Type) -> TokenStre
                         idempotent_hint: Some(#idempotent),
                         open_world_hint: None,
                     }),
+                    execution: #execution,
                     output_schema: #output_schema,
                 }
             }
@@ -625,9 +670,11 @@ fn generate_resource_handler(resources: &[ResourceMethod], self_ty: &syn::Type) 
                     ::mcpkit::types::Resource {
                         uri: #uri.to_string(),
                         name: #name.to_string(),
+                        title: None,
                         description: if #description.is_empty() { None } else { Some(#description.to_string()) },
                         mime_type: Some(#mime_type.to_string()),
                         size: None,
+                        icons: None,
                         annotations: None,
                     },
                 })
@@ -650,8 +697,10 @@ fn generate_resource_handler(resources: &[ResourceMethod], self_ty: &syn::Type) 
                     ::mcpkit::types::ResourceTemplate {
                         uri_template: #uri.to_string(),
                         name: #name.to_string(),
+                        title: None,
                         description: if #description.is_empty() { None } else { Some(#description.to_string()) },
                         mime_type: Some(#mime_type.to_string()),
+                        icons: None,
                         annotations: None,
                     },
                 })
@@ -784,6 +833,7 @@ fn generate_prompt_handler(prompts: &[PromptMethod], self_ty: &syn::Type) -> Tok
                     quote! {
                         ::mcpkit::types::PromptArgument {
                             name: #param_name.to_string(),
+                            title: None,
                             description: if #param_desc.is_empty() { None } else { Some(#param_desc.to_string()) },
                             required: Some(#required),
                         }
@@ -800,7 +850,9 @@ fn generate_prompt_handler(prompts: &[PromptMethod], self_ty: &syn::Type) -> Tok
             quote! {
                 ::mcpkit::types::Prompt {
                     name: #name.to_string(),
+                    title: None,
                     description: if #description.is_empty() { None } else { Some(#description.to_string()) },
+                    icons: None,
                     arguments: #arguments_expr,
                 }
             }

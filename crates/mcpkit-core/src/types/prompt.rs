@@ -4,6 +4,7 @@
 //! They allow servers to define reusable message patterns with arguments.
 
 use super::content::{Content, Role};
+use super::metadata::Icon;
 use serde::{Deserialize, Serialize};
 
 /// A prompt definition exposed by an MCP server.
@@ -14,9 +15,15 @@ use serde::{Deserialize, Serialize};
 pub struct Prompt {
     /// Unique name of the prompt.
     pub name: String,
+    /// Optional human-readable display title.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
     /// Human-readable description of what the prompt does.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// Optional icons the client can display for this prompt.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icons: Option<Vec<Icon>>,
     /// Arguments that the prompt accepts.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub arguments: Option<Vec<PromptArgument>>,
@@ -28,7 +35,9 @@ impl Prompt {
     pub fn new(name: impl Into<String>) -> Self {
         Self {
             name: name.into(),
+            title: None,
             description: None,
+            icons: None,
             arguments: None,
         }
     }
@@ -37,6 +46,27 @@ impl Prompt {
     #[must_use]
     pub fn description(mut self, description: impl Into<String>) -> Self {
         self.description = Some(description.into());
+        self
+    }
+
+    /// Set the prompt's display title.
+    #[must_use]
+    pub fn title(mut self, title: impl Into<String>) -> Self {
+        self.title = Some(title.into());
+        self
+    }
+
+    /// Add an icon the client can display for this prompt.
+    #[must_use]
+    pub fn icon(mut self, icon: Icon) -> Self {
+        self.icons.get_or_insert_with(Vec::new).push(icon);
+        self
+    }
+
+    /// Set the prompt's icons, replacing any already set.
+    #[must_use]
+    pub fn icons(mut self, icons: impl IntoIterator<Item = Icon>) -> Self {
+        self.icons = Some(icons.into_iter().collect());
         self
     }
 
@@ -65,6 +95,9 @@ impl Prompt {
 pub struct PromptArgument {
     /// Name of the argument.
     pub name: String,
+    /// Optional human-readable display title.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
     /// Human-readable description.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
@@ -79,6 +112,7 @@ impl PromptArgument {
     pub fn required(name: impl Into<String>, description: impl Into<String>) -> Self {
         Self {
             name: name.into(),
+            title: None,
             description: Some(description.into()),
             required: Some(true),
         }
@@ -89,9 +123,17 @@ impl PromptArgument {
     pub fn optional(name: impl Into<String>, description: impl Into<String>) -> Self {
         Self {
             name: name.into(),
+            title: None,
             description: Some(description.into()),
             required: Some(false),
         }
+    }
+
+    /// Set the argument's display title.
+    #[must_use]
+    pub fn title(mut self, title: impl Into<String>) -> Self {
+        self.title = Some(title.into());
+        self
     }
 }
 

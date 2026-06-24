@@ -267,8 +267,10 @@ mod tests {
         fn server_info(&self) -> ServerInfo {
             ServerInfo {
                 name: "test-server".to_string(),
+                title: None,
                 version: "1.0.0".to_string(),
                 protocol_version: None,
+                icons: None,
             }
         }
 

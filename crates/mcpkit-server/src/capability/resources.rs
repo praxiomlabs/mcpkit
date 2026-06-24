@@ -224,9 +224,11 @@ impl ResourceBuilder {
         Resource {
             uri: self.uri,
             name: self.name,
+            title: None,
             description: self.description,
             mime_type: self.mime_type,
             size: None,
+            icons: None,
             annotations: None,
         }
     }
@@ -269,8 +271,10 @@ impl ResourceTemplateBuilder {
         ResourceTemplate {
             uri_template: self.uri_template,
             name: self.name,
+            title: None,
             description: self.description,
             mime_type: self.mime_type,
+            icons: None,
             annotations: None,
         }
     }

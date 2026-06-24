@@ -53,9 +53,11 @@ fn test_resource_definition() -> Result<(), Box<dyn std::error::Error>> {
     let resource = Resource {
         uri: "file:///config.json".to_string(),
         name: "Configuration".to_string(),
+        title: None,
         description: Some("App configuration".to_string()),
         mime_type: Some("application/json".to_string()),
         size: Some(1024),
+        icons: None,
         annotations: None,
     };
 
@@ -73,9 +75,12 @@ fn test_resource_definition() -> Result<(), Box<dyn std::error::Error>> {
 fn test_prompt_definition() -> Result<(), Box<dyn std::error::Error>> {
     let prompt = Prompt {
         name: "code_review".to_string(),
+        title: None,
         description: Some("Review code for issues".to_string()),
+        icons: None,
         arguments: Some(vec![PromptArgument {
             name: "code".to_string(),
+            title: None,
             description: Some("The code to review".to_string()),
             required: Some(true),
         }]),
@@ -153,9 +158,11 @@ fn test_resource_without_optional_fields() -> Result<(), Box<dyn std::error::Err
     let resource = Resource {
         uri: "test://resource".to_string(),
         name: "Test".to_string(),
+        title: None,
         description: None,
         mime_type: None,
         size: None,
+        icons: None,
         annotations: None,
     };
 
@@ -170,7 +177,9 @@ fn test_resource_without_optional_fields() -> Result<(), Box<dyn std::error::Err
 fn test_prompt_without_arguments() -> Result<(), Box<dyn std::error::Error>> {
     let prompt = Prompt {
         name: "simple".to_string(),
+        title: None,
         description: Some("A simple prompt".to_string()),
+        icons: None,
         arguments: None,
     };
 

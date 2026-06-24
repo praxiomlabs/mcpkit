@@ -159,6 +159,7 @@ impl PromptBuilder {
     pub fn required_arg(mut self, name: impl Into<String>, description: impl Into<String>) -> Self {
         self.arguments.push(PromptArgument {
             name: name.into(),
+            title: None,
             description: Some(description.into()),
             required: Some(true),
         });
@@ -169,6 +170,7 @@ impl PromptBuilder {
     pub fn optional_arg(mut self, name: impl Into<String>, description: impl Into<String>) -> Self {
         self.arguments.push(PromptArgument {
             name: name.into(),
+            title: None,
             description: Some(description.into()),
             required: Some(false),
         });
@@ -187,7 +189,9 @@ impl PromptBuilder {
     pub fn build(self) -> Prompt {
         Prompt {
             name: self.name,
+            title: None,
             description: self.description,
+            icons: None,
             arguments: if self.arguments.is_empty() {
                 None
             } else {

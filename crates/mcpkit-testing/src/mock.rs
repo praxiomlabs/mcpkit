@@ -110,9 +110,12 @@ impl MockTool {
     pub fn to_tool(&self) -> Tool {
         Tool {
             name: self.name.clone(),
+            title: None,
             description: self.description.clone(),
             input_schema: self.input_schema.clone(),
+            icons: None,
             annotations: self.annotations.clone(),
+            execution: None,
             output_schema: None,
         }
     }
@@ -178,9 +181,11 @@ impl MockResource {
         Resource {
             uri: self.uri.clone(),
             name: self.name.clone(),
+            title: None,
             description: self.description.clone(),
             mime_type: self.mime_type.clone(),
             size: Some(self.content.len() as u64),
+            icons: None,
             annotations: None,
         }
     }
@@ -234,7 +239,9 @@ impl MockPrompt {
     pub fn to_prompt(&self) -> Prompt {
         Prompt {
             name: self.name.clone(),
+            title: None,
             description: self.description.clone(),
+            icons: None,
             arguments: None,
         }
     }

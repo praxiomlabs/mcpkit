@@ -4,6 +4,7 @@
 //! Each tool has a name, description, and JSON Schema defining its input.
 
 use super::content::Content;
+use super::metadata::Icon;
 use serde::{Deserialize, Serialize};
 
 /// A tool definition exposed by an MCP server.
@@ -31,15 +32,28 @@ use serde::{Deserialize, Serialize};
 pub struct Tool {
     /// Unique name of the tool.
     pub name: String,
+    /// Optional human-readable display title.
+    ///
+    /// Display-name precedence is `title`, then `annotations.title`, then
+    /// `name`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
     /// Human-readable description of what the tool does.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     /// JSON Schema defining the tool's input parameters.
     #[serde(rename = "inputSchema")]
     pub input_schema: serde_json::Value,
+    /// Optional icons the client can display for this tool.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icons: Option<Vec<Icon>>,
     /// Optional annotations providing hints about tool behavior.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub annotations: Option<ToolAnnotations>,
+    /// Optional execution-related properties (e.g. task-augmented execution
+    /// support).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub execution: Option<ToolExecution>,
     /// JSON Schema describing the tool's structured output, if it produces any.
     ///
     /// When set, a successful result's `structuredContent` is expected to
@@ -54,14 +68,54 @@ impl Tool {
     pub fn new(name: impl Into<String>) -> Self {
         Self {
             name: name.into(),
+            title: None,
             description: None,
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {}
             }),
+            icons: None,
             annotations: None,
+            execution: None,
             output_schema: None,
         }
+    }
+
+    /// Set the tool's display title (`title`).
+    #[must_use]
+    pub fn title(mut self, title: impl Into<String>) -> Self {
+        self.title = Some(title.into());
+        self
+    }
+
+    /// Add an icon the client can display for this tool.
+    #[must_use]
+    pub fn icon(mut self, icon: Icon) -> Self {
+        self.icons.get_or_insert_with(Vec::new).push(icon);
+        self
+    }
+
+    /// Set the tool's icons, replacing any already set.
+    #[must_use]
+    pub fn icons(mut self, icons: impl IntoIterator<Item = Icon>) -> Self {
+        self.icons = Some(icons.into_iter().collect());
+        self
+    }
+
+    /// Set the tool's execution properties.
+    #[must_use]
+    pub fn execution(mut self, execution: ToolExecution) -> Self {
+        self.execution = Some(execution);
+        self
+    }
+
+    /// Declare the tool's task-augmented execution support.
+    #[must_use]
+    pub fn task_support(mut self, task_support: TaskSupport) -> Self {
+        self.execution
+            .get_or_insert_with(ToolExecution::default)
+            .task_support = Some(task_support);
+        self
     }
 
     /// Set the tool's output schema (`outputSchema`).
@@ -278,6 +332,42 @@ impl ToolAnnotations {
     pub const fn with_idempotent(mut self, idempotent: bool) -> Self {
         self.idempotent_hint = Some(idempotent);
         self
+    }
+}
+
+/// Whether a tool supports task-augmented execution.
+///
+/// Task-augmented execution lets clients drive long-running tool calls through
+/// the task system (poll for status instead of blocking on the response).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TaskSupport {
+    /// The tool does not support task-augmented execution (spec default).
+    #[default]
+    Forbidden,
+    /// The tool may be executed with task augmentation.
+    Optional,
+    /// The tool must be executed with task augmentation.
+    Required,
+}
+
+/// Execution-related properties for a tool.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolExecution {
+    /// Whether this tool supports task-augmented execution.
+    ///
+    /// Absent is equivalent to [`TaskSupport::Forbidden`].
+    #[serde(rename = "taskSupport", skip_serializing_if = "Option::is_none")]
+    pub task_support: Option<TaskSupport>,
+}
+
+impl ToolExecution {
+    /// Create execution properties declaring the given task support.
+    #[must_use]
+    pub const fn with_task_support(task_support: TaskSupport) -> Self {
+        Self {
+            task_support: Some(task_support),
+        }
     }
 }
 
@@ -579,6 +669,54 @@ mod tests {
         // Round-trips and stays absent when unset.
         let plain: CallToolResult = serde_json::from_str(r#"{"content":[]}"#).expect("deserialize");
         assert!(plain.structured_content.is_none());
+    }
+
+    #[test]
+    fn test_tool_title_icons_execution_serde() {
+        use super::super::metadata::{Icon, IconTheme};
+
+        // Absent by default.
+        let tool = Tool::new("t");
+        let j = serde_json::to_value(&tool).unwrap();
+        assert!(j.get("title").is_none());
+        assert!(j.get("icons").is_none());
+        assert!(j.get("execution").is_none());
+
+        let tool = Tool::new("t")
+            .title("Pretty Name")
+            .icon(
+                Icon::new("https://e/i.png")
+                    .mime_type("image/png")
+                    .theme(IconTheme::Light),
+            )
+            .task_support(TaskSupport::Optional);
+        let j = serde_json::to_value(&tool).unwrap();
+        assert_eq!(j["title"], "Pretty Name");
+        assert_eq!(j["icons"][0]["src"], "https://e/i.png");
+        assert_eq!(j["icons"][0]["theme"], "light");
+        // `execution.taskSupport` is camelCase and lowercase-valued.
+        assert_eq!(j["execution"]["taskSupport"], "optional");
+
+        // Round-trips.
+        let back: Tool = serde_json::from_value(j).unwrap();
+        assert_eq!(back.title.as_deref(), Some("Pretty Name"));
+        assert_eq!(
+            back.execution.and_then(|e| e.task_support),
+            Some(TaskSupport::Optional)
+        );
+    }
+
+    #[test]
+    fn test_task_support_serde_values() {
+        assert_eq!(
+            serde_json::to_value(TaskSupport::Forbidden).unwrap(),
+            serde_json::json!("forbidden")
+        );
+        assert_eq!(
+            serde_json::to_value(TaskSupport::Required).unwrap(),
+            serde_json::json!("required")
+        );
+        assert_eq!(TaskSupport::default(), TaskSupport::Forbidden);
     }
 
     #[test]

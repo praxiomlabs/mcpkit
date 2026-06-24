@@ -25,9 +25,12 @@ impl ToolHandler {
             "echo".to_string(),
             Tool {
                 name: "echo".to_string(),
+                title: None,
                 description: Some("Echo back the input".to_string()),
                 input_schema: json!({"type": "object", "properties": {"message": {"type": "string"}}}),
+                icons: None,
                 annotations: None,
+                execution: None,
                 output_schema: None,
             },
         );
@@ -36,6 +39,7 @@ impl ToolHandler {
             "calculate".to_string(),
             Tool {
                 name: "calculate".to_string(),
+                title: None,
                 description: Some("Perform arithmetic".to_string()),
                 input_schema: json!({
                     "type": "object",
@@ -46,7 +50,9 @@ impl ToolHandler {
                     },
                     "required": ["a", "b", "op"]
                 }),
+                icons: None,
                 annotations: None,
+                execution: None,
                 output_schema: None,
             },
         );
