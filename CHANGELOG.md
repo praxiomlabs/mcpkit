@@ -24,6 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SessionStore::with_idle_timeout` and a `DEFAULT_SESSION_TIMEOUT` constant in
   the `mcpkit-warp` and `mcpkit-rocket` adapters, to configure the idle timeout
   used when reaping inactive sessions.
+- `ResourceLink` tool-result content type: a `Content::ResourceLink` variant
+  (serialized as `"resource_link"`) backed by a new `ResourceLinkContent`
+  (`uri`, `name`, optional `description`/`mimeType`/`annotations`), plus a
+  `Content::resource_link(uri, name)` constructor and `Content::is_resource_link`,
+  so tools can return a resource handle to fetch instead of inlining the payload
+  ([#80](https://github.com/praxiomlabs/mcpkit/issues/80)).
 
 ### Changed
 
