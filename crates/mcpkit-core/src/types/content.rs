@@ -20,6 +20,9 @@ pub enum Content {
     Audio(AudioContent),
     /// Embedded resource reference.
     Resource(ResourceContent),
+    /// A link to a resource (not embedded).
+    #[serde(rename = "resource_link")]
+    ResourceLink(ResourceLinkContent),
 }
 
 impl Content {
@@ -97,6 +100,24 @@ impl Content {
         matches!(self, Self::Resource(_))
     }
 
+    /// Create a resource link.
+    #[must_use]
+    pub fn resource_link(uri: impl Into<String>, name: impl Into<String>) -> Self {
+        Self::ResourceLink(ResourceLinkContent {
+            uri: uri.into(),
+            name: name.into(),
+            description: None,
+            mime_type: None,
+            annotations: None,
+        })
+    }
+
+    /// Check if this is a resource link.
+    #[must_use]
+    pub const fn is_resource_link(&self) -> bool {
+        matches!(self, Self::ResourceLink(_))
+    }
+
     /// Get the text if this is text content.
     #[must_use]
     pub fn as_text(&self) -> Option<&str> {
@@ -157,6 +178,24 @@ pub struct ResourceContent {
     /// Base64-encoded binary content.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub blob: Option<String>,
+    /// Optional annotations.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub annotations: Option<ContentAnnotations>,
+}
+
+/// A link to a resource (not embedded inline, just a URI reference).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResourceLinkContent {
+    /// URI of the resource.
+    pub uri: String,
+    /// Name of the resource.
+    pub name: String,
+    /// Description of the resource.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// MIME type of the resource.
+    #[serde(rename = "mimeType", skip_serializing_if = "Option::is_none")]
+    pub mime_type: Option<String>,
     /// Optional annotations.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub annotations: Option<ContentAnnotations>,
@@ -260,6 +299,19 @@ mod tests {
                 .ok_or("Expected audience")?
                 .contains(&Role::User)
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_resource_link_content() -> Result<(), Box<dyn std::error::Error>> {
+        let content = Content::resource_link("https://example.com/file.pdf", "My File");
+        assert!(content.is_resource_link());
+        let json = serde_json::to_string(&content)?;
+        let parsed: Content = serde_json::from_str(&json)?;
+        assert!(parsed.is_resource_link());
+        assert!(json.contains("\"type\":\"resource_link\""));
+        assert!(json.contains("\"uri\":\"https://example.com/file.pdf\""));
+        assert!(json.contains("\"name\":\"My File\""));
         Ok(())
     }
 }
