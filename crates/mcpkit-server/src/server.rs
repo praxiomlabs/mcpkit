@@ -35,6 +35,7 @@
 use crate::builder::{NotRegistered, Registered, Server};
 use crate::context::{CancellationToken, Context, Peer};
 use crate::handler::{PromptHandler, ResourceHandler, ServerHandler, ToolHandler};
+use futures::channel::oneshot;
 use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
 use mcpkit_core::error::McpError;
 use mcpkit_core::protocol::{Message, Notification, ProgressToken, Request, RequestId, Response};
@@ -44,7 +45,8 @@ use mcpkit_transport::Transport;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::RwLock;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::time::Duration;
 
 /// State for a running server.
 pub struct ServerState {
@@ -61,6 +63,11 @@ pub struct ServerState {
     /// This is stored as a `ProtocolVersion` enum for type-safe feature detection.
     /// Use methods like `protocol_version().supports_tasks()` to check capabilities.
     pub negotiated_version: RwLock<Option<ProtocolVersion>>,
+    /// Response channels for in-flight server-initiated (outbound) requests,
+    /// keyed by the outbound request id.
+    pending_requests: RwLock<HashMap<RequestId, oneshot::Sender<Response>>>,
+    /// Monotonic counter for allocating outbound request ids.
+    outbound_id: AtomicU64,
 }
 
 impl ServerState {
@@ -73,6 +80,55 @@ impl ServerState {
             initialized: AtomicBool::new(false),
             cancellations: RwLock::new(HashMap::new()),
             negotiated_version: RwLock::new(None),
+            pending_requests: RwLock::new(HashMap::new()),
+            outbound_id: AtomicU64::new(1),
+        }
+    }
+
+    /// Allocate a unique id for a server-initiated (outbound) request.
+    pub(crate) fn next_outbound_id(&self) -> RequestId {
+        RequestId::Number(self.outbound_id.fetch_add(1, Ordering::Relaxed))
+    }
+
+    /// Register a pending outbound request, returning the receiver that resolves
+    /// when the matching response arrives.
+    pub(crate) fn register_outbound(&self, id: RequestId) -> oneshot::Receiver<Response> {
+        let (tx, rx) = oneshot::channel();
+        if let Ok(mut pending) = self.pending_requests.write() {
+            pending.insert(id, tx);
+        }
+        rx
+    }
+
+    /// Drop a pending outbound request (e.g. on timeout or cancellation).
+    pub(crate) fn remove_outbound(&self, id: &RequestId) {
+        if let Ok(mut pending) = self.pending_requests.write() {
+            pending.remove(id);
+        }
+    }
+
+    /// Route an inbound response to the outbound request that is waiting for it.
+    pub(crate) fn route_response(&self, response: Response) {
+        let sender = self
+            .pending_requests
+            .write()
+            .ok()
+            .and_then(|mut pending| pending.remove(&response.id));
+        match sender {
+            Some(sender) => {
+                let _ = sender.send(response);
+            }
+            None => {
+                tracing::debug!(id = %response.id, "response did not match a pending request");
+            }
+        }
+    }
+
+    /// Fail every pending outbound request (e.g. the connection closed). Dropping
+    /// the senders makes the waiting receivers resolve with an error.
+    pub(crate) fn fail_pending_requests(&self) {
+        if let Ok(mut pending) = self.pending_requests.write() {
+            pending.clear();
         }
     }
 
@@ -155,15 +211,44 @@ impl ServerState {
     }
 }
 
+/// Shared state a [`TransportPeer`] needs to make server-initiated requests:
+/// the pending-request registry (on [`ServerState`]) and the outbound timeout.
+#[derive(Clone)]
+struct OutboundCtx {
+    state: Arc<ServerState>,
+    timeout: Duration,
+}
+
 /// A peer implementation that sends notifications over a transport.
+///
+/// Constructed with [`new`](Self::new) it can only send notifications. The
+/// runtime builds request-capable peers (with a pending-request registry) for
+/// handler contexts via `with_outbound`.
 pub struct TransportPeer<T: Transport> {
     transport: Arc<T>,
+    outbound: Option<OutboundCtx>,
 }
 
 impl<T: Transport> TransportPeer<T> {
-    /// Create a new transport peer.
+    /// Create a new notification-only transport peer.
     pub const fn new(transport: Arc<T>) -> Self {
-        Self { transport }
+        Self {
+            transport,
+            outbound: None,
+        }
+    }
+
+    /// Create a request-capable transport peer that correlates responses through
+    /// the given server state.
+    pub(crate) fn with_outbound(
+        transport: Arc<T>,
+        state: Arc<ServerState>,
+        timeout: Duration,
+    ) -> Self {
+        Self {
+            transport,
+            outbound: Some(OutboundCtx { state, timeout }),
+        }
     }
 }
 
@@ -182,6 +267,55 @@ where
                 .send(Message::Notification(notification))
                 .await
                 .map_err(std::convert::Into::into)
+        })
+    }
+
+    fn request(
+        &self,
+        method: std::borrow::Cow<'static, str>,
+        params: Option<serde_json::Value>,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Response, McpError>> + Send + '_>>
+    {
+        let Some(outbound) = self.outbound.clone() else {
+            return Box::pin(async {
+                Err(McpError::internal(
+                    "this peer does not support server-initiated requests",
+                ))
+            });
+        };
+        let transport = self.transport.clone();
+        Box::pin(async move {
+            use futures::future::{Either, select};
+
+            let id = outbound.state.next_outbound_id();
+            let rx = outbound.state.register_outbound(id.clone());
+            let request = match params {
+                Some(p) => Request::with_params(method, id.clone(), p),
+                None => Request::new(method, id.clone()),
+            };
+            transport
+                .send(Message::Request(request))
+                .await
+                .map_err(std::convert::Into::into)?;
+
+            let sleep = mcpkit_transport::runtime::sleep(outbound.timeout);
+            futures::pin_mut!(sleep);
+            match select(rx, sleep).await {
+                Either::Left((Ok(response), _)) => Ok(response),
+                Either::Left((Err(_canceled), _)) => {
+                    outbound.state.remove_outbound(&id);
+                    Err(McpError::internal(
+                        "response channel closed before a reply arrived",
+                    ))
+                }
+                Either::Right(((), _)) => {
+                    outbound.state.remove_outbound(&id);
+                    Err(McpError::internal(format!(
+                        "server-initiated request timed out after {:?}",
+                        outbound.timeout
+                    )))
+                }
+            }
         })
     }
 }
@@ -279,6 +413,9 @@ pub struct RuntimeConfig {
     pub auto_initialized: bool,
     /// Maximum concurrent requests to process.
     pub max_concurrent_requests: usize,
+    /// How long a server-initiated request (e.g. elicitation, sampling) waits
+    /// for the client's response before failing.
+    pub outbound_request_timeout: Duration,
 }
 
 impl Default for RuntimeConfig {
@@ -286,6 +423,7 @@ impl Default for RuntimeConfig {
         Self {
             auto_initialized: true,
             max_concurrent_requests: 100,
+            outbound_request_timeout: Duration::from_secs(60),
         }
     }
 }
@@ -344,44 +482,57 @@ where
 
         let max = self.config.max_concurrent_requests.max(1);
         let mut in_flight = FuturesUnordered::new();
+        // Requests received while at the concurrency limit. They run as soon as a
+        // slot frees. Crucially the loop keeps receiving in the meantime, so a
+        // handler parked on its own server-initiated request (which needs an
+        // inbound response to complete) cannot deadlock the loop.
+        let mut queued: std::collections::VecDeque<Request> = std::collections::VecDeque::new();
 
         let outcome = loop {
-            // Obtain the next incoming message, making progress on in-flight
-            // requests in the meantime. `in_flight.next()` is only awaited while
-            // the set is non-empty, so it never spuriously yields `None`.
+            // Dispatch queued requests while concurrency slots are free.
+            while in_flight.len() < max {
+                let Some(request) = queued.pop_front() else {
+                    break;
+                };
+                in_flight.push(self.handle_request_isolated(request));
+            }
+
+            // Always receive (so responses to our own outbound requests are
+            // routed even when every slot is parked) while making progress on
+            // in-flight work. `in_flight.next()` is only awaited while the set is
+            // non-empty, so it never spuriously yields `None`.
             let message = if in_flight.is_empty() {
                 match self.transport.recv().await {
                     Ok(opt) => opt,
                     Err(e) => break Err(e.into()),
                 }
-            } else if in_flight.len() < max {
-                // Race the next message against in-flight completions.
+            } else {
                 let recv = std::pin::pin!(self.transport.recv());
                 match select(recv, in_flight.next()).await {
                     Either::Left((Ok(opt), _)) => opt,
                     Either::Left((Err(e), _)) => break Err(e.into()),
-                    // An in-flight request finished; its response was already
-                    // sent. Loop to keep accepting work.
+                    // An in-flight request finished, freeing a slot; loop to
+                    // dispatch any queued requests.
                     Either::Right((_, _)) => continue,
                 }
-            } else {
-                // At the concurrency limit: drain one in-flight request before
-                // accepting any new message (backpressure).
-                in_flight.next().await;
-                continue;
             };
 
             match message {
                 Some(Message::Request(request)) => {
-                    in_flight.push(self.handle_request_isolated(request));
+                    if in_flight.len() < max {
+                        in_flight.push(self.handle_request_isolated(request));
+                    } else {
+                        queued.push_back(request);
+                    }
                 }
                 Some(Message::Notification(notification)) => {
                     if let Err(e) = self.handle_notification(notification).await {
                         tracing::error!(error = %e, "Error handling notification");
                     }
                 }
-                Some(Message::Response(_)) => {
-                    tracing::warn!("Received unexpected response message");
+                Some(Message::Response(response)) => {
+                    // A reply to a server-initiated request (elicitation, etc.).
+                    self.state.route_response(response);
                 }
                 None => {
                     tracing::info!("Connection closed");
@@ -390,8 +541,10 @@ where
             }
         };
 
-        // Drain any still-running requests so their responses are delivered
-        // before we return.
+        // The connection is going away: fail any in-flight outbound requests so
+        // handlers parked on them unblock, then drain the handlers so their
+        // responses are delivered before we return.
+        self.state.fail_pending_requests();
         while in_flight.next().await.is_some() {}
 
         if let Err(ref err) = outcome {
@@ -522,8 +675,13 @@ where
         // Extract progress token from params._meta.progressToken if present
         let progress_token = extract_progress_token(params);
 
-        // Create context for the handler
-        let peer = TransportPeer::new(self.transport.clone());
+        // Create context for the handler. The peer is request-capable so handlers
+        // can make server-initiated requests (e.g. elicitation) via `ctx.request`.
+        let peer = TransportPeer::with_outbound(
+            self.transport.clone(),
+            self.state.clone(),
+            self.config.outbound_request_timeout,
+        );
         let client_caps = self.state.client_caps();
         let protocol_version = self
             .state
@@ -1224,6 +1382,28 @@ mod tests {
         }
     }
 
+    /// A router whose `ask` handler makes a server-initiated request back to the
+    /// client (`ask/upstream`) and returns its result, for testing the reverse
+    /// request/response path.
+    struct OutboundRouter;
+
+    impl RequestRouter for OutboundRouter {
+        fn server_info(&self) -> ServerInfo {
+            ServerInfo::new("outbound-test", "0.0.0")
+        }
+        async fn route(
+            &self,
+            method: &str,
+            _params: Option<&serde_json::Value>,
+            ctx: &Context<'_>,
+        ) -> Result<serde_json::Value, McpError> {
+            match method {
+                "ask" => ctx.request("ask/upstream", None).await,
+                other => Err(McpError::method_not_found(other)),
+            }
+        }
+    }
+
     fn req(method: &'static str, id: u64) -> Message {
         Message::Request(Request::new(method, id))
     }
@@ -1378,6 +1558,7 @@ mod tests {
             config: RuntimeConfig {
                 auto_initialized: true,
                 max_concurrent_requests: 1,
+                ..RuntimeConfig::default()
             },
         };
         let handle = tokio::spawn(async move { runtime.run().await });
@@ -1475,6 +1656,92 @@ mod tests {
             }
             other => panic!("expected a notification, got {other:?}"),
         }
+    }
+
+    #[tokio::test]
+    async fn server_initiated_request_roundtrips_at_concurrency_limit() {
+        let (client, server) = MemoryTransport::pair();
+        let state = Arc::new(ServerState::new(ServerCapabilities::default()));
+        state.set_initialized();
+        let runtime = ServerRuntime {
+            server: OutboundRouter,
+            transport: Arc::new(server),
+            state,
+            // max=1: the handler holds the only slot while parked on its outbound
+            // request, so the loop MUST keep receiving to route the response.
+            // The old "drain at max" loop would deadlock here.
+            config: RuntimeConfig {
+                auto_initialized: true,
+                max_concurrent_requests: 1,
+                ..RuntimeConfig::default()
+            },
+        };
+        let handle = tokio::spawn(async move { runtime.run().await });
+
+        // Trigger a handler that issues a server-initiated request.
+        client.send(req("ask", 1)).await.expect("send");
+
+        // The server sends us (the client) its outbound request.
+        let outbound = match timeout(Duration::from_secs(2), client.recv())
+            .await
+            .expect("no outbound request (timed out)")
+            .expect("recv ok")
+            .expect("some message")
+        {
+            Message::Request(r) => r,
+            other => panic!("expected a server-initiated request, got {other:?}"),
+        };
+        assert_eq!(outbound.method.as_ref(), "ask/upstream");
+
+        // Reply to it; the handler should resume and return the result.
+        client
+            .send(Message::Response(Response::success(
+                outbound.id.clone(),
+                serde_json::json!({ "answer": 42 }),
+            )))
+            .await
+            .expect("send response");
+
+        let resp = next_response(&client).await;
+        assert_eq!(resp.id, RequestId::Number(1));
+        assert_eq!(resp.result, Some(serde_json::json!({ "answer": 42 })));
+
+        drop(client);
+        let _ = timeout(Duration::from_secs(2), handle).await;
+    }
+
+    #[tokio::test]
+    async fn server_initiated_request_times_out() {
+        let (client, server) = MemoryTransport::pair();
+        let state = Arc::new(ServerState::new(ServerCapabilities::default()));
+        state.set_initialized();
+        let runtime = ServerRuntime {
+            server: OutboundRouter,
+            transport: Arc::new(server),
+            state,
+            config: RuntimeConfig {
+                outbound_request_timeout: Duration::from_millis(100),
+                ..RuntimeConfig::default()
+            },
+        };
+        let handle = tokio::spawn(async move { runtime.run().await });
+
+        client.send(req("ask", 1)).await.expect("send");
+
+        // Receive the outbound request but never answer it.
+        let _outbound = timeout(Duration::from_secs(2), client.recv())
+            .await
+            .expect("no outbound request")
+            .expect("recv ok")
+            .expect("some message");
+
+        // The handler's request times out, so its own response is an error.
+        let resp = next_response(&client).await;
+        assert_eq!(resp.id, RequestId::Number(1));
+        assert!(resp.error.is_some(), "timed-out request should error");
+
+        drop(client);
+        let _ = timeout(Duration::from_secs(2), handle).await;
     }
 
     #[test]

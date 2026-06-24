@@ -36,9 +36,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `prompts_list_changed()`, `resource_updated(uri)`, and a generic `notify()`,
   so a server can tell the client to re-list when its tool/resource/prompt set
   changes between requests ([#77](https://github.com/praxiomlabs/mcpkit/issues/77)).
+- Server-initiated request/response: `Context::request(method, params)` lets a
+  handler send a request to the client and await its response (the basis for
+  elicitation and sampling), and `Peer` gains a `request` method (default-erroring
+  so existing implementors are unaffected). The runtime correlates the response,
+  bounds the wait by `RuntimeConfig::outbound_request_timeout`, and aborts if the
+  request's context is cancelled. Receiving these responses no longer starves the
+  message loop at the concurrency limit
+  ([#73](https://github.com/praxiomlabs/mcpkit/issues/73)).
 
 ### Changed
 
+- **Breaking:** `RuntimeConfig` gains an `outbound_request_timeout` field
+  (construct with `..RuntimeConfig::default()` if you build it with a struct
+  literal).
 - **Breaking:** `Session::mark_initialized` in the `mcpkit-axum` and
   `mcpkit-actix` adapters now takes the negotiated `ProtocolVersion` in addition
   to the client capabilities, and `Session` gains a `protocol_version` field.

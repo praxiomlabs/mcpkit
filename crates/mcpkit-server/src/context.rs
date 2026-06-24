@@ -45,8 +45,9 @@
 
 use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
 use mcpkit_core::error::McpError;
-use mcpkit_core::protocol::{Notification, ProgressToken, RequestId};
+use mcpkit_core::protocol::{Notification, ProgressToken, RequestId, Response};
 use mcpkit_core::protocol_version::ProtocolVersion;
+use std::borrow::Cow;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -65,6 +66,27 @@ pub trait Peer: Send + Sync {
         &self,
         notification: Notification,
     ) -> Pin<Box<dyn Future<Output = Result<(), McpError>> + Send + '_>>;
+
+    /// Send a request to the peer and await its response.
+    ///
+    /// Used for server-initiated requests such as elicitation and sampling. The
+    /// implementation assigns the request id and correlates the response.
+    ///
+    /// The default implementation returns an error: a peer that has no
+    /// persistent bidirectional connection (for example a one-shot HTTP
+    /// response) cannot make server-initiated requests.
+    fn request(
+        &self,
+        method: Cow<'static, str>,
+        params: Option<serde_json::Value>,
+    ) -> Pin<Box<dyn Future<Output = Result<Response, McpError>> + Send + '_>> {
+        let _ = (method, params);
+        Box::pin(async {
+            Err(McpError::internal(
+                "this peer does not support server-initiated requests",
+            ))
+        })
+    }
 }
 
 /// A cancellation token for tracking request cancellation.
@@ -310,6 +332,39 @@ impl<'a> Context<'a> {
         });
 
         self.notify("notifications/progress", Some(params)).await
+    }
+
+    /// Send a request to the client and await its response.
+    ///
+    /// This is the basis for server-initiated requests (e.g. elicitation,
+    /// sampling). The peer assigns the request id and correlates the response;
+    /// the request is aborted if this context is cancelled.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the request was cancelled, the peer does not support
+    /// requests, the request timed out, or the response carried a JSON-RPC
+    /// error.
+    pub async fn request(
+        &self,
+        method: impl Into<Cow<'static, str>>,
+        params: Option<serde_json::Value>,
+    ) -> Result<serde_json::Value, McpError> {
+        use futures::future::{Either, select};
+
+        let request = self.peer.request(method.into(), params);
+        let cancelled = self.cancel.cancelled();
+        let response = match select(request, cancelled).await {
+            Either::Left((result, _)) => result?,
+            Either::Right(((), _)) => return Err(McpError::internal("request cancelled")),
+        };
+
+        if let Some(error) = response.error {
+            return Err(McpError::internal(error.message));
+        }
+        response
+            .result
+            .ok_or_else(|| McpError::internal("response contained neither result nor error"))
     }
 }
 
