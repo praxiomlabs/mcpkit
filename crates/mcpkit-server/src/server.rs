@@ -186,6 +186,92 @@ where
     }
 }
 
+/// A cloneable handle for sending server-initiated notifications from outside a
+/// request context.
+///
+/// A handler's [`Context`] can only send notifications while a request is being
+/// served. When the server's own state changes between requests — for example
+/// its tool set changes — use a `ServerNotifier` to push the corresponding
+/// notification (`tools/list_changed`, `resources/list_changed`, etc.) to the
+/// client.
+///
+/// Obtain one from [`ServerRuntime::notifier`] before spawning the runtime:
+///
+/// ```rust,ignore
+/// let runtime = ServerRuntime::new(server, transport);
+/// let notifier = runtime.notifier();
+/// tokio::spawn(async move { runtime.run().await });
+///
+/// // later, from anywhere:
+/// notifier.tools_list_changed().await?;
+/// ```
+#[derive(Clone)]
+pub struct ServerNotifier {
+    peer: Arc<dyn Peer>,
+}
+
+impl ServerNotifier {
+    /// Send a notification with the given method and optional params.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the notification could not be sent over the transport.
+    pub async fn notify(
+        &self,
+        method: impl Into<std::borrow::Cow<'static, str>>,
+        params: Option<serde_json::Value>,
+    ) -> Result<(), McpError> {
+        let notification = match params {
+            Some(p) => Notification::with_params(method, p),
+            None => Notification::new(method),
+        };
+        self.peer.notify(notification).await
+    }
+
+    /// Notify the client that the available tool list has changed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the notification could not be sent.
+    pub async fn tools_list_changed(&self) -> Result<(), McpError> {
+        self.notify(crate::router::notifications::TOOLS_LIST_CHANGED, None)
+            .await
+    }
+
+    /// Notify the client that the available resource list has changed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the notification could not be sent.
+    pub async fn resources_list_changed(&self) -> Result<(), McpError> {
+        self.notify(crate::router::notifications::RESOURCES_LIST_CHANGED, None)
+            .await
+    }
+
+    /// Notify the client that the available prompt list has changed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the notification could not be sent.
+    pub async fn prompts_list_changed(&self) -> Result<(), McpError> {
+        self.notify(crate::router::notifications::PROMPTS_LIST_CHANGED, None)
+            .await
+    }
+
+    /// Notify the client that a subscribed resource was updated.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the notification could not be sent.
+    pub async fn resource_updated(&self, uri: impl Into<String>) -> Result<(), McpError> {
+        self.notify(
+            crate::router::notifications::RESOURCES_UPDATED,
+            Some(serde_json::json!({ "uri": uri.into() })),
+        )
+        .await
+    }
+}
+
 /// Server runtime configuration.
 #[derive(Debug, Clone)]
 pub struct RuntimeConfig {
@@ -228,6 +314,18 @@ where
     /// Get the server state.
     pub const fn state(&self) -> &Arc<ServerState> {
         &self.state
+    }
+
+    /// Get a cloneable [`ServerNotifier`] for sending server-initiated
+    /// notifications (e.g. `tools/list_changed`) from outside a request context.
+    ///
+    /// Call this before spawning [`run`](Self::run); the returned handle shares
+    /// the runtime's transport and can be used from any task.
+    #[must_use]
+    pub fn notifier(&self) -> ServerNotifier {
+        ServerNotifier {
+            peer: Arc::new(TransportPeer::new(self.transport.clone())),
+        }
     }
 
     /// Run the server message loop.
@@ -1348,6 +1446,35 @@ mod tests {
 
         drop(client);
         let _ = timeout(Duration::from_secs(2), handle).await;
+    }
+
+    #[tokio::test]
+    async fn notifier_sends_list_changed_outside_request() {
+        let (client, server) = MemoryTransport::pair();
+        let state = Arc::new(ServerState::new(ServerCapabilities::default()));
+        let runtime = ServerRuntime {
+            server: PingRouter,
+            transport: Arc::new(server),
+            state,
+            config: RuntimeConfig::default(),
+        };
+
+        // The notifier works without an active request and without running the
+        // message loop — it sends straight over the shared transport.
+        let notifier = runtime.notifier();
+        notifier.tools_list_changed().await.expect("notify");
+
+        let msg = timeout(Duration::from_secs(2), client.recv())
+            .await
+            .expect("no notification (timed out)")
+            .expect("recv ok")
+            .expect("some message");
+        match msg {
+            Message::Notification(n) => {
+                assert_eq!(n.method.as_ref(), "notifications/tools/list_changed");
+            }
+            other => panic!("expected a notification, got {other:?}"),
+        }
     }
 
     #[test]

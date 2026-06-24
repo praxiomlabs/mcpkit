@@ -81,7 +81,9 @@ pub use health::{
 };
 pub use metrics::{MethodStats, MetricsSnapshot, ServerMetrics};
 pub use router::{route_prompts, route_resources, route_tools};
-pub use server::{RequestRouter, RuntimeConfig, ServerRuntime, ServerState, TransportPeer};
+pub use server::{
+    RequestRouter, RuntimeConfig, ServerNotifier, ServerRuntime, ServerState, TransportPeer,
+};
 
 /// Prelude module for convenient imports.
 pub mod prelude {

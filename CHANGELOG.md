@@ -30,6 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Content::resource_link(uri, name)` constructor and `Content::is_resource_link`,
   so tools can return a resource handle to fetch instead of inlining the payload
   ([#80](https://github.com/praxiomlabs/mcpkit/issues/80)).
+- `ServerNotifier`, a cloneable handle obtained from `ServerRuntime::notifier()`
+  for sending server-initiated notifications from outside a request context.
+  It exposes `tools_list_changed()`, `resources_list_changed()`,
+  `prompts_list_changed()`, `resource_updated(uri)`, and a generic `notify()`,
+  so a server can tell the client to re-list when its tool/resource/prompt set
+  changes between requests ([#77](https://github.com/praxiomlabs/mcpkit/issues/77)).
 
 ### Changed
 
