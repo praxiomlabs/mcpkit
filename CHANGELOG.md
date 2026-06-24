@@ -44,9 +44,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   request's context is cancelled. Receiving these responses no longer starves the
   message loop at the concurrency limit
   ([#73](https://github.com/praxiomlabs/mcpkit/issues/73)).
+- `Context::elicit(ElicitRequest) -> ElicitResult` for form-mode elicitation: a
+  handler can request structured input from the user through the client and
+  await the result. Gated on the client's `elicitation` capability and the
+  negotiated protocol version ([#73](https://github.com/praxiomlabs/mcpkit/issues/73)).
 
 ### Changed
 
+- **Breaking:** removed the non-functional server-side elicitation scaffolding —
+  the `ElicitationHandler` trait and the `ElicitationService` builder. They
+  modelled the server *answering* its own elicitation, which is inverted from
+  the spec (the server *sends* `elicitation/create` to the client); use
+  `Context::elicit` instead.
 - **Breaking:** `RuntimeConfig` gains an `outbound_request_timeout` field
   (construct with `..RuntimeConfig::default()` if you build it with a struct
   literal).

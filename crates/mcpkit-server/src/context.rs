@@ -47,6 +47,7 @@ use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
 use mcpkit_core::error::McpError;
 use mcpkit_core::protocol::{Notification, ProgressToken, RequestId, Response};
 use mcpkit_core::protocol_version::ProtocolVersion;
+use mcpkit_core::types::elicitation::{ElicitRequest, ElicitResult};
 use std::borrow::Cow;
 use std::future::Future;
 use std::pin::Pin;
@@ -365,6 +366,36 @@ impl<'a> Context<'a> {
         response
             .result
             .ok_or_else(|| McpError::internal("response contained neither result nor error"))
+    }
+
+    /// Request structured input from the user through the client (form-mode
+    /// elicitation).
+    ///
+    /// Sends an `elicitation/create` request and awaits the user's response
+    /// (accept with content, decline, or cancel). This requires the client to
+    /// have declared the `elicitation` capability and the negotiated protocol
+    /// version to support elicitation.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the client did not declare elicitation support, the
+    /// negotiated protocol version predates elicitation, the request was
+    /// cancelled or timed out, or the response could not be parsed.
+    pub async fn elicit(&self, request: ElicitRequest) -> Result<ElicitResult, McpError> {
+        if !self.protocol_version.supports_elicitation() {
+            return Err(McpError::internal(
+                "the negotiated protocol version does not support elicitation",
+            ));
+        }
+        if !self.client_caps.has_elicitation() {
+            return Err(McpError::internal(
+                "the client did not declare the elicitation capability",
+            ));
+        }
+
+        let params = serde_json::to_value(&request).map_err(McpError::from)?;
+        let result = self.request("elicitation/create", Some(params)).await?;
+        serde_json::from_value(result).map_err(McpError::from)
     }
 }
 

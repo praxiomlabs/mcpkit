@@ -12,7 +12,6 @@
 //! - [`PromptHandler`]: Handle prompt discovery and rendering
 //! - [`TaskHandler`]: Handle long-running task operations
 //! - [`SamplingHandler`]: Handle sampling requests (client-to-server)
-//! - [`ElicitationHandler`]: Handle elicitation requests (client-to-server)
 //!
 //! # Example
 //!
@@ -41,7 +40,6 @@ use mcpkit_core::error::McpError;
 use mcpkit_core::types::{
     GetPromptResult, Prompt, Resource, ResourceContents, ResourceTemplate, Task, TaskId, Tool,
     ToolOutput,
-    elicitation::{ElicitRequest, ElicitResult},
     sampling::{CreateMessageRequest, CreateMessageResult},
 };
 use serde_json::Value;
@@ -349,62 +347,6 @@ pub trait SamplingHandler: Send + Sync {
     ) -> impl Future<Output = Result<CreateMessageResult, McpError>> + Send;
 }
 
-/// Handler for elicitation requests (structured user input).
-///
-/// Implement this trait to allow the server to request structured input
-/// from the user through the client. This enables interactive workflows
-/// where servers can gather user preferences, confirmations, or data.
-///
-/// # Example
-///
-/// ```ignore
-/// use mcpkit_server::{ElicitationHandler, Context};
-/// use mcpkit_core::types::elicitation::{ElicitRequest, ElicitResult};
-/// use mcpkit_core::error::McpError;
-///
-/// struct MyServer;
-///
-/// impl ElicitationHandler for MyServer {
-///     async fn elicit(
-///         &self,
-///         request: ElicitRequest,
-///         ctx: &Context<'_>,
-///     ) -> Result<ElicitResult, McpError> {
-///         // The client will display the request to the user
-///         ctx.peer().elicit(request).await
-///     }
-/// }
-/// ```
-///
-/// # Use Cases
-///
-/// - Requesting user confirmation before destructive operations
-/// - Gathering user preferences or configuration
-/// - Prompting for credentials or sensitive information
-/// - Interactive wizards or multi-step forms
-pub trait ElicitationHandler: Send + Sync {
-    /// Request structured input from the user.
-    ///
-    /// This allows the server to gather information from the user through
-    /// the client interface. The client will present the request to the
-    /// user according to the specified schema and return their response.
-    ///
-    /// # Arguments
-    ///
-    /// * `request` - The elicitation request specifying the message and schema.
-    /// * `ctx` - The request context providing access to the peer connection.
-    ///
-    /// # Returns
-    ///
-    /// The result of the elicitation, including the user's action (accept,
-    /// decline, or cancel) and any provided content.
-    fn elicit(
-        &self,
-        request: ElicitRequest,
-        ctx: &Context<'_>,
-    ) -> impl Future<Output = Result<ElicitResult, McpError>> + Send;
-}
-
 // =============================================================================
 // Blanket implementations for Arc<T>
 //
@@ -575,16 +517,6 @@ impl<T: SamplingHandler> SamplingHandler for Arc<T> {
         ctx: &Context<'_>,
     ) -> impl Future<Output = Result<CreateMessageResult, McpError>> + Send {
         (**self).create_message(request, ctx)
-    }
-}
-
-impl<T: ElicitationHandler> ElicitationHandler for Arc<T> {
-    fn elicit(
-        &self,
-        request: ElicitRequest,
-        ctx: &Context<'_>,
-    ) -> impl Future<Output = Result<ElicitResult, McpError>> + Send {
-        (**self).elicit(request, ctx)
     }
 }
 
