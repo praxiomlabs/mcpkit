@@ -100,6 +100,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `cancelled()`). Previously the context held an unregistered token, so cancel
   notifications had no effect; numeric request ids are now matched as well
   ([#87](https://github.com/praxiomlabs/mcpkit/issues/87)).
+- **Breaking (wire format):** embedded resource content (`Content::Resource`)
+  now nests its payload under a `resource` key to match the spec's
+  `EmbeddedResource` (`{ "type": "resource", "resource": { "uri": .. } }`).
+  Previously the `uri`/`mimeType`/`text`/`blob` fields were hoisted to the top
+  level, which spec-compliant peers could not parse. `ResourceContent` now holds
+  a single `resource: ResourceContents` field plus `annotations`
+  ([#106](https://github.com/praxiomlabs/mcpkit/issues/106)).
 
 ### Security
 

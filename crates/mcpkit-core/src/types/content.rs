@@ -3,6 +3,7 @@
 //! Content represents the payload in tool results, resource contents,
 //! and prompt messages. MCP supports text, images, audio, and embedded resources.
 
+use super::resource::ResourceContents;
 use serde::{Deserialize, Serialize};
 
 /// Content that can be included in messages and results.
@@ -68,10 +69,12 @@ impl Content {
     #[must_use]
     pub fn resource(uri: impl Into<String>) -> Self {
         Self::Resource(ResourceContent {
-            uri: uri.into(),
-            mime_type: None,
-            text: None,
-            blob: None,
+            resource: ResourceContents {
+                uri: uri.into(),
+                mime_type: None,
+                text: None,
+                blob: None,
+            },
             annotations: None,
         })
     }
@@ -165,19 +168,13 @@ pub struct AudioContent {
 }
 
 /// Embedded resource content.
+///
+/// The resource payload is nested under `resource` to match the spec's
+/// `EmbeddedResource` (`{ "type": "resource", "resource": { "uri": .. } }`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResourceContent {
-    /// URI of the resource.
-    pub uri: String,
-    /// MIME type of the content.
-    #[serde(rename = "mimeType", skip_serializing_if = "Option::is_none")]
-    pub mime_type: Option<String>,
-    /// Text content if the resource is text.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub text: Option<String>,
-    /// Base64-encoded binary content.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub blob: Option<String>,
+    /// The embedded resource contents.
+    pub resource: ResourceContents,
     /// Optional annotations.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub annotations: Option<ContentAnnotations>,
@@ -299,6 +296,23 @@ mod tests {
                 .ok_or("Expected audience")?
                 .contains(&Role::User)
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_embedded_resource_nests_under_resource_key() -> Result<(), Box<dyn std::error::Error>> {
+        // Spec EmbeddedResource: { "type": "resource", "resource": { "uri": .. } }
+        let content = Content::resource("file:///main.rs");
+        assert!(content.is_resource());
+        let j = serde_json::to_value(&content)?;
+        assert_eq!(j["type"], "resource");
+        assert_eq!(j["resource"]["uri"], "file:///main.rs");
+        // The uri must NOT be hoisted to the top level (the old, non-conformant shape).
+        assert!(j.get("uri").is_none());
+
+        // Round-trips from the spec shape.
+        let back: Content = serde_json::from_value(j)?;
+        assert!(back.is_resource());
         Ok(())
     }
 
