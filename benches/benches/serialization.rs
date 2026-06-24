@@ -82,6 +82,7 @@ fn large_response() -> Response {
 fn tool_definition() -> Tool {
     Tool {
         name: "search_database".to_string(),
+        title: None,
         description: Some("Search the database with a SQL query".to_string()),
         input_schema: json!({
             "type": "object",
@@ -104,6 +105,7 @@ fn tool_definition() -> Tool {
             },
             "required": ["query"]
         }),
+        icons: None,
         annotations: Some(ToolAnnotations {
             title: Some("Database Search".to_string()),
             read_only_hint: Some(true),
@@ -111,6 +113,7 @@ fn tool_definition() -> Tool {
             idempotent_hint: Some(true),
             open_world_hint: None,
         }),
+        execution: None,
         output_schema: None,
     }
 }

@@ -56,6 +56,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `McpRouter::with_allowed_origins(..)` / `McpRouter::allow_any_origin()` in the
   `mcpkit-axum`, `mcpkit-actix`, `mcpkit-rocket`, and `mcpkit-warp` adapters to configure it
   ([#82](https://github.com/praxiomlabs/mcpkit/issues/82)).
+- 2025-11-25 display metadata and tool execution fields. A shared `Icon` type
+  (`src`, `mimeType`, `sizes`, `theme`) plus `IconTheme`, and the `title`/`icons`
+  fields the spec adds via `BaseMetadata`/`Icons`: `Tool`, `Resource`,
+  `ResourceTemplate`, and `Prompt` gain `title` + `icons`; `PromptArgument` gains
+  `title`; `ServerInfo`/`ClientInfo` gain `title` + `icons`. `Tool` also gains
+  `execution: Option<ToolExecution>` with `ToolExecution.task_support`
+  (`TaskSupport::{Forbidden, Optional, Required}`, default `Forbidden`) for
+  task-augmented execution negotiation. Each type has builder setters, and the
+  `#[tool(..)]` macro accepts `title = ".."` and `task_support = "optional"`
+  (a `task_support` value other than `"forbidden"`/`"optional"`/`"required"` is a
+  compile error). **Breaking:** these structs have public fields, so code that
+  constructs them with a struct literal must add the new fields
+  ([#79](https://github.com/praxiomlabs/mcpkit/issues/79)).
 
 ### Changed
 

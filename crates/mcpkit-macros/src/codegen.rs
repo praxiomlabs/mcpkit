@@ -18,8 +18,13 @@ pub struct ToolMethod {
     pub name: Ident,
     /// The tool name (may be overridden by attribute)
     pub tool_name: String,
+    /// Optional display title (`Tool.title`)
+    pub title: Option<String>,
     /// The description
     pub description: String,
+    /// Task-augmented execution support, validated to one of
+    /// `"forbidden"`/`"optional"`/`"required"`.
+    pub task_support: Option<String>,
     /// Whether the tool is destructive
     pub destructive: bool,
     /// Whether the tool is idempotent

@@ -18,6 +18,7 @@
 pub mod completion;
 pub mod content;
 pub mod elicitation;
+pub mod metadata;
 pub mod prompt;
 pub mod resource;
 pub mod sampling;
@@ -28,6 +29,7 @@ pub mod tool;
 pub use completion::*;
 pub use content::*;
 pub use elicitation::*;
+pub use metadata::*;
 pub use prompt::*;
 pub use resource::*;
 pub use sampling::*;
