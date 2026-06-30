@@ -105,12 +105,15 @@ pub mod prelude {
     pub use crate::types::{
         // Tool types
         CallToolResult,
+        // Task types
+        CancelTaskRequest,
         // Content types
         Content,
         ContentAnnotations,
         // Sampling types
         CreateMessageRequest,
         CreateMessageResult,
+        CreateTaskResult,
         // Elicitation types
         ElicitAction,
         ElicitRequest,
@@ -118,6 +121,10 @@ pub mod prelude {
         ElicitationSchema,
         // Prompt types
         GetPromptResult,
+        GetTaskPayloadRequest,
+        GetTaskRequest,
+        ListTasksRequest,
+        ListTasksResult,
         ModelPreferences,
         Prompt,
         PromptArgument,
@@ -131,13 +138,11 @@ pub mod prelude {
         Role,
         SamplingMessage,
         StopReason,
-        // Task types
         Task,
-        TaskError,
         TaskId,
+        TaskMetadata,
         TaskProgress,
         TaskStatus,
-        TaskSummary,
         Tool,
         ToolAnnotations,
         ToolOutput,
