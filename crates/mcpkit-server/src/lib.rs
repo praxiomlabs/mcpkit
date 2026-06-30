@@ -60,6 +60,7 @@
 pub mod builder;
 pub mod capability;
 pub mod context;
+pub mod dispatch;
 pub mod handler;
 pub mod health;
 pub mod metrics;

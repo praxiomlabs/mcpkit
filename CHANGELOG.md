@@ -102,6 +102,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `TaskProgress` is retained for the progress-notification handler pending #112.
   This is the type layer for [#81](https://github.com/praxiomlabs/mcpkit/issues/81);
   capability advertisement and the task-augmented `tools/call` flow follow.
+- Server request dispatch is consolidated. The combinatorial
+  `impl_request_router!` macro (one `RequestRouter` impl per registered-handler
+  combination) is replaced by a single slot-based impl backed by a new
+  `mcpkit_server::dispatch` module (object-safe `DynToolHandler`/
+  `DynResourceHandler`/`DynPromptHandler` + `ToolSlot`/`ResourceSlot`/
+  `PromptSlot`). The duplicate per-method routing in `server.rs` is removed; the
+  single source of truth is `mcpkit_server::router` (`route_tools`/
+  `route_resources`/`route_prompts` now take `&dyn Dyn*Handler`), shared by the
+  server runtime and the framework adapters. Behavior is unchanged. **Breaking
+  (minor):** the `route_*` functions' signatures changed from generic
+  `<H: ToolHandler>(&H, ..)` to `(&dyn DynToolHandler, ..)` — a concrete `&handler`
+  reference still coerces in, so most call sites are unaffected
+  ([#117](https://github.com/praxiomlabs/mcpkit/issues/117)).
 
 ### Fixed
 
