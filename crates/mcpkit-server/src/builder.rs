@@ -239,8 +239,7 @@ where
             resources: self.resources,
             prompts: self.prompts,
             tasks: Registered(tasks),
-            // Note: capabilities.with_tasks() would be added when supported
-            capabilities: self.capabilities,
+            capabilities: self.capabilities.with_tasks(),
         }
     }
 }
@@ -283,7 +282,7 @@ pub struct Server<H, T, R, P, K> {
     pub(crate) tools: T,
     pub(crate) resources: R,
     pub(crate) prompts: P,
-    tasks: K,
+    pub(crate) tasks: K,
     capabilities: ServerCapabilities,
 }
 
@@ -425,6 +424,41 @@ mod tests {
         assert!(server.capabilities().has_tools());
         // This compiles because tools are registered
         let _tool_handler: &TestToolHandler = server.tool_handler();
+    }
+
+    struct TestTaskHandler;
+
+    impl crate::handler::TaskHandler for TestTaskHandler {
+        async fn list_tasks(
+            &self,
+            _ctx: &Context<'_>,
+        ) -> Result<Vec<mcpkit_core::types::Task>, McpError> {
+            Ok(vec![])
+        }
+        async fn get_task(
+            &self,
+            _id: &mcpkit_core::types::TaskId,
+            _ctx: &Context<'_>,
+        ) -> Result<Option<mcpkit_core::types::Task>, McpError> {
+            Ok(None)
+        }
+        async fn cancel_task(
+            &self,
+            _id: &mcpkit_core::types::TaskId,
+            _ctx: &Context<'_>,
+        ) -> Result<bool, McpError> {
+            Ok(false)
+        }
+    }
+
+    #[test]
+    fn test_server_builder_with_tasks_advertises_capability() {
+        // Registering a TaskHandler must advertise the `tasks` capability (#81).
+        let server = ServerBuilder::new(TestHandler)
+            .with_tasks(TestTaskHandler)
+            .build();
+
+        assert!(server.capabilities().has_tasks());
     }
 
     #[test]

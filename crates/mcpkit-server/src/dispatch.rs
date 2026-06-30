@@ -13,10 +13,11 @@
 
 use crate::builder::{NotRegistered, Registered};
 use crate::context::Context;
-use crate::handler::{PromptHandler, ResourceHandler, ToolHandler};
+use crate::handler::{PromptHandler, ResourceHandler, TaskHandler, ToolHandler};
 use mcpkit_core::error::McpError;
 use mcpkit_core::types::{
-    GetPromptResult, Prompt, Resource, ResourceContents, ResourceTemplate, Tool, ToolOutput,
+    GetPromptResult, Prompt, Resource, ResourceContents, ResourceTemplate, Task, TaskId, Tool,
+    ToolOutput,
 };
 use serde_json::Value;
 use std::future::Future;
@@ -132,6 +133,44 @@ impl<P: PromptHandler> DynPromptHandler for P {
     }
 }
 
+/// Object-safe form of [`TaskHandler`].
+pub trait DynTaskHandler: Send + Sync {
+    /// See [`TaskHandler::list_tasks`].
+    fn list_tasks<'a>(&'a self, ctx: &'a Context<'_>) -> BoxFut<'a, Result<Vec<Task>, McpError>>;
+    /// See [`TaskHandler::get_task`].
+    fn get_task<'a>(
+        &'a self,
+        id: &'a TaskId,
+        ctx: &'a Context<'_>,
+    ) -> BoxFut<'a, Result<Option<Task>, McpError>>;
+    /// See [`TaskHandler::cancel_task`].
+    fn cancel_task<'a>(
+        &'a self,
+        id: &'a TaskId,
+        ctx: &'a Context<'_>,
+    ) -> BoxFut<'a, Result<bool, McpError>>;
+}
+
+impl<K: TaskHandler> DynTaskHandler for K {
+    fn list_tasks<'a>(&'a self, ctx: &'a Context<'_>) -> BoxFut<'a, Result<Vec<Task>, McpError>> {
+        Box::pin(TaskHandler::list_tasks(self, ctx))
+    }
+    fn get_task<'a>(
+        &'a self,
+        id: &'a TaskId,
+        ctx: &'a Context<'_>,
+    ) -> BoxFut<'a, Result<Option<Task>, McpError>> {
+        Box::pin(TaskHandler::get_task(self, id, ctx))
+    }
+    fn cancel_task<'a>(
+        &'a self,
+        id: &'a TaskId,
+        ctx: &'a Context<'_>,
+    ) -> BoxFut<'a, Result<bool, McpError>> {
+        Box::pin(TaskHandler::cancel_task(self, id, ctx))
+    }
+}
+
 // ============================================================================
 // Typestate slots: expose `Option<&dyn Dyn*Handler>` for both `Registered<H>`
 // and `NotRegistered`, so one router impl can be generic over the slots.
@@ -181,6 +220,22 @@ impl PromptSlot for NotRegistered {
 }
 impl<P: PromptHandler> PromptSlot for Registered<P> {
     fn as_prompt_handler(&self) -> Option<&dyn DynPromptHandler> {
+        Some(&self.0)
+    }
+}
+
+/// A task-handler slot.
+pub trait TaskSlot: Send + Sync {
+    /// The registered task handler, or `None`.
+    fn as_task_handler(&self) -> Option<&dyn DynTaskHandler>;
+}
+impl TaskSlot for NotRegistered {
+    fn as_task_handler(&self) -> Option<&dyn DynTaskHandler> {
+        None
+    }
+}
+impl<K: TaskHandler> TaskSlot for Registered<K> {
+    fn as_task_handler(&self) -> Option<&dyn DynTaskHandler> {
         Some(&self.0)
     }
 }
