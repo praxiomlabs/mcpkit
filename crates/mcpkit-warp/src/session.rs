@@ -1,6 +1,7 @@
 //! Session management for MCP Warp integration.
 
 use dashmap::DashMap;
+use mcpkit_core::auth::{SessionBindingError, VerifiedUser, check_session_binding};
 use mcpkit_core::capability::ClientCapabilities;
 use mcpkit_core::protocol_version::ProtocolVersion;
 use std::sync::Arc;
@@ -25,6 +26,8 @@ struct SessionState {
     protocol_version: Option<ProtocolVersion>,
     /// Client capabilities from initialization.
     client_capabilities: Option<ClientCapabilities>,
+    /// The verified user this session is bound to, if any.
+    user: Option<VerifiedUser>,
 }
 
 impl Default for SessionStore {
@@ -58,6 +61,15 @@ impl SessionStore {
     /// bounded without a background cleanup task.
     #[must_use]
     pub fn create(&self) -> String {
+        self.create_for_user(None)
+    }
+
+    /// Create a new session bound to an optional verified user, returning its ID.
+    ///
+    /// A session created with `Some(user)` may then only be used by that same
+    /// user (see [`touch_verified`](Self::touch_verified)).
+    #[must_use]
+    pub fn create_for_user(&self, user: Option<VerifiedUser>) -> String {
         self.cleanup(self.idle_timeout);
         let id = Uuid::new_v4().to_string();
         let now = Instant::now();
@@ -67,6 +79,7 @@ impl SessionStore {
                 last_seen: now,
                 protocol_version: None,
                 client_capabilities: None,
+                user,
             },
         );
         id
@@ -77,6 +90,24 @@ impl SessionStore {
         if let Some(mut session) = self.sessions.get_mut(id) {
             session.last_seen = Instant::now();
         }
+    }
+
+    /// Touch a session, enforcing its user binding against the identity
+    /// presenting this request first.
+    ///
+    /// Returns `Ok(true)` if the session existed and was touched, `Ok(false)` if
+    /// it did not exist, or `Err` on a binding violation.
+    pub fn touch_verified(
+        &self,
+        id: &str,
+        presenting: Option<&VerifiedUser>,
+    ) -> Result<bool, SessionBindingError> {
+        let Some(mut session) = self.sessions.get_mut(id) else {
+            return Ok(false);
+        };
+        check_session_binding(session.user.as_ref(), presenting)?;
+        session.last_seen = Instant::now();
+        Ok(true)
     }
 
     /// Record the protocol version and client capabilities negotiated during

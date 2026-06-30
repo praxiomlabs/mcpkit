@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Session-to-verified-user binding (security). A new
+  `mcpkit_core::auth::VerifiedUser` (`subject` + `issuer` + `audience`) models an
+  identity verified from an access token, and `check_session_binding` enforces
+  that a session bound to a user is only ever used by that same user (identity is
+  the `(issuer, subject)` pair; audience is recorded but not part of equality —
+  validate it at the token boundary). Each adapter session store
+  (`mcpkit-axum`/`mcpkit-actix`/`mcpkit-warp`/`mcpkit-rocket`) gains
+  `create_for_user(..)` plus `touch_verified(..)` (and `get_verified(..)` on
+  axum/actix) that reject a mismatched, missing, or unexpectedly-present identity;
+  the adapter `Session` carries an `Option<VerifiedUser>`. Token validation stays
+  pluggable (use the JWT helpers + `VerifiedUser::from_claims`); this is the
+  store-level mechanism, with adapter handler wiring (POST + SSE) to follow
+  ([#86](https://github.com/praxiomlabs/mcpkit/issues/86)).
 - Structured tool output (MCP `outputSchema` / `structuredContent`): `Tool` gains
   an `output_schema` field + `Tool::output_schema(..)`, and `CallToolResult` gains
   a `structured_content` field + `CallToolResult::with_structured_content(..)`.

@@ -58,10 +58,13 @@
 //! let auth_url = auth_request.build_url("https://auth.example.com/authorize");
 //! ```
 
+pub mod identity;
 mod oauth;
 
 #[cfg(feature = "jwt")]
 pub mod jwt;
+
+pub use identity::{SessionBindingError, VerifiedUser, check_session_binding};
 
 // Re-export all OAuth types
 pub use oauth::{

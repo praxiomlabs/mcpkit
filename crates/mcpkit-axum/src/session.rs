@@ -1,6 +1,7 @@
 //! Session management for MCP HTTP connections.
 
 use dashmap::DashMap;
+use mcpkit_core::auth::{SessionBindingError, VerifiedUser, check_session_binding};
 use mcpkit_core::capability::ClientCapabilities;
 use mcpkit_core::protocol_version::ProtocolVersion;
 use std::collections::VecDeque;
@@ -25,12 +26,21 @@ pub struct Session {
     pub client_capabilities: Option<ClientCapabilities>,
     /// Protocol version negotiated during initialization.
     pub protocol_version: Option<ProtocolVersion>,
+    /// The verified user this session is bound to, if any. Once bound, the
+    /// session may only be used by the same user (see [`SessionBindingError`]).
+    pub user: Option<VerifiedUser>,
 }
 
 impl Session {
-    /// Create a new session.
+    /// Create a new anonymous session.
     #[must_use]
     pub fn new(id: String) -> Self {
+        Self::with_user(id, None)
+    }
+
+    /// Create a new session bound to an optional verified user.
+    #[must_use]
+    pub fn with_user(id: String, user: Option<VerifiedUser>) -> Self {
         let now = Instant::now();
         Self {
             id,
@@ -39,6 +49,7 @@ impl Session {
             initialized: false,
             client_capabilities: None,
             protocol_version: None,
+            user,
         }
     }
 
@@ -539,9 +550,19 @@ impl SessionStore {
     /// background cleanup task.
     #[must_use]
     pub fn create(&self) -> String {
+        self.create_for_user(None)
+    }
+
+    /// Create a new session bound to an optional verified user.
+    ///
+    /// A session created with `Some(user)` may then only be used by that same
+    /// user (see [`SessionStore::get_verified`]).
+    #[must_use]
+    pub fn create_for_user(&self, user: Option<VerifiedUser>) -> String {
         self.cleanup_expired();
         let id = uuid::Uuid::new_v4().to_string();
-        self.sessions.insert(id.clone(), Session::new(id.clone()));
+        self.sessions
+            .insert(id.clone(), Session::with_user(id.clone(), user));
         id
     }
 
@@ -551,11 +572,46 @@ impl SessionStore {
         self.sessions.get(id).map(|r| r.clone())
     }
 
+    /// Get a session by ID, enforcing its user binding against the identity
+    /// presenting this request.
+    ///
+    /// Returns `Ok(None)` if no such session exists, `Ok(Some(session))` if the
+    /// binding holds, or `Err` if the presenting identity does not match the
+    /// session's bound user.
+    pub fn get_verified(
+        &self,
+        id: &str,
+        presenting: Option<&VerifiedUser>,
+    ) -> Result<Option<Session>, SessionBindingError> {
+        let Some(session) = self.get(id) else {
+            return Ok(None);
+        };
+        check_session_binding(session.user.as_ref(), presenting)?;
+        Ok(Some(session))
+    }
+
     /// Touch a session to update its last active time.
     pub fn touch(&self, id: &str) {
         if let Some(mut session) = self.sessions.get_mut(id) {
             session.touch();
         }
+    }
+
+    /// Touch a session, enforcing its user binding first.
+    ///
+    /// Returns `Ok(true)` if the session existed and was touched, `Ok(false)` if
+    /// it did not exist, or `Err` on a binding violation.
+    pub fn touch_verified(
+        &self,
+        id: &str,
+        presenting: Option<&VerifiedUser>,
+    ) -> Result<bool, SessionBindingError> {
+        let Some(mut session) = self.sessions.get_mut(id) else {
+            return Ok(false);
+        };
+        check_session_binding(session.user.as_ref(), presenting)?;
+        session.touch();
+        Ok(true)
     }
 
     /// Update a session.
@@ -611,6 +667,43 @@ mod tests {
         assert_eq!(session.id, "test-123");
         assert!(!session.initialized);
         assert!(session.client_capabilities.is_none());
+        assert!(session.user.is_none());
+    }
+
+    #[test]
+    fn user_bound_session_enforces_identity() {
+        let store = SessionStore::new(Duration::from_secs(60));
+        let alice = VerifiedUser::new("alice").issuer("https://idp");
+        let bob = VerifiedUser::new("bob").issuer("https://idp");
+
+        let id = store.create_for_user(Some(alice.clone()));
+
+        // Same user: ok.
+        assert_eq!(store.touch_verified(&id, Some(&alice)), Ok(true));
+        assert!(store.get_verified(&id, Some(&alice)).unwrap().is_some());
+        // Different user: mismatch.
+        assert_eq!(
+            store.touch_verified(&id, Some(&bob)),
+            Err(SessionBindingError::IdentityMismatch)
+        );
+        // Missing identity on a bound session: rejected.
+        assert_eq!(
+            store.get_verified(&id, None).unwrap_err(),
+            SessionBindingError::IdentityRequired
+        );
+
+        // Anonymous session: anonymous ok, but a verified identity is rejected
+        // (no silent upgrade).
+        let anon = store.create();
+        assert_eq!(store.touch_verified(&anon, None), Ok(true));
+        assert_eq!(
+            store.touch_verified(&anon, Some(&alice)),
+            Err(SessionBindingError::UnexpectedIdentity)
+        );
+
+        // Unknown session id: not found, not an error.
+        assert_eq!(store.touch_verified("nope", Some(&alice)), Ok(false));
+        assert!(store.get_verified("nope", Some(&alice)).unwrap().is_none());
     }
 
     #[test]
