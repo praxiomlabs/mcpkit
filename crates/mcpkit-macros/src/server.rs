@@ -91,12 +91,16 @@ pub fn expand_mcp_server(attr: TokenStream, item: TokenStream) -> Result<TokenSt
     let self_ty = &impl_block.self_ty;
 
     // Generate ServerHandler impl with correct capabilities
+    let has_task_tools = tool_methods
+        .iter()
+        .any(|t| t.task_support.as_deref().is_some_and(|s| s != "forbidden"));
     let server_handler_impl = generate_server_handler(
         &attrs,
         self_ty,
         !tool_methods.is_empty(),
         !resource_methods.is_empty(),
         !prompt_methods.is_empty(),
+        has_task_tools,
     );
 
     // Generate ToolHandler impl if there are any tools
@@ -475,12 +479,14 @@ fn extract_option_inner_type(ty: &syn::Type) -> syn::Type {
 }
 
 /// Generate the `ServerHandler` implementation.
+#[allow(clippy::fn_params_excessive_bools)] // internal codegen flags
 fn generate_server_handler(
     attrs: &ServerAttrs,
     self_ty: &syn::Type,
     has_tools: bool,
     has_resources: bool,
     has_prompts: bool,
+    has_task_tools: bool,
 ) -> TokenStream {
     let name = &attrs.name;
     let version = &attrs.version;
@@ -500,6 +506,11 @@ fn generate_server_handler(
     }
     if has_prompts {
         capability_chain.push(quote!(.with_prompts()));
+    }
+    // A tool declaring `task_support` other than "forbidden" makes the server
+    // task-augmentable, so advertise the `tasks` capability.
+    if has_task_tools {
+        capability_chain.push(quote!(.with_tasks()));
     }
 
     // Join the capability chain

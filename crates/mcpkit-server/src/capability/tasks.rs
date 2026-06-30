@@ -57,6 +57,19 @@ impl TaskHandle {
         &self.task_id
     }
 
+    /// A snapshot of this task's current state.
+    #[must_use]
+    pub fn task(&self) -> Option<Task> {
+        self.manager.get(&self.task_id).map(|s| s.task)
+    }
+
+    /// The cancellation token for this task, for wiring into an execution
+    /// context so `tasks/cancel` aborts the running operation.
+    #[must_use]
+    pub fn cancel_token(&self) -> Option<CancellationToken> {
+        self.manager.get(&self.task_id).map(|s| s.cancel_token)
+    }
+
     /// Mark the task as waiting for input (e.g. during elicitation/sampling).
     pub fn mark_input_required(&self) -> Result<(), McpError> {
         self.manager
@@ -111,8 +124,9 @@ impl TaskManager {
     }
 
     /// Create a new `working` task and return a handle to it.
-    pub fn create(self: &Arc<Self>) -> TaskHandle {
-        let task = Task::create();
+    pub fn create(self: &Arc<Self>, ttl: Option<u64>) -> TaskHandle {
+        let mut task = Task::create();
+        task.ttl = ttl;
         let task_id = task.task_id.clone();
 
         if let Ok(mut tasks) = self.tasks.write() {
@@ -253,7 +267,7 @@ impl TaskService {
     /// Create a new task and return a handle for driving it.
     #[must_use]
     pub fn create(&self) -> TaskHandle {
-        self.manager.create()
+        self.manager.create(None)
     }
 }
 
@@ -283,7 +297,7 @@ mod tests {
     fn test_task_manager_create_and_list() {
         let manager = Arc::new(TaskManager::new());
 
-        let handle = manager.create();
+        let handle = manager.create(None);
         assert!(!handle.is_cancelled());
 
         let tasks = manager.list();
@@ -294,7 +308,7 @@ mod tests {
     #[test]
     fn test_task_complete_stores_payload() -> Result<(), Box<dyn std::error::Error>> {
         let manager = Arc::new(TaskManager::new());
-        let handle = manager.create();
+        let handle = manager.create(None);
         let task_id = handle.id().clone();
 
         handle.complete(serde_json::json!({"result": "ok"}))?;
@@ -311,7 +325,7 @@ mod tests {
     #[test]
     fn test_task_input_required_and_fail() -> Result<(), Box<dyn std::error::Error>> {
         let manager = Arc::new(TaskManager::new());
-        let handle = manager.create();
+        let handle = manager.create(None);
         let task_id = handle.id().clone();
 
         handle.mark_input_required()?;
@@ -330,7 +344,7 @@ mod tests {
     #[test]
     fn test_task_cancellation() -> Result<(), Box<dyn std::error::Error>> {
         let manager = Arc::new(TaskManager::new());
-        let handle = manager.create();
+        let handle = manager.create(None);
         let task_id = handle.id().clone();
 
         assert!(!handle.is_cancelled());

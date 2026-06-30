@@ -79,6 +79,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   task-augmented `tools/call` flow are the next step; task dispatch on the
   framework adapters is a follow-up
   ([#81](https://github.com/praxiomlabs/mcpkit/issues/81)).
+- Task-augmented `tools/call`. A `tools/call` whose params include a `task`
+  object now runs as a task when the named tool declares
+  `execution.taskSupport` of `optional`/`required` (a `forbidden`/absent tool
+  rejects the augmentation): the server replies with `CreateTaskResult`
+  immediately and runs the tool in the background, off the request-concurrency
+  limit, then stores the result. The `ServerRuntime` owns a built-in task store
+  and serves `tasks/list`/`tasks/get`/`tasks/cancel`/`tasks/result` from it
+  (falling through to a custom `with_tasks` handler for ids it does not own);
+  `tasks/result` returns the tool's `CallToolResult` once `completed`. The
+  task's cancel token is wired into the execution context, so `tasks/cancel`
+  aborts the running tool. The `#[mcp_server]` macro auto-advertises the `tasks`
+  capability when any `#[tool]` declares `task_support` other than `forbidden`
+  ([#81](https://github.com/praxiomlabs/mcpkit/issues/81)).
 
 ### Changed
 
