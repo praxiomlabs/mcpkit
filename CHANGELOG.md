@@ -87,6 +87,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ConnectionInner` (`mcpkit-core`) and `ConnectionData` (`mcpkit-server`) are
   now `#[doc(hidden)]`. They are internal implementation details of
   `Connection` and were never intended as stable API.
+- **Breaking:** the task types are rewritten to the 2025-11-25 spec model. `Task`
+  is now `{ taskId, status, statusMessage?, createdAt, lastUpdatedAt, ttl,
+  pollInterval? }`; `TaskStatus` is `working`/`input_required`/`completed`/
+  `failed`/`cancelled` (was `pending`/`running`/…). The non-spec `TaskError`,
+  `TaskSummary`, and the `Task` fields `tool`/`progress`/`result`/`error`/
+  `updatedAt` are removed; `id` is now `taskId`. New spec types: `TaskMetadata`
+  (the request `task` augmentation field), `CreateTaskResult`,
+  `GetTaskRequest`/`GetTaskResult`, `GetTaskPayloadRequest`/`GetTaskPayloadResult`
+  (`tasks/result`), `CancelTaskRequest`/`CancelTaskResult`, `ListTasksRequest`/
+  `ListTasksResult`. `ListTasksRequest` no longer carries a `status` filter (not
+  in the spec). The server's `TaskManager`/`TaskHandle` are reworked to the new
+  model (a task is `working` on create, stores a payload on `complete`).
+  `TaskProgress` is retained for the progress-notification handler pending #112.
+  This is the type layer for [#81](https://github.com/praxiomlabs/mcpkit/issues/81);
+  capability advertisement and the task-augmented `tools/call` flow follow.
 
 ### Fixed
 

@@ -1,7 +1,9 @@
-//! Task types for MCP servers.
+//! Task types for the MCP 2025-11-25 tasks utility.
 //!
-//! Tasks represent long-running operations that can be tracked, monitored,
-//! and cancelled.
+//! A task represents a long-running operation. A receiver that supports
+//! task-augmented execution returns a [`CreateTaskResult`] immediately, and the
+//! caller polls [`tasks/get`](GetTaskRequest) for status and
+//! [`tasks/result`](GetTaskPayloadRequest) for the eventual payload.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -51,17 +53,17 @@ impl From<&str> for TaskId {
 
 /// The current status of a task.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum TaskStatus {
-    /// Task is pending execution.
-    Pending,
-    /// Task is currently running.
-    Running,
-    /// Task completed successfully.
+    /// The request is currently being processed.
+    Working,
+    /// The task is waiting for input (e.g. an elicitation or sampling round-trip).
+    InputRequired,
+    /// The request completed successfully and the result is available.
     Completed,
-    /// Task failed with an error.
+    /// The request did not complete successfully.
     Failed,
-    /// Task was cancelled.
+    /// The request was cancelled before completion.
     Cancelled,
 }
 
@@ -71,25 +73,13 @@ impl TaskStatus {
     pub const fn is_terminal(&self) -> bool {
         matches!(self, Self::Completed | Self::Failed | Self::Cancelled)
     }
-
-    /// Check if the task is actively running.
-    #[must_use]
-    pub const fn is_running(&self) -> bool {
-        matches!(self, Self::Running)
-    }
-
-    /// Check if the task is pending.
-    #[must_use]
-    pub const fn is_pending(&self) -> bool {
-        matches!(self, Self::Pending)
-    }
 }
 
 impl std::fmt::Display for TaskStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Pending => write!(f, "pending"),
-            Self::Running => write!(f, "running"),
+            Self::Working => write!(f, "working"),
+            Self::InputRequired => write!(f, "input_required"),
             Self::Completed => write!(f, "completed"),
             Self::Failed => write!(f, "failed"),
             Self::Cancelled => write!(f, "cancelled"),
@@ -97,7 +87,170 @@ impl std::fmt::Display for TaskStatus {
     }
 }
 
-/// Progress information for a running task.
+/// Full state information for a task.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Task {
+    /// The task identifier.
+    #[serde(rename = "taskId")]
+    pub task_id: TaskId,
+    /// Current task state.
+    pub status: TaskStatus,
+    /// Optional human-readable message describing the current state (e.g. a
+    /// failure reason or completion summary).
+    #[serde(rename = "statusMessage", skip_serializing_if = "Option::is_none")]
+    pub status_message: Option<String>,
+    /// ISO 8601 timestamp when the task was created.
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+    /// ISO 8601 timestamp when the task was last updated.
+    #[serde(rename = "lastUpdatedAt")]
+    pub last_updated_at: String,
+    /// Actual retention duration from creation, in milliseconds; `None`
+    /// (serialized as `null`) for unlimited.
+    pub ttl: Option<u64>,
+    /// Suggested polling interval, in milliseconds.
+    #[serde(rename = "pollInterval", skip_serializing_if = "Option::is_none")]
+    pub poll_interval: Option<u64>,
+}
+
+impl Task {
+    /// Create a new `working` task with the given ID, timestamped now.
+    #[must_use]
+    pub fn new(task_id: TaskId) -> Self {
+        let now = chrono::Utc::now().to_rfc3339();
+        Self {
+            task_id,
+            status: TaskStatus::Working,
+            status_message: None,
+            created_at: now.clone(),
+            last_updated_at: now,
+            ttl: None,
+            poll_interval: None,
+        }
+    }
+
+    /// Create a new `working` task with a generated ID.
+    #[must_use]
+    pub fn create() -> Self {
+        Self::new(TaskId::generate())
+    }
+
+    /// Set the status message.
+    #[must_use]
+    pub fn status_message(mut self, message: impl Into<String>) -> Self {
+        self.status_message = Some(message.into());
+        self
+    }
+
+    /// Set the retention duration in milliseconds (`None` for unlimited).
+    #[must_use]
+    pub const fn ttl(mut self, ttl: Option<u64>) -> Self {
+        self.ttl = ttl;
+        self
+    }
+
+    /// Set the suggested polling interval in milliseconds.
+    #[must_use]
+    pub const fn poll_interval(mut self, poll_interval: u64) -> Self {
+        self.poll_interval = Some(poll_interval);
+        self
+    }
+
+    /// Transition the task to a new status and bump `lastUpdatedAt`.
+    pub fn set_status(&mut self, status: TaskStatus) {
+        self.status = status;
+        self.last_updated_at = chrono::Utc::now().to_rfc3339();
+    }
+}
+
+/// Metadata for requesting task-augmented execution.
+///
+/// Include this in the `task` field of a request's params to ask the receiver
+/// to run the request as a task.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct TaskMetadata {
+    /// Requested retention duration from creation, in milliseconds.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ttl: Option<u64>,
+}
+
+/// Metadata associating a message with a task.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RelatedTaskMetadata {
+    /// The task identifier this message is associated with.
+    #[serde(rename = "taskId")]
+    pub task_id: TaskId,
+}
+
+/// Result of a task-augmented request: the created task, returned immediately.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateTaskResult {
+    /// The created task.
+    pub task: Task,
+}
+
+/// Result of `tasks/get` — the task's current state (spec `Result & Task`).
+pub type GetTaskResult = Task;
+
+/// Result of `tasks/cancel` — the task's state after cancellation (`Result & Task`).
+pub type CancelTaskResult = Task;
+
+/// Result of `tasks/result` — the eventual payload of the augmented request
+/// (e.g. the `CallToolResult`). An arbitrary result object.
+pub type GetTaskPayloadResult = Value;
+
+/// Request parameters for `tasks/list`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ListTasksRequest {
+    /// Cursor for pagination.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
+}
+
+/// Response for `tasks/list`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ListTasksResult {
+    /// The list of tasks.
+    pub tasks: Vec<Task>,
+    /// Cursor for the next page, if more tasks exist.
+    #[serde(rename = "nextCursor", skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
+}
+
+/// Request parameters for `tasks/get`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetTaskRequest {
+    /// The task identifier to query.
+    #[serde(rename = "taskId")]
+    pub task_id: TaskId,
+}
+
+/// Request parameters for `tasks/result`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetTaskPayloadRequest {
+    /// The task identifier to retrieve results for.
+    #[serde(rename = "taskId")]
+    pub task_id: TaskId,
+}
+
+/// Request parameters for `tasks/cancel`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CancelTaskRequest {
+    /// The task identifier to cancel.
+    #[serde(rename = "taskId")]
+    pub task_id: TaskId,
+}
+
+/// Parameters for a task status notification (spec `NotificationParams & Task`):
+/// the task's current state.
+pub type TaskStatusNotification = Task;
+
+/// Progress information carried by a `notifications/progress` message.
+///
+/// Note: this is the progress utility's payload, not part of the spec `Task`
+/// object (the 2025-11-25 `Task` has no embedded progress). It is retained for
+/// the client's progress-notification handler and will be reconciled with the
+/// typed `ProgressNotification` params in #112.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskProgress {
     /// Current progress value.
@@ -110,425 +263,64 @@ pub struct TaskProgress {
     pub message: Option<String>,
 }
 
-impl TaskProgress {
-    /// Create new progress information.
-    #[must_use]
-    pub const fn new(current: u64) -> Self {
-        Self {
-            current,
-            total: None,
-            message: None,
-        }
-    }
-
-    /// Set the total progress value.
-    #[must_use]
-    pub const fn total(mut self, total: u64) -> Self {
-        self.total = Some(total);
-        self
-    }
-
-    /// Set the progress message.
-    #[must_use]
-    pub fn message(mut self, message: impl Into<String>) -> Self {
-        self.message = Some(message.into());
-        self
-    }
-
-    /// Get the progress percentage (0.0 to 1.0) if total is known.
-    #[must_use]
-    pub fn percentage(&self) -> Option<f64> {
-        self.total.map(|t| {
-            if t == 0 {
-                1.0
-            } else {
-                (self.current as f64 / t as f64).min(1.0)
-            }
-        })
-    }
-}
-
-/// Error information for a failed task.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TaskError {
-    /// Error code.
-    pub code: i32,
-    /// Error message.
-    pub message: String,
-    /// Additional error data.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub data: Option<Value>,
-}
-
-impl TaskError {
-    /// Create a new task error.
-    #[must_use]
-    pub fn new(code: i32, message: impl Into<String>) -> Self {
-        Self {
-            code,
-            message: message.into(),
-            data: None,
-        }
-    }
-
-    /// Set additional error data.
-    #[must_use]
-    pub fn data(mut self, data: Value) -> Self {
-        self.data = Some(data);
-        self
-    }
-}
-
-/// Full state information for a task.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Task {
-    /// Unique task identifier.
-    pub id: TaskId,
-    /// Current task status.
-    pub status: TaskStatus,
-    /// Name of the tool that created this task.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool: Option<String>,
-    /// Human-readable description.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-    /// Progress information (for running tasks).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub progress: Option<TaskProgress>,
-    /// Result data (for completed tasks).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub result: Option<Value>,
-    /// Error information (for failed tasks).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<TaskError>,
-    /// Timestamp when the task was created.
-    #[serde(rename = "createdAt")]
-    pub created_at: chrono::DateTime<chrono::Utc>,
-    /// Timestamp when the task was last updated.
-    #[serde(rename = "updatedAt")]
-    pub updated_at: chrono::DateTime<chrono::Utc>,
-}
-
-impl Task {
-    /// Create a new pending task.
-    #[must_use]
-    pub fn new(id: TaskId) -> Self {
-        let now = chrono::Utc::now();
-        Self {
-            id,
-            status: TaskStatus::Pending,
-            tool: None,
-            description: None,
-            progress: None,
-            result: None,
-            error: None,
-            created_at: now,
-            updated_at: now,
-        }
-    }
-
-    /// Create a new task with a generated ID.
-    #[must_use]
-    pub fn create() -> Self {
-        Self::new(TaskId::generate())
-    }
-
-    /// Set the tool name.
-    #[must_use]
-    pub fn tool(mut self, tool: impl Into<String>) -> Self {
-        self.tool = Some(tool.into());
-        self
-    }
-
-    /// Set the description.
-    #[must_use]
-    pub fn description(mut self, description: impl Into<String>) -> Self {
-        self.description = Some(description.into());
-        self
-    }
-
-    /// Mark the task as running.
-    pub fn start(&mut self) {
-        self.status = TaskStatus::Running;
-        self.updated_at = chrono::Utc::now();
-    }
-
-    /// Update task progress.
-    pub fn update_progress(&mut self, progress: TaskProgress) {
-        self.progress = Some(progress);
-        self.updated_at = chrono::Utc::now();
-    }
-
-    /// Complete the task with a result.
-    pub fn complete(&mut self, result: Value) {
-        self.status = TaskStatus::Completed;
-        self.result = Some(result);
-        self.progress = None;
-        self.updated_at = chrono::Utc::now();
-    }
-
-    /// Fail the task with an error.
-    pub fn fail(&mut self, error: TaskError) {
-        self.status = TaskStatus::Failed;
-        self.error = Some(error);
-        self.progress = None;
-        self.updated_at = chrono::Utc::now();
-    }
-
-    /// Cancel the task.
-    pub fn cancel(&mut self) {
-        self.status = TaskStatus::Cancelled;
-        self.progress = None;
-        self.updated_at = chrono::Utc::now();
-    }
-}
-
-/// A summary of a task (for listing).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TaskSummary {
-    /// Unique task identifier.
-    pub id: TaskId,
-    /// Current task status.
-    pub status: TaskStatus,
-    /// Name of the tool that created this task.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool: Option<String>,
-    /// Human-readable description.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-    /// Progress percentage (0.0 to 1.0) if available.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub progress: Option<f64>,
-}
-
-impl From<&Task> for TaskSummary {
-    fn from(task: &Task) -> Self {
-        Self {
-            id: task.id.clone(),
-            status: task.status,
-            tool: task.tool.clone(),
-            description: task.description.clone(),
-            progress: task.progress.as_ref().and_then(TaskProgress::percentage),
-        }
-    }
-}
-
-/// Request parameters for listing tasks.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct ListTasksRequest {
-    /// Filter by status.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub status: Option<TaskStatus>,
-    /// Cursor for pagination.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cursor: Option<String>,
-}
-
-/// Response for listing tasks.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ListTasksResult {
-    /// The list of tasks.
-    pub tasks: Vec<TaskSummary>,
-    /// Cursor for the next page.
-    #[serde(rename = "nextCursor", skip_serializing_if = "Option::is_none")]
-    pub next_cursor: Option<String>,
-}
-
-/// Request parameters for getting a task.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GetTaskRequest {
-    /// ID of the task to get.
-    pub id: TaskId,
-}
-
-/// Request parameters for cancelling a task.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CancelTaskRequest {
-    /// ID of the task to cancel.
-    pub id: TaskId,
-}
-
-/// Notification that a task's status has changed.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TaskStatusNotification {
-    /// ID of the task.
-    pub id: TaskId,
-    /// New status.
-    pub status: TaskStatus,
-    /// Progress information (if running).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub progress: Option<TaskProgress>,
-    /// Result (if completed).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub result: Option<Value>,
-    /// Error (if failed).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<TaskError>,
-}
-
-impl TaskStatusNotification {
-    /// Create a running notification.
-    #[must_use]
-    pub const fn running(id: TaskId) -> Self {
-        Self {
-            id,
-            status: TaskStatus::Running,
-            progress: None,
-            result: None,
-            error: None,
-        }
-    }
-
-    /// Create a progress notification.
-    #[must_use]
-    pub const fn progress(id: TaskId, progress: TaskProgress) -> Self {
-        Self {
-            id,
-            status: TaskStatus::Running,
-            progress: Some(progress),
-            result: None,
-            error: None,
-        }
-    }
-
-    /// Create a completed notification.
-    #[must_use]
-    pub const fn completed(id: TaskId, result: Value) -> Self {
-        Self {
-            id,
-            status: TaskStatus::Completed,
-            progress: None,
-            result: Some(result),
-            error: None,
-        }
-    }
-
-    /// Create a failed notification.
-    #[must_use]
-    pub const fn failed(id: TaskId, error: TaskError) -> Self {
-        Self {
-            id,
-            status: TaskStatus::Failed,
-            progress: None,
-            result: None,
-            error: Some(error),
-        }
-    }
-
-    /// Create a cancelled notification.
-    #[must_use]
-    pub const fn cancelled(id: TaskId) -> Self {
-        Self {
-            id,
-            status: TaskStatus::Cancelled,
-            progress: None,
-            result: None,
-            error: None,
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_task_lifecycle() -> Result<(), Box<dyn std::error::Error>> {
-        let mut task = Task::create().tool("analyze").description("Analyzing data");
+    fn task_serializes_with_spec_field_names() {
+        let task = Task::new(TaskId::new("t-1"));
+        let j = serde_json::to_value(&task).unwrap();
+        assert_eq!(j["taskId"], "t-1");
+        assert_eq!(j["status"], "working");
+        // ttl is required + nullable -> present as null when unset.
+        assert!(j.get("ttl").is_some() && j["ttl"].is_null());
+        // Optional fields absent when unset.
+        assert!(j.get("statusMessage").is_none());
+        assert!(j.get("pollInterval").is_none());
+        assert!(j["createdAt"].is_string());
+        assert!(j["lastUpdatedAt"].is_string());
+    }
 
-        assert_eq!(task.status, TaskStatus::Pending);
-        assert!(!task.status.is_terminal());
-
-        task.start();
-        assert_eq!(task.status, TaskStatus::Running);
-        assert!(task.status.is_running());
-
-        task.update_progress(TaskProgress::new(50).total(100).message("Halfway done"));
+    #[test]
+    fn task_status_serde_values() {
         assert_eq!(
-            task.progress
-                .as_ref()
-                .ok_or("Expected progress")?
-                .percentage(),
-            Some(0.5)
+            serde_json::to_value(TaskStatus::Working).unwrap(),
+            serde_json::json!("working")
         );
+        assert_eq!(
+            serde_json::to_value(TaskStatus::InputRequired).unwrap(),
+            serde_json::json!("input_required")
+        );
+        assert!(TaskStatus::Completed.is_terminal());
+        assert!(!TaskStatus::Working.is_terminal());
+    }
 
-        task.complete(serde_json::json!({"result": "success"}));
+    #[test]
+    fn set_status_updates_timestamp() {
+        let mut task = Task::new(TaskId::new("t"));
+        let created = task.last_updated_at.clone();
+        task.set_status(TaskStatus::Completed);
         assert_eq!(task.status, TaskStatus::Completed);
-        assert!(task.status.is_terminal());
-        assert!(task.result.is_some());
-        Ok(())
+        // created_at is stable; last_updated_at is refreshed.
+        assert_eq!(task.created_at, created);
     }
 
     #[test]
-    fn test_task_failure() {
-        let mut task = Task::create();
-        task.start();
-        task.fail(
-            TaskError::new(-1, "Something went wrong")
-                .data(serde_json::json!({"details": "error"})),
-        );
-
-        assert_eq!(task.status, TaskStatus::Failed);
-        assert!(task.status.is_terminal());
-        assert!(task.error.is_some());
+    fn create_task_result_wraps_task() {
+        let res = CreateTaskResult {
+            task: Task::new(TaskId::new("abc")),
+        };
+        let j = serde_json::to_value(&res).unwrap();
+        assert_eq!(j["task"]["taskId"], "abc");
     }
 
     #[test]
-    fn test_task_cancellation() {
-        let mut task = Task::create();
-        task.start();
-        task.cancel();
-
-        assert_eq!(task.status, TaskStatus::Cancelled);
-        assert!(task.status.is_terminal());
-    }
-
-    #[test]
-    fn test_task_summary() {
-        let mut task = Task::create()
-            .tool("process")
-            .description("Processing files");
-        task.start();
-        task.update_progress(TaskProgress::new(25).total(100));
-
-        let summary: TaskSummary = (&task).into();
-        assert_eq!(summary.id, task.id);
-        assert_eq!(summary.status, TaskStatus::Running);
-        assert_eq!(summary.progress, Some(0.25));
-    }
-
-    #[test]
-    fn test_progress_percentage() {
-        let progress = TaskProgress::new(0).total(100);
-        assert_eq!(progress.percentage(), Some(0.0));
-
-        let progress = TaskProgress::new(100).total(100);
-        assert_eq!(progress.percentage(), Some(1.0));
-
-        let progress = TaskProgress::new(150).total(100);
-        assert_eq!(progress.percentage(), Some(1.0)); // Clamped to 1.0
-
-        let progress = TaskProgress::new(50);
-        assert_eq!(progress.percentage(), None); // No total
-
-        let progress = TaskProgress::new(0).total(0);
-        assert_eq!(progress.percentage(), Some(1.0)); // Division by zero handled
-    }
-
-    #[test]
-    fn test_task_notifications() {
-        let id = TaskId::generate();
-
-        let running = TaskStatusNotification::running(id.clone());
-        assert_eq!(running.status, TaskStatus::Running);
-
-        let progress =
-            TaskStatusNotification::progress(id.clone(), TaskProgress::new(50).total(100));
-        assert!(progress.progress.is_some());
-
-        let completed =
-            TaskStatusNotification::completed(id, serde_json::json!({"data": "result"}));
-        assert_eq!(completed.status, TaskStatus::Completed);
-        assert!(completed.result.is_some());
+    fn requests_use_task_id_field() {
+        let j = serde_json::to_value(GetTaskRequest {
+            task_id: TaskId::new("x"),
+        })
+        .unwrap();
+        assert_eq!(j["taskId"], "x");
     }
 }

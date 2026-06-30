@@ -27,7 +27,7 @@ use mcpkit_core::types::{
     GetPromptResult, GetTaskRequest, ListPromptsResult, ListResourceTemplatesResult,
     ListResourcesResult, ListTasksRequest, ListTasksResult, ListToolsResult, Prompt,
     ReadResourceRequest, ReadResourceResult, Resource, ResourceContents, ResourceTemplate, Task,
-    TaskStatus, TaskSummary, Tool,
+    TaskStatus, Tool,
 };
 use mcpkit_transport::Transport;
 use std::collections::HashMap;
@@ -738,7 +738,7 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
     /// # Errors
     ///
     /// Returns an error if tasks are not supported or the request fails.
-    pub async fn list_tasks(&self) -> Result<Vec<TaskSummary>, McpError> {
+    pub async fn list_tasks(&self) -> Result<Vec<Task>, McpError> {
         self.ensure_capability("tasks", self.has_tasks())?;
 
         let result: ListTasksResult = self.request("tasks/list", None).await?;
@@ -757,12 +757,18 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
     ) -> Result<ListTasksResult, McpError> {
         self.ensure_capability("tasks", self.has_tasks())?;
 
+        // `tasks/list` has no server-side status filter in the spec; filter the
+        // returned page client-side when a status is requested.
         let request = ListTasksRequest {
-            status,
             cursor: cursor.map(String::from),
         };
-        self.request("tasks/list", Some(serde_json::to_value(request)?))
-            .await
+        let mut result: ListTasksResult = self
+            .request("tasks/list", Some(serde_json::to_value(request)?))
+            .await?;
+        if let Some(status) = status {
+            result.tasks.retain(|task| task.status == status);
+        }
+        Ok(result)
     }
 
     /// Get a task by ID.
@@ -774,7 +780,7 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
         self.ensure_capability("tasks", self.has_tasks())?;
 
         let request = GetTaskRequest {
-            id: id.into().into(),
+            task_id: id.into().into(),
         };
         self.request("tasks/get", Some(serde_json::to_value(request)?))
             .await
@@ -790,7 +796,7 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
         self.ensure_capability("tasks", self.has_tasks())?;
 
         let request = CancelTaskRequest {
-            id: id.into().into(),
+            task_id: id.into().into(),
         };
         let _: serde_json::Value = self
             .request("tasks/cancel", Some(serde_json::to_value(request)?))

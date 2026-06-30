@@ -1,9 +1,7 @@
 //! Task capability implementation.
 //!
-//! This module provides support for long-running tasks in MCP servers.
-//!
-//! Tasks allow servers to execute long-running operations while
-//! providing progress updates and supporting cancellation.
+//! Tasks let a server run a long-running operation while the caller polls for
+//! status (`tasks/get`) and, once terminal, the payload (`tasks/result`).
 
 use crate::context::CancellationToken;
 use crate::context::Context;
@@ -15,11 +13,14 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
-/// Internal state for a running task.
-#[derive(Debug)]
+/// Internal state for a tracked task.
+#[derive(Debug, Clone)]
 pub struct TaskState {
-    /// Task metadata.
+    /// Task metadata (status, timestamps, ttl).
     pub task: Task,
+    /// The eventual payload, available once the task is `completed`
+    /// (returned by `tasks/result`).
+    pub payload: Option<Value>,
     /// Cancellation token.
     pub cancel_token: CancellationToken,
     /// When the task was last accessed (for cleanup).
@@ -27,10 +28,10 @@ pub struct TaskState {
 }
 
 impl TaskState {
-    /// Create a new task state.
     fn new(task: Task) -> Self {
         Self {
             task,
+            payload: None,
             cancel_token: CancellationToken::new(),
             last_access: Instant::now(),
         }
@@ -43,10 +44,7 @@ impl TaskState {
     }
 }
 
-/// Handle for interacting with a running task.
-///
-/// This handle is given to task executors to report progress
-/// and completion.
+/// Handle for driving a tracked task to a terminal state.
 pub struct TaskHandle {
     task_id: TaskId,
     manager: Arc<TaskManager>,
@@ -59,35 +57,21 @@ impl TaskHandle {
         &self.task_id
     }
 
-    /// Report that the task is now running.
-    pub async fn running(&self) -> Result<(), McpError> {
+    /// Mark the task as waiting for input (e.g. during elicitation/sampling).
+    pub fn mark_input_required(&self) -> Result<(), McpError> {
         self.manager
-            .update_status(&self.task_id, TaskStatus::Running)
-            .await
+            .set_status(&self.task_id, TaskStatus::InputRequired, None)
     }
 
-    /// Report progress on the task.
-    pub async fn progress(
-        &self,
-        current: u64,
-        total: Option<u64>,
-        message: Option<&str>,
-    ) -> Result<(), McpError> {
-        self.manager
-            .update_progress(&self.task_id, current, total, message)
-            .await
+    /// Mark the task `completed` and store its payload.
+    pub fn complete(&self, payload: Value) -> Result<(), McpError> {
+        self.manager.complete(&self.task_id, payload)
     }
 
-    /// Mark the task as completed with a result.
-    pub async fn complete(&self, result: Value) -> Result<(), McpError> {
-        self.manager.complete_success(&self.task_id, result).await
-    }
-
-    /// Mark the task as failed with an error.
-    pub async fn error(&self, message: impl Into<String>) -> Result<(), McpError> {
+    /// Mark the task `failed` with a status message.
+    pub fn fail(&self, message: impl Into<String>) -> Result<(), McpError> {
         self.manager
-            .complete_error(&self.task_id, message.into())
-            .await
+            .set_status(&self.task_id, TaskStatus::Failed, Some(message.into()))
     }
 
     /// Check if the task has been cancelled.
@@ -98,7 +82,7 @@ impl TaskHandle {
             .is_none_or(|s| s.is_cancelled())
     }
 
-    /// Get a future that completes when the task is cancelled.
+    /// A future that completes when the task is cancelled.
     pub async fn cancelled(&self) {
         if let Some(state) = self.manager.get(&self.task_id) {
             state.cancel_token.cancelled().await;
@@ -106,10 +90,7 @@ impl TaskHandle {
     }
 }
 
-/// Manager for coordinating tasks.
-///
-/// This manages the lifecycle of tasks, including creation,
-/// progress tracking, cancellation, and cleanup.
+/// Manager coordinating the lifecycle of tracked tasks.
 pub struct TaskManager {
     tasks: RwLock<HashMap<TaskId, TaskState>>,
 }
@@ -129,16 +110,13 @@ impl TaskManager {
         }
     }
 
-    /// Create a new task.
-    pub fn create(self: &Arc<Self>, tool_name: Option<&str>) -> TaskHandle {
-        let mut task = Task::create();
-        task.tool = tool_name.map(String::from);
-
-        let task_id = task.id.clone();
-        let state = TaskState::new(task);
+    /// Create a new `working` task and return a handle to it.
+    pub fn create(self: &Arc<Self>) -> TaskHandle {
+        let task = Task::create();
+        let task_id = task.task_id.clone();
 
         if let Ok(mut tasks) = self.tasks.write() {
-            tasks.insert(task_id.clone(), state);
+            tasks.insert(task_id.clone(), TaskState::new(task));
         }
 
         TaskHandle {
@@ -147,21 +125,25 @@ impl TaskManager {
         }
     }
 
-    /// Get a task state by ID.
+    /// Get a snapshot of a task's state by ID.
+    #[must_use]
     pub fn get(&self, id: &TaskId) -> Option<TaskState> {
-        self.tasks.read().ok()?.get(id).map(|s| TaskState {
-            task: s.task.clone(),
-            cancel_token: s.cancel_token.clone(),
-            last_access: s.last_access,
-        })
+        self.tasks.read().ok()?.get(id).cloned()
     }
 
-    /// List all tasks.
+    /// List all tracked tasks.
+    #[must_use]
     pub fn list(&self) -> Vec<Task> {
         self.tasks
             .read()
             .map(|tasks| tasks.values().map(|s| s.task.clone()).collect())
             .unwrap_or_default()
+    }
+
+    /// Get the payload of a completed task, if available.
+    #[must_use]
+    pub fn payload(&self, id: &TaskId) -> Option<Value> {
+        self.tasks.read().ok()?.get(id)?.payload.clone()
     }
 
     /// Cancel a task.
@@ -173,8 +155,8 @@ impl TaskManager {
 
         if let Some(state) = tasks.get_mut(id) {
             state.cancel_token.cancel();
-            state.task.status = TaskStatus::Cancelled;
-            state.task.updated_at = chrono::Utc::now();
+            state.task.set_status(TaskStatus::Cancelled);
+            state.last_access = Instant::now();
             Ok(())
         } else {
             Err(McpError::invalid_params(
@@ -184,33 +166,12 @@ impl TaskManager {
         }
     }
 
-    /// Update task status.
-    async fn update_status(&self, id: &TaskId, status: TaskStatus) -> Result<(), McpError> {
-        let mut tasks = self
-            .tasks
-            .write()
-            .map_err(|_| McpError::internal("Failed to acquire task lock"))?;
-
-        if let Some(state) = tasks.get_mut(id) {
-            state.task.status = status;
-            state.task.updated_at = chrono::Utc::now();
-            state.last_access = Instant::now();
-            Ok(())
-        } else {
-            Err(McpError::invalid_params(
-                "tasks/get",
-                format!("Unknown task: {}", id.as_str()),
-            ))
-        }
-    }
-
-    /// Update task progress.
-    async fn update_progress(
+    /// Set a task's status (and optional status message).
+    fn set_status(
         &self,
         id: &TaskId,
-        current: u64,
-        total: Option<u64>,
-        message: Option<&str>,
+        status: TaskStatus,
+        message: Option<String>,
     ) -> Result<(), McpError> {
         let mut tasks = self
             .tasks
@@ -218,12 +179,10 @@ impl TaskManager {
             .map_err(|_| McpError::internal("Failed to acquire task lock"))?;
 
         if let Some(state) = tasks.get_mut(id) {
-            state.task.progress = Some(mcpkit_core::types::task::TaskProgress {
-                current,
-                total,
-                message: message.map(String::from),
-            });
-            state.task.updated_at = chrono::Utc::now();
+            state.task.set_status(status);
+            if message.is_some() {
+                state.task.status_message = message;
+            }
             state.last_access = Instant::now();
             Ok(())
         } else {
@@ -234,53 +193,27 @@ impl TaskManager {
         }
     }
 
-    /// Complete a task with success.
-    async fn complete_success(&self, id: &TaskId, result: Value) -> Result<(), McpError> {
+    /// Mark a task completed and store its payload.
+    fn complete(&self, id: &TaskId, payload: Value) -> Result<(), McpError> {
         let mut tasks = self
             .tasks
             .write()
             .map_err(|_| McpError::internal("Failed to acquire task lock"))?;
 
         if let Some(state) = tasks.get_mut(id) {
-            state.task.status = TaskStatus::Completed;
-            state.task.result = Some(result);
-            state.task.updated_at = chrono::Utc::now();
+            state.task.set_status(TaskStatus::Completed);
+            state.payload = Some(payload);
             state.last_access = Instant::now();
             Ok(())
         } else {
             Err(McpError::invalid_params(
-                "tasks/get",
+                "tasks/result",
                 format!("Unknown task: {}", id.as_str()),
             ))
         }
     }
 
-    /// Complete a task with an error.
-    async fn complete_error(&self, id: &TaskId, message: String) -> Result<(), McpError> {
-        let mut tasks = self
-            .tasks
-            .write()
-            .map_err(|_| McpError::internal("Failed to acquire task lock"))?;
-
-        if let Some(state) = tasks.get_mut(id) {
-            state.task.status = TaskStatus::Failed;
-            state.task.error = Some(mcpkit_core::types::task::TaskError {
-                code: -1,
-                message,
-                data: None,
-            });
-            state.task.updated_at = chrono::Utc::now();
-            state.last_access = Instant::now();
-            Ok(())
-        } else {
-            Err(McpError::invalid_params(
-                "tasks/get",
-                format!("Unknown task: {}", id.as_str()),
-            ))
-        }
-    }
-
-    /// Remove completed tasks older than the given duration.
+    /// Remove terminal tasks older than `max_age`.
     pub fn cleanup(&self, max_age: std::time::Duration) {
         if let Ok(mut tasks) = self.tasks.write() {
             tasks.retain(|_, state| {
@@ -291,7 +224,7 @@ impl TaskManager {
     }
 }
 
-/// Task service implementing the `TaskHandler` trait.
+/// Task service implementing the [`TaskHandler`] trait over a [`TaskManager`].
 pub struct TaskService {
     manager: Arc<TaskManager>,
 }
@@ -317,10 +250,10 @@ impl TaskService {
         &self.manager
     }
 
-    /// Create a new task and get a handle for it.
+    /// Create a new task and return a handle for driving it.
     #[must_use]
-    pub fn create(&self, tool_name: Option<&str>) -> TaskHandle {
-        self.manager.create(tool_name)
+    pub fn create(&self) -> TaskHandle {
+        self.manager.create()
     }
 }
 
@@ -338,10 +271,7 @@ impl TaskHandler for TaskService {
     }
 
     async fn cancel_task(&self, task_id: &TaskId, _ctx: &Context<'_>) -> Result<bool, McpError> {
-        match self.manager.cancel(task_id) {
-            Ok(()) => Ok(true),
-            Err(_) => Ok(false),
-        }
+        Ok(self.manager.cancel(task_id).is_ok())
     }
 }
 
@@ -350,73 +280,77 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_task_manager() {
+    fn test_task_manager_create_and_list() {
         let manager = Arc::new(TaskManager::new());
 
-        let handle = manager.create(Some("test-tool"));
+        let handle = manager.create();
         assert!(!handle.is_cancelled());
 
         let tasks = manager.list();
         assert_eq!(tasks.len(), 1);
-        assert_eq!(tasks[0].tool.as_deref(), Some("test-tool"));
-        assert_eq!(tasks[0].status, TaskStatus::Pending);
+        assert_eq!(tasks[0].status, TaskStatus::Working);
     }
 
-    #[tokio::test]
-    async fn test_task_lifecycle() -> Result<(), Box<dyn std::error::Error>> {
+    #[test]
+    fn test_task_complete_stores_payload() -> Result<(), Box<dyn std::error::Error>> {
         let manager = Arc::new(TaskManager::new());
-
-        let handle = manager.create(Some("processor"));
+        let handle = manager.create();
         let task_id = handle.id().clone();
 
-        // Start running
-        handle.running().await?;
-        let state = manager.get(&task_id).ok_or("Task not found")?;
-        assert_eq!(state.task.status, TaskStatus::Running);
+        handle.complete(serde_json::json!({"result": "ok"}))?;
 
-        // Report progress
-        handle.progress(50, Some(100), Some("Halfway done")).await?;
-        let state = manager.get(&task_id).ok_or("Task not found")?;
-        assert_eq!(state.task.progress.as_ref().map(|p| p.current), Some(50));
-
-        // Complete
-        handle
-            .complete(serde_json::json!({"result": "success"}))
-            .await?;
         let state = manager.get(&task_id).ok_or("Task not found")?;
         assert_eq!(state.task.status, TaskStatus::Completed);
+        assert_eq!(
+            manager.payload(&task_id),
+            Some(serde_json::json!({"result": "ok"}))
+        );
+        Ok(())
+    }
 
+    #[test]
+    fn test_task_input_required_and_fail() -> Result<(), Box<dyn std::error::Error>> {
+        let manager = Arc::new(TaskManager::new());
+        let handle = manager.create();
+        let task_id = handle.id().clone();
+
+        handle.mark_input_required()?;
+        assert_eq!(
+            manager.get(&task_id).ok_or("not found")?.task.status,
+            TaskStatus::InputRequired
+        );
+
+        handle.fail("boom")?;
+        let state = manager.get(&task_id).ok_or("not found")?;
+        assert_eq!(state.task.status, TaskStatus::Failed);
+        assert_eq!(state.task.status_message.as_deref(), Some("boom"));
         Ok(())
     }
 
     #[test]
     fn test_task_cancellation() -> Result<(), Box<dyn std::error::Error>> {
         let manager = Arc::new(TaskManager::new());
-
-        let handle = manager.create(None);
+        let handle = manager.create();
         let task_id = handle.id().clone();
 
         assert!(!handle.is_cancelled());
-
         manager.cancel(&task_id)?;
-
         assert!(handle.is_cancelled());
-        let state = manager.get(&task_id).ok_or("Task not found")?;
-        assert_eq!(state.task.status, TaskStatus::Cancelled);
-
+        assert_eq!(
+            manager.get(&task_id).ok_or("not found")?.task.status,
+            TaskStatus::Cancelled
+        );
         Ok(())
     }
 
     #[tokio::test]
-    async fn test_task_service() -> Result<(), Box<dyn std::error::Error>> {
+    async fn test_task_service_handler() -> Result<(), Box<dyn std::error::Error>> {
         let service = TaskService::new();
+        let handle = service.create();
+        let task_id = handle.id().clone();
 
-        let handle = service.create(Some("service-task"));
-        handle.running().await?;
-
-        let tasks = service.manager.list();
-        assert_eq!(tasks.len(), 1);
-
+        assert_eq!(service.manager().list().len(), 1);
+        assert!(service.manager().get(&task_id).is_some());
         Ok(())
     }
 }
