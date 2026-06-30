@@ -33,7 +33,7 @@
 //! ```
 
 use crate::builder::Server;
-use crate::context::{CancellationToken, Context, Peer};
+use crate::context::{CancellationToken, Context, ContextData, Peer};
 use crate::dispatch::{PromptSlot, ResourceSlot, TaskSlot, ToolSlot};
 use crate::handler::ServerHandler;
 use crate::router::{route_prompts, route_resources, route_tasks, route_tools};
@@ -440,8 +440,57 @@ where
     server: S,
     transport: Arc<Tr>,
     state: Arc<ServerState>,
+    /// Built-in store for task-augmented execution (the runtime creates tasks
+    /// here and serves `tasks/*` from it).
+    task_store: Arc<crate::capability::tasks::TaskManager>,
     /// Runtime configuration (concurrency limit, etc.).
     config: RuntimeConfig,
+}
+
+/// A task-augmented `tools/call` whose tool runs in the background after the
+/// `CreateTaskResult` reply has been sent.
+struct BackgroundExec {
+    handle: crate::capability::tasks::TaskHandle,
+    name: String,
+    args: serde_json::Value,
+    ctx_data: ContextData,
+    cancel: CancellationToken,
+}
+
+/// Outcome of inspecting a request for task augmentation.
+enum TaskBegin {
+    /// Not a task-augmented `tools/call`; handle it normally.
+    NotApplicable,
+    /// The augmentation was rejected and an error response was already sent.
+    Rejected,
+    /// A task was created and `CreateTaskResult` sent; run this in the background.
+    Deferred(Box<BackgroundExec>),
+}
+
+/// Make progress on in-flight requests and background task executions, returning
+/// any new background work an in-flight request just produced. Background tasks
+/// are polled here but do not count against the request concurrency limit.
+async fn drive_sets<F1, F2>(
+    in_flight: &mut futures::stream::FuturesUnordered<F1>,
+    background: &mut futures::stream::FuturesUnordered<F2>,
+) -> Option<BackgroundExec>
+where
+    F1: std::future::Future<Output = Option<BackgroundExec>>,
+    F2: std::future::Future<Output = ()>,
+{
+    use futures::future::{Either, select};
+    use futures::stream::StreamExt;
+    if in_flight.is_empty() {
+        background.next().await;
+        return None;
+    }
+    if background.is_empty() {
+        return in_flight.next().await.flatten();
+    }
+    match select(in_flight.next(), background.next()).await {
+        Either::Left((res, _)) => res.flatten(),
+        Either::Right((_finished, _)) => None,
+    }
 }
 
 impl<S, Tr> ServerRuntime<S, Tr>
@@ -481,8 +530,18 @@ where
         use futures::future::{Either, select};
         use futures::stream::{FuturesUnordered, StreamExt};
 
+        // What the loop should do next, decided after borrows on the future sets
+        // are released so we can push new background work.
+        enum Step {
+            Message(Option<Message>),
+            Progress(Option<BackgroundExec>),
+        }
+
         let max = self.config.max_concurrent_requests.max(1);
         let mut in_flight = FuturesUnordered::new();
+        // Task-augmented tool executions run here, off the request concurrency
+        // limit, so long-running tasks never starve normal request handling.
+        let mut background = FuturesUnordered::new();
         // Requests received while at the concurrency limit. They run as soon as a
         // slot frees. Crucially the loop keeps receiving in the meantime, so a
         // handler parked on its own server-initiated request (which needs an
@@ -500,42 +559,45 @@ where
 
             // Always receive (so responses to our own outbound requests are
             // routed even when every slot is parked) while making progress on
-            // in-flight work. `in_flight.next()` is only awaited while the set is
-            // non-empty, so it never spuriously yields `None`.
-            let message = if in_flight.is_empty() {
+            // in-flight requests and background tasks.
+            let step = if in_flight.is_empty() && background.is_empty() {
                 match self.transport.recv().await {
-                    Ok(opt) => opt,
+                    Ok(opt) => Step::Message(opt),
                     Err(e) => break Err(e.into()),
                 }
             } else {
                 let recv = std::pin::pin!(self.transport.recv());
-                match select(recv, in_flight.next()).await {
-                    Either::Left((Ok(opt), _)) => opt,
+                let progress = std::pin::pin!(drive_sets(&mut in_flight, &mut background));
+                match select(recv, progress).await {
+                    Either::Left((Ok(opt), _)) => Step::Message(opt),
                     Either::Left((Err(e), _)) => break Err(e.into()),
-                    // An in-flight request finished, freeing a slot; loop to
-                    // dispatch any queued requests.
-                    Either::Right((_, _)) => continue,
+                    Either::Right((maybe_exec, _)) => Step::Progress(maybe_exec),
                 }
             };
 
-            match message {
-                Some(Message::Request(request)) => {
+            // Borrows on the future sets are released here, so we may push work.
+            match step {
+                Step::Progress(Some(exec)) => {
+                    background.push(self.run_task(exec));
+                }
+                Step::Progress(None) => {}
+                Step::Message(Some(Message::Request(request))) => {
                     if in_flight.len() < max {
                         in_flight.push(self.handle_request_isolated(request));
                     } else {
                         queued.push_back(request);
                     }
                 }
-                Some(Message::Notification(notification)) => {
+                Step::Message(Some(Message::Notification(notification))) => {
                     if let Err(e) = self.handle_notification(notification).await {
                         tracing::error!(error = %e, "Error handling notification");
                     }
                 }
-                Some(Message::Response(response)) => {
+                Step::Message(Some(Message::Response(response))) => {
                     // A reply to a server-initiated request (elicitation, etc.).
                     self.state.route_response(response);
                 }
-                None => {
+                Step::Message(None) => {
                     tracing::info!("Connection closed");
                     break Ok(());
                 }
@@ -544,9 +606,11 @@ where
 
         // The connection is going away: fail any in-flight outbound requests so
         // handlers parked on them unblock, then drain the handlers so their
-        // responses are delivered before we return.
+        // responses are delivered before we return. Background tasks are drained
+        // too so their results are stored before we exit.
         self.state.fail_pending_requests();
         while in_flight.next().await.is_some() {}
+        while background.next().await.is_some() {}
 
         if let Err(ref err) = outcome {
             tracing::error!(error = %err, "Transport error");
@@ -573,12 +637,20 @@ where
     /// A panic in the handler is caught and converted into a JSON-RPC internal
     /// error response so a single misbehaving handler cannot tear down the
     /// whole connection.
-    async fn handle_request_isolated(&self, request: Request) {
+    async fn handle_request_isolated(&self, request: Request) -> Option<BackgroundExec> {
         use futures::FutureExt;
         use std::panic::AssertUnwindSafe;
 
         let id = request.id.clone();
         tracing::debug!(method = %request.method, id = %id, "Handling request");
+
+        // Task-augmented `tools/call`: reply with `CreateTaskResult` now and hand
+        // the tool execution back to the run loop to run in the background.
+        match self.try_begin_task(&request).await {
+            TaskBegin::Deferred(exec) => return Some(*exec),
+            TaskBegin::Rejected => return None,
+            TaskBegin::NotApplicable => {}
+        }
 
         let computed = AssertUnwindSafe(self.compute_response(&request))
             .catch_unwind()
@@ -600,6 +672,212 @@ where
         if let Err(e) = self.transport.send(Message::Response(response_msg)).await {
             let err: McpError = e.into();
             tracing::error!(error = %err, "Failed to send response");
+        }
+        None
+    }
+
+    /// Inspect a request for task augmentation. For a task-augmented `tools/call`
+    /// on a tool that supports it, create the task, reply with `CreateTaskResult`
+    /// immediately, and return the background execution; otherwise leave it to the
+    /// normal request path.
+    async fn try_begin_task(&self, request: &Request) -> TaskBegin {
+        if request.method.as_ref() != "tools/call" {
+            return TaskBegin::NotApplicable;
+        }
+        let params = request.params.as_ref();
+        let Some(task_meta) = params.and_then(|p| p.get("task")) else {
+            return TaskBegin::NotApplicable;
+        };
+        if task_meta.is_null() {
+            return TaskBegin::NotApplicable;
+        }
+        // Before initialization, let the normal path emit the not-initialized error.
+        if !self.state.is_initialized() {
+            return TaskBegin::NotApplicable;
+        }
+        let Some(name) = params
+            .and_then(|p| p.get("name"))
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+        else {
+            // Malformed call; let the normal path report it.
+            return TaskBegin::NotApplicable;
+        };
+        let args = params
+            .and_then(|p| p.get("arguments"))
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!({}));
+        let ttl = task_meta.get("ttl").and_then(serde_json::Value::as_u64);
+
+        let client_caps = self.state.client_caps();
+        let protocol_version = self
+            .state
+            .protocol_version()
+            .unwrap_or(ProtocolVersion::LATEST);
+
+        // Gate on the tool's declared task support (spec: a `forbidden` tool must
+        // not be task-augmented).
+        let support = {
+            let peer = TransportPeer::with_outbound(
+                self.transport.clone(),
+                self.state.clone(),
+                self.config.outbound_request_timeout,
+            );
+            let ctx = Context::new(
+                &request.id,
+                None,
+                &client_caps,
+                &self.state.server_caps,
+                protocol_version,
+                &peer,
+            );
+            self.server.tool_task_support(&name, &ctx).await
+        };
+        if support == mcpkit_core::types::TaskSupport::Forbidden {
+            let err = McpError::invalid_params(
+                "tools/call",
+                format!("tool '{name}' does not support task-augmented execution"),
+            );
+            let _ = self
+                .transport
+                .send(Message::Response(Response::error(
+                    request.id.clone(),
+                    err.into(),
+                )))
+                .await;
+            return TaskBegin::Rejected;
+        }
+
+        // Create the task and reply with `CreateTaskResult` immediately.
+        let handle = self.task_store.create(ttl);
+        let task = handle
+            .task()
+            .unwrap_or_else(|| mcpkit_core::types::Task::new(handle.id().clone()));
+        let create_result =
+            serde_json::to_value(mcpkit_core::types::CreateTaskResult { task }).unwrap_or_default();
+        if let Err(e) = self
+            .transport
+            .send(Message::Response(Response::success(
+                request.id.clone(),
+                create_result,
+            )))
+            .await
+        {
+            let err: McpError = e.into();
+            tracing::error!(error = %err, "Failed to send CreateTaskResult");
+        }
+
+        let cancel = handle.cancel_token().unwrap_or_else(CancellationToken::new);
+        let ctx_data = ContextData::new(
+            request.id.clone(),
+            client_caps,
+            self.state.server_caps.clone(),
+            protocol_version,
+        );
+        TaskBegin::Deferred(Box::new(BackgroundExec {
+            handle,
+            name,
+            args,
+            ctx_data,
+            cancel,
+        }))
+    }
+
+    /// Run a task-augmented tool to completion in the background, storing the
+    /// result (or failure) on the task.
+    async fn run_task(&self, exec: BackgroundExec) {
+        let BackgroundExec {
+            handle,
+            name,
+            args,
+            ctx_data,
+            cancel,
+        } = exec;
+        let peer = TransportPeer::with_outbound(
+            self.transport.clone(),
+            self.state.clone(),
+            self.config.outbound_request_timeout,
+        );
+        let ctx = Context::with_cancellation(
+            &ctx_data.request_id,
+            None,
+            &ctx_data.client_caps,
+            &ctx_data.server_caps,
+            ctx_data.protocol_version,
+            &peer,
+            cancel,
+        );
+        match self.server.call_tool_json(&name, args, &ctx).await {
+            Ok(payload) => {
+                let _ = handle.complete(payload);
+            }
+            Err(e) => {
+                let _ = handle.fail(e.to_string());
+            }
+        }
+    }
+
+    /// Serve task queries from the built-in task store. Returns `None` for
+    /// non-task methods, and for `tasks/get`/`tasks/result`/`tasks/cancel` whose
+    /// id the store does not own (so a custom `with_tasks` handler can serve it).
+    fn route_runtime_tasks(
+        &self,
+        method: &str,
+        params: Option<&serde_json::Value>,
+    ) -> Option<Result<serde_json::Value, McpError>> {
+        let task_id = || {
+            params
+                .and_then(|p| p.get("taskId"))
+                .and_then(|v| v.as_str())
+                .map(mcpkit_core::types::TaskId::new)
+        };
+        match method {
+            "tasks/list" => Some(Ok(serde_json::json!({ "tasks": self.task_store.list() }))),
+            "tasks/get" => {
+                let Some(id) = task_id() else {
+                    return Some(Err(McpError::invalid_params("tasks/get", "missing taskId")));
+                };
+                self.task_store
+                    .get(&id)
+                    .map(|s| Ok(serde_json::to_value(s.task).unwrap_or_default()))
+            }
+            "tasks/result" => {
+                let Some(id) = task_id() else {
+                    return Some(Err(McpError::invalid_params(
+                        "tasks/result",
+                        "missing taskId",
+                    )));
+                };
+                if let Some(payload) = self.task_store.payload(&id) {
+                    Some(Ok(payload))
+                } else if self.task_store.get(&id).is_some() {
+                    Some(Err(McpError::invalid_params(
+                        "tasks/result",
+                        "task is not completed",
+                    )))
+                } else {
+                    None
+                }
+            }
+            "tasks/cancel" => {
+                let Some(id) = task_id() else {
+                    return Some(Err(McpError::invalid_params(
+                        "tasks/cancel",
+                        "missing taskId",
+                    )));
+                };
+                if self.task_store.get(&id).is_some() {
+                    let _ = self.task_store.cancel(&id);
+                    Some(Ok(self
+                        .task_store
+                        .get(&id)
+                        .map(|s| serde_json::to_value(s.task).unwrap_or_default())
+                        .unwrap_or_default()))
+                } else {
+                    None
+                }
+            }
+            _ => None,
         }
     }
 
@@ -672,6 +950,12 @@ where
     async fn route_request(&self, request: &Request) -> Result<serde_json::Value, McpError> {
         let method = request.method.as_ref();
         let params = request.params.as_ref();
+
+        // Serve task queries from the built-in store first (falling through to a
+        // custom `with_tasks` handler for ids the store does not own).
+        if let Some(result) = self.route_runtime_tasks(method, params) {
+            return result;
+        }
 
         // Extract progress token from params._meta.progressToken if present
         let progress_token = extract_progress_token(params);
@@ -763,6 +1047,7 @@ where
             server,
             transport: Arc::new(transport),
             state: Arc::new(ServerState::new(caps)),
+            task_store: Arc::new(crate::capability::tasks::TaskManager::new()),
             config: RuntimeConfig::default(),
         }
     }
@@ -778,6 +1063,7 @@ where
             server,
             transport: Arc::new(transport),
             state: Arc::new(ServerState::new(caps)),
+            task_store: Arc::new(crate::capability::tasks::TaskManager::new()),
             config,
         }
     }
@@ -799,6 +1085,28 @@ pub trait RequestRouter: Send + Sync {
         params: Option<&serde_json::Value>,
         ctx: &Context<'_>,
     ) -> Result<serde_json::Value, McpError>;
+
+    /// The task-augmentation support a tool declares (`Tool.execution.taskSupport`),
+    /// used to gate task-augmented `tools/call`. Defaults to `Forbidden`.
+    async fn tool_task_support(
+        &self,
+        _name: &str,
+        _ctx: &Context<'_>,
+    ) -> mcpkit_core::types::TaskSupport {
+        mcpkit_core::types::TaskSupport::Forbidden
+    }
+
+    /// Run a tool to completion for task-augmented execution, returning its
+    /// `CallToolResult` as JSON (the `tasks/result` payload). Defaults to
+    /// method-not-found.
+    async fn call_tool_json(
+        &self,
+        name: &str,
+        _args: serde_json::Value,
+        _ctx: &Context<'_>,
+    ) -> Result<serde_json::Value, McpError> {
+        Err(McpError::method_not_found(name))
+    }
 }
 
 /// Extension methods for Server to run with a transport.
@@ -875,6 +1183,38 @@ where
             }
         }
         Err(McpError::method_not_found(method))
+    }
+
+    async fn tool_task_support(
+        &self,
+        name: &str,
+        ctx: &Context<'_>,
+    ) -> mcpkit_core::types::TaskSupport {
+        use mcpkit_core::types::TaskSupport;
+        let Some(handler) = self.tools.as_tool_handler() else {
+            return TaskSupport::Forbidden;
+        };
+        let tools = handler.list_tools(ctx).await.unwrap_or_default();
+        tools
+            .iter()
+            .find(|t| t.name == name)
+            .and_then(|t| t.execution.as_ref())
+            .and_then(|e| e.task_support)
+            .unwrap_or(TaskSupport::Forbidden)
+    }
+
+    async fn call_tool_json(
+        &self,
+        name: &str,
+        args: serde_json::Value,
+        ctx: &Context<'_>,
+    ) -> Result<serde_json::Value, McpError> {
+        let Some(handler) = self.tools.as_tool_handler() else {
+            return Err(McpError::method_not_found(name));
+        };
+        let output = handler.call_tool(name, args, ctx).await?;
+        let result: mcpkit_core::types::CallToolResult = output.into();
+        Ok(serde_json::to_value(result).unwrap_or_default())
     }
 }
 
@@ -1131,6 +1471,7 @@ mod tests {
             server: PanicRouter,
             transport: Arc::new(server),
             state,
+            task_store: Arc::new(crate::capability::tasks::TaskManager::new()),
             config: RuntimeConfig::default(),
         };
         let handle = tokio::spawn(async move { runtime.run().await });
@@ -1168,6 +1509,7 @@ mod tests {
             server: PingRouter,
             transport: Arc::new(server),
             state,
+            task_store: Arc::new(crate::capability::tasks::TaskManager::new()),
             config: RuntimeConfig::default(),
         };
         let handle = tokio::spawn(async move { runtime.run().await });
@@ -1210,6 +1552,7 @@ mod tests {
             },
             transport: Arc::new(server),
             state,
+            task_store: Arc::new(crate::capability::tasks::TaskManager::new()),
             config: RuntimeConfig::default(),
         };
         let handle = tokio::spawn(async move { runtime.run().await });
@@ -1257,6 +1600,7 @@ mod tests {
             },
             transport: Arc::new(server),
             state,
+            task_store: Arc::new(crate::capability::tasks::TaskManager::new()),
             config: RuntimeConfig {
                 auto_initialized: true,
                 max_concurrent_requests: 1,
@@ -1301,6 +1645,7 @@ mod tests {
             },
             transport: Arc::new(server),
             state,
+            task_store: Arc::new(crate::capability::tasks::TaskManager::new()),
             config: RuntimeConfig::default(),
         };
         let handle = tokio::spawn(async move { runtime.run().await });
@@ -1339,6 +1684,7 @@ mod tests {
             server: PingRouter,
             transport: Arc::new(server),
             state,
+            task_store: Arc::new(crate::capability::tasks::TaskManager::new()),
             config: RuntimeConfig::default(),
         };
 
@@ -1369,6 +1715,7 @@ mod tests {
             server: OutboundRouter,
             transport: Arc::new(server),
             state,
+            task_store: Arc::new(crate::capability::tasks::TaskManager::new()),
             // max=1: the handler holds the only slot while parked on its outbound
             // request, so the loop MUST keep receiving to route the response.
             // The old "drain at max" loop would deadlock here.
@@ -1421,6 +1768,7 @@ mod tests {
             server: OutboundRouter,
             transport: Arc::new(server),
             state,
+            task_store: Arc::new(crate::capability::tasks::TaskManager::new()),
             config: RuntimeConfig {
                 outbound_request_timeout: Duration::from_millis(100),
                 ..RuntimeConfig::default()
@@ -1456,6 +1804,7 @@ mod tests {
             server: ElicitRouter,
             transport: Arc::new(server),
             state,
+            task_store: Arc::new(crate::capability::tasks::TaskManager::new()),
             config: RuntimeConfig::default(),
         };
         let handle = tokio::spawn(async move { runtime.run().await });
@@ -1512,6 +1861,7 @@ mod tests {
             server: ElicitRouter,
             transport: Arc::new(server),
             state,
+            task_store: Arc::new(crate::capability::tasks::TaskManager::new()),
             config: RuntimeConfig::default(),
         };
         let handle = tokio::spawn(async move { runtime.run().await });
@@ -1542,6 +1892,7 @@ mod tests {
             server: SampleRouter,
             transport: Arc::new(server),
             state,
+            task_store: Arc::new(crate::capability::tasks::TaskManager::new()),
             config: RuntimeConfig::default(),
         };
         let handle = tokio::spawn(async move { runtime.run().await });
@@ -1595,6 +1946,7 @@ mod tests {
             server: SampleRouter,
             transport: Arc::new(server),
             state,
+            task_store: Arc::new(crate::capability::tasks::TaskManager::new()),
             config: RuntimeConfig::default(),
         };
         let handle = tokio::spawn(async move { runtime.run().await });
@@ -1700,5 +2052,165 @@ mod tests {
     fn test_extract_progress_token_none_params() {
         let token = extract_progress_token(None);
         assert!(token.is_none());
+    }
+
+    #[tokio::test]
+    async fn task_augmented_tools_call_runs_in_background() {
+        use crate::builder::ServerBuilder;
+        use crate::handler::{ServerHandler, ToolHandler};
+        use mcpkit_core::protocol::Request;
+        use mcpkit_core::types::{TaskSupport, Tool, ToolOutput};
+
+        struct H;
+        impl ServerHandler for H {
+            fn server_info(&self) -> ServerInfo {
+                ServerInfo::new("t", "1.0.0")
+            }
+        }
+        impl ToolHandler for H {
+            async fn list_tools(&self, _ctx: &Context<'_>) -> Result<Vec<Tool>, McpError> {
+                Ok(vec![Tool::new("slow").task_support(TaskSupport::Optional)])
+            }
+            async fn call_tool(
+                &self,
+                name: &str,
+                _args: serde_json::Value,
+                _ctx: &Context<'_>,
+            ) -> Result<ToolOutput, McpError> {
+                Ok(ToolOutput::text(format!("done:{name}")))
+            }
+        }
+
+        let request = |id: u64, method: &'static str, params: serde_json::Value| {
+            Message::Request(Request {
+                jsonrpc: "2.0".into(),
+                id: RequestId::Number(id),
+                method: method.into(),
+                params: Some(params),
+            })
+        };
+
+        let (client, server_tr) = MemoryTransport::pair();
+        let built = ServerBuilder::new(H).with_tools(H).build();
+        let runtime = ServerRuntime::new(built, server_tr);
+        runtime.state().set_initialized();
+        let handle = tokio::spawn(async move { runtime.run().await });
+
+        // A task-augmented tools/call returns CreateTaskResult immediately.
+        client
+            .send(request(
+                1,
+                "tools/call",
+                serde_json::json!({ "name": "slow", "arguments": {}, "task": {} }),
+            ))
+            .await
+            .expect("send");
+        let resp = next_response(&client).await;
+        assert_eq!(resp.id, RequestId::Number(1));
+        assert!(
+            resp.error.is_none(),
+            "augmented call errored: {:?}",
+            resp.error
+        );
+        let result = resp.result.expect("create result");
+        assert_eq!(result["task"]["status"], "working");
+        let task_id = result["task"]["taskId"]
+            .as_str()
+            .expect("taskId")
+            .to_string();
+
+        // The tool runs in the background; tasks/result yields its payload once done.
+        let mut payload = None;
+        for attempt in 0..100u64 {
+            client
+                .send(request(
+                    100 + attempt,
+                    "tasks/result",
+                    serde_json::json!({ "taskId": task_id }),
+                ))
+                .await
+                .expect("send");
+            let r = next_response(&client).await;
+            if r.error.is_none() {
+                payload = r.result;
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        let payload = payload.expect("task completed with a payload");
+        assert!(
+            payload["content"][0]["text"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("done:slow"),
+            "unexpected task payload: {payload}"
+        );
+
+        // tasks/get reports the terminal status.
+        client
+            .send(request(
+                999,
+                "tasks/get",
+                serde_json::json!({ "taskId": task_id }),
+            ))
+            .await
+            .expect("send");
+        let got = next_response(&client).await;
+        assert_eq!(got.result.expect("task")["status"], "completed");
+
+        drop(client);
+        let _ = timeout(Duration::from_secs(2), handle).await;
+    }
+
+    #[tokio::test]
+    async fn task_augmented_call_on_forbidden_tool_is_rejected() {
+        use crate::builder::ServerBuilder;
+        use crate::handler::{ServerHandler, ToolHandler};
+        use mcpkit_core::protocol::Request;
+        use mcpkit_core::types::{Tool, ToolOutput};
+
+        struct H;
+        impl ServerHandler for H {
+            fn server_info(&self) -> ServerInfo {
+                ServerInfo::new("t", "1.0.0")
+            }
+        }
+        impl ToolHandler for H {
+            async fn list_tools(&self, _ctx: &Context<'_>) -> Result<Vec<Tool>, McpError> {
+                // No execution.taskSupport -> forbidden by default.
+                Ok(vec![Tool::new("plain")])
+            }
+            async fn call_tool(
+                &self,
+                _name: &str,
+                _args: serde_json::Value,
+                _ctx: &Context<'_>,
+            ) -> Result<ToolOutput, McpError> {
+                Ok(ToolOutput::text("ok"))
+            }
+        }
+
+        let (client, server_tr) = MemoryTransport::pair();
+        let runtime = ServerRuntime::new(ServerBuilder::new(H).with_tools(H).build(), server_tr);
+        runtime.state().set_initialized();
+        let handle = tokio::spawn(async move { runtime.run().await });
+
+        client
+            .send(Message::Request(Request {
+                jsonrpc: "2.0".into(),
+                id: RequestId::Number(1),
+                method: "tools/call".into(),
+                params: Some(serde_json::json!({ "name": "plain", "task": {} })),
+            }))
+            .await
+            .expect("send");
+        let resp = next_response(&client).await;
+        assert!(
+            resp.error.is_some(),
+            "a forbidden tool must reject task augmentation"
+        );
+
+        drop(client);
+        let _ = timeout(Duration::from_secs(2), handle).await;
     }
 }

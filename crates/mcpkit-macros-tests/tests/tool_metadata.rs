@@ -49,3 +49,11 @@ async fn tool_advertises_title_and_task_support() {
         Some(TaskSupport::Optional),
     );
 }
+
+#[test]
+fn task_support_tool_advertises_tasks_capability() {
+    use mcpkit::server::ServerHandler;
+    // A `#[tool(task_support = "optional")]` makes the server task-augmentable,
+    // so the macro must advertise the `tasks` capability (#81).
+    assert!(Srv.capabilities().has_tasks());
+}
