@@ -507,10 +507,11 @@ fn parse_list_params(params: Option<&Value>) -> ListParams {
 // =============================================================================
 
 use crate::context::Context;
-use crate::handler::{PromptHandler, ResourceHandler, ToolHandler};
+use crate::dispatch::{DynPromptHandler, DynResourceHandler, DynToolHandler};
 use mcpkit_core::types::CallToolResult;
 
-/// Route tool-related requests to a handler implementing [`ToolHandler`].
+/// Route tool-related requests to a handler implementing
+/// [`ToolHandler`](crate::handler::ToolHandler).
 ///
 /// This function handles `tools/list` and `tools/call` methods.
 /// Returns `None` if the method is not tool-related.
@@ -522,8 +523,8 @@ use mcpkit_core::types::CallToolResult;
 ///     return result;
 /// }
 /// ```
-pub async fn route_tools<TH: ToolHandler + Send + Sync>(
-    handler: &TH,
+pub async fn route_tools(
+    handler: &dyn DynToolHandler,
     method: &str,
     params: Option<&serde_json::Value>,
     ctx: &Context<'_>,
@@ -581,7 +582,8 @@ pub async fn route_tools<TH: ToolHandler + Send + Sync>(
     }
 }
 
-/// Route resource-related requests to a handler implementing [`ResourceHandler`].
+/// Route resource-related requests to a handler implementing
+/// [`ResourceHandler`](crate::handler::ResourceHandler).
 ///
 /// This function handles `resources/list`, `resources/templates/list`, and `resources/read` methods.
 /// Returns `None` if the method is not resource-related.
@@ -593,8 +595,8 @@ pub async fn route_tools<TH: ToolHandler + Send + Sync>(
 ///     return result;
 /// }
 /// ```
-pub async fn route_resources<RH: ResourceHandler + Send + Sync>(
-    handler: &RH,
+pub async fn route_resources(
+    handler: &dyn DynResourceHandler,
     method: &str,
     params: Option<&serde_json::Value>,
     ctx: &Context<'_>,
@@ -658,7 +660,8 @@ pub async fn route_resources<RH: ResourceHandler + Send + Sync>(
     }
 }
 
-/// Route prompt-related requests to a handler implementing [`PromptHandler`].
+/// Route prompt-related requests to a handler implementing
+/// [`PromptHandler`](crate::handler::PromptHandler).
 ///
 /// This function handles `prompts/list` and `prompts/get` methods.
 /// Returns `None` if the method is not prompt-related.
@@ -670,8 +673,8 @@ pub async fn route_resources<RH: ResourceHandler + Send + Sync>(
 ///     return result;
 /// }
 /// ```
-pub async fn route_prompts<PH: PromptHandler + Send + Sync>(
-    handler: &PH,
+pub async fn route_prompts(
+    handler: &dyn DynPromptHandler,
     method: &str,
     params: Option<&serde_json::Value>,
     ctx: &Context<'_>,

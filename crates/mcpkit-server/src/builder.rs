@@ -280,9 +280,9 @@ where
 /// - `K`: Task handler
 pub struct Server<H, T, R, P, K> {
     handler: H,
-    tools: T,
-    resources: R,
-    prompts: P,
+    pub(crate) tools: T,
+    pub(crate) resources: R,
+    pub(crate) prompts: P,
     tasks: K,
     capabilities: ServerCapabilities,
 }

@@ -32,15 +32,16 @@
 //! assert!(!state.is_initialized());
 //! ```
 
-use crate::builder::{NotRegistered, Registered, Server};
+use crate::builder::Server;
 use crate::context::{CancellationToken, Context, Peer};
-use crate::handler::{PromptHandler, ResourceHandler, ServerHandler, ToolHandler};
+use crate::dispatch::{PromptSlot, ResourceSlot, ToolSlot};
+use crate::handler::ServerHandler;
+use crate::router::{route_prompts, route_resources, route_tools};
 use futures::channel::oneshot;
 use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
 use mcpkit_core::error::McpError;
 use mcpkit_core::protocol::{Message, Notification, ProgressToken, Request, RequestId, Response};
 use mcpkit_core::protocol_version::ProtocolVersion;
-use mcpkit_core::types::CallToolResult;
 use mcpkit_transport::Transport;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -822,417 +823,55 @@ where
 }
 
 // ============================================================================
-// RequestRouter implementations via macro
+// Request routing
 // ============================================================================
 
-// Internal routing functions to reduce code duplication.
-// Each function handles a specific handler type's methods.
-
-async fn route_tools<TH: ToolHandler + Send + Sync>(
-    handler: &TH,
-    method: &str,
-    params: Option<&serde_json::Value>,
-    ctx: &Context<'_>,
-) -> Option<Result<serde_json::Value, McpError>> {
-    match method {
-        "tools/list" => {
-            tracing::debug!("Listing available tools");
-            let result = handler.list_tools(ctx).await;
-            match &result {
-                Ok(tools) => tracing::debug!(count = tools.len(), "Listed tools"),
-                Err(e) => tracing::warn!(error = %e, "Failed to list tools"),
-            }
-            Some(result.map(|tools| serde_json::json!({ "tools": tools })))
-        }
-        "tools/call" => {
-            let result = async {
-                let params = params.ok_or_else(|| {
-                    McpError::invalid_params("tools/call", "missing params")
-                })?;
-                let name = params.get("name")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| McpError::invalid_params("tools/call", "missing tool name"))?;
-                let args = params.get("arguments")
-                    .cloned()
-                    .unwrap_or_else(|| serde_json::json!({}));
-
-                tracing::info!(tool = %name, "Calling tool");
-                let start = std::time::Instant::now();
-                let output = handler.call_tool(name, args, ctx).await;
-                let duration = start.elapsed();
-
-                match &output {
-                    Ok(_) => tracing::info!(tool = %name, duration_ms = duration.as_millis(), "Tool call completed"),
-                    Err(e) => tracing::warn!(tool = %name, duration_ms = duration.as_millis(), error = %e, "Tool call failed"),
-                }
-
-                let output = output?;
-                let result: CallToolResult = output.into();
-                Ok(serde_json::to_value(result).unwrap_or_else(|_| serde_json::json!({})))
-            }.await;
-            Some(result)
-        }
-        _ => None,
-    }
-}
-
-async fn route_resources<RH: ResourceHandler + Send + Sync>(
-    handler: &RH,
-    method: &str,
-    params: Option<&serde_json::Value>,
-    ctx: &Context<'_>,
-) -> Option<Result<serde_json::Value, McpError>> {
-    match method {
-        "resources/list" => {
-            tracing::debug!("Listing available resources");
-            let result = handler.list_resources(ctx).await;
-            match &result {
-                Ok(resources) => tracing::debug!(count = resources.len(), "Listed resources"),
-                Err(e) => tracing::warn!(error = %e, "Failed to list resources"),
-            }
-            Some(result.map(|resources| serde_json::json!({ "resources": resources })))
-        }
-        "resources/templates/list" => {
-            tracing::debug!("Listing available resource templates");
-            let result = handler.list_resource_templates(ctx).await;
-            match &result {
-                Ok(templates) => {
-                    tracing::debug!(count = templates.len(), "Listed resource templates");
-                }
-                Err(e) => tracing::warn!(error = %e, "Failed to list resource templates"),
-            }
-            Some(result.map(|templates| serde_json::json!({ "resourceTemplates": templates })))
-        }
-        "resources/read" => {
-            let result = async {
-                let params = params.ok_or_else(|| {
-                    McpError::invalid_params("resources/read", "missing params")
-                })?;
-                let uri = params.get("uri")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| McpError::invalid_params("resources/read", "missing uri"))?;
-
-                tracing::info!(uri = %uri, "Reading resource");
-                let start = std::time::Instant::now();
-                let contents = handler.read_resource(uri, ctx).await;
-                let duration = start.elapsed();
-
-                match &contents {
-                    Ok(_) => tracing::info!(uri = %uri, duration_ms = duration.as_millis(), "Resource read completed"),
-                    Err(e) => tracing::warn!(uri = %uri, duration_ms = duration.as_millis(), error = %e, "Resource read failed"),
-                }
-
-                let contents = contents?;
-                Ok(serde_json::json!({ "contents": contents }))
-            }.await;
-            Some(result)
-        }
-        _ => None,
-    }
-}
-
-async fn route_prompts<PH: PromptHandler + Send + Sync>(
-    handler: &PH,
-    method: &str,
-    params: Option<&serde_json::Value>,
-    ctx: &Context<'_>,
-) -> Option<Result<serde_json::Value, McpError>> {
-    match method {
-        "prompts/list" => {
-            tracing::debug!("Listing available prompts");
-            let result = handler.list_prompts(ctx).await;
-            match &result {
-                Ok(prompts) => tracing::debug!(count = prompts.len(), "Listed prompts"),
-                Err(e) => tracing::warn!(error = %e, "Failed to list prompts"),
-            }
-            Some(result.map(|prompts| serde_json::json!({ "prompts": prompts })))
-        }
-        "prompts/get" => {
-            let result = async {
-                let params = params.ok_or_else(|| {
-                    McpError::invalid_params("prompts/get", "missing params")
-                })?;
-                let name = params.get("name")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| McpError::invalid_params("prompts/get", "missing prompt name"))?;
-                let args = params.get("arguments")
-                    .and_then(|v| v.as_object())
-                    .cloned();
-
-                tracing::info!(prompt = %name, "Getting prompt");
-                let start = std::time::Instant::now();
-                let prompt_result = handler.get_prompt(name, args, ctx).await;
-                let duration = start.elapsed();
-
-                match &prompt_result {
-                    Ok(_) => tracing::info!(prompt = %name, duration_ms = duration.as_millis(), "Prompt retrieval completed"),
-                    Err(e) => tracing::warn!(prompt = %name, duration_ms = duration.as_millis(), error = %e, "Prompt retrieval failed"),
-                }
-
-                let result = prompt_result?;
-                Ok(serde_json::to_value(result).unwrap_or_else(|_| serde_json::json!({})))
-            }.await;
-            Some(result)
-        }
-        _ => None,
-    }
-}
-
-/// Macro to generate `RequestRouter` implementations for all handler combinations.
+/// Single [`RequestRouter`] implementation over the typestate handler slots.
 ///
-/// This macro reduces code duplication by generating all 2^3 = 8 combinations
-/// of tool/resource/prompt handler registration states.
-macro_rules! impl_request_router {
-    // Base case: no handlers
-    (base; $($bounds:tt)*) => {
-        impl<H $($bounds)*> RequestRouter for Server<H, NotRegistered, NotRegistered, NotRegistered, NotRegistered>
-        where
-            H: ServerHandler + Send + Sync,
-        {
-            fn server_info(&self) -> mcpkit_core::capability::ServerInfo {
-                self.handler().server_info()
-            }
+/// Each capability is a slot (`Registered<H>` / `NotRegistered`) exposing an
+/// optional object-safe handler; routing checks each in turn. Adding a
+/// dispatched capability is one slot plus one arm here -- there is no
+/// per-combination explosion. The shared per-method routing logic lives in
+/// [`crate::router`].
+impl<H, T, R, P, K> RequestRouter for Server<H, T, R, P, K>
+where
+    H: ServerHandler + Send + Sync,
+    T: ToolSlot,
+    R: ResourceSlot,
+    P: PromptSlot,
+    K: Send + Sync,
+{
+    fn server_info(&self) -> mcpkit_core::capability::ServerInfo {
+        self.handler().server_info()
+    }
 
-            async fn route(
-                &self,
-                method: &str,
-                _params: Option<&serde_json::Value>,
-                _ctx: &Context<'_>,
-            ) -> Result<serde_json::Value, McpError> {
-                match method {
-                    "ping" => Ok(serde_json::json!({})),
-                    _ => Err(McpError::method_not_found(method)),
-                }
+    async fn route(
+        &self,
+        method: &str,
+        params: Option<&serde_json::Value>,
+        ctx: &Context<'_>,
+    ) -> Result<serde_json::Value, McpError> {
+        if method == "ping" {
+            return Ok(serde_json::json!({}));
+        }
+        if let Some(handler) = self.tools.as_tool_handler() {
+            if let Some(result) = route_tools(handler, method, params, ctx).await {
+                return result;
             }
         }
-    };
-
-    // Tools only
-    (tools; $($bounds:tt)*) => {
-        impl<H, TH $($bounds)*> RequestRouter for Server<H, Registered<TH>, NotRegistered, NotRegistered, NotRegistered>
-        where
-            H: ServerHandler + Send + Sync,
-            TH: ToolHandler + Send + Sync,
-        {
-            fn server_info(&self) -> mcpkit_core::capability::ServerInfo {
-                self.handler().server_info()
-            }
-
-            async fn route(
-                &self,
-                method: &str,
-                params: Option<&serde_json::Value>,
-                ctx: &Context<'_>,
-            ) -> Result<serde_json::Value, McpError> {
-                if method == "ping" {
-                    return Ok(serde_json::json!({}));
-                }
-                if let Some(result) = route_tools(self.tool_handler(), method, params, ctx).await {
-                    return result;
-                }
-                Err(McpError::method_not_found(method))
+        if let Some(handler) = self.resources.as_resource_handler() {
+            if let Some(result) = route_resources(handler, method, params, ctx).await {
+                return result;
             }
         }
-    };
-
-    // Resources only
-    (resources; $($bounds:tt)*) => {
-        impl<H, RH $($bounds)*> RequestRouter for Server<H, NotRegistered, Registered<RH>, NotRegistered, NotRegistered>
-        where
-            H: ServerHandler + Send + Sync,
-            RH: ResourceHandler + Send + Sync,
-        {
-            fn server_info(&self) -> mcpkit_core::capability::ServerInfo {
-                self.handler().server_info()
-            }
-
-            async fn route(
-                &self,
-                method: &str,
-                params: Option<&serde_json::Value>,
-                ctx: &Context<'_>,
-            ) -> Result<serde_json::Value, McpError> {
-                if method == "ping" {
-                    return Ok(serde_json::json!({}));
-                }
-                if let Some(result) = route_resources(self.resource_handler(), method, params, ctx).await {
-                    return result;
-                }
-                Err(McpError::method_not_found(method))
+        if let Some(handler) = self.prompts.as_prompt_handler() {
+            if let Some(result) = route_prompts(handler, method, params, ctx).await {
+                return result;
             }
         }
-    };
-
-    // Prompts only
-    (prompts; $($bounds:tt)*) => {
-        impl<H, PH $($bounds)*> RequestRouter for Server<H, NotRegistered, NotRegistered, Registered<PH>, NotRegistered>
-        where
-            H: ServerHandler + Send + Sync,
-            PH: PromptHandler + Send + Sync,
-        {
-            fn server_info(&self) -> mcpkit_core::capability::ServerInfo {
-                self.handler().server_info()
-            }
-
-            async fn route(
-                &self,
-                method: &str,
-                params: Option<&serde_json::Value>,
-                ctx: &Context<'_>,
-            ) -> Result<serde_json::Value, McpError> {
-                if method == "ping" {
-                    return Ok(serde_json::json!({}));
-                }
-                if let Some(result) = route_prompts(self.prompt_handler(), method, params, ctx).await {
-                    return result;
-                }
-                Err(McpError::method_not_found(method))
-            }
-        }
-    };
-
-    // Tools + Resources
-    (tools_resources; $($bounds:tt)*) => {
-        impl<H, TH, RH $($bounds)*> RequestRouter for Server<H, Registered<TH>, Registered<RH>, NotRegistered, NotRegistered>
-        where
-            H: ServerHandler + Send + Sync,
-            TH: ToolHandler + Send + Sync,
-            RH: ResourceHandler + Send + Sync,
-        {
-            fn server_info(&self) -> mcpkit_core::capability::ServerInfo {
-                self.handler().server_info()
-            }
-
-            async fn route(
-                &self,
-                method: &str,
-                params: Option<&serde_json::Value>,
-                ctx: &Context<'_>,
-            ) -> Result<serde_json::Value, McpError> {
-                if method == "ping" {
-                    return Ok(serde_json::json!({}));
-                }
-                if let Some(result) = route_tools(self.tool_handler(), method, params, ctx).await {
-                    return result;
-                }
-                if let Some(result) = route_resources(self.resource_handler(), method, params, ctx).await {
-                    return result;
-                }
-                Err(McpError::method_not_found(method))
-            }
-        }
-    };
-
-    // Tools + Prompts
-    (tools_prompts; $($bounds:tt)*) => {
-        impl<H, TH, PH $($bounds)*> RequestRouter for Server<H, Registered<TH>, NotRegistered, Registered<PH>, NotRegistered>
-        where
-            H: ServerHandler + Send + Sync,
-            TH: ToolHandler + Send + Sync,
-            PH: PromptHandler + Send + Sync,
-        {
-            fn server_info(&self) -> mcpkit_core::capability::ServerInfo {
-                self.handler().server_info()
-            }
-
-            async fn route(
-                &self,
-                method: &str,
-                params: Option<&serde_json::Value>,
-                ctx: &Context<'_>,
-            ) -> Result<serde_json::Value, McpError> {
-                if method == "ping" {
-                    return Ok(serde_json::json!({}));
-                }
-                if let Some(result) = route_tools(self.tool_handler(), method, params, ctx).await {
-                    return result;
-                }
-                if let Some(result) = route_prompts(self.prompt_handler(), method, params, ctx).await {
-                    return result;
-                }
-                Err(McpError::method_not_found(method))
-            }
-        }
-    };
-
-    // Resources + Prompts
-    (resources_prompts; $($bounds:tt)*) => {
-        impl<H, RH, PH $($bounds)*> RequestRouter for Server<H, NotRegistered, Registered<RH>, Registered<PH>, NotRegistered>
-        where
-            H: ServerHandler + Send + Sync,
-            RH: ResourceHandler + Send + Sync,
-            PH: PromptHandler + Send + Sync,
-        {
-            fn server_info(&self) -> mcpkit_core::capability::ServerInfo {
-                self.handler().server_info()
-            }
-
-            async fn route(
-                &self,
-                method: &str,
-                params: Option<&serde_json::Value>,
-                ctx: &Context<'_>,
-            ) -> Result<serde_json::Value, McpError> {
-                if method == "ping" {
-                    return Ok(serde_json::json!({}));
-                }
-                if let Some(result) = route_resources(self.resource_handler(), method, params, ctx).await {
-                    return result;
-                }
-                if let Some(result) = route_prompts(self.prompt_handler(), method, params, ctx).await {
-                    return result;
-                }
-                Err(McpError::method_not_found(method))
-            }
-        }
-    };
-
-    // Tools + Resources + Prompts
-    (tools_resources_prompts; $($bounds:tt)*) => {
-        impl<H, TH, RH, PH $($bounds)*> RequestRouter for Server<H, Registered<TH>, Registered<RH>, Registered<PH>, NotRegistered>
-        where
-            H: ServerHandler + Send + Sync,
-            TH: ToolHandler + Send + Sync,
-            RH: ResourceHandler + Send + Sync,
-            PH: PromptHandler + Send + Sync,
-        {
-            fn server_info(&self) -> mcpkit_core::capability::ServerInfo {
-                self.handler().server_info()
-            }
-
-            async fn route(
-                &self,
-                method: &str,
-                params: Option<&serde_json::Value>,
-                ctx: &Context<'_>,
-            ) -> Result<serde_json::Value, McpError> {
-                if method == "ping" {
-                    return Ok(serde_json::json!({}));
-                }
-                if let Some(result) = route_tools(self.tool_handler(), method, params, ctx).await {
-                    return result;
-                }
-                if let Some(result) = route_resources(self.resource_handler(), method, params, ctx).await {
-                    return result;
-                }
-                if let Some(result) = route_prompts(self.prompt_handler(), method, params, ctx).await {
-                    return result;
-                }
-                Err(McpError::method_not_found(method))
-            }
-        }
-    };
+        Err(McpError::method_not_found(method))
+    }
 }
-
-// Generate all RequestRouter implementations
-impl_request_router!(base;);
-impl_request_router!(tools;);
-impl_request_router!(resources;);
-impl_request_router!(prompts;);
-impl_request_router!(tools_resources;);
-impl_request_router!(tools_prompts;);
-impl_request_router!(resources_prompts;);
-impl_request_router!(tools_resources_prompts;);
 
 // ============================================================================
 // Helper functions
