@@ -507,8 +507,8 @@ fn parse_list_params(params: Option<&Value>) -> ListParams {
 // =============================================================================
 
 use crate::context::Context;
-use crate::dispatch::{DynPromptHandler, DynResourceHandler, DynToolHandler};
-use mcpkit_core::types::CallToolResult;
+use crate::dispatch::{DynPromptHandler, DynResourceHandler, DynTaskHandler, DynToolHandler};
+use mcpkit_core::types::{CallToolResult, TaskId};
 
 /// Route tool-related requests to a handler implementing
 /// [`ToolHandler`](crate::handler::ToolHandler).
@@ -726,6 +726,71 @@ pub async fn route_prompts(
         }
         _ => None,
     }
+}
+
+/// Route task-related requests to a handler implementing
+/// [`TaskHandler`](crate::handler::TaskHandler).
+///
+/// Handles `tasks/list`, `tasks/get`, and `tasks/cancel`. Returns `None` if the
+/// method is not task-related. (`tasks/result` is handled by the task-augmented
+/// call flow, not here.)
+pub async fn route_tasks(
+    handler: &dyn DynTaskHandler,
+    method: &str,
+    params: Option<&serde_json::Value>,
+    ctx: &Context<'_>,
+) -> Option<Result<serde_json::Value, McpError>> {
+    match method {
+        methods::TASKS_LIST => {
+            let result = handler.list_tasks(ctx).await;
+            Some(result.map(|tasks| serde_json::json!({ "tasks": tasks })))
+        }
+        methods::TASKS_GET => {
+            let result = async {
+                let id = parse_task_id(params, methods::TASKS_GET)?;
+                match handler.get_task(&id, ctx).await? {
+                    Some(task) => Ok(serde_json::to_value(task).unwrap_or_default()),
+                    None => Err(McpError::invalid_params(
+                        methods::TASKS_GET,
+                        format!("unknown task: {id}"),
+                    )),
+                }
+            }
+            .await;
+            Some(result)
+        }
+        methods::TASKS_CANCEL => {
+            let result = async {
+                let id = parse_task_id(params, methods::TASKS_CANCEL)?;
+                if !handler.cancel_task(&id, ctx).await? {
+                    return Err(McpError::invalid_params(
+                        methods::TASKS_CANCEL,
+                        format!("unknown task: {id}"),
+                    ));
+                }
+                // CancelTaskResult is `Result & Task`: return the cancelled task.
+                match handler.get_task(&id, ctx).await? {
+                    Some(task) => Ok(serde_json::to_value(task).unwrap_or_default()),
+                    None => Ok(serde_json::json!({})),
+                }
+            }
+            .await;
+            Some(result)
+        }
+        _ => None,
+    }
+}
+
+/// Extract a required `taskId` parameter.
+fn parse_task_id(
+    params: Option<&serde_json::Value>,
+    method: &'static str,
+) -> Result<TaskId, McpError> {
+    let task_id = params
+        .and_then(|p| p.get("taskId"))
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| McpError::invalid_params(method, "missing taskId"))?;
+    Ok(TaskId::new(task_id))
 }
 
 #[cfg(test)]
@@ -1239,6 +1304,60 @@ mod tests {
         assert_eq!(
             notifications::PROMPTS_LIST_CHANGED,
             "notifications/prompts/list_changed"
+        );
+    }
+
+    #[tokio::test]
+    async fn route_tasks_dispatches_list_get_cancel() {
+        use crate::capability::tasks::TaskService;
+        use crate::context::NoOpPeer;
+        use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
+        use mcpkit_core::protocol::RequestId;
+        use mcpkit_core::protocol_version::ProtocolVersion;
+
+        let service = TaskService::new();
+        let request_id = RequestId::Number(1);
+        let client_caps = ClientCapabilities::default();
+        let server_caps = ServerCapabilities::default();
+        let peer = NoOpPeer;
+        let ctx = Context::new(
+            &request_id,
+            None,
+            &client_caps,
+            &server_caps,
+            ProtocolVersion::LATEST,
+            &peer,
+        );
+
+        // tasks/list -> { "tasks": [] } (no tasks registered).
+        let listed = route_tasks(&service, methods::TASKS_LIST, None, &ctx)
+            .await
+            .expect("tasks/list is routed")
+            .expect("ok");
+        assert_eq!(listed, serde_json::json!({ "tasks": [] }));
+
+        // tasks/get with a missing taskId is a routed error.
+        let got = route_tasks(&service, methods::TASKS_GET, None, &ctx)
+            .await
+            .expect("tasks/get is routed");
+        assert!(got.is_err());
+
+        // An unknown task id is a routed error, not a panic.
+        let cancel = route_tasks(
+            &service,
+            methods::TASKS_CANCEL,
+            Some(&serde_json::json!({ "taskId": "nope" })),
+            &ctx,
+        )
+        .await
+        .expect("tasks/cancel is routed");
+        assert!(cancel.is_err());
+
+        // A non-task method is not handled here.
+        assert!(
+            route_tasks(&service, methods::TOOLS_LIST, None, &ctx)
+                .await
+                .is_none()
         );
     }
 }

@@ -69,6 +69,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   compile error). **Breaking:** these structs have public fields, so code that
   constructs them with a struct literal must add the new fields
   ([#79](https://github.com/praxiomlabs/mcpkit/issues/79)).
+- MCP Tasks dispatch and capability advertisement. `ServerBuilder::with_tasks`
+  now advertises the `tasks` capability (previously it registered the handler
+  but left the capability unadvertised), and the server routes `tasks/list`,
+  `tasks/get`, and `tasks/cancel` to the registered `TaskHandler` via a new
+  `mcpkit_server::router::route_tasks` (`tasks/get`/`tasks/cancel` return the
+  task; unknown task ids are reported as errors). Wired through the consolidated
+  slot dispatch (a `DynTaskHandler`/`TaskSlot` pair). `tasks/result` and the
+  task-augmented `tools/call` flow are the next step; task dispatch on the
+  framework adapters is a follow-up
+  ([#81](https://github.com/praxiomlabs/mcpkit/issues/81)).
 
 ### Changed
 

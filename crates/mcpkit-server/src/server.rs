@@ -34,9 +34,9 @@
 
 use crate::builder::Server;
 use crate::context::{CancellationToken, Context, Peer};
-use crate::dispatch::{PromptSlot, ResourceSlot, ToolSlot};
+use crate::dispatch::{PromptSlot, ResourceSlot, TaskSlot, ToolSlot};
 use crate::handler::ServerHandler;
-use crate::router::{route_prompts, route_resources, route_tools};
+use crate::router::{route_prompts, route_resources, route_tasks, route_tools};
 use futures::channel::oneshot;
 use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
 use mcpkit_core::error::McpError;
@@ -839,7 +839,7 @@ where
     T: ToolSlot,
     R: ResourceSlot,
     P: PromptSlot,
-    K: Send + Sync,
+    K: TaskSlot,
 {
     fn server_info(&self) -> mcpkit_core::capability::ServerInfo {
         self.handler().server_info()
@@ -866,6 +866,11 @@ where
         }
         if let Some(handler) = self.prompts.as_prompt_handler() {
             if let Some(result) = route_prompts(handler, method, params, ctx).await {
+                return result;
+            }
+        }
+        if let Some(handler) = self.tasks.as_task_handler() {
+            if let Some(result) = route_tasks(handler, method, params, ctx).await {
                 return result;
             }
         }
