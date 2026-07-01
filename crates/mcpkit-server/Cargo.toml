@@ -21,6 +21,10 @@ event-listener = "5.4"
 tokio = { version = "1", features = ["sync", "rt"], optional = true }
 tracing = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
+# Optional JSON Schema validator for opt-in tool I/O validation. `default-features
+# = false` deliberately drops network/file `$ref` resolution (a tool schema must
+# not trigger outbound fetches).
+jsonschema = { version = "0.46", default-features = false, optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }
@@ -28,6 +32,8 @@ tokio = { version = "1", features = ["full", "test-util"] }
 [features]
 default = ["tokio-runtime"]
 tokio-runtime = ["tokio", "mcpkit-transport/tokio-runtime"]
+# Opt-in JSON Schema validation of tool inputs/outputs (see `validation` module).
+schema-validation = ["dep:jsonschema"]
 
 [lints]
 workspace = true

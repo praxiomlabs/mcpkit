@@ -2231,4 +2231,115 @@ mod tests {
         drop(client);
         let _ = timeout(Duration::from_secs(2), handle).await;
     }
+
+    /// The validation decorator must also cover the *task* path: a
+    /// task-augmented `tools/call` whose arguments violate the `inputSchema`
+    /// must resolve to an `isError` result rather than running the tool body.
+    /// This exercises `Server::call_tool_json` (background execution), a
+    /// different call site than `route_tools`.
+    #[cfg(feature = "schema-validation")]
+    #[tokio::test]
+    async fn task_path_validates_input_via_decorator() {
+        use crate::builder::ServerBuilder;
+        use crate::handler::{ServerHandler, ToolHandler};
+        use mcpkit_core::protocol::Request;
+        use mcpkit_core::types::{TaskSupport, Tool, ToolOutput};
+
+        struct H;
+        impl ServerHandler for H {
+            fn server_info(&self) -> ServerInfo {
+                ServerInfo::new("t", "1.0.0")
+            }
+        }
+        impl ToolHandler for H {
+            async fn list_tools(&self, _ctx: &Context<'_>) -> Result<Vec<Tool>, McpError> {
+                Ok(vec![
+                    Tool::new("slow")
+                        .task_support(TaskSupport::Optional)
+                        .input_schema(serde_json::json!({
+                            "type": "object",
+                            "properties": { "n": { "type": "number" } },
+                            "required": ["n"]
+                        })),
+                ])
+            }
+            async fn call_tool(
+                &self,
+                name: &str,
+                _args: serde_json::Value,
+                _ctx: &Context<'_>,
+            ) -> Result<ToolOutput, McpError> {
+                Ok(ToolOutput::text(format!("done:{name}")))
+            }
+        }
+
+        let request = |id: u64, method: &'static str, params: serde_json::Value| {
+            Message::Request(Request {
+                jsonrpc: "2.0".into(),
+                id: RequestId::Number(id),
+                method: method.into(),
+                params: Some(params),
+            })
+        };
+
+        let (client, server_tr) = MemoryTransport::pair();
+        // `validate_tool_io()` wraps the tool handler; background task execution
+        // must still route through it.
+        let built = ServerBuilder::new(H)
+            .with_tools(H)
+            .validate_tool_io()
+            .build();
+        let runtime = ServerRuntime::new(built, server_tr);
+        runtime.state().set_initialized();
+        let handle = tokio::spawn(async move { runtime.run().await });
+
+        // Task-augmented call with input that violates the schema (missing "n").
+        client
+            .send(request(
+                1,
+                "tools/call",
+                serde_json::json!({ "name": "slow", "arguments": {}, "task": {} }),
+            ))
+            .await
+            .expect("send");
+        let resp = next_response(&client).await;
+        let task_id = resp.result.expect("create result")["task"]["taskId"]
+            .as_str()
+            .expect("taskId")
+            .to_string();
+
+        let mut payload = None;
+        for attempt in 0..100u64 {
+            client
+                .send(request(
+                    100 + attempt,
+                    "tasks/result",
+                    serde_json::json!({ "taskId": task_id }),
+                ))
+                .await
+                .expect("send");
+            let r = next_response(&client).await;
+            if r.error.is_none() {
+                payload = r.result;
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        let payload = payload.expect("task completed with a payload");
+        assert_eq!(
+            payload["isError"],
+            serde_json::json!(true),
+            "task path must validate input: {payload}"
+        );
+        assert!(
+            !payload["content"][0]["text"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("done:slow"),
+            "the tool body must not have run: {payload}"
+        );
+
+        drop(client);
+        let _ = timeout(Duration::from_secs(2), handle).await;
+    }
 }

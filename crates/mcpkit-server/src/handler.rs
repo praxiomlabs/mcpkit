@@ -102,6 +102,14 @@ pub trait ToolHandler: Send + Sync {
 
     /// Call a tool with the given arguments.
     ///
+    /// `args` is passed through **unvalidated**: this generic path does not check
+    /// `args` against the tool's `inputSchema`, nor the returned
+    /// `structuredContent` against its `outputSchema`. Enable the
+    /// `schema-validation` feature and wrap the handler with
+    /// [`ServerBuilder::validate_tool_io`](crate::builder::ServerBuilder::validate_tool_io)
+    /// (or [`ValidatingToolHandler`](crate::validation::ValidatingToolHandler) for
+    /// adapter users) to enforce those schemas.
+    ///
     /// # Arguments
     ///
     /// * `name` - The name of the tool to call
