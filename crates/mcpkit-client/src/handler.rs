@@ -11,6 +11,7 @@
 use mcpkit_core::error::McpError;
 use mcpkit_core::types::{
     CreateMessageRequest, CreateMessageResult, ElicitRequest, ElicitResult, TaskId, TaskProgress,
+    UrlElicitRequest,
 };
 use std::future::Future;
 
@@ -71,6 +72,29 @@ pub trait ClientHandler: Send + Sync {
                 available: Box::new([]),
             })
         }
+    }
+
+    /// Handle a URL-mode elicitation request from the server.
+    ///
+    /// The server is asking the user to navigate to a URL for an out-of-band
+    /// interaction (e.g. authorization).
+    ///
+    /// **Security:** the default implementation **declines** — a client MUST NOT
+    /// open the URL without explicit user consent. Override this to clearly show
+    /// the URL's domain, obtain consent, open the URL, and return the action.
+    /// Only override it (and declare the `elicitation.url` capability) if you can
+    /// honour that consent requirement.
+    fn elicit_url(
+        &self,
+        _request: UrlElicitRequest,
+    ) -> impl Future<Output = Result<ElicitResult, McpError>> + Send {
+        async { Ok(ElicitResult::declined()) }
+    }
+
+    /// Called when a URL-mode elicitation's out-of-band interaction has
+    /// completed (`notifications/elicitation/complete`).
+    fn on_elicitation_complete(&self, _elicitation_id: String) -> impl Future<Output = ()> + Send {
+        async {}
     }
 
     /// List roots that the client exposes.
