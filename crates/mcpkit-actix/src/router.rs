@@ -331,6 +331,7 @@ mod tests {
             _ctx: &Context<'_>,
         ) -> Result<GetPromptResult, McpError> {
             Ok(GetPromptResult {
+                meta: None,
                 description: Some("Test prompt".to_string()),
                 messages: vec![],
             })

@@ -3,6 +3,7 @@
 //! This module provides types for the completion capability
 //! which enables auto-completion of arguments.
 
+use super::meta::Meta;
 use serde::{Deserialize, Serialize};
 
 /// Reference to a prompt or resource for completion context.
@@ -92,6 +93,9 @@ pub struct Completion {
 pub struct CompleteResult {
     /// The completion data.
     pub completion: Completion,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 #[cfg(test)]

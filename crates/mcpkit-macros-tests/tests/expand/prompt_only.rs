@@ -10,7 +10,7 @@ impl PromptServer {
     /// Generate a greeting prompt
     #[prompt(description = "Generate a personalized greeting")]
     async fn greeting(&self, name: String) -> mcpkit::types::GetPromptResult {
-        mcpkit::types::GetPromptResult {
+        mcpkit::types::GetPromptResult { meta: None,
             description: Some("A greeting prompt".to_string()),
             messages: vec![
                 mcpkit::types::PromptMessage::user(format!("Say hello to {}", name)),

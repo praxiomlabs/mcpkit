@@ -4,6 +4,7 @@
 //! They can be files, database entries, API responses, or any other
 //! addressable content.
 
+use super::meta::Meta;
 use super::metadata::Icon;
 use serde::{Deserialize, Serialize};
 
@@ -304,6 +305,9 @@ pub struct ListResourcesResult {
     /// Cursor for the next page.
     #[serde(rename = "nextCursor", skip_serializing_if = "Option::is_none")]
     pub next_cursor: Option<String>,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 /// Response for listing resource templates.
@@ -315,6 +319,9 @@ pub struct ListResourceTemplatesResult {
     /// Cursor for the next page.
     #[serde(rename = "nextCursor", skip_serializing_if = "Option::is_none")]
     pub next_cursor: Option<String>,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 /// Request parameters for reading a resource.
@@ -329,6 +336,9 @@ pub struct ReadResourceRequest {
 pub struct ReadResourceResult {
     /// The resource contents.
     pub contents: Vec<ResourceContents>,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 /// Notification that a resource has changed.

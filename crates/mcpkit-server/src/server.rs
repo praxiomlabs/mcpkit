@@ -771,7 +771,8 @@ where
             .task()
             .unwrap_or_else(|| mcpkit_core::types::Task::new(handle.id().clone()));
         let create_result =
-            serde_json::to_value(mcpkit_core::types::CreateTaskResult { task }).unwrap_or_default();
+            serde_json::to_value(mcpkit_core::types::CreateTaskResult { task, meta: None })
+                .unwrap_or_default();
         if let Err(e) = self
             .transport
             .send(Message::Response(Response::success(
@@ -1268,10 +1269,7 @@ fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
 }
 
 fn extract_progress_token(params: Option<&serde_json::Value>) -> Option<ProgressToken> {
-    params?
-        .get("_meta")?
-        .get("progressToken")
-        .and_then(|v| serde_json::from_value(v.clone()).ok())
+    params.and_then(mcpkit_core::types::Meta::progress_token_from_params)
 }
 
 #[cfg(test)]
@@ -1934,6 +1932,7 @@ mod tests {
             content: Content::text("a summary"),
             model: "test-model".to_string(),
             stop_reason: None,
+            meta: None,
         };
         client
             .send(Message::Response(Response::success(

@@ -5,6 +5,7 @@
 
 use crate::extension::ExtensionRegistry;
 use crate::types::Icon;
+use crate::types::meta::Meta;
 use serde::{Deserialize, Serialize};
 
 /// Server capabilities advertised during initialization.
@@ -563,6 +564,9 @@ pub struct InitializeResult {
     /// Optional instructions for using this server.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub instructions: Option<String>,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 impl InitializeResult {
@@ -574,6 +578,7 @@ impl InitializeResult {
             capabilities,
             server_info,
             instructions: None,
+            meta: None,
         }
     }
 
@@ -773,7 +778,11 @@ pub struct PingRequest {}
 
 /// Ping response.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct PingResult {}
+pub struct PingResult {
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
+}
 
 #[cfg(test)]
 mod tests {

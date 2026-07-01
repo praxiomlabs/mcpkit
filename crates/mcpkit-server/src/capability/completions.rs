@@ -138,6 +138,7 @@ impl CompletionService {
                     total: Some(total),
                     has_more: Some(false),
                 },
+                meta: None,
             })
         } else {
             // Return empty completions if no handler registered
@@ -147,6 +148,7 @@ impl CompletionService {
                     total: Some(0),
                     has_more: Some(false),
                 },
+                meta: None,
             })
         }
     }

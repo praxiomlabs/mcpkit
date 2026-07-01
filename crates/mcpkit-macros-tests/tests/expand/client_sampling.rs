@@ -15,6 +15,7 @@ impl SamplingHandler {
             role: Role::Assistant,
             content: Content::text("Hello!"),
             stop_reason: Some(StopReason::EndTurn),
+            meta: None,
         })
     }
 }

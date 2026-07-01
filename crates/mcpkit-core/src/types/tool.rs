@@ -4,6 +4,7 @@
 //! Each tool has a name, description, and JSON Schema defining its input.
 
 use super::content::Content;
+use super::meta::Meta;
 use super::metadata::Icon;
 use serde::{Deserialize, Serialize};
 
@@ -391,6 +392,9 @@ pub struct CallToolResult {
         skip_serializing_if = "Option::is_none"
     )]
     pub structured_content: Option<serde_json::Value>,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 impl CallToolResult {
@@ -401,6 +405,7 @@ impl CallToolResult {
             content: vec![Content::text(text)],
             is_error: None,
             structured_content: None,
+            meta: None,
         }
     }
 
@@ -411,6 +416,7 @@ impl CallToolResult {
             content,
             is_error: None,
             structured_content: None,
+            meta: None,
         }
     }
 
@@ -421,6 +427,7 @@ impl CallToolResult {
             content: vec![Content::text(message)],
             is_error: Some(true),
             structured_content: None,
+            meta: None,
         }
     }
 
@@ -583,6 +590,9 @@ pub struct ListToolsResult {
     /// Cursor for the next page, if more tools exist.
     #[serde(rename = "nextCursor", skip_serializing_if = "Option::is_none")]
     pub next_cursor: Option<String>,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 /// Request parameters for calling a tool.

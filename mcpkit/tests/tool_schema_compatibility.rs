@@ -231,6 +231,7 @@ fn test_call_tool_result_error_serialization() -> Result<(), Box<dyn std::error:
 #[test]
 fn test_call_tool_result_is_error_field_casing() -> Result<(), Box<dyn std::error::Error>> {
     let error_result = CallToolResult {
+        meta: None,
         content: vec![Content::text("Error message")],
         is_error: Some(true),
         structured_content: None,
@@ -318,6 +319,7 @@ fn test_tool_output_error_with_suggestion() -> Result<(), Box<dyn std::error::Er
 #[test]
 fn test_list_tools_result_serialization() -> Result<(), Box<dyn std::error::Error>> {
     let result = ListToolsResult {
+        meta: None,
         tools: vec![
             Tool::new("tool_a")
                 .description("Tool A")
@@ -349,6 +351,7 @@ fn test_list_tools_result_serialization() -> Result<(), Box<dyn std::error::Erro
 #[test]
 fn test_list_tools_result_without_cursor() -> Result<(), Box<dyn std::error::Error>> {
     let result = ListToolsResult {
+        meta: None,
         tools: vec![Tool::new("tool").input_schema(json!({"type": "object"}))],
         next_cursor: None,
     };
@@ -587,6 +590,7 @@ fn test_tools_list_response_matches_mcp_spec() -> Result<(), Box<dyn std::error:
     ];
 
     let response = ListToolsResult {
+        meta: None,
         tools,
         next_cursor: None,
     };

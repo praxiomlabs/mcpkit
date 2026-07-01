@@ -277,7 +277,7 @@ pub fn resource(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ```ignore
 /// #[prompt(description = "Generate a greeting message")]
 /// async fn greeting(&self, name: String) -> GetPromptResult {
-///     GetPromptResult {
+///     GetPromptResult { meta: None,
 ///         description: Some("A friendly greeting".to_string()),
 ///         messages: vec![
 ///             PromptMessage::user(format!("Hello, {}!", name))

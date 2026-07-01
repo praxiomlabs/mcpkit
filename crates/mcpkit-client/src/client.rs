@@ -1295,6 +1295,7 @@ mod tests {
             capabilities: ServerCapabilities::new(),
             server_info: ServerInfo::new("test-server", "1.0.0"),
             instructions: None,
+            meta: None,
         }
     }
 
@@ -1518,6 +1519,7 @@ mod tests {
             capabilities: ServerCapabilities::new().with_tools(),
             server_info: ServerInfo::new("test-server", "1.0.0"),
             instructions: None,
+            meta: None,
         }
     }
 

@@ -5,6 +5,7 @@
 //! caller polls [`tasks/get`](GetTaskRequest) for status and
 //! [`tasks/result`](GetTaskPayloadRequest) for the eventual payload.
 
+use super::meta::Meta;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -111,6 +112,9 @@ pub struct Task {
     /// Suggested polling interval, in milliseconds.
     #[serde(rename = "pollInterval", skip_serializing_if = "Option::is_none")]
     pub poll_interval: Option<u64>,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 impl Task {
@@ -126,6 +130,7 @@ impl Task {
             last_updated_at: now,
             ttl: None,
             poll_interval: None,
+            meta: None,
         }
     }
 
@@ -187,6 +192,9 @@ pub struct RelatedTaskMetadata {
 pub struct CreateTaskResult {
     /// The created task.
     pub task: Task,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 /// Result of `tasks/get` — the task's current state (spec `Result & Task`).
@@ -215,6 +223,9 @@ pub struct ListTasksResult {
     /// Cursor for the next page, if more tasks exist.
     #[serde(rename = "nextCursor", skip_serializing_if = "Option::is_none")]
     pub next_cursor: Option<String>,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 /// Request parameters for `tasks/get`.
@@ -310,6 +321,7 @@ mod tests {
     fn create_task_result_wraps_task() {
         let res = CreateTaskResult {
             task: Task::new(TaskId::new("abc")),
+            meta: None,
         };
         let j = serde_json::to_value(&res).unwrap();
         assert_eq!(j["task"]["taskId"], "abc");
