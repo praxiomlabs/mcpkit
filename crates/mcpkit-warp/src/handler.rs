@@ -261,8 +261,14 @@ where
         }
         _ => {
             // Try routing to tools
-            if let Some(result) =
-                route_tools(state.handler.as_ref(), method, params, &ctx, None).await
+            if let Some(result) = route_tools(
+                state.handler.as_ref(),
+                method,
+                params,
+                &ctx,
+                state.list_page_size,
+            )
+            .await
             {
                 return match result {
                     Ok(value) => Response::success(request.id.clone(), value),
@@ -271,8 +277,14 @@ where
             }
 
             // Try routing to resources
-            if let Some(result) =
-                route_resources(state.handler.as_ref(), method, params, &ctx, None).await
+            if let Some(result) = route_resources(
+                state.handler.as_ref(),
+                method,
+                params,
+                &ctx,
+                state.list_page_size,
+            )
+            .await
             {
                 return match result {
                     Ok(value) => Response::success(request.id.clone(), value),
@@ -281,8 +293,14 @@ where
             }
 
             // Try routing to prompts
-            if let Some(result) =
-                route_prompts(state.handler.as_ref(), method, params, &ctx, None).await
+            if let Some(result) = route_prompts(
+                state.handler.as_ref(),
+                method,
+                params,
+                &ctx,
+                state.list_page_size,
+            )
+            .await
             {
                 return match result {
                     Ok(value) => Response::success(request.id.clone(), value),

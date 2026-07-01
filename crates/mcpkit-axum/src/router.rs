@@ -67,6 +67,14 @@ where
         }
     }
 
+    /// Set the page size for `*/list` results. `None` (the default) disables
+    /// pagination; a size of `0` is treated as disabled.
+    #[must_use]
+    pub const fn list_page_size(mut self, page_size: usize) -> Self {
+        self.state.list_page_size = Some(page_size);
+        self
+    }
+
     /// Enable CORS with permissive defaults.
     ///
     /// For production, you should use `with_cors_layer` with a custom configuration.

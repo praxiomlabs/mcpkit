@@ -31,6 +31,8 @@ pub struct McpState<H> {
     /// Validates request `Origin` headers (DNS-rebinding protection). Defaults
     /// to loopback-only.
     pub origin_validator: Arc<OriginValidator>,
+    /// Page size for `*/list` results; `None` disables pagination.
+    pub list_page_size: Option<usize>,
 }
 
 impl<H> McpState<H>
@@ -46,6 +48,7 @@ where
             sessions: SessionStore::new(),
             sse_sessions: SessionStore::new(),
             origin_validator: Arc::new(OriginValidator::default()),
+            list_page_size: None,
         }
     }
 
@@ -67,7 +70,20 @@ impl<H> Clone for McpState<H> {
             sessions: self.sessions.clone(),
             sse_sessions: self.sse_sessions.clone(),
             origin_validator: Arc::clone(&self.origin_validator),
+            list_page_size: self.list_page_size,
         }
+    }
+}
+
+impl<H> McpState<H> {
+    /// Enable pagination of `*/list` results at the given page size.
+    ///
+    /// By default pagination is disabled (lists return everything with no
+    /// `nextCursor`). A size of `0` is treated as disabled.
+    #[must_use]
+    pub const fn with_list_page_size(mut self, page_size: usize) -> Self {
+        self.list_page_size = Some(page_size);
+        self
     }
 }
 
