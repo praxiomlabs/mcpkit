@@ -93,6 +93,17 @@ where
         self
     }
 
+    /// Set the page size for `*/list` results. `None` (the default) disables
+    /// pagination; a size of `0` is treated as disabled.
+    #[must_use]
+    pub fn list_page_size(mut self, page_size: usize) -> Self {
+        // The builder owns the only reference to the state at this point.
+        if let Some(state) = Arc::get_mut(&mut self.state) {
+            state.list_page_size = Some(page_size);
+        }
+        self
+    }
+
     fn set_origin_validator(&mut self, validator: OriginValidator) {
         // The builder owns the only reference to the state at this point, so
         // `get_mut` succeeds.
