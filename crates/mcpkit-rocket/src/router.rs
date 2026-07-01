@@ -190,6 +190,7 @@ macro_rules! create_mcp_routes {
             version: $crate::handler::ProtocolVersionHeader,
             session: $crate::handler::SessionIdHeader,
             origin: $crate::handler::OriginHeader,
+            user: $crate::handler::VerifiedUserGuard,
             body: String,
         ) -> $crate::handler::McpResponse {
             $crate::handler::handle_mcp_post(
@@ -197,6 +198,7 @@ macro_rules! create_mcp_routes {
                 version.0.as_deref(),
                 session.0,
                 origin.0.as_deref(),
+                user.0,
                 &body,
             )
             .await
@@ -207,6 +209,7 @@ macro_rules! create_mcp_routes {
             state: &::rocket::State<$crate::McpState<$handler_type>>,
             session: $crate::handler::SessionIdHeader,
             origin: $crate::handler::OriginHeader,
+            user: $crate::handler::VerifiedUserGuard,
         ) -> ::std::result::Result<
             ::rocket::response::stream::EventStream![],
             ::rocket::http::Status,
@@ -218,6 +221,18 @@ macro_rules! create_mcp_routes {
                 .is_allowed(origin.0.as_deref())
             {
                 return ::std::result::Result::Err(::rocket::http::Status::Forbidden);
+            }
+            // Enforce the session's user binding before subscribing a
+            // reconnecting client to its event stream.
+            if let ::std::option::Option::Some(id) = &session.0 {
+                if state
+                    .inner()
+                    .sessions
+                    .touch_verified(id, user.0.as_ref())
+                    .is_err()
+                {
+                    return ::std::result::Result::Err(::rocket::http::Status::Forbidden);
+                }
             }
             ::std::result::Result::Ok($crate::handler::handle_sse(state.inner(), session.0))
         }

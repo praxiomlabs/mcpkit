@@ -1,15 +1,29 @@
 //! HTTP handlers for MCP requests.
+//!
+//! # Authenticated sessions
+//!
+//! To bind sessions to a verified user (MCP security best practices), have your
+//! authentication middleware validate the bearer token and insert a
+//! [`mcpkit_core::auth::VerifiedUser`] into the request extensions (e.g. with a
+//! `tower` layer that calls `req.extensions_mut().insert(user)`). The handlers
+//! read it and bind the session: a session created for a user may then only be
+//! used by that same user, and a request presenting a mismatched, missing, or
+//! unexpected identity is rejected. Requests without a `VerifiedUser` extension
+//! are treated as anonymous. Token validation stays your application's
+//! responsibility; `VerifiedUser::from_claims` builds one from validated JWT
+//! claims.
 
 use crate::error::ExtensionError;
 use crate::session::{EventStore, StoredEvent};
 use crate::state::{HasServerInfo, McpState, OAuthState};
 use crate::{SUPPORTED_VERSIONS, is_supported_version};
-use axum::Json;
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use axum::response::sse::{Event, KeepAlive, Sse};
+use axum::{Extension, Json};
 use futures::stream::Stream;
+use mcpkit_core::auth::VerifiedUser;
 use mcpkit_core::capability::ClientCapabilities;
 use mcpkit_core::protocol::Message;
 use mcpkit_core::protocol_version::ProtocolVersion;
@@ -40,11 +54,15 @@ use tracing::{debug, info, warn};
 pub async fn handle_mcp_post<H>(
     State(state): State<McpState<H>>,
     headers: HeaderMap,
+    user: Option<Extension<VerifiedUser>>,
     body: String,
 ) -> impl IntoResponse
 where
     H: ServerHandler + ToolHandler + ResourceHandler + PromptHandler + Send + Sync + 'static,
 {
+    // The verified user (if any) is supplied by the application's auth middleware
+    // via a request extension; mcpkit binds the session to it.
+    let user = user.map(|Extension(u)| u);
     // Reject disallowed Origins (DNS-rebinding protection) before any work.
     let origin = headers.get("origin").and_then(|v| v.to_str().ok());
     if !state.origin_validator.is_allowed(origin) {
@@ -78,11 +96,19 @@ where
         .map(String::from);
 
     let session_id = match session_id {
-        Some(id) => {
-            state.sessions.touch(&id);
-            id
-        }
-        None => state.sessions.create(),
+        Some(id) => match state.sessions.touch_verified(&id, user.as_ref()) {
+            Ok(true) => id,
+            // Reject an unknown session id rather than silently proceeding.
+            Ok(false) => {
+                warn!(session_id = %id, "Rejected: unknown session id");
+                return ExtensionError::SessionNotFound(id).into_response();
+            }
+            Err(e) => {
+                warn!(session_id = %id, error = %e, "Rejected: session binding violation");
+                return (StatusCode::FORBIDDEN, e.to_string()).into_response();
+            }
+        },
+        None => state.sessions.create_for_user(user),
     };
 
     debug!(session_id = %session_id, "Processing MCP request");
@@ -289,6 +315,7 @@ where
 pub async fn handle_sse<H>(
     State(state): State<McpState<H>>,
     headers: HeaderMap,
+    user: Option<Extension<VerifiedUser>>,
 ) -> impl IntoResponse
 where
     H: HasServerInfo + Send + Sync + 'static,
@@ -303,10 +330,20 @@ where
         return (StatusCode::FORBIDDEN, "origin not allowed").into_response();
     }
 
+    let user = user.map(|Extension(u)| u);
     let session_id = headers
         .get("mcp-session-id")
         .and_then(|v| v.to_str().ok())
         .map(String::from);
+
+    // Enforce the session's user binding before replaying any buffered events to
+    // a reconnecting client (a different user must not receive them).
+    if let Some(id) = &session_id {
+        if let Err(e) = state.sessions.get_verified(id, user.as_ref()) {
+            warn!(session_id = %id, error = %e, "Rejected SSE: session binding violation");
+            return (StatusCode::FORBIDDEN, e.to_string()).into_response();
+        }
+    }
 
     let last_event_id = headers
         .get("last-event-id")

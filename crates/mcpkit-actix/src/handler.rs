@@ -4,8 +4,9 @@ use crate::error::ExtensionError;
 use crate::state::{HasServerInfo, McpState, OAuthState};
 use crate::{SUPPORTED_VERSIONS, is_supported_version};
 use actix_web::http::header::ContentType;
-use actix_web::{HttpRequest, HttpResponse, web};
+use actix_web::{HttpMessage, HttpRequest, HttpResponse, web};
 use futures::stream::{self, StreamExt};
+use mcpkit_core::auth::VerifiedUser;
 use mcpkit_core::capability::ClientCapabilities;
 use mcpkit_core::protocol::Message;
 use mcpkit_core::protocol_version::ProtocolVersion;
@@ -66,6 +67,10 @@ where
         )));
     }
 
+    // The verified user (if any) is supplied by the application's auth
+    // middleware via a request extension; mcpkit binds the session to it.
+    let user = req.extensions().get::<VerifiedUser>().cloned();
+
     // Get or create session
     let session_id = req
         .headers()
@@ -74,11 +79,19 @@ where
         .map(String::from);
 
     let session_id = match session_id {
-        Some(id) => {
-            state.sessions.touch(&id);
-            id
-        }
-        None => state.sessions.create(),
+        Some(id) => match state.sessions.touch_verified(&id, user.as_ref()) {
+            Ok(true) => id,
+            // Reject an unknown session id rather than silently proceeding.
+            Ok(false) => {
+                warn!(session_id = %id, "Rejected: unknown session id");
+                return Err(ExtensionError::SessionNotFound(id));
+            }
+            Err(e) => {
+                warn!(session_id = %id, error = %e, "Rejected: session binding violation");
+                return Ok(HttpResponse::Forbidden().body(e.to_string()));
+            }
+        },
+        None => state.sessions.create_for_user(user),
     };
 
     debug!(session_id = %session_id, "Processing MCP request");
@@ -276,11 +289,20 @@ where
         return HttpResponse::Forbidden().body("origin not allowed");
     }
 
+    let user = req.extensions().get::<VerifiedUser>().cloned();
     let session_id = req
         .headers()
         .get("mcp-session-id")
         .and_then(|v| v.to_str().ok())
         .map(String::from);
+
+    // Enforce the session's user binding before replaying buffered events.
+    if let Some(id) = &session_id {
+        if let Err(e) = state.sessions.get_verified(id, user.as_ref()) {
+            warn!(session_id = %id, error = %e, "Rejected SSE: session binding violation");
+            return HttpResponse::Forbidden().body(e.to_string());
+        }
+    }
 
     let (id, rx) = if let Some(id) = session_id {
         // Try to reconnect to existing session

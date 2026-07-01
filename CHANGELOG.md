@@ -22,6 +22,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pluggable (use the JWT helpers + `VerifiedUser::from_claims`); this is the
   store-level mechanism, with adapter handler wiring (POST + SSE) to follow
   ([#86](https://github.com/praxiomlabs/mcpkit/issues/86)).
+- Session binding is now enforced by the adapter handlers (all four:
+  `mcpkit-axum`/`mcpkit-actix`/`mcpkit-warp`/`mcpkit-rocket`), on both the POST
+  and SSE paths. The handlers read the request's `VerifiedUser` (axum/actix from
+  request extensions; rocket via a `VerifiedUserGuard` reading request-local
+  cache; warp as a filter-supplied argument — the default router passes anonymous,
+  so auth-aware apps compose their own filter), bind a new session to it, and
+  reject a request that presents a mismatched, missing, or unexpectedly-present
+  identity — including before replaying buffered SSE events to a reconnecting
+  client ([#86](https://github.com/praxiomlabs/mcpkit/issues/86)).
 - Structured tool output (MCP `outputSchema` / `structuredContent`): `Tool` gains
   an `output_schema` field + `Tool::output_schema(..)`, and `CallToolResult` gains
   a `structured_content` field + `CallToolResult::with_structured_content(..)`.
@@ -108,6 +117,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking (behavior):** the HTTP adapters now reject a request that presents an
+  `mcp-session-id` for a session the server does not know (previously such a
+  request was accepted and processed as if freshly created). Clients must use a
+  session id the server minted, or omit the header to start a new session. This
+  tightens session semantics alongside the user-binding work
+  ([#86](https://github.com/praxiomlabs/mcpkit/issues/86)). The adapter POST
+  handlers also gain a verified-user parameter/guard (`Option<Extension<VerifiedUser>>`
+  on axum, `VerifiedUserGuard` on rocket, an `Option<VerifiedUser>` filter argument
+  on warp), which changes their signatures.
 - **Breaking:** removed the non-functional, inverted server-side scaffolding for
   elicitation and sampling — the `ElicitationHandler`/`SamplingHandler` traits
   and the `ElicitationService`/`SamplingService` builders. They modelled the

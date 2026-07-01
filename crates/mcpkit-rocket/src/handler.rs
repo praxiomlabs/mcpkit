@@ -2,6 +2,7 @@
 
 use crate::state::{HasServerInfo, McpState};
 use crate::{SUPPORTED_VERSIONS, is_supported_version};
+use mcpkit_core::auth::VerifiedUser;
 use mcpkit_core::capability::ClientCapabilities;
 use mcpkit_core::protocol::Message;
 use mcpkit_core::protocol_version::ProtocolVersion;
@@ -47,6 +48,23 @@ impl<'r> FromRequest<'r> for SessionIdHeader {
             .get_one("mcp-session-id")
             .map(String::from);
         Outcome::Success(SessionIdHeader(session_id))
+    }
+}
+
+/// The verified user for this request.
+///
+/// An application's authentication fairing validates the bearer token and caches
+/// the resulting identity with `request.local_cache(|| Some(user))` (or `None`);
+/// this guard reads it back so mcpkit can bind the session to it.
+pub struct VerifiedUserGuard(pub Option<VerifiedUser>);
+
+#[rocket::async_trait]
+impl<'r> FromRequest<'r> for VerifiedUserGuard {
+    type Error = ();
+
+    async fn from_request(request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
+        let user = request.local_cache(|| None::<VerifiedUser>).clone();
+        Outcome::Success(Self(user))
     }
 }
 
@@ -179,6 +197,7 @@ pub async fn handle_mcp_post<H>(
     version: Option<&str>,
     session_id: Option<String>,
     origin: Option<&str>,
+    user: Option<VerifiedUser>,
     body: &str,
 ) -> McpResponse
 where
@@ -214,13 +233,21 @@ where
         );
     }
 
-    // Get or create session
+    // Get or create session (binding it to the verified user, if any).
     let session_id = match session_id {
-        Some(id) => {
-            state.sessions.touch(&id);
-            id
-        }
-        None => state.sessions.create(),
+        Some(id) => match state.sessions.touch_verified(&id, user.as_ref()) {
+            Ok(true) => id,
+            // Reject an unknown session id rather than silently proceeding.
+            Ok(false) => {
+                warn!(session_id = %id, "Rejected: unknown session id");
+                return McpResponse::error(Status::NotFound, "unknown session id".to_string());
+            }
+            Err(e) => {
+                warn!(session_id = %id, error = %e, "Rejected: session binding violation");
+                return McpResponse::error(Status::Forbidden, e.to_string());
+            }
+        },
+        None => state.sessions.create_for_user(user),
     };
 
     debug!(session_id = %session_id, "Processing MCP request");
