@@ -572,7 +572,7 @@ fn test_sampling_capability_serialization() -> Result<(), Box<dyn std::error::Er
 
 #[test]
 fn test_elicitation_capability_serialization() -> Result<(), Box<dyn std::error::Error>> {
-    let cap = ElicitationCapability {};
+    let cap = ElicitationCapability::default();
 
     let json_str = serde_json::to_string(&cap)?;
 
@@ -930,7 +930,10 @@ fn test_empty_capability_structs_serialize_to_empty_object()
     assert_eq!(serde_json::to_string(&LoggingCapability {})?, "{}");
     assert_eq!(serde_json::to_string(&CompletionCapability {})?, "{}");
     assert_eq!(serde_json::to_string(&SamplingCapability {})?, "{}");
-    assert_eq!(serde_json::to_string(&ElicitationCapability {})?, "{}");
+    assert_eq!(
+        serde_json::to_string(&ElicitationCapability::default())?,
+        "{}"
+    );
     assert_eq!(serde_json::to_string(&ToolCapability::default())?, "{}");
     assert_eq!(serde_json::to_string(&ResourceCapability::default())?, "{}");
     assert_eq!(serde_json::to_string(&PromptCapability::default())?, "{}");

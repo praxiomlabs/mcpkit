@@ -31,3 +31,6 @@ pub const USER_REJECTED: i32 = -1;
 
 /// Resource was not found.
 pub const RESOURCE_NOT_FOUND: i32 = -32002;
+
+/// The server requires a URL-mode elicitation before the request can proceed.
+pub const URL_ELICITATION_REQUIRED: i32 = -32042;

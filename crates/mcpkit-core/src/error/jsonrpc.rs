@@ -95,6 +95,9 @@ impl From<&McpError> for JsonRpcError {
                 "client_version": details.client_version,
                 "server_version": details.server_version,
             })),
+            McpError::UrlElicitationRequired { elicitations } => Some(serde_json::json!({
+                "elicitations": elicitations,
+            })),
             McpError::WithContext { source, .. } => {
                 let inner: Self = source.as_ref().into();
                 inner.data

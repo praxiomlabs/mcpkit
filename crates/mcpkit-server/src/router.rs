@@ -83,6 +83,8 @@ pub mod notifications {
     pub const TOOLS_LIST_CHANGED: &str = "notifications/tools/list_changed";
     /// Sent when the list of available prompts has changed.
     pub const PROMPTS_LIST_CHANGED: &str = "notifications/prompts/list_changed";
+    /// Sent when a URL-mode elicitation's out-of-band interaction has completed.
+    pub const ELICITATION_COMPLETE: &str = "notifications/elicitation/complete";
 }
 
 /// Represents a parsed MCP request with typed parameters.

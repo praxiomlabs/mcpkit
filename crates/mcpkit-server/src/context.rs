@@ -47,7 +47,7 @@ use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
 use mcpkit_core::error::McpError;
 use mcpkit_core::protocol::{Notification, ProgressToken, RequestId, Response};
 use mcpkit_core::protocol_version::ProtocolVersion;
-use mcpkit_core::types::elicitation::{ElicitRequest, ElicitResult};
+use mcpkit_core::types::elicitation::{ElicitRequest, ElicitResult, UrlElicitRequest};
 use mcpkit_core::types::sampling::{CreateMessageRequest, CreateMessageResult};
 use std::borrow::Cow;
 use std::future::Future;
@@ -391,6 +391,45 @@ impl<'a> Context<'a> {
         if !self.client_caps.has_elicitation() {
             return Err(McpError::internal(
                 "the client did not declare the elicitation capability",
+            ));
+        }
+
+        let params = serde_json::to_value(&request).map_err(McpError::from)?;
+        let result = self.request("elicitation/create", Some(params)).await?;
+        serde_json::from_value(result).map_err(McpError::from)
+    }
+
+    /// Request a URL-mode elicitation: ask the client to have the user navigate
+    /// to a URL for an out-of-band interaction (e.g. authorization or payment).
+    ///
+    /// Returns the client's [`ElicitResult`] action once the user consents to
+    /// open the URL. When the out-of-band interaction later finishes, notify the
+    /// client with `ServerNotifier::elicitation_complete(elicitation_id)`.
+    ///
+    /// Gated on the client's `elicitation.url` sub-capability (which is only
+    /// declared on 2025-11-25+).
+    ///
+    /// # Security
+    ///
+    /// Per the MCP spec, the caller MUST use an unguessable `elicitation_id`
+    /// bound to a verified user identity and MUST NOT place credentials in the
+    /// URL. mcpkit provides the mechanism; associating the id with a user is the
+    /// application's responsibility (see the session-binding helpers, #86).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the negotiated protocol version does not support
+    /// elicitation, the client did not declare URL-mode elicitation, or the
+    /// request fails.
+    pub async fn elicit_url(&self, request: UrlElicitRequest) -> Result<ElicitResult, McpError> {
+        if !self.protocol_version.supports_elicitation() {
+            return Err(McpError::internal(
+                "the negotiated protocol version does not support elicitation",
+            ));
+        }
+        if !self.client_caps.has_url_elicitation() {
+            return Err(McpError::internal(
+                "the client did not declare URL-mode elicitation support",
             ));
         }
 
