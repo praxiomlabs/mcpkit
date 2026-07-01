@@ -239,6 +239,7 @@ impl PromptHandler for WarpHandler {
                     .unwrap_or("User");
 
                 Ok(GetPromptResult {
+                    meta: None,
                     description: Some(format!("Welcome message for {user_name}")),
                     messages: vec![PromptMessage::user(format!(
                         "Please write a warm and friendly welcome message for {user_name} \

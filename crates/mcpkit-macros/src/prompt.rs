@@ -81,7 +81,7 @@ mod tests {
         // Valid method
         let method: ImplItemFn = parse_quote! {
             async fn greeting(&self, name: String) -> GetPromptResult {
-                GetPromptResult {
+                GetPromptResult { meta: None,
                     description: None,
                     messages: vec![],
                 }
@@ -92,7 +92,7 @@ mod tests {
         // Method without self - invalid
         let method: ImplItemFn = parse_quote! {
             async fn greeting(name: String) -> GetPromptResult {
-                GetPromptResult {
+                GetPromptResult { meta: None,
                     description: None,
                     messages: vec![],
                 }

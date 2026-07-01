@@ -24,6 +24,7 @@ impl FullHandler {
             role: Role::Assistant,
             content: Content::text("Response"),
             stop_reason: Some(StopReason::EndTurn),
+            meta: None,
         })
     }
 

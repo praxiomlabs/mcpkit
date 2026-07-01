@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Protocol `_meta` foundation (`mcpkit-core`). A new `Meta` type (an open,
+  string-keyed map, `types::meta`) models the MCP `_meta` object, with typed
+  `progress_token`/`with_progress_token` accessors bridging `ProgressToken` and a
+  `Meta::progress_token_from_params` helper (the server's hand-rolled progress-
+  token extraction now delegates to it). Concrete result structs
+  (`CallToolResult`, `GetPromptResult`, `ListToolsResult`, the other `*Result`
+  types, `InitializeResult`, `PingResult`) gain an optional `meta: Option<Meta>`
+  field, serialized as `_meta` and omitted when absent. The base `Task` is left
+  spec-pure (no `_meta`); task-get/cancel result and status-notification `_meta`
+  (spec `Result & Task`) is deferred to
+  [#136](https://github.com/praxiomlabs/mcpkit/issues/136) to avoid contaminating
+  nested `Task` values. A generic `Request<T>` refactor was deliberately avoided;
+  request-param `_meta` beyond `progressToken` is handled at the boundary rather
+  than per-struct.
+  **Breaking:** the new field means struct-literal construction of these result
+  types now requires `meta` (use the existing constructors, `..Default::default()`
+  where derived, or `meta: None`)
+  ([#109](https://github.com/praxiomlabs/mcpkit/issues/109)).
 - Redaction hook for transport content logging (`mcpkit-transport`). When
   `LoggingLayer::with_contents(true)` logs full messages, secrets could leak into
   logs. `LoggingLayer` gains `redact_keys(keys)` (recursively masks object values

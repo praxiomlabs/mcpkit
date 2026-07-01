@@ -488,6 +488,7 @@ impl PromptHandler for MockServer {
     ) -> impl Future<Output = Result<GetPromptResult, McpError>> + Send {
         let result = if let Some(prompt) = self.prompts.get(name) {
             Ok(GetPromptResult {
+                meta: None,
                 description: prompt.description.clone(),
                 messages: vec![PromptMessage {
                     role: mcpkit_core::types::Role::User,

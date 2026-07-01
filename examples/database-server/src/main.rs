@@ -349,6 +349,7 @@ impl DatabaseServer {
             .unwrap_or_default();
 
         GetPromptResult {
+            meta: None,
             description: Some(format!("SELECT query for {}", table_name)),
             messages: vec![
                 PromptMessage::user(format!(
@@ -377,6 +378,7 @@ impl DatabaseServer {
             .unwrap_or_default();
 
         GetPromptResult {
+            meta: None,
             description: Some("Database schema design assistance".to_string()),
             messages: vec![PromptMessage::user(format!(
                 "You are a database architect. Design normalized, efficient schemas. \
@@ -406,6 +408,7 @@ impl DatabaseServer {
             .unwrap_or_default();
 
         GetPromptResult {
+            meta: None,
             description: Some("Query optimization analysis".to_string()),
             messages: vec![PromptMessage::user(format!(
                 "You are a database performance expert. Analyze queries for optimization \

@@ -5,6 +5,7 @@
 //! caller polls [`tasks/get`](GetTaskRequest) for status and
 //! [`tasks/result`](GetTaskPayloadRequest) for the eventual payload.
 
+use super::meta::Meta;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -187,7 +188,20 @@ pub struct RelatedTaskMetadata {
 pub struct CreateTaskResult {
     /// The created task.
     pub task: Task,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
+
+// NOTE: Per the spec, `tasks/get`/`tasks/cancel` results and the task-status
+// notification are `Result & Task` / `NotificationParams & Task`, i.e. they may
+// carry a result/notification-level `_meta`. That is intentionally *not* modeled
+// here: the base `Task` has no `_meta` (adding one would leak `_meta` into nested
+// `CreateTaskResult.task` and `ListTasksResult.tasks[]`), and the task handler API
+// returns a bare `Task` with nowhere to supply result-level metadata. Modeling it
+// would need dedicated result wrapper types + a handler-contract change — see
+// issue #136. `CreateTaskResult`/`ListTasksResult` do carry their own
+// result-level `_meta`.
 
 /// Result of `tasks/get` — the task's current state (spec `Result & Task`).
 pub type GetTaskResult = Task;
@@ -215,6 +229,9 @@ pub struct ListTasksResult {
     /// Cursor for the next page, if more tasks exist.
     #[serde(rename = "nextCursor", skip_serializing_if = "Option::is_none")]
     pub next_cursor: Option<String>,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 /// Request parameters for `tasks/get`.
@@ -310,6 +327,7 @@ mod tests {
     fn create_task_result_wraps_task() {
         let res = CreateTaskResult {
             task: Task::new(TaskId::new("abc")),
+            meta: None,
         };
         let j = serde_json::to_value(&res).unwrap();
         assert_eq!(j["task"]["taskId"], "abc");

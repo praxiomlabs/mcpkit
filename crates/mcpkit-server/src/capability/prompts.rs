@@ -254,6 +254,7 @@ impl PromptResultBuilder {
         GetPromptResult {
             description: self.description,
             messages: self.messages,
+            meta: None,
         }
     }
 }

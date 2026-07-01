@@ -9,7 +9,7 @@ struct MyServer;
 impl MyServer {
     #[prompt]
     async fn greeting(&self, name: String) -> mcpkit_core::types::GetPromptResult {
-        mcpkit_core::types::GetPromptResult {
+        mcpkit_core::types::GetPromptResult { meta: None,
             description: None,
             messages: vec![],
         }

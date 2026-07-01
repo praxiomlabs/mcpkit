@@ -97,6 +97,7 @@ impl PromptHandler for TestHandler {
     ) -> Result<GetPromptResult, McpError> {
         if name == "greeting" {
             Ok(GetPromptResult {
+                meta: None,
                 description: Some("A friendly greeting".to_string()),
                 messages: vec![],
             })

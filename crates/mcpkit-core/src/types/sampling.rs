@@ -5,6 +5,7 @@
 //! the client's AI capabilities.
 
 use super::content::{Content, Role};
+use super::meta::Meta;
 use serde::{Deserialize, Serialize};
 
 /// A message in a sampling conversation.
@@ -230,6 +231,9 @@ pub struct CreateMessageResult {
     /// Stop reason.
     #[serde(rename = "stopReason", skip_serializing_if = "Option::is_none")]
     pub stop_reason: Option<StopReason>,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 impl CreateMessageResult {

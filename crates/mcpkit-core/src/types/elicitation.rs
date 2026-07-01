@@ -4,6 +4,7 @@
 //! through the client. This enables interactive workflows where servers
 //! can gather user preferences, confirmations, or data.
 
+use super::meta::Meta;
 use serde::{Deserialize, Serialize};
 
 /// The mode of an elicitation request.
@@ -368,6 +369,9 @@ pub struct ElicitResult {
     /// The content provided (if accepted).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<serde_json::Map<String, serde_json::Value>>,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 impl ElicitResult {
@@ -377,6 +381,7 @@ impl ElicitResult {
         Self {
             action: ElicitAction::Accept,
             content: Some(content),
+            meta: None,
         }
     }
 
@@ -386,6 +391,7 @@ impl ElicitResult {
         Self {
             action: ElicitAction::Decline,
             content: None,
+            meta: None,
         }
     }
 
@@ -395,6 +401,7 @@ impl ElicitResult {
         Self {
             action: ElicitAction::Cancel,
             content: None,
+            meta: None,
         }
     }
 

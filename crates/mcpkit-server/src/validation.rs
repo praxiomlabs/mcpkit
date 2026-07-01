@@ -528,6 +528,7 @@ mod tests {
                 Ok(GetPromptResult {
                     description: None,
                     messages: vec![],
+                    meta: None,
                 })
             }
         }

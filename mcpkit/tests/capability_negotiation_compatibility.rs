@@ -751,6 +751,7 @@ fn test_full_handshake_latest_version() {
     let server_info = ServerInfo::new("test-server", "1.0");
     let server_caps = ServerCapabilities::new().with_tools();
     let result = InitializeResult {
+        meta: None,
         protocol_version: negotiated.to_string(),
         capabilities: server_caps,
         server_info,
@@ -785,6 +786,7 @@ fn test_full_handshake_rmcp_version() -> Result<(), Box<dyn std::error::Error>> 
     let server_caps = ServerCapabilities::new().with_tools().with_resources();
 
     let result = InitializeResult {
+        meta: None,
         protocol_version: negotiated.to_string(),
         capabilities: server_caps,
         server_info,

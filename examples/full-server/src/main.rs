@@ -129,6 +129,7 @@ impl FullServer {
     async fn code_review(&self, code: String, language: Option<String>) -> GetPromptResult {
         let lang = language.unwrap_or_else(|| "unknown".to_string());
         GetPromptResult {
+            meta: None,
             description: Some("Code review prompt".to_string()),
             messages: vec![PromptMessage::user(format!(
                 "Please review the following {} code for:\n\
@@ -150,6 +151,7 @@ impl FullServer {
             .unwrap_or_else(|| "Keep the summary concise.".to_string());
 
         GetPromptResult {
+            meta: None,
             description: Some("Summarization prompt".to_string()),
             messages: vec![PromptMessage::user(format!(
                 "Please summarize the following text. {}\n\n{}",

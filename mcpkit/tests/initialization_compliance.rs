@@ -68,6 +68,7 @@ fn test_initialize_result() {
     let capabilities = ServerCapabilities::new().with_tools();
 
     let result = InitializeResult {
+        meta: None,
         protocol_version: PROTOCOL_VERSION.to_string(),
         capabilities,
         server_info,

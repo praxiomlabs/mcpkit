@@ -150,6 +150,7 @@ mod tests {
             _ctx: &Context<'_>,
         ) -> Result<GetPromptResult, McpError> {
             Ok(GetPromptResult {
+                meta: None,
                 description: Some("Warp Test".to_string()),
                 messages: vec![],
             })

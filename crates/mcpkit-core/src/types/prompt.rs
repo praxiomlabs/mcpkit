@@ -4,6 +4,7 @@
 //! They allow servers to define reusable message patterns with arguments.
 
 use super::content::{Content, Role};
+use super::meta::Meta;
 use super::metadata::Icon;
 use serde::{Deserialize, Serialize};
 
@@ -180,6 +181,9 @@ pub struct GetPromptResult {
     pub description: Option<String>,
     /// The prompt messages.
     pub messages: Vec<PromptMessage>,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 impl GetPromptResult {
@@ -189,6 +193,7 @@ impl GetPromptResult {
         Self {
             description: None,
             messages: vec![PromptMessage::user(text)],
+            meta: None,
         }
     }
 
@@ -198,6 +203,7 @@ impl GetPromptResult {
         Self {
             description: None,
             messages: vec![PromptMessage::assistant(text)],
+            meta: None,
         }
     }
 
@@ -207,6 +213,7 @@ impl GetPromptResult {
         Self {
             description: None,
             messages,
+            meta: None,
         }
     }
 
