@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Redaction hook for transport content logging (`mcpkit-transport`). When
+  `LoggingLayer::with_contents(true)` logs full messages, secrets could leak into
+  logs. `LoggingLayer` gains `redact_keys(keys)` (recursively masks object values
+  under case-insensitively-matching keys with `<redacted>`), `redact_with(fn)` (a
+  custom hook returning the JSON to log), and `with_redacted_contents()` (enables
+  content logging with the new `LoggingLayer::DEFAULT_REDACT_KEYS` denylist
+  applied). Redaction only affects the logged representation — the forwarded
+  message is never modified — and is skipped entirely when content logging is off;
+  a serialization failure logs a placeholder rather than the raw message. Default
+  behaviour is unchanged (no redactor unless configured)
+  ([#84](https://github.com/praxiomlabs/mcpkit/issues/84)).
 - Opt-in tool I/O schema validation (`mcpkit-server`, feature
   `schema-validation`, off by default). A new `ValidatingToolHandler<H>` decorator
   validates `tools/call` arguments against each tool's `inputSchema` and
