@@ -579,16 +579,49 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
     // Tool Operations
     // ==========================================================================
 
-    /// List all available tools.
+    /// Follow `nextCursor` pagination to exhaustion, accumulating every page.
+    ///
+    /// `extract` pulls the page's items and its `nextCursor` out of each result.
+    /// A server that hands back the same cursor it was given (i.e. makes no
+    /// forward progress) is rejected rather than looped on forever.
+    async fn list_all<Item, R>(
+        &self,
+        method: &str,
+        extract: impl Fn(R) -> (Vec<Item>, Option<String>),
+    ) -> Result<Vec<Item>, McpError>
+    where
+        R: serde::de::DeserializeOwned,
+    {
+        let mut all = Vec::new();
+        let mut cursor: Option<String> = None;
+        loop {
+            let params = cursor
+                .as_deref()
+                .map(|c| serde_json::json!({ "cursor": c }));
+            let result: R = self.request(method, params).await?;
+            let (items, next) = extract(result);
+            all.extend(items);
+            match next {
+                Some(next) if cursor.as_ref() != Some(&next) => cursor = Some(next),
+                Some(_) => {
+                    return Err(McpError::internal(format!(
+                        "{method} returned a non-advancing pagination cursor"
+                    )));
+                }
+                None => return Ok(all),
+            }
+        }
+    }
+
+    /// List all available tools, following pagination to exhaustion.
     ///
     /// # Errors
     ///
     /// Returns an error if tools are not supported or the request fails.
     pub async fn list_tools(&self) -> Result<Vec<Tool>, McpError> {
         self.ensure_capability("tools", self.has_tools())?;
-
-        let result: ListToolsResult = self.request("tools/list", None).await?;
-        Ok(result.tools)
+        self.list_all("tools/list", |r: ListToolsResult| (r.tools, r.next_cursor))
+            .await
     }
 
     /// List tools with pagination.
@@ -635,16 +668,17 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
     // Resource Operations
     // ==========================================================================
 
-    /// List all available resources.
+    /// List all available resources, following pagination to exhaustion.
     ///
     /// # Errors
     ///
     /// Returns an error if resources are not supported or the request fails.
     pub async fn list_resources(&self) -> Result<Vec<Resource>, McpError> {
         self.ensure_capability("resources", self.has_resources())?;
-
-        let result: ListResourcesResult = self.request("resources/list", None).await?;
-        Ok(result.resources)
+        self.list_all("resources/list", |r: ListResourcesResult| {
+            (r.resources, r.next_cursor)
+        })
+        .await
     }
 
     /// List resources with pagination.
@@ -662,17 +696,18 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
         self.request("resources/list", params).await
     }
 
-    /// List resource templates.
+    /// List resource templates, following pagination to exhaustion.
     ///
     /// # Errors
     ///
     /// Returns an error if resources are not supported or the request fails.
     pub async fn list_resource_templates(&self) -> Result<Vec<ResourceTemplate>, McpError> {
         self.ensure_capability("resources", self.has_resources())?;
-
-        let result: ListResourceTemplatesResult =
-            self.request("resources/templates/list", None).await?;
-        Ok(result.resource_templates)
+        self.list_all(
+            "resources/templates/list",
+            |r: ListResourceTemplatesResult| (r.resource_templates, r.next_cursor),
+        )
+        .await
     }
 
     /// Read a resource by URI.
@@ -697,16 +732,17 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
     // Prompt Operations
     // ==========================================================================
 
-    /// List all available prompts.
+    /// List all available prompts, following pagination to exhaustion.
     ///
     /// # Errors
     ///
     /// Returns an error if prompts are not supported or the request fails.
     pub async fn list_prompts(&self) -> Result<Vec<Prompt>, McpError> {
         self.ensure_capability("prompts", self.has_prompts())?;
-
-        let result: ListPromptsResult = self.request("prompts/list", None).await?;
-        Ok(result.prompts)
+        self.list_all("prompts/list", |r: ListPromptsResult| {
+            (r.prompts, r.next_cursor)
+        })
+        .await
     }
 
     /// List prompts with pagination.
@@ -1397,6 +1433,133 @@ mod tests {
         assert!(
             client.pending.read().await.is_empty(),
             "pending requests must be drained when the connection closes"
+        );
+    }
+
+    /// A transport that serves `tools/list` in fixed-size pages, echoing an
+    /// opaque numeric `nextCursor`. With `stuck_cursor` it always returns the
+    /// same cursor, to exercise the non-advancing-cursor guard.
+    struct PaginatingTransport {
+        resp_tx: tokio::sync::mpsc::UnboundedSender<Message>,
+        resp_rx: tokio::sync::Mutex<tokio::sync::mpsc::UnboundedReceiver<Message>>,
+        total: usize,
+        page_size: usize,
+        stuck_cursor: bool,
+    }
+
+    impl PaginatingTransport {
+        fn new(total: usize, page_size: usize, stuck_cursor: bool) -> Self {
+            let (resp_tx, resp_rx) = tokio::sync::mpsc::unbounded_channel();
+            Self {
+                resp_tx,
+                resp_rx: tokio::sync::Mutex::new(resp_rx),
+                total,
+                page_size,
+                stuck_cursor,
+            }
+        }
+    }
+
+    impl Transport for PaginatingTransport {
+        type Error = std::convert::Infallible;
+
+        async fn send(&self, msg: Message) -> Result<(), Self::Error> {
+            let Message::Request(req) = msg else {
+                return Ok(());
+            };
+            let offset: usize = req
+                .params
+                .as_ref()
+                .and_then(|p| p.get("cursor"))
+                .and_then(serde_json::Value::as_str)
+                .and_then(|c| c.parse().ok())
+                .unwrap_or(0);
+            let end = (offset + self.page_size).min(self.total);
+            let tools: Vec<serde_json::Value> = (offset..end)
+                .map(|i| serde_json::json!({ "name": format!("t{i}"), "inputSchema": {} }))
+                .collect();
+            let mut result = serde_json::json!({ "tools": tools });
+            let next = if self.stuck_cursor {
+                Some("0".to_string())
+            } else if end < self.total {
+                Some(end.to_string())
+            } else {
+                None
+            };
+            if let Some(next) = next {
+                result["nextCursor"] = serde_json::Value::String(next);
+            }
+            let _ = self
+                .resp_tx
+                .send(Message::Response(Response::success(req.id, result)));
+            Ok(())
+        }
+
+        async fn recv(&self) -> Result<Option<Message>, Self::Error> {
+            Ok(self.resp_rx.lock().await.recv().await)
+        }
+
+        async fn close(&self) -> Result<(), Self::Error> {
+            Ok(())
+        }
+
+        fn is_connected(&self) -> bool {
+            true
+        }
+
+        fn metadata(&self) -> TransportMetadata {
+            TransportMetadata::new("paginating-test")
+        }
+    }
+
+    fn tools_init_result() -> InitializeResult {
+        InitializeResult {
+            protocol_version: PROTOCOL_VERSION.to_string(),
+            capabilities: ServerCapabilities::new().with_tools(),
+            server_info: ServerInfo::new("test-server", "1.0.0"),
+            instructions: None,
+        }
+    }
+
+    /// `list_tools` must follow `nextCursor` across every page rather than
+    /// silently truncating to the first page.
+    #[tokio::test]
+    async fn list_tools_follows_cursor_to_exhaustion() {
+        let client = Client::new(
+            PaginatingTransport::new(5, 2, false),
+            tools_init_result(),
+            ClientInfo::new("test-client", "1.0.0"),
+            ClientCapabilities::default(),
+            Duration::from_secs(5),
+        );
+
+        let tools = client
+            .list_tools()
+            .await
+            .expect("list_tools should paginate");
+        let names: Vec<_> = tools.iter().map(|t| t.name.as_str()).collect();
+        assert_eq!(names, ["t0", "t1", "t2", "t3", "t4"]);
+    }
+
+    /// A server that keeps handing back the same cursor must surface an error
+    /// instead of looping forever.
+    #[tokio::test]
+    async fn list_tools_rejects_non_advancing_cursor() {
+        let client = Client::new(
+            PaginatingTransport::new(5, 2, true),
+            tools_init_result(),
+            ClientInfo::new("test-client", "1.0.0"),
+            ClientCapabilities::default(),
+            Duration::from_secs(5),
+        );
+
+        let err = client
+            .list_tools()
+            .await
+            .expect_err("a non-advancing cursor must not loop forever");
+        assert!(
+            err.to_string().contains("non-advancing"),
+            "expected a non-advancing-cursor error, got {err:?}"
         );
     }
 }

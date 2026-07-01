@@ -20,9 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   between page requests may skip or repeat entries — fine for static tool/prompt
   lists, a documented caveat for dynamic resource lists. The HTTP adapters
   (axum/actix/warp/rocket) expose the same configuration via
-  `McpRouter::list_page_size(n)` (and
-  `McpState::with_list_page_size(n)`); client "list all" cursor-following follows
-  in a subsequent PR
+  `McpRouter::list_page_size(n)` (and `McpState::with_list_page_size(n)`). On the
+  client side, `Client::list_tools`, `list_resources`, `list_resource_templates`,
+  and `list_prompts` now follow `nextCursor` to exhaustion rather than silently
+  truncating to the first page against a paginating server (a server that returns
+  a non-advancing cursor is rejected instead of looped on); the single-page
+  `*_paginated` variants are unchanged
   ([#78](https://github.com/praxiomlabs/mcpkit/issues/78)).
 - URL-mode elicitation (2025-11-25), core + server. `ElicitRequest` gains an
   optional `mode` (absent = form); new `UrlElicitRequest`
