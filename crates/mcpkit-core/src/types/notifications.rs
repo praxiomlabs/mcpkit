@@ -13,8 +13,11 @@ pub struct ProgressNotificationParams {
     #[serde(rename = "progressToken")]
     pub progress_token: ProgressToken,
     /// Progress so far. May be fractional and should increase with each update.
+    ///
+    /// Must be a finite number: JSON cannot represent `NaN`/infinity, and
+    /// serialization renders them as `null` (an invalid `progress`).
     pub progress: f64,
-    /// Total amount of work, when known.
+    /// Total amount of work, when known. Must be finite (see `progress`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub total: Option<f64>,
     /// Optional human-readable progress message.

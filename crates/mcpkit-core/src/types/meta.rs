@@ -101,9 +101,10 @@ impl Meta {
     /// Attach `_meta.progressToken` to (possibly absent) request params so the
     /// server will emit progress notifications for the call.
     ///
-    /// Existing params and any existing `_meta` entries are preserved; a missing
-    /// params object becomes `{ "_meta": { "progressToken": … } }`. Params that
-    /// are not a JSON object (invalid for MCP) are replaced.
+    /// Existing params and any existing `_meta` object entries are preserved; a
+    /// missing params object becomes `{ "_meta": { "progressToken": … } }`.
+    /// Params that are not a JSON object, or a pre-existing non-object `_meta`
+    /// (both invalid for MCP), are replaced so the token is always attached.
     #[must_use]
     pub fn with_progress_token_in_params(params: Option<Value>, token: &ProgressToken) -> Value {
         let mut obj = match params {
@@ -113,6 +114,11 @@ impl Meta {
         let meta = obj
             .entry("_meta")
             .or_insert_with(|| Value::Object(Map::new()));
+        // A pre-existing non-object `_meta` is malformed; replace it so the token
+        // is always inserted (the helper guarantees progress wiring).
+        if !meta.is_object() {
+            *meta = Value::Object(Map::new());
+        }
         if let Value::Object(meta_obj) = meta {
             meta_obj.insert(
                 PROGRESS_TOKEN_KEY.to_string(),
@@ -188,6 +194,11 @@ mod tests {
             out,
             json!({ "name": "t", "_meta": { "keep": true, "progressToken": "x" } })
         );
+
+        // A malformed non-object `_meta` is replaced so the token still attaches.
+        let params = json!({ "name": "t", "_meta": false });
+        let out = Meta::with_progress_token_in_params(Some(params), &ProgressToken::Number(1));
+        assert_eq!(out, json!({ "name": "t", "_meta": { "progressToken": 1 } }));
     }
 
     #[test]
