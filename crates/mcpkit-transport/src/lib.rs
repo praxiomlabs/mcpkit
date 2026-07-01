@@ -20,7 +20,6 @@
 //! | [`memory::MemoryTransport`] | Testing and in-process communication | Requires runtime feature |
 //! | [`spawn::SpawnedTransport`] | Spawn MCP servers as subprocesses | `tokio-runtime` |
 //! | [`http::HttpTransport`] | HTTP client for streamable HTTP servers | Always available |
-//! | [`http::HttpTransportListener`] | HTTP server (Streamable HTTP) | `http` feature |
 //! | [`websocket::WebSocketTransport`] | WebSocket client with reconnection | Always available |
 //! | [`websocket::WebSocketListener`] | WebSocket server | Always available |
 //! | `grpc::GrpcTransport` | gRPC client with bidirectional streaming | `grpc` feature |
@@ -42,10 +41,11 @@
 //! ```ignore
 //! // Client
 //! let transport = HttpTransport::connect("http://localhost:8080/mcp").await?;
-//!
-//! // Server (requires `http` feature)
-//! let listener = HttpTransportListener::bind("0.0.0.0:8080").await?;
 //! ```
+//!
+//! To *serve* MCP over Streamable HTTP, use a framework adapter
+//! (`mcpkit-axum`, `mcpkit-actix`, `mcpkit-warp`, or `mcpkit-rocket`), which
+//! handle routing, sessions, SSE, and origin validation.
 //!
 //! **For WebSocket:**
 //! ```ignore
@@ -128,7 +128,6 @@ pub use stdio::SyncStdioTransport;
 
 // HTTP transport (always export config/builder, listener only with http feature)
 #[cfg(feature = "http")]
-pub use http::HttpTransportListener;
 pub use http::{HttpTransport, HttpTransportBuilder, HttpTransportConfig};
 
 // WebSocket transport

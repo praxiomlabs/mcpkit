@@ -237,6 +237,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reference still coerces in, so most call sites are unaffected
   ([#117](https://github.com/praxiomlabs/mcpkit/issues/117)).
 
+### Removed
+
+- The standalone `HttpTransportListener` (and `HttpServerConfig`) in
+  `mcpkit-transport` — a non-functional Streamable HTTP server stub that echoed
+  requests, never routed to a handler, and had placeholder SSE/DELETE. It could
+  not serve MCP and duplicated the framework adapters. Serve Streamable HTTP with
+  a framework adapter (`mcpkit-axum`, `mcpkit-actix`, `mcpkit-warp`,
+  `mcpkit-rocket`) instead. The HTTP *client* (`HttpTransport`,
+  `HttpTransportConfig`, `HttpTransportBuilder`) and `OriginValidator` are
+  unchanged ([#83](https://github.com/praxiomlabs/mcpkit/issues/83)).
+
 ### Fixed
 
 - The client now dispatches elicitation requests on the spec method name
