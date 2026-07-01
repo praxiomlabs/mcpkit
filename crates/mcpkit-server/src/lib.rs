@@ -67,6 +67,8 @@ pub mod metrics;
 pub mod router;
 pub mod server;
 pub mod state;
+#[cfg(feature = "schema-validation")]
+pub mod validation;
 
 // Re-export commonly used types
 pub use builder::{FullServer, MinimalServer, NotRegistered, Registered, Server, ServerBuilder};
@@ -83,6 +85,8 @@ pub use router::{route_prompts, route_resources, route_tools};
 pub use server::{
     RequestRouter, RuntimeConfig, ServerNotifier, ServerRuntime, ServerState, TransportPeer,
 };
+#[cfg(feature = "schema-validation")]
+pub use validation::{ValidatingToolHandler, ValidationMode, validate_json};
 
 /// Prelude module for convenient imports.
 pub mod prelude {

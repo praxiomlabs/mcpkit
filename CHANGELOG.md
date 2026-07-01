@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Opt-in tool I/O schema validation (`mcpkit-server`, feature
+  `schema-validation`, off by default). A new `ValidatingToolHandler<H>` decorator
+  validates `tools/call` arguments against each tool's `inputSchema` and
+  structured results against its `outputSchema`, resolving schemas from the inner
+  handler's `list_tools` at call time (no cache). Enable it on the builder with
+  `ServerBuilder::validate_tool_io()` (or the granular `validate_tool_inputs()` /
+  `validate_tool_outputs()`); HTTP-adapter users can wrap their handler directly
+  (the decorator transparently forwards `ServerHandler`/`ResourceHandler`/
+  `PromptHandler`). Per the Tools spec's error handling, arguments that fail the
+  `inputSchema` yield an `isError: true` result (not a `-32602` protocol error,
+  which stays reserved for malformed envelopes and unknown tools); an
+  `outputSchema` violation is logged as a server bug, the invalid
+  `structuredContent` is dropped, and the call returns `isError: true`. The
+  generic `ToolHandler::call_tool` path remains an unchecked escape hatch unless
+  wrapped. String `format` assertions are not enforced. A standalone
+  `validate_json` helper is also exported
+  ([#85](https://github.com/praxiomlabs/mcpkit/issues/85)).
 - List pagination (opt-in). A new `mcpkit_core::pagination` module provides an
   opaque, versioned base64url cursor codec and a `paginate` helper. The server
   now honours the inbound `cursor` and returns a `nextCursor` for `tools/list`,

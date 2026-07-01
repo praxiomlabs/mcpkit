@@ -169,6 +169,64 @@ where
     }
 }
 
+// Opt-in tool I/O schema validation (feature `schema-validation`). Wrapping the
+// registered tool handler covers every dispatch path (normal `tools/call`,
+// task-augmented execution, and the HTTP adapters) because they all go through
+// `ToolHandler::call_tool`.
+#[cfg(feature = "schema-validation")]
+impl<H, TH, R, P, K> ServerBuilder<H, Registered<TH>, R, P, K>
+where
+    H: ServerHandler,
+    TH: ToolHandler,
+{
+    /// Validate both `tools/call` arguments against each tool's `inputSchema`
+    /// and structured results against its `outputSchema`.
+    ///
+    /// Arguments that fail the `inputSchema` yield an `isError: true` result (per
+    /// the Tools spec's error handling); an `outputSchema` violation is logged as
+    /// a server bug, the invalid `structuredContent` is dropped, and the call
+    /// returns `isError: true`. See [`crate::validation`].
+    #[must_use]
+    pub fn validate_tool_io(
+        self,
+    ) -> ServerBuilder<H, Registered<crate::validation::ValidatingToolHandler<TH>>, R, P, K> {
+        self.wrap_tool_validation(crate::validation::ValidationMode::both())
+    }
+
+    /// Validate only `tools/call` arguments against each tool's `inputSchema`.
+    #[must_use]
+    pub fn validate_tool_inputs(
+        self,
+    ) -> ServerBuilder<H, Registered<crate::validation::ValidatingToolHandler<TH>>, R, P, K> {
+        self.wrap_tool_validation(crate::validation::ValidationMode::inputs_only())
+    }
+
+    /// Validate only structured results against each tool's `outputSchema`.
+    #[must_use]
+    pub fn validate_tool_outputs(
+        self,
+    ) -> ServerBuilder<H, Registered<crate::validation::ValidatingToolHandler<TH>>, R, P, K> {
+        self.wrap_tool_validation(crate::validation::ValidationMode::outputs_only())
+    }
+
+    fn wrap_tool_validation(
+        self,
+        mode: crate::validation::ValidationMode,
+    ) -> ServerBuilder<H, Registered<crate::validation::ValidatingToolHandler<TH>>, R, P, K> {
+        ServerBuilder {
+            handler: self.handler,
+            tools: Registered(crate::validation::ValidatingToolHandler::new(
+                self.tools.0,
+                mode,
+            )),
+            resources: self.resources,
+            prompts: self.prompts,
+            tasks: self.tasks,
+            capabilities: self.capabilities,
+        }
+    }
+}
+
 // Resource handler registration (only when resources are not yet registered)
 impl<H, T, P, K> ServerBuilder<H, T, NotRegistered, P, K>
 where
