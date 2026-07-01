@@ -10,8 +10,8 @@
 
 use mcpkit_core::error::McpError;
 use mcpkit_core::types::{
-    CreateMessageRequest, CreateMessageResult, ElicitRequest, ElicitResult, TaskId, TaskProgress,
-    UrlElicitRequest,
+    CreateMessageRequest, CreateMessageResult, ElicitRequest, ElicitResult,
+    ProgressNotificationParams, TaskId, TaskProgress, UrlElicitRequest,
 };
 use std::future::Future;
 
@@ -131,6 +131,14 @@ pub trait ClientHandler: Send + Sync {
     // =========================================================================
     // Notification Handlers
     // =========================================================================
+
+    /// Called on a `notifications/progress` update for a request that carried a
+    /// `progressToken`.
+    ///
+    /// Override this to track progress of long-running server operations.
+    fn on_progress(&self, _params: ProgressNotificationParams) -> impl Future<Output = ()> + Send {
+        async {}
+    }
 
     /// Called when a task makes progress.
     ///

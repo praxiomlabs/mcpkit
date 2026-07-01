@@ -1030,8 +1030,13 @@ where
                 if let Some(request_id) = notification
                     .params
                     .as_ref()
-                    .and_then(|p| p.get("requestId"))
-                    .and_then(|v| serde_json::from_value::<RequestId>(v.clone()).ok())
+                    .and_then(|p| {
+                        serde_json::from_value::<mcpkit_core::types::CancelledNotificationParams>(
+                            p.clone(),
+                        )
+                        .ok()
+                    })
+                    .and_then(|c| c.request_id)
                 {
                     // Match the canonical id form `route_request` registers with,
                     // so numeric and string request ids both resolve.

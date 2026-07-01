@@ -97,6 +97,30 @@ impl Meta {
             .get(PROGRESS_TOKEN_KEY)
             .and_then(|v| serde_json::from_value(v.clone()).ok())
     }
+
+    /// Attach `_meta.progressToken` to (possibly absent) request params so the
+    /// server will emit progress notifications for the call.
+    ///
+    /// Existing params and any existing `_meta` entries are preserved; a missing
+    /// params object becomes `{ "_meta": { "progressToken": … } }`. Params that
+    /// are not a JSON object (invalid for MCP) are replaced.
+    #[must_use]
+    pub fn with_progress_token_in_params(params: Option<Value>, token: &ProgressToken) -> Value {
+        let mut obj = match params {
+            Some(Value::Object(map)) => map,
+            _ => Map::new(),
+        };
+        let meta = obj
+            .entry("_meta")
+            .or_insert_with(|| Value::Object(Map::new()));
+        if let Value::Object(meta_obj) = meta {
+            meta_obj.insert(
+                PROGRESS_TOKEN_KEY.to_string(),
+                serde_json::to_value(token).unwrap_or(Value::Null),
+            );
+        }
+        Value::Object(obj)
+    }
 }
 
 #[cfg(test)]
@@ -148,6 +172,22 @@ mod tests {
         let mut keys: Vec<&str> = meta.iter().map(|(k, _)| k.as_str()).collect();
         keys.sort_unstable();
         assert_eq!(keys, ["a", "b"]);
+    }
+
+    #[test]
+    fn with_progress_token_in_params_injects_and_preserves() {
+        // Absent params -> just `_meta.progressToken`.
+        let out = Meta::with_progress_token_in_params(None, &ProgressToken::Number(3));
+        assert_eq!(out, json!({ "_meta": { "progressToken": 3 } }));
+
+        // Existing params and existing `_meta` entries are preserved.
+        let params = json!({ "name": "t", "_meta": { "keep": true } });
+        let out =
+            Meta::with_progress_token_in_params(Some(params), &ProgressToken::String("x".into()));
+        assert_eq!(
+            out,
+            json!({ "name": "t", "_meta": { "keep": true, "progressToken": "x" } })
+        );
     }
 
     #[test]

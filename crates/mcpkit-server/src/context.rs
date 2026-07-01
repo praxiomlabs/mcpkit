@@ -48,6 +48,7 @@ use mcpkit_core::error::McpError;
 use mcpkit_core::protocol::{Notification, ProgressToken, RequestId, Response};
 use mcpkit_core::protocol_version::ProtocolVersion;
 use mcpkit_core::types::elicitation::{ElicitRequest, ElicitResult, UrlElicitRequest};
+use mcpkit_core::types::notifications::ProgressNotificationParams;
 use mcpkit_core::types::sampling::{CreateMessageRequest, CreateMessageResult};
 use std::borrow::Cow;
 use std::future::Future;
@@ -317,8 +318,8 @@ impl<'a> Context<'a> {
     /// Returns an error if the notification could not be sent.
     pub async fn progress(
         &self,
-        current: u64,
-        total: Option<u64>,
+        current: f64,
+        total: Option<f64>,
         message: Option<&str>,
     ) -> Result<(), McpError> {
         let Some(token) = self.progress_token else {
@@ -326,14 +327,17 @@ impl<'a> Context<'a> {
             return Ok(());
         };
 
-        let params = serde_json::json!({
-            "progressToken": token,
-            "progress": current,
-            "total": total,
-            "message": message,
-        });
+        let params = ProgressNotificationParams {
+            total,
+            message: message.map(String::from),
+            ..ProgressNotificationParams::new(token.clone(), current)
+        };
 
-        self.notify("notifications/progress", Some(params)).await
+        self.notify(
+            "notifications/progress",
+            Some(serde_json::to_value(params)?),
+        )
+        .await
     }
 
     /// Send a request to the client and await its response.

@@ -262,7 +262,11 @@ pub struct CancelTaskRequest {
 /// the task's current state.
 pub type TaskStatusNotification = Task;
 
-/// Progress information carried by a `notifications/progress` message.
+/// Task-domain progress information.
+///
+/// Note: the base-protocol `notifications/progress` payload is
+/// [`ProgressNotificationParams`](crate::types::ProgressNotificationParams), not
+/// this type.
 ///
 /// Note: this is the progress utility's payload, not part of the spec `Task`
 /// object (the 2025-11-25 `Task` has no embedded progress). It is retained for
