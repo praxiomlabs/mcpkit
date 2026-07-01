@@ -510,7 +510,27 @@ fn parse_list_params(params: Option<&Value>) -> ListParams {
 
 use crate::context::Context;
 use crate::dispatch::{DynPromptHandler, DynResourceHandler, DynTaskHandler, DynToolHandler};
+use mcpkit_core::pagination::paginate;
 use mcpkit_core::types::{CallToolResult, TaskId};
+
+/// Build a paginated list result: the items under `key` plus an optional
+/// `nextCursor`.
+fn list_result<T: serde::Serialize>(key: &str, items: Vec<T>, next: Option<String>) -> Value {
+    let mut obj = serde_json::Map::new();
+    obj.insert(
+        key.to_string(),
+        serde_json::to_value(items).unwrap_or_default(),
+    );
+    if let Some(cursor) = next {
+        obj.insert("nextCursor".to_string(), Value::String(cursor));
+    }
+    Value::Object(obj)
+}
+
+/// The `cursor` string from list-request params, if present.
+fn list_cursor(params: Option<&Value>) -> Option<&str> {
+    params.and_then(|p| p.get("cursor")).and_then(Value::as_str)
+}
 
 /// Route tool-related requests to a handler implementing
 /// [`ToolHandler`](crate::handler::ToolHandler).
@@ -530,16 +550,20 @@ pub async fn route_tools(
     method: &str,
     params: Option<&serde_json::Value>,
     ctx: &Context<'_>,
+    page_size: Option<usize>,
 ) -> Option<Result<serde_json::Value, McpError>> {
     match method {
         methods::TOOLS_LIST => {
             tracing::debug!("Listing available tools");
-            let result = handler.list_tools(ctx).await;
-            match &result {
-                Ok(tools) => tracing::debug!(count = tools.len(), "Listed tools"),
-                Err(e) => tracing::warn!(error = %e, "Failed to list tools"),
+            let result = async {
+                let tools = handler.list_tools(ctx).await?;
+                let (page, next) =
+                    paginate(tools, list_cursor(params), page_size, methods::TOOLS_LIST)?;
+                tracing::debug!(count = page.len(), "Listed tools");
+                Ok(list_result("tools", page, next))
             }
-            Some(result.map(|tools| serde_json::json!({ "tools": tools })))
+            .await;
+            Some(result)
         }
         methods::TOOLS_CALL => {
             let result = async {
@@ -602,27 +626,40 @@ pub async fn route_resources(
     method: &str,
     params: Option<&serde_json::Value>,
     ctx: &Context<'_>,
+    page_size: Option<usize>,
 ) -> Option<Result<serde_json::Value, McpError>> {
     match method {
         methods::RESOURCES_LIST => {
             tracing::debug!("Listing available resources");
-            let result = handler.list_resources(ctx).await;
-            match &result {
-                Ok(resources) => tracing::debug!(count = resources.len(), "Listed resources"),
-                Err(e) => tracing::warn!(error = %e, "Failed to list resources"),
+            let result = async {
+                let resources = handler.list_resources(ctx).await?;
+                let (page, next) = paginate(
+                    resources,
+                    list_cursor(params),
+                    page_size,
+                    methods::RESOURCES_LIST,
+                )?;
+                tracing::debug!(count = page.len(), "Listed resources");
+                Ok(list_result("resources", page, next))
             }
-            Some(result.map(|resources| serde_json::json!({ "resources": resources })))
+            .await;
+            Some(result)
         }
         methods::RESOURCES_TEMPLATES_LIST => {
             tracing::debug!("Listing available resource templates");
-            let result = handler.list_resource_templates(ctx).await;
-            match &result {
-                Ok(templates) => {
-                    tracing::debug!(count = templates.len(), "Listed resource templates");
-                }
-                Err(e) => tracing::warn!(error = %e, "Failed to list resource templates"),
+            let result = async {
+                let templates = handler.list_resource_templates(ctx).await?;
+                let (page, next) = paginate(
+                    templates,
+                    list_cursor(params),
+                    page_size,
+                    methods::RESOURCES_TEMPLATES_LIST,
+                )?;
+                tracing::debug!(count = page.len(), "Listed resource templates");
+                Ok(list_result("resourceTemplates", page, next))
             }
-            Some(result.map(|templates| serde_json::json!({ "resourceTemplates": templates })))
+            .await;
+            Some(result)
         }
         methods::RESOURCES_READ => {
             let result = async {
@@ -680,16 +717,24 @@ pub async fn route_prompts(
     method: &str,
     params: Option<&serde_json::Value>,
     ctx: &Context<'_>,
+    page_size: Option<usize>,
 ) -> Option<Result<serde_json::Value, McpError>> {
     match method {
         methods::PROMPTS_LIST => {
             tracing::debug!("Listing available prompts");
-            let result = handler.list_prompts(ctx).await;
-            match &result {
-                Ok(prompts) => tracing::debug!(count = prompts.len(), "Listed prompts"),
-                Err(e) => tracing::warn!(error = %e, "Failed to list prompts"),
+            let result = async {
+                let prompts = handler.list_prompts(ctx).await?;
+                let (page, next) = paginate(
+                    prompts,
+                    list_cursor(params),
+                    page_size,
+                    methods::PROMPTS_LIST,
+                )?;
+                tracing::debug!(count = page.len(), "Listed prompts");
+                Ok(list_result("prompts", page, next))
             }
-            Some(result.map(|prompts| serde_json::json!({ "prompts": prompts })))
+            .await;
+            Some(result)
         }
         methods::PROMPTS_GET => {
             let result = async {
@@ -1361,5 +1406,79 @@ mod tests {
                 .await
                 .is_none()
         );
+    }
+
+    #[tokio::test]
+    async fn route_tools_paginates_tools_list() {
+        use crate::context::NoOpPeer;
+        use crate::handler::ToolHandler;
+        use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
+        use mcpkit_core::protocol::RequestId;
+        use mcpkit_core::protocol_version::ProtocolVersion;
+        use mcpkit_core::types::{Tool, ToolOutput};
+
+        struct Tools;
+        impl ToolHandler for Tools {
+            async fn list_tools(&self, _ctx: &Context<'_>) -> Result<Vec<Tool>, McpError> {
+                Ok(vec![Tool::new("a"), Tool::new("b"), Tool::new("c")])
+            }
+            async fn call_tool(
+                &self,
+                _name: &str,
+                _args: Value,
+                _ctx: &Context<'_>,
+            ) -> Result<ToolOutput, McpError> {
+                Ok(ToolOutput::text("x"))
+            }
+        }
+
+        let handler = Tools;
+        let request_id = RequestId::Number(1);
+        let client_caps = ClientCapabilities::default();
+        let server_caps = ServerCapabilities::default();
+        let peer = NoOpPeer;
+        let ctx = Context::new(
+            &request_id,
+            None,
+            &client_caps,
+            &server_caps,
+            ProtocolVersion::LATEST,
+            &peer,
+        );
+
+        // Page 1 of size 2 -> two tools plus a nextCursor.
+        let page1 = route_tools(&handler, methods::TOOLS_LIST, None, &ctx, Some(2))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(page1["tools"].as_array().unwrap().len(), 2);
+        let cursor = page1["nextCursor"]
+            .as_str()
+            .expect("nextCursor")
+            .to_string();
+
+        // Page 2 via the cursor -> the last tool, no further cursor.
+        let params = serde_json::json!({ "cursor": cursor });
+        let page2 = route_tools(&handler, methods::TOOLS_LIST, Some(&params), &ctx, Some(2))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(page2["tools"].as_array().unwrap().len(), 1);
+        assert!(page2.get("nextCursor").is_none());
+
+        // Pagination disabled (None) -> all three, no cursor.
+        let all = route_tools(&handler, methods::TOOLS_LIST, None, &ctx, None)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(all["tools"].as_array().unwrap().len(), 3);
+        assert!(all.get("nextCursor").is_none());
+
+        // An invalid cursor is a routed error.
+        let bad = serde_json::json!({ "cursor": "not-a-cursor" });
+        let err = route_tools(&handler, methods::TOOLS_LIST, Some(&bad), &ctx, Some(2))
+            .await
+            .unwrap();
+        assert!(err.is_err());
     }
 }

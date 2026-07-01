@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- List pagination (opt-in). A new `mcpkit_core::pagination` module provides an
+  opaque, versioned base64url cursor codec and a `paginate` helper. The server
+  now honours the inbound `cursor` and returns a `nextCursor` for `tools/list`,
+  `resources/list`, `resources/templates/list`, and `prompts/list`.
+  `Server::list_page_size(n)` enables paging at page size `n` (default: disabled
+  — lists return everything with no `nextCursor`, unchanged behaviour); an
+  invalid cursor is an `Invalid params` error. Handler traits are unchanged
+  (routing-layer paging). Cursors are offset-based, so a list that changes
+  between page requests may skip or repeat entries — fine for static tool/prompt
+  lists, a documented caveat for dynamic resource lists. Adapter (axum/actix/
+  warp/rocket) page-size configuration and client "list all" cursor-following
+  follow in subsequent PRs
+  ([#78](https://github.com/praxiomlabs/mcpkit/issues/78)).
 - URL-mode elicitation (2025-11-25), core + server. `ElicitRequest` gains an
   optional `mode` (absent = form); new `UrlElicitRequest`
   (`mode`/`message`/`elicitationId`/`url`), `ElicitRequestParams` (a union that

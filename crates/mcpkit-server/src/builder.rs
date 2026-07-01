@@ -265,6 +265,7 @@ where
             prompts: self.prompts,
             tasks: self.tasks,
             capabilities: self.capabilities,
+            list_page_size: None,
         }
     }
 }
@@ -284,6 +285,9 @@ pub struct Server<H, T, R, P, K> {
     pub(crate) prompts: P,
     pub(crate) tasks: K,
     capabilities: ServerCapabilities,
+    /// Page size for `*/list` results; `None` disables pagination (list
+    /// responses return everything, no `nextCursor`).
+    pub(crate) list_page_size: Option<usize>,
 }
 
 impl<H, T, R, P, K> Server<H, T, R, P, K>
@@ -294,6 +298,19 @@ where
     #[must_use]
     pub const fn capabilities(&self) -> &ServerCapabilities {
         &self.capabilities
+    }
+
+    /// Enable pagination of `tools/list`, `resources/list`,
+    /// `resources/templates/list`, and `prompts/list` at the given page size.
+    ///
+    /// By default pagination is disabled (each list returns all items with no
+    /// `nextCursor`). Setting a page size bounds the response payload; clients
+    /// follow the returned `nextCursor` to fetch subsequent pages. A size of `0`
+    /// is treated as disabled.
+    #[must_use]
+    pub const fn list_page_size(mut self, page_size: usize) -> Self {
+        self.list_page_size = Some(page_size);
+        self
     }
 
     /// Get a reference to the base handler.

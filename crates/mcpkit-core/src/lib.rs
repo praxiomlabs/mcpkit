@@ -63,6 +63,7 @@ pub mod capability;
 pub mod debug;
 pub mod error;
 pub mod extension;
+pub mod pagination;
 pub mod protocol;
 pub mod protocol_version;
 pub mod schema;
