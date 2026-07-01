@@ -1179,18 +1179,19 @@ where
         if method == "ping" {
             return Ok(serde_json::json!({}));
         }
+        let page_size = self.list_page_size;
         if let Some(handler) = self.tools.as_tool_handler() {
-            if let Some(result) = route_tools(handler, method, params, ctx).await {
+            if let Some(result) = route_tools(handler, method, params, ctx, page_size).await {
                 return result;
             }
         }
         if let Some(handler) = self.resources.as_resource_handler() {
-            if let Some(result) = route_resources(handler, method, params, ctx).await {
+            if let Some(result) = route_resources(handler, method, params, ctx, page_size).await {
                 return result;
             }
         }
         if let Some(handler) = self.prompts.as_prompt_handler() {
-            if let Some(result) = route_prompts(handler, method, params, ctx).await {
+            if let Some(result) = route_prompts(handler, method, params, ctx, page_size).await {
                 return result;
             }
         }
