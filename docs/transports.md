@@ -37,17 +37,12 @@ use mcpkit_transport::http::{HttpTransport, HttpTransportConfig};
 // Client
 let config = HttpTransportConfig::new("http://localhost:8080/mcp");
 let transport = HttpTransport::new(config);
-
-// Server
-use mcpkit_transport::http::HttpTransportListener;
-
-let listener = HttpTransportListener::bind("0.0.0.0:8080").await?;
-while let Some(transport) = listener.accept().await? {
-    tokio::spawn(async move {
-        server.serve(transport).await
-    });
-}
 ```
+
+To **serve** MCP over Streamable HTTP, use a framework adapter —
+`mcpkit-axum`, `mcpkit-actix`, `mcpkit-warp`, or `mcpkit-rocket` — which handle
+request routing, session management, SSE, and `Origin` validation. See each
+adapter crate's docs for the router setup.
 
 ### Configuration Options
 

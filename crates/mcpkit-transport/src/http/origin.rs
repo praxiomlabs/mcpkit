@@ -8,7 +8,16 @@
 //!
 //! See: <https://modelcontextprotocol.io/specification/2025-11-25/basic/transports>
 
-use super::server::OriginValidationMode;
+/// Origin validation mode for DNS-rebinding protection, used internally by
+/// [`OriginValidator`].
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+enum OriginValidationMode {
+    /// Validate against an allow list; origins not in the list are rejected.
+    #[default]
+    AllowList,
+    /// Disable origin validation entirely (no DNS-rebinding protection).
+    Disabled,
+}
 
 /// Validates request `Origin` headers to protect an HTTP MCP server from
 /// DNS-rebinding attacks.
@@ -66,15 +75,13 @@ impl OriginValidator {
     #[must_use]
     pub fn is_allowed(&self, origin: Option<&str>) -> bool {
         match self.mode {
-            OriginValidationMode::Disabled | OriginValidationMode::WarnAndAllow => true,
+            OriginValidationMode::Disabled => true,
             OriginValidationMode::AllowList => match origin {
                 // No Origin header: not a browser request, so not a DNS-rebinding
                 // vector.
                 None => true,
                 Some(origin) => self.is_origin_listed(origin),
             },
-            // Strict additionally requires that an `Origin` header be present.
-            OriginValidationMode::Strict => origin.is_some_and(|o| self.is_origin_listed(o)),
         }
     }
 
@@ -126,14 +133,10 @@ mod tests {
     }
 
     #[test]
-    fn missing_origin_is_allowed_but_strict_rejects_it() {
+    fn missing_origin_is_allowed() {
+        // Requests without an `Origin` header cannot come from a browser, so
+        // they are not a DNS-rebinding vector and are allowed.
         assert!(OriginValidator::allow_list().is_allowed(None));
-        let strict = OriginValidator {
-            mode: OriginValidationMode::Strict,
-            allowed_origins: Vec::new(),
-        };
-        assert!(!strict.is_allowed(None));
-        assert!(strict.is_allowed(Some("http://localhost")));
     }
 
     #[test]

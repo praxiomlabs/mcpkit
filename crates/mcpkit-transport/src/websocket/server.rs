@@ -32,7 +32,9 @@ use crate::error::TransportError;
 
 /// Origin validation mode for DNS rebinding protection.
 ///
-/// See [`crate::http::OriginValidationMode`] for detailed documentation.
+/// DNS rebinding lets a malicious web page bind its own domain to a loopback
+/// address and make same-origin requests to a local server; validating the
+/// request `Origin` header against an allow list defends against it.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum OriginValidationMode {
     /// Validate against an allow list.

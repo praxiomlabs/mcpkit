@@ -44,9 +44,6 @@ mod config;
 mod sse;
 
 #[cfg(feature = "http")]
-mod server;
-
-#[cfg(feature = "http")]
 mod origin;
 
 // Re-export public types
@@ -58,8 +55,6 @@ pub use config::{
 
 #[cfg(feature = "http")]
 pub use origin::OriginValidator;
-#[cfg(feature = "http")]
-pub use server::{HttpServerConfig, HttpTransportListener, OriginValidationMode};
 
 // Re-export SSE types for testing
 pub use sse::HttpTransportState;

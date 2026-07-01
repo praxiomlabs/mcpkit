@@ -504,18 +504,18 @@ let listener = WebSocketListener::with_config("0.0.0.0:8080", config);
 
 ##### HTTP Origin Validation
 
-The same validation modes apply to HTTP transports:
+HTTP MCP servers are built with the framework adapters (`mcpkit-axum`,
+`mcpkit-actix`, `mcpkit-warp`, `mcpkit-rocket`), which validate the `Origin`
+header via `mcpkit_transport::http::OriginValidator`. The secure default
+(`OriginValidator::allow_list()`) accepts only loopback origins plus any you add;
+configure additional origins through the adapter's router builder (e.g.
+`McpRouter::with_allowed_origins([...])`):
 
 ```rust
-use mcpkit_transport::http::{HttpServerConfig, OriginValidationMode};
+use mcpkit_transport::http::OriginValidator;
 
-// Production HTTP server
-let config = HttpServerConfig::production()
-    .with_allowed_origin("https://trusted-client.com");
-
-// Acknowledge development mode security trade-offs explicitly
-let dev_config = HttpServerConfig::new()
-    .acknowledge_origin_security_warning();  // Required for non-production configs
+// Loopback-only by default; add explicitly trusted browser origins.
+let validator = OriginValidator::allow_list().allow("https://trusted-client.com");
 ```
 
 ### 2. Input Validation
