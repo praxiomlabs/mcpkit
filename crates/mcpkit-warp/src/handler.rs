@@ -3,6 +3,7 @@
 use crate::state::{HasServerInfo, McpState};
 use crate::{SUPPORTED_VERSIONS, is_supported_version};
 use futures::StreamExt;
+use mcpkit_core::auth::VerifiedUser;
 use mcpkit_core::capability::ClientCapabilities;
 use mcpkit_core::protocol::Message;
 use mcpkit_core::protocol_version::ProtocolVersion;
@@ -27,6 +28,7 @@ pub async fn handle_mcp_post<H>(
     version: Option<String>,
     session_id: Option<String>,
     origin: Option<String>,
+    user: Option<VerifiedUser>,
     body: String,
 ) -> Result<impl warp::Reply, Infallible>
 where
@@ -74,13 +76,32 @@ where
         ));
     }
 
-    // Get or create session
+    // Get or create session (binding it to the verified user, if any).
     let session_id = match session_id {
-        Some(id) => {
-            state.sessions.touch(&id);
-            id
-        }
-        None => state.sessions.create(),
+        Some(id) => match state.sessions.touch_verified(&id, user.as_ref()) {
+            Ok(true) => id,
+            Ok(false) => {
+                warn!(session_id = %id, "Rejected: unknown session id");
+                let error_body = serde_json::json!({
+                    "error": { "code": -32600, "message": "unknown session id" }
+                });
+                return Ok(warp::reply::with_status(
+                    warp::reply::json(&error_body),
+                    StatusCode::NOT_FOUND,
+                ));
+            }
+            Err(e) => {
+                warn!(session_id = %id, error = %e, "Rejected: session binding violation");
+                let error_body = serde_json::json!({
+                    "error": { "code": -32600, "message": e.to_string() }
+                });
+                return Ok(warp::reply::with_status(
+                    warp::reply::json(&error_body),
+                    StatusCode::FORBIDDEN,
+                ));
+            }
+        },
+        None => state.sessions.create_for_user(user),
     };
 
     debug!(session_id = %session_id, "Processing MCP request");
@@ -282,6 +303,7 @@ pub fn handle_sse<H>(
     state: Arc<McpState<H>>,
     session_id: Option<String>,
     origin: Option<String>,
+    user: Option<VerifiedUser>,
 ) -> warp::reply::Response
 where
     H: HasServerInfo + Send + Sync + 'static,
@@ -296,6 +318,15 @@ where
         );
         return warp::reply::with_status("origin not allowed", StatusCode::FORBIDDEN)
             .into_response();
+    }
+
+    // Enforce the session's user binding before subscribing a reconnecting
+    // client to its event stream.
+    if let Some(id) = &session_id {
+        if let Err(e) = state.sessions.touch_verified(id, user.as_ref()) {
+            warn!(session_id = %id, error = %e, "Rejected SSE: session binding violation");
+            return warp::reply::with_status(e.to_string(), StatusCode::FORBIDDEN).into_response();
+        }
     }
 
     let (session_id, rx) = if let Some(id) = session_id {
@@ -461,6 +492,7 @@ mod tests {
             Some("unsupported-version".to_string()),
             None,
             None,
+            None,
             r#"{"jsonrpc":"2.0","method":"ping","id":1}"#.to_string(),
         )
         .await;
@@ -476,6 +508,7 @@ mod tests {
         let response = handle_mcp_post(
             state,
             Some("2025-11-25".to_string()),
+            None,
             None,
             None,
             "invalid json".to_string(),
@@ -495,6 +528,7 @@ mod tests {
             Some("2025-11-25".to_string()),
             None,
             None,
+            None,
             r#"{"jsonrpc":"2.0","method":"ping","id":1}"#.to_string(),
         )
         .await;
@@ -510,6 +544,7 @@ mod tests {
         let response = handle_mcp_post(
             state,
             Some("2025-11-25".to_string()),
+            None,
             None,
             None,
             r#"{"jsonrpc":"2.0","method":"initialize","params":{},"id":1}"#.to_string(),
@@ -532,6 +567,7 @@ mod tests {
             Some("2025-11-25".to_string()),
             Some(session_id.clone()),
             None,
+            None,
             r#"{"jsonrpc":"2.0","method":"ping","id":1}"#.to_string(),
         )
         .await;
@@ -548,6 +584,7 @@ mod tests {
         let response = handle_mcp_post(
             state,
             Some("2025-11-25".to_string()),
+            None,
             None,
             None,
             r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#.to_string(),

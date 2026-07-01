@@ -130,7 +130,7 @@ where
                  origin: Option<String>,
                  bytes: bytes::Bytes| async move {
                     let body = String::from_utf8_lossy(&bytes).to_string();
-                    handle_mcp_post(state, version, session_id, origin, body).await
+                    handle_mcp_post(state, version, session_id, origin, None, body).await
                 },
             );
 
@@ -144,7 +144,7 @@ where
             .and(with_origin())
             .map(
                 |state: Arc<McpState<H>>, session_id: Option<String>, origin: Option<String>| {
-                    handle_sse(state, session_id, origin)
+                    handle_sse(state, session_id, origin, None)
                 },
             );
 
@@ -189,7 +189,7 @@ where
                  origin: Option<String>,
                  bytes: bytes::Bytes| async move {
                     let body = String::from_utf8_lossy(&bytes).to_string();
-                    handle_mcp_post(state, version, session_id, origin, body).await
+                    handle_mcp_post(state, version, session_id, origin, None, body).await
                 },
             );
 
@@ -203,7 +203,7 @@ where
             .and(with_origin())
             .map(
                 |state: Arc<McpState<H>>, session_id: Option<String>, origin: Option<String>| {
-                    handle_sse(state, session_id, origin)
+                    handle_sse(state, session_id, origin, None)
                 },
             );
 
