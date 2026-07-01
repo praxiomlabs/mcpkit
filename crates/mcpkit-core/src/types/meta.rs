@@ -45,6 +45,11 @@ impl Meta {
         self.0.get(key)
     }
 
+    /// Iterate over the `(key, value)` metadata entries.
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &Value)> {
+        self.0.iter()
+    }
+
     /// Insert a raw metadata entry, returning the previous value if any.
     pub fn insert(&mut self, key: impl Into<String>, value: Value) -> Option<Value> {
         self.0.insert(key.into(), value)
@@ -135,6 +140,14 @@ mod tests {
     fn empty_meta_is_empty() {
         assert!(Meta::new().is_empty());
         assert!(!Meta::new().with("k", json!(1)).is_empty());
+    }
+
+    #[test]
+    fn iter_yields_entries() {
+        let meta = Meta::new().with("a", json!(1)).with("b", json!(2));
+        let mut keys: Vec<&str> = meta.iter().map(|(k, _)| k.as_str()).collect();
+        keys.sort_unstable();
+        assert_eq!(keys, ["a", "b"]);
     }
 
     #[test]

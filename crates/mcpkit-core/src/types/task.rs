@@ -112,9 +112,6 @@ pub struct Task {
     /// Suggested polling interval, in milliseconds.
     #[serde(rename = "pollInterval", skip_serializing_if = "Option::is_none")]
     pub poll_interval: Option<u64>,
-    /// Optional protocol metadata (`_meta`).
-    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
-    pub meta: Option<Meta>,
 }
 
 impl Task {
@@ -130,7 +127,6 @@ impl Task {
             last_updated_at: now,
             ttl: None,
             poll_interval: None,
-            meta: None,
         }
     }
 
@@ -196,6 +192,16 @@ pub struct CreateTaskResult {
     #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
     pub meta: Option<Meta>,
 }
+
+// NOTE: Per the spec, `tasks/get`/`tasks/cancel` results and the task-status
+// notification are `Result & Task` / `NotificationParams & Task`, i.e. they may
+// carry a result/notification-level `_meta`. That is intentionally *not* modeled
+// here: the base `Task` has no `_meta` (adding one would leak `_meta` into nested
+// `CreateTaskResult.task` and `ListTasksResult.tasks[]`), and the task handler API
+// returns a bare `Task` with nowhere to supply result-level metadata. Modeling it
+// would need dedicated result wrapper types + a handler-contract change — see
+// issue #136. `CreateTaskResult`/`ListTasksResult` do carry their own
+// result-level `_meta`.
 
 /// Result of `tasks/get` — the task's current state (spec `Result & Task`).
 pub type GetTaskResult = Task;

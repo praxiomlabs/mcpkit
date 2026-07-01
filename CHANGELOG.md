@@ -15,10 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Meta::progress_token_from_params` helper (the server's hand-rolled progress-
   token extraction now delegates to it). Concrete result structs
   (`CallToolResult`, `GetPromptResult`, `ListToolsResult`, the other `*Result`
-  types, `InitializeResult`, `PingResult`) and `Task` gain an optional
-  `meta: Option<Meta>` field, serialized as `_meta` and omitted when absent. A
-  generic `Request<T>` refactor was deliberately avoided; request-param `_meta`
-  beyond `progressToken` is handled at the boundary rather than per-struct.
+  types, `InitializeResult`, `PingResult`) gain an optional `meta: Option<Meta>`
+  field, serialized as `_meta` and omitted when absent. The base `Task` is left
+  spec-pure (no `_meta`); task-get/cancel result and status-notification `_meta`
+  (spec `Result & Task`) is deferred to
+  [#136](https://github.com/praxiomlabs/mcpkit/issues/136) to avoid contaminating
+  nested `Task` values. A generic `Request<T>` refactor was deliberately avoided;
+  request-param `_meta` beyond `progressToken` is handled at the boundary rather
+  than per-struct.
   **Breaking:** the new field means struct-literal construction of these result
   types now requires `meta` (use the existing constructors, `..Default::default()`
   where derived, or `meta: None`)
