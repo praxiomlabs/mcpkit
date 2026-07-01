@@ -21,8 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   wire. `ClientCapabilities` gains `with_form_elicitation`/`with_url_elicitation`
   and `has_form_elicitation`/`has_url_elicitation`; `ElicitationCapability` is now
   `{ form?, url? }` (an empty `{}` remains form-capable for backwards
-  compatibility). Client-side URL handling (with a consent hook) and the
-  completion-notification dispatch follow in a second PR
+  compatibility).
+  The client now handles both modes: it parses `elicitation/create` via the
+  `ElicitRequestParams` union and dispatches URL-mode requests to a new
+  `ClientHandler::elicit_url` (default: **decline** — a client must not open a
+  URL without explicit user consent), and dispatches
+  `notifications/elicitation/complete` to `ClientHandler::on_elicitation_complete`.
+  The `#[mcp_client]` macro gains `#[elicit_url]` and `#[on_elicitation_complete]`
+  handler attributes
   ([#103](https://github.com/praxiomlabs/mcpkit/issues/103)).
 - Session-to-verified-user binding (security). A new
   `mcpkit_core::auth::VerifiedUser` (`subject` + `issuer` + `audience`) models an

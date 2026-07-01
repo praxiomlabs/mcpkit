@@ -23,7 +23,7 @@ use mcpkit_core::protocol::{Message, Notification, Request, RequestId, Response}
 use mcpkit_core::protocol_version::ProtocolVersion;
 use mcpkit_core::types::{
     CallToolRequest, CallToolResult, CancelTaskRequest, CompleteRequest, CompleteResult,
-    CompletionArgument, CompletionRef, CreateMessageRequest, ElicitRequest, GetPromptRequest,
+    CompletionArgument, CompletionRef, CreateMessageRequest, ElicitRequestParams, GetPromptRequest,
     GetPromptResult, GetTaskRequest, ListPromptsResult, ListResourceTemplatesResult,
     ListResourcesResult, ListTasksRequest, ListTasksResult, ListToolsResult, Prompt,
     ReadResourceRequest, ReadResourceResult, Resource, ResourceContents, ResourceTemplate, Task,
@@ -379,25 +379,29 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
 
     /// Handle an elicitation/create request.
     async fn handle_elicitation_request(request: &Request, handler: &Arc<H>) -> Response {
-        let params = match &request.params {
-            Some(p) => match serde_json::from_value::<ElicitRequest>(p.clone()) {
-                Ok(req) => req,
-                Err(e) => {
-                    return Response::error(
-                        request.id.clone(),
-                        JsonRpcError::invalid_params(format!("Invalid params: {e}")),
-                    );
-                }
-            },
-            None => {
+        let Some(p) = &request.params else {
+            return Response::error(
+                request.id.clone(),
+                JsonRpcError::invalid_params("Missing params for elicitation/create"),
+            );
+        };
+        // Parse either form- or url-mode params (discriminated by `mode`).
+        let params = match serde_json::from_value::<ElicitRequestParams>(p.clone()) {
+            Ok(params) => params,
+            Err(e) => {
                 return Response::error(
                     request.id.clone(),
-                    JsonRpcError::invalid_params("Missing params for elicitation/create"),
+                    JsonRpcError::invalid_params(format!("Invalid params: {e}")),
                 );
             }
         };
 
-        match handler.elicit(params).await {
+        let outcome = match params {
+            ElicitRequestParams::Form(req) => handler.elicit(req).await,
+            ElicitRequestParams::Url(req) => handler.elicit_url(req).await,
+        };
+
+        match outcome {
             Ok(result) => match serde_json::to_value(result) {
                 Ok(value) => Response::success(request.id.clone(), value),
                 Err(e) => Response::error(
@@ -486,6 +490,17 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
             "notifications/prompts/list_changed" => {
                 debug!("Prompts list changed");
                 handler.on_prompts_list_changed().await;
+            }
+            "notifications/elicitation/complete" => {
+                if let Some(id) = notification
+                    .params
+                    .as_ref()
+                    .and_then(|p| p.get("elicitationId"))
+                    .and_then(|v| v.as_str())
+                {
+                    debug!(elicitation_id = %id, "Elicitation completed");
+                    handler.on_elicitation_complete(id.to_string()).await;
+                }
             }
             _ => {
                 trace!(method = %notification.method, "Unhandled notification");

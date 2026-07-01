@@ -32,6 +32,9 @@ pub fn expand_mcp_client(attr: TokenStream, item: TokenStream) -> Result<TokenSt
     // Find handler methods
     let sampling_method = find_and_remove_handler(&mut impl_block, "sampling");
     let elicitation_method = find_and_remove_handler(&mut impl_block, "elicitation");
+    let elicit_url_method = find_and_remove_handler(&mut impl_block, "elicit_url");
+    let on_elicitation_complete_method =
+        find_and_remove_handler(&mut impl_block, "on_elicitation_complete");
     let roots_method = find_and_remove_handler(&mut impl_block, "roots");
 
     // Find lifecycle hooks
@@ -57,6 +60,8 @@ pub fn expand_mcp_client(attr: TokenStream, item: TokenStream) -> Result<TokenSt
         self_ty,
         sampling_method.as_ref(),
         elicitation_method.as_ref(),
+        elicit_url_method.as_ref(),
+        on_elicitation_complete_method.as_ref(),
         roots_method.as_ref(),
         on_connected_method.as_ref(),
         on_disconnected_method.as_ref(),
@@ -126,6 +131,8 @@ fn generate_client_handler(
     self_ty: &syn::Type,
     sampling_method: Option<&HandlerMethod>,
     elicitation_method: Option<&HandlerMethod>,
+    elicit_url_method: Option<&HandlerMethod>,
+    on_elicitation_complete_method: Option<&HandlerMethod>,
     roots_method: Option<&HandlerMethod>,
     on_connected_method: Option<&HandlerMethod>,
     on_disconnected_method: Option<&HandlerMethod>,
@@ -198,6 +205,55 @@ fn generate_client_handler(
                     async move {
                         Ok(#call)
                     }
+                }
+            }
+        }
+    } else {
+        quote!()
+    };
+
+    // Generate elicit_url method
+    let elicit_url_impl = if let Some(method) = elicit_url_method {
+        let method_name = &method.name;
+        let call = if method.is_async {
+            quote!(self.#method_name(request).await)
+        } else {
+            quote!(self.#method_name(request))
+        };
+        let body = if method.returns_result {
+            quote!(#call)
+        } else {
+            quote!(Ok(#call))
+        };
+        quote! {
+            fn elicit_url(
+                &self,
+                request: ::mcpkit::types::UrlElicitRequest,
+            ) -> impl std::future::Future<Output = Result<::mcpkit::types::ElicitResult, ::mcpkit::error::McpError>> + Send {
+                async move {
+                    #body
+                }
+            }
+        }
+    } else {
+        quote!()
+    };
+
+    // Generate on_elicitation_complete method
+    let on_elicitation_complete_impl = if let Some(method) = on_elicitation_complete_method {
+        let method_name = &method.name;
+        let call = if method.is_async {
+            quote!(self.#method_name(elicitation_id).await)
+        } else {
+            quote!(self.#method_name(elicitation_id))
+        };
+        quote! {
+            fn on_elicitation_complete(
+                &self,
+                elicitation_id: String,
+            ) -> impl std::future::Future<Output = ()> + Send {
+                async move {
+                    #call
                 }
             }
         }
@@ -374,6 +430,8 @@ fn generate_client_handler(
         impl ::mcpkit::client::ClientHandler for #self_ty {
             #create_message_impl
             #elicit_impl
+            #elicit_url_impl
+            #on_elicitation_complete_impl
             #list_roots_impl
             #on_connected_impl
             #on_disconnected_impl
