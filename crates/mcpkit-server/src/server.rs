@@ -405,6 +405,23 @@ impl ServerNotifier {
         )
         .await
     }
+
+    /// Notify the client that a URL-mode elicitation's out-of-band interaction
+    /// has completed (`notifications/elicitation/complete`).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the notification could not be sent.
+    pub async fn elicitation_complete(
+        &self,
+        elicitation_id: impl Into<String>,
+    ) -> Result<(), McpError> {
+        self.notify(
+            crate::router::notifications::ELICITATION_COMPLETE,
+            Some(serde_json::json!({ "elicitationId": elicitation_id.into() })),
+        )
+        .await
+    }
 }
 
 /// Server runtime configuration.

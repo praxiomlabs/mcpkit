@@ -226,6 +226,16 @@ pub enum McpError {
         /// Human-readable error message.
         message: String,
     },
+
+    /// The server requires the client to complete one or more URL-mode
+    /// elicitations before this request can proceed (JSON-RPC code `-32042`).
+    #[error("URL elicitation required")]
+    #[diagnostic(code(mcp::elicitation::url_required))]
+    UrlElicitationRequired {
+        /// The URL elicitations the client must complete first (carried in the
+        /// error `data.elicitations`).
+        elicitations: Vec<crate::types::UrlElicitRequest>,
+    },
 }
 
 // ============================================================================
@@ -315,6 +325,13 @@ impl McpError {
             message: message.into(),
             source: None,
         }
+    }
+
+    /// Signal that the client must complete the given URL-mode elicitations
+    /// before this request can proceed (JSON-RPC code `-32042`).
+    #[must_use]
+    pub fn url_elicitation_required(elicitations: Vec<crate::types::UrlElicitRequest>) -> Self {
+        Self::UrlElicitationRequired { elicitations }
     }
 
     /// Create an internal error with a source.
@@ -475,6 +492,7 @@ impl McpError {
             Self::Cancelled { .. } => codes::SERVER_ERROR_START - 8,
             Self::WithContext { source, .. } => source.code(),
             Self::InternalMessage { .. } => codes::INTERNAL_ERROR,
+            Self::UrlElicitationRequired { .. } => codes::URL_ELICITATION_REQUIRED,
         }
     }
 
@@ -528,6 +546,26 @@ impl From<std::io::Error> for McpError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn url_elicitation_required_preserves_code_and_data() {
+        use crate::error::jsonrpc::JsonRpcError;
+        use crate::types::UrlElicitRequest;
+
+        let err = McpError::url_elicitation_required(vec![UrlElicitRequest::new(
+            "authorize",
+            "e1",
+            "https://auth/x",
+        )]);
+        assert_eq!(err.code(), codes::URL_ELICITATION_REQUIRED);
+
+        // The structured `data.elicitations` must survive the wire conversion.
+        let wire = JsonRpcError::from(&err);
+        assert_eq!(wire.code, -32042);
+        let data = wire.data.expect("data present");
+        assert_eq!(data["elicitations"][0]["elicitationId"], "e1");
+        assert_eq!(data["elicitations"][0]["mode"], "url");
+    }
 
     #[test]
     fn resource_errors_have_distinct_codes() {

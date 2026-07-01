@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- URL-mode elicitation (2025-11-25), core + server. `ElicitRequest` gains an
+  optional `mode` (absent = form); new `UrlElicitRequest`
+  (`mode`/`message`/`elicitationId`/`url`), `ElicitRequestParams` (a union that
+  parses either mode from the wire), and `ElicitationCompleteNotification`.
+  `Context::elicit_url` sends a URL-mode `elicitation/create` (gated on the
+  client's `elicitation.url` sub-capability), and `ServerNotifier::elicitation_complete`
+  sends `notifications/elicitation/complete` for the out-of-band completion.
+  `McpError::url_elicitation_required` carries the `-32042`
+  `URLElicitationRequired` error with its `data.elicitations` preserved on the
+  wire. `ClientCapabilities` gains `with_form_elicitation`/`with_url_elicitation`
+  and `has_form_elicitation`/`has_url_elicitation`; `ElicitationCapability` is now
+  `{ form?, url? }` (an empty `{}` remains form-capable for backwards
+  compatibility). Client-side URL handling (with a consent hook) and the
+  completion-notification dispatch follow in a second PR
+  ([#103](https://github.com/praxiomlabs/mcpkit/issues/103)).
 - Session-to-verified-user binding (security). A new
   `mcpkit_core::auth::VerifiedUser` (`subject` + `issuer` + `audience`) models an
   identity verified from an access token, and `check_session_binding` enforces

@@ -242,11 +242,55 @@ impl ClientCapabilities {
         self
     }
 
-    /// Enable elicitation support.
+    /// Enable elicitation support (form mode).
+    ///
+    /// This declares `elicitation: {}`, which is form-capable (the 2025-06-18
+    /// behaviour). Use [`with_url_elicitation`](Self::with_url_elicitation) to
+    /// additionally declare URL-mode support.
     #[must_use]
-    pub const fn with_elicitation(mut self) -> Self {
-        self.elicitation = Some(ElicitationCapability {});
+    pub fn with_elicitation(mut self) -> Self {
+        self.elicitation = Some(ElicitationCapability {
+            form: None,
+            url: None,
+        });
         self
+    }
+
+    /// Declare form-mode elicitation support explicitly (`elicitation.form`).
+    #[must_use]
+    pub fn with_form_elicitation(mut self) -> Self {
+        self.elicitation
+            .get_or_insert_with(ElicitationCapability::default)
+            .form = Some(serde_json::json!({}));
+        self
+    }
+
+    /// Declare URL-mode elicitation support (`elicitation.url`).
+    #[must_use]
+    pub fn with_url_elicitation(mut self) -> Self {
+        self.elicitation
+            .get_or_insert_with(ElicitationCapability::default)
+            .url = Some(serde_json::json!({}));
+        self
+    }
+
+    /// Check if form-mode elicitation is supported.
+    ///
+    /// True when `elicitation.form` is declared, or when `elicitation` is present
+    /// but empty (`{}`), which is form-capable for backwards compatibility.
+    #[must_use]
+    pub fn has_form_elicitation(&self) -> bool {
+        self.elicitation
+            .as_ref()
+            .is_some_and(ElicitationCapability::has_form)
+    }
+
+    /// Check if URL-mode elicitation is supported (`elicitation.url` declared).
+    #[must_use]
+    pub fn has_url_elicitation(&self) -> bool {
+        self.elicitation
+            .as_ref()
+            .is_some_and(ElicitationCapability::has_url)
     }
 
     /// Check if roots are supported.
@@ -353,7 +397,30 @@ pub struct SamplingCapability {}
 
 /// Elicitation capability flags.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct ElicitationCapability {}
+pub struct ElicitationCapability {
+    /// Declared support for form-mode elicitation. An absent `form` and `url`
+    /// (an empty `{}`) is treated as form-capable for backwards compatibility.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub form: Option<serde_json::Value>,
+    /// Declared support for URL-mode elicitation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<serde_json::Value>,
+}
+
+impl ElicitationCapability {
+    /// Whether form-mode elicitation is supported (`form` declared, or empty
+    /// `{}` which is form-capable for backwards compatibility).
+    #[must_use]
+    pub const fn has_form(&self) -> bool {
+        self.form.is_some() || self.url.is_none()
+    }
+
+    /// Whether URL-mode elicitation is supported (`url` declared).
+    #[must_use]
+    pub const fn has_url(&self) -> bool {
+        self.url.is_some()
+    }
+}
 
 /// Server information provided during initialization.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -710,6 +777,33 @@ pub struct PingResult {}
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn elicitation_form_url_capability_semantics() {
+        use super::ClientCapabilities;
+        // Empty `{}` (legacy `with_elicitation`) is form-capable, not url.
+        let form = ClientCapabilities::default().with_elicitation();
+        assert!(form.has_elicitation());
+        assert!(form.has_form_elicitation());
+        assert!(!form.has_url_elicitation());
+        assert_eq!(
+            serde_json::to_value(&form.elicitation).unwrap(),
+            serde_json::json!({}),
+            "empty elicitation must still serialize as {{}} for compatibility"
+        );
+
+        // URL-only: url present, form not.
+        let url = ClientCapabilities::default().with_url_elicitation();
+        assert!(url.has_url_elicitation());
+        assert!(!url.has_form_elicitation());
+
+        // Both.
+        let both = ClientCapabilities::default()
+            .with_form_elicitation()
+            .with_url_elicitation();
+        assert!(both.has_form_elicitation());
+        assert!(both.has_url_elicitation());
+    }
+
     use super::*;
 
     #[test]

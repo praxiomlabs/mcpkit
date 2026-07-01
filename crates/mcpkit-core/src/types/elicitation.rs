@@ -6,9 +6,22 @@
 
 use serde::{Deserialize, Serialize};
 
-/// A request to elicit information from the user.
+/// The mode of an elicitation request.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ElicitMode {
+    /// In-band form input against a requested schema.
+    Form,
+    /// Out-of-band interaction via a URL the user navigates to.
+    Url,
+}
+
+/// A form-mode request to elicit information from the user.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ElicitRequest {
+    /// The elicitation mode. Absent is equivalent to [`ElicitMode::Form`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mode: Option<ElicitMode>,
     /// Message explaining what information is needed.
     pub message: String,
     /// The schema describing what input is expected.
@@ -21,6 +34,7 @@ impl ElicitRequest {
     #[must_use]
     pub fn new(message: impl Into<String>, schema: ElicitationSchema) -> Self {
         Self {
+            mode: None,
             message: message.into(),
             requested_schema: schema,
         }
@@ -55,6 +69,79 @@ impl ElicitRequest {
             message,
             ElicitationSchema::object().property(field_name, PropertySchema::enum_values(options)),
         )
+    }
+}
+
+/// A URL-mode request to elicit information via an out-of-band interaction.
+///
+/// The user is asked to navigate to `url` (e.g. for authorization or payment).
+/// The client returns an [`ElicitResult`] action immediately (consenting to open
+/// the URL); the server later sends an [`ElicitationCompleteNotification`] when
+/// the out-of-band interaction finishes.
+///
+/// Per the spec, URL mode is security-sensitive: the `elicitation_id` MUST be
+/// unguessable and bound to a verified user identity, and MUST NOT carry
+/// credentials in the URL.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UrlElicitRequest {
+    /// The elicitation mode (always [`ElicitMode::Url`]).
+    pub mode: ElicitMode,
+    /// Message explaining why the interaction is needed.
+    pub message: String,
+    /// Opaque, unguessable id, unique within the server, correlating this
+    /// elicitation with its completion notification.
+    #[serde(rename = "elicitationId")]
+    pub elicitation_id: String,
+    /// The URL the user should navigate to.
+    pub url: String,
+}
+
+impl UrlElicitRequest {
+    /// Create a URL-mode elicitation request.
+    #[must_use]
+    pub fn new(
+        message: impl Into<String>,
+        elicitation_id: impl Into<String>,
+        url: impl Into<String>,
+    ) -> Self {
+        Self {
+            mode: ElicitMode::Url,
+            message: message.into(),
+            elicitation_id: elicitation_id.into(),
+            url: url.into(),
+        }
+    }
+}
+
+/// The parameters of an `elicitation/create` request — a form or URL request,
+/// discriminated by `mode` (absent = form).
+///
+/// Used on the client to parse either mode from the wire.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ElicitRequestParams {
+    /// A URL-mode request (`mode: "url"`).
+    Url(UrlElicitRequest),
+    /// A form-mode request (`mode` absent or `"form"`).
+    Form(ElicitRequest),
+}
+
+/// A `notifications/elicitation/complete` notification: the out-of-band
+/// interaction for a URL-mode elicitation has finished.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ElicitationCompleteNotification {
+    /// The id of the elicitation that completed.
+    #[serde(rename = "elicitationId")]
+    pub elicitation_id: String,
+}
+
+impl ElicitationCompleteNotification {
+    /// Create a completion notification for the given elicitation id.
+    #[must_use]
+    pub fn new(elicitation_id: impl Into<String>) -> Self {
+        Self {
+            elicitation_id: elicitation_id.into(),
+        }
     }
 }
 
@@ -361,6 +448,53 @@ impl std::fmt::Display for ElicitAction {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn url_request_serializes_with_mode_and_ids() {
+        let req = UrlElicitRequest::new("authorize", "elic-123", "https://auth.example/x");
+        let j = serde_json::to_value(&req).unwrap();
+        assert_eq!(j["mode"], "url");
+        assert_eq!(j["elicitationId"], "elic-123");
+        assert_eq!(j["url"], "https://auth.example/x");
+    }
+
+    #[test]
+    fn form_request_omits_mode_by_default() {
+        let req = ElicitRequest::text("name?", "name");
+        let j = serde_json::to_value(&req).unwrap();
+        assert!(
+            j.get("mode").is_none(),
+            "form mode should be absent by default"
+        );
+        assert!(j.get("requestedSchema").is_some());
+    }
+
+    #[test]
+    fn params_union_parses_both_modes() {
+        // URL mode.
+        let url = serde_json::json!({
+            "mode": "url", "message": "go", "elicitationId": "e1", "url": "https://x"
+        });
+        assert!(matches!(
+            serde_json::from_value::<ElicitRequestParams>(url).unwrap(),
+            ElicitRequestParams::Url(_)
+        ));
+        // Form mode (mode absent).
+        let form = serde_json::json!({
+            "message": "name?",
+            "requestedSchema": { "type": "object", "properties": {} }
+        });
+        assert!(matches!(
+            serde_json::from_value::<ElicitRequestParams>(form).unwrap(),
+            ElicitRequestParams::Form(_)
+        ));
+    }
+
+    #[test]
+    fn completion_notification_uses_elicitation_id() {
+        let j = serde_json::to_value(ElicitationCompleteNotification::new("e1")).unwrap();
+        assert_eq!(j["elicitationId"], "e1");
+    }
 
     #[test]
     fn test_text_elicitation() {
