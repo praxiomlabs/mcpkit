@@ -76,6 +76,18 @@ pub trait DynResourceHandler: Send + Sync {
         uri: &'a str,
         ctx: &'a Context<'_>,
     ) -> BoxFut<'a, Result<Vec<ResourceContents>, McpError>>;
+    /// See [`ResourceHandler::subscribe`].
+    fn subscribe<'a>(
+        &'a self,
+        uri: &'a str,
+        ctx: &'a Context<'_>,
+    ) -> BoxFut<'a, Result<bool, McpError>>;
+    /// See [`ResourceHandler::unsubscribe`].
+    fn unsubscribe<'a>(
+        &'a self,
+        uri: &'a str,
+        ctx: &'a Context<'_>,
+    ) -> BoxFut<'a, Result<bool, McpError>>;
 }
 
 impl<R: ResourceHandler> DynResourceHandler for R {
@@ -97,6 +109,20 @@ impl<R: ResourceHandler> DynResourceHandler for R {
         ctx: &'a Context<'_>,
     ) -> BoxFut<'a, Result<Vec<ResourceContents>, McpError>> {
         Box::pin(ResourceHandler::read_resource(self, uri, ctx))
+    }
+    fn subscribe<'a>(
+        &'a self,
+        uri: &'a str,
+        ctx: &'a Context<'_>,
+    ) -> BoxFut<'a, Result<bool, McpError>> {
+        Box::pin(ResourceHandler::subscribe(self, uri, ctx))
+    }
+    fn unsubscribe<'a>(
+        &'a self,
+        uri: &'a str,
+        ctx: &'a Context<'_>,
+    ) -> BoxFut<'a, Result<bool, McpError>> {
+        Box::pin(ResourceHandler::unsubscribe(self, uri, ctx))
     }
 }
 

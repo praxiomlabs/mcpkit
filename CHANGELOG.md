@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Resource subscription request types + wiring (#107). New core
+  `SubscribeRequest`/`UnsubscribeRequest` (`{ uri }`), and the server now actually
+  dispatches `resources/subscribe`/`resources/unsubscribe` to
+  `ResourceHandler::subscribe`/`unsubscribe` (added to the object-safe dispatch
+  layer). **Fixed:** these methods previously fell through routing and returned
+  `method not found` despite the advertised `resources.subscribe` capability. A
+  handler returning `true` yields the spec's empty result; `false` is an error
+  (the subscription was not established) rather than a false success. The client's
+  `subscribe_resource`/`unsubscribe_resource` now use the typed requests
+  ([#107](https://github.com/praxiomlabs/mcpkit/issues/107)).
 - Typed progress/cancelled notification params (`mcpkit-core`, #112).
   `ProgressNotificationParams { progressToken, progress: f64, total?, message?,
   _meta? }` and `CancelledNotificationParams { requestId?, reason?, _meta? }`

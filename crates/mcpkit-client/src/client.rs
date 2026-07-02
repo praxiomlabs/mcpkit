@@ -26,8 +26,8 @@ use mcpkit_core::types::{
     CompletionArgument, CompletionRef, CreateMessageRequest, ElicitRequestParams, GetPromptRequest,
     GetPromptResult, GetTaskRequest, ListPromptsResult, ListResourceTemplatesResult,
     ListResourcesResult, ListTasksRequest, ListTasksResult, ListToolsResult, Prompt,
-    ReadResourceRequest, ReadResourceResult, Resource, ResourceContents, ResourceTemplate, Task,
-    TaskStatus, Tool,
+    ReadResourceRequest, ReadResourceResult, Resource, ResourceContents, ResourceTemplate,
+    SubscribeRequest, Task, TaskStatus, Tool, UnsubscribeRequest,
 };
 use mcpkit_transport::Transport;
 use std::collections::HashMap;
@@ -940,8 +940,10 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
             });
         }
 
-        let params = serde_json::json!({ "uri": uri.into() });
-        let _: serde_json::Value = self.request("resources/subscribe", Some(params)).await?;
+        let request = SubscribeRequest { uri: uri.into() };
+        let _: serde_json::Value = self
+            .request("resources/subscribe", Some(serde_json::to_value(request)?))
+            .await?;
         Ok(())
     }
 
@@ -961,8 +963,13 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
             });
         }
 
-        let params = serde_json::json!({ "uri": uri.into() });
-        let _: serde_json::Value = self.request("resources/unsubscribe", Some(params)).await?;
+        let request = UnsubscribeRequest { uri: uri.into() };
+        let _: serde_json::Value = self
+            .request(
+                "resources/unsubscribe",
+                Some(serde_json::to_value(request)?),
+            )
+            .await?;
         Ok(())
     }
 

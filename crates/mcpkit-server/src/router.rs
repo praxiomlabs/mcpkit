@@ -511,7 +511,7 @@ fn parse_list_params(params: Option<&Value>) -> ListParams {
 use crate::context::Context;
 use crate::dispatch::{DynPromptHandler, DynResourceHandler, DynTaskHandler, DynToolHandler};
 use mcpkit_core::pagination::paginate;
-use mcpkit_core::types::{CallToolResult, TaskId};
+use mcpkit_core::types::{CallToolResult, SubscribeRequest, TaskId, UnsubscribeRequest};
 
 /// Build a paginated list result: the items under `key` plus an optional
 /// `nextCursor`.
@@ -691,6 +691,50 @@ pub async fn route_resources(
 
                 let contents = contents?;
                 Ok(serde_json::json!({ "contents": contents }))
+            }
+            .await;
+            Some(result)
+        }
+        methods::RESOURCES_SUBSCRIBE => {
+            let result = async {
+                let params = params.ok_or_else(|| {
+                    McpError::invalid_params(methods::RESOURCES_SUBSCRIBE, "missing params")
+                })?;
+                let req: SubscribeRequest =
+                    serde_json::from_value(params.clone()).map_err(|_| {
+                        McpError::invalid_params(methods::RESOURCES_SUBSCRIBE, "missing uri")
+                    })?;
+                tracing::info!(uri = %req.uri, "Subscribing to resource");
+                if handler.subscribe(&req.uri, ctx).await? {
+                    Ok(serde_json::json!({}))
+                } else {
+                    Err(McpError::internal(format!(
+                        "subscription not established for {}",
+                        req.uri
+                    )))
+                }
+            }
+            .await;
+            Some(result)
+        }
+        methods::RESOURCES_UNSUBSCRIBE => {
+            let result = async {
+                let params = params.ok_or_else(|| {
+                    McpError::invalid_params(methods::RESOURCES_UNSUBSCRIBE, "missing params")
+                })?;
+                let req: UnsubscribeRequest =
+                    serde_json::from_value(params.clone()).map_err(|_| {
+                        McpError::invalid_params(methods::RESOURCES_UNSUBSCRIBE, "missing uri")
+                    })?;
+                tracing::info!(uri = %req.uri, "Unsubscribing from resource");
+                if handler.unsubscribe(&req.uri, ctx).await? {
+                    Ok(serde_json::json!({}))
+                } else {
+                    Err(McpError::internal(format!(
+                        "unsubscribe not honored for {}",
+                        req.uri
+                    )))
+                }
             }
             .await;
             Some(result)
@@ -1480,5 +1524,105 @@ mod tests {
             .await
             .unwrap();
         assert!(err.is_err());
+    }
+
+    #[tokio::test]
+    async fn route_resources_dispatches_subscribe_and_unsubscribe() {
+        use crate::context::NoOpPeer;
+        use crate::handler::ResourceHandler;
+        use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
+        use mcpkit_core::protocol::RequestId;
+        use mcpkit_core::protocol_version::ProtocolVersion;
+        use mcpkit_core::types::{Resource, ResourceContents};
+
+        struct Res {
+            ok: bool,
+        }
+        impl ResourceHandler for Res {
+            async fn list_resources(&self, _ctx: &Context<'_>) -> Result<Vec<Resource>, McpError> {
+                Ok(vec![])
+            }
+            async fn read_resource(
+                &self,
+                _uri: &str,
+                _ctx: &Context<'_>,
+            ) -> Result<Vec<ResourceContents>, McpError> {
+                Ok(vec![])
+            }
+            async fn subscribe(&self, _uri: &str, _ctx: &Context<'_>) -> Result<bool, McpError> {
+                Ok(self.ok)
+            }
+            async fn unsubscribe(&self, _uri: &str, _ctx: &Context<'_>) -> Result<bool, McpError> {
+                Ok(self.ok)
+            }
+        }
+
+        let request_id = RequestId::Number(1);
+        let client_caps = ClientCapabilities::default();
+        let server_caps = ServerCapabilities::default();
+        let peer = NoOpPeer;
+        let ctx = Context::new(
+            &request_id,
+            None,
+            &client_caps,
+            &server_caps,
+            ProtocolVersion::LATEST,
+            &peer,
+        );
+        let params = serde_json::json!({ "uri": "file:///x" });
+
+        // subscribe -> Ok(true) yields an empty result (no longer method-not-found).
+        let ok = route_resources(
+            &Res { ok: true },
+            methods::RESOURCES_SUBSCRIBE,
+            Some(&params),
+            &ctx,
+            None,
+        )
+        .await
+        .expect("subscribe is routed")
+        .expect("ok");
+        assert_eq!(ok, serde_json::json!({}));
+
+        // subscribe -> Ok(false) is an error, not a fake success.
+        assert!(
+            route_resources(
+                &Res { ok: false },
+                methods::RESOURCES_SUBSCRIBE,
+                Some(&params),
+                &ctx,
+                None,
+            )
+            .await
+            .expect("routed")
+            .is_err()
+        );
+
+        // Missing uri -> invalid params.
+        assert!(
+            route_resources(
+                &Res { ok: true },
+                methods::RESOURCES_SUBSCRIBE,
+                Some(&serde_json::json!({})),
+                &ctx,
+                None,
+            )
+            .await
+            .expect("routed")
+            .is_err()
+        );
+
+        // unsubscribe -> Ok(true) yields an empty result.
+        let ok = route_resources(
+            &Res { ok: true },
+            methods::RESOURCES_UNSUBSCRIBE,
+            Some(&params),
+            &ctx,
+            None,
+        )
+        .await
+        .expect("unsubscribe is routed")
+        .expect("ok");
+        assert_eq!(ok, serde_json::json!({}));
     }
 }
