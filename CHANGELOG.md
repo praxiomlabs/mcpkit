@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Typed progress/cancelled notification params (`mcpkit-core`, #112).
+  `ProgressNotificationParams { progressToken, progress: f64, total?, message?,
+  _meta? }` and `CancelledNotificationParams { requestId?, reason?, _meta? }`
+  replace the ad-hoc raw-JSON handling. The server's `notifications/cancelled`
+  handler now parses the typed struct, and `Context::progress` serializes the
+  typed struct (omitting absent `total`/`message` instead of emitting `null`).
+  Clients gain `ClientHandler::on_progress(ProgressNotificationParams)` and
+  `Client::request_with_progress(method, params, token)` (attaches
+  `_meta.progressToken` via the new `Meta::with_progress_token_in_params`) to opt
+  into progress for a call. **Fixed:** incoming `notifications/progress` were
+  dropped for numeric progress tokens and mis-parsed as `TaskProgress`; they now
+  route to `on_progress` with typed params. **Breaking:** `Context::progress` now
+  takes `f64` (was `u64`), matching the spec's fractional `progress`
+  ([#112](https://github.com/praxiomlabs/mcpkit/issues/112)).
 - Protocol `_meta` foundation (`mcpkit-core`). A new `Meta` type (an open,
   string-keyed map, `types::meta`) models the MCP `_meta` object, with typed
   `progress_token`/`with_progress_token` accessors bridging `ProgressToken` and a

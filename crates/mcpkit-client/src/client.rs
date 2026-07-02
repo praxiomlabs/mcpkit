@@ -455,19 +455,17 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
                 }
             }
             "notifications/progress" => {
-                // Handle progress notifications
+                // Handle progress notifications with typed params (progressToken
+                // may be a string or a number).
                 if let Some(params) = notification.params {
-                    if let (Some(task_id), Some(progress)) = (
-                        params.get("progressToken").and_then(|v| v.as_str()),
-                        params.get("progress"),
+                    match serde_json::from_value::<mcpkit_core::types::ProgressNotificationParams>(
+                        params,
                     ) {
-                        if let Ok(progress) = serde_json::from_value::<
-                            mcpkit_core::types::TaskProgress,
-                        >(progress.clone())
-                        {
-                            debug!(task_id = %task_id, "Task progress update");
-                            handler.on_task_progress(task_id.into(), progress).await;
+                        Ok(params) => {
+                            debug!(token = %params.progress_token, "Progress update");
+                            handler.on_progress(params).await;
                         }
+                        Err(e) => debug!(error = %e, "Ignoring malformed progress notification"),
                     }
                 }
             }
@@ -1014,6 +1012,27 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
     /// Generate the next request ID.
     fn next_request_id(&self) -> RequestId {
         RequestId::Number(self.next_id.fetch_add(1, Ordering::SeqCst))
+    }
+
+    /// Send a request with a `progressToken` attached (via `_meta.progressToken`)
+    /// so the server may emit `notifications/progress` for the call. Progress
+    /// updates are delivered to the client handler's
+    /// [`on_progress`](crate::ClientHandler::on_progress).
+    ///
+    /// `params` is the method's normal params object (or `None`); the token is
+    /// merged into its `_meta`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the request fails or times out.
+    pub async fn request_with_progress<R: serde::de::DeserializeOwned>(
+        &self,
+        method: &str,
+        params: Option<serde_json::Value>,
+        token: mcpkit_core::protocol::ProgressToken,
+    ) -> Result<R, McpError> {
+        let params = mcpkit_core::types::Meta::with_progress_token_in_params(params, &token);
+        self.request(method, Some(params)).await
     }
 
     /// Send a request and wait for the response.
@@ -1563,5 +1582,37 @@ mod tests {
             err.to_string().contains("non-advancing"),
             "expected a non-advancing-cursor error, got {err:?}"
         );
+    }
+
+    /// Regression: a `notifications/progress` with a **numeric** progress token
+    /// must reach `on_progress` with typed params (the old code only accepted
+    /// string tokens and mis-parsed `progress` as a `TaskProgress`).
+    #[tokio::test]
+    async fn progress_notification_routes_to_on_progress_with_numeric_token() {
+        use mcpkit_core::protocol::ProgressToken;
+        use mcpkit_core::types::ProgressNotificationParams;
+        use std::sync::Mutex;
+
+        struct Rec(Arc<Mutex<Vec<ProgressNotificationParams>>>);
+        impl ClientHandler for Rec {
+            async fn on_progress(&self, params: ProgressNotificationParams) {
+                self.0.lock().unwrap().push(params);
+            }
+        }
+
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let handler = Arc::new(Rec(Arc::clone(&seen)));
+        let notif = Notification::with_params(
+            "notifications/progress",
+            serde_json::json!({ "progressToken": 5, "progress": 0.25, "total": 1.0 }),
+        );
+
+        Client::<SilentTransport, Rec>::handle_notification(notif, &handler).await;
+
+        let seen = seen.lock().unwrap();
+        assert_eq!(seen.len(), 1);
+        assert_eq!(seen[0].progress_token, ProgressToken::Number(5));
+        assert!((seen[0].progress - 0.25).abs() < f64::EPSILON);
+        assert_eq!(seen[0].total, Some(1.0));
     }
 }
