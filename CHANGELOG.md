@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Tool-augmented sampling — content + request surface (#110, phase A). New core
+  `ToolUseContent`/`ToolResultContent` content blocks, a `SamplingContent` union
+  (Text/Image/Audio/ToolUse/ToolResult — the spec's `SamplingMessageContentBlock`,
+  kept separate from the general `Content`/`ContentBlock`), an `OneOrMany<T>`
+  helper, and `ToolChoice`. `SamplingMessage.content` and
+  `CreateMessageResult.content` become `OneOrMany<SamplingContent>` (a message can
+  now carry a text block plus tool_use, and results can carry parallel tool
+  calls); `SamplingMessage` gains `_meta`. `CreateMessageRequest` gains `tools`,
+  `toolChoice`, and `_meta`. `SamplingCapability` gains `context`/`tools`
+  sub-capabilities with `with_sampling_tools()`/`has_sampling_tools()` (and the
+  `context` equivalents). **Fixed:** `StopReason` was a closed lowercase enum
+  (`end_turn`), but the spec is an *open* camelCase string — it's now
+  `endTurn`/`stopSequence`/`maxTokens`/`toolUse` plus an `Other(String)` passthrough.
+  **Breaking:** the sampling content type changes and `StopReason` representation.
+  Task-augmented sampling (the `task` request field + its alternate
+  `CreateTaskResult` response path) is deferred to
+  [#143](https://github.com/praxiomlabs/mcpkit/issues/143)
+  ([#110](https://github.com/praxiomlabs/mcpkit/issues/110)).
 - Roots as first-class protocol types (#111). `Root` moves into `mcpkit-core`
   with serde derives (`name` omitted when absent, fixing the previous `name: null`
   on the wire) and is re-exported from `mcpkit_client::handler` for compatibility.

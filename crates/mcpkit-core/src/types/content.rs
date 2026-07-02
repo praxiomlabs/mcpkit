@@ -198,6 +198,45 @@ pub struct ResourceLinkContent {
     pub annotations: Option<ContentAnnotations>,
 }
 
+/// A tool call the model wants to make, in a sampling message
+/// (`type: "tool_use"`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolUseContent {
+    /// Unique id correlating this call with its later `tool_result`.
+    pub id: String,
+    /// The name of the tool to call.
+    pub name: String,
+    /// The tool arguments.
+    pub input: serde_json::Value,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<super::meta::Meta>,
+}
+
+/// The result of a tool call, fed back into a sampling message
+/// (`type: "tool_result"`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolResultContent {
+    /// The id of the `tool_use` this result corresponds to.
+    #[serde(rename = "toolUseId")]
+    pub tool_use_id: String,
+    /// The unstructured result content (normal content blocks).
+    pub content: Vec<Content>,
+    /// Optional structured result.
+    #[serde(
+        rename = "structuredContent",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub structured_content: Option<serde_json::Value>,
+    /// Whether the tool call ended in an error.
+    #[serde(rename = "isError", skip_serializing_if = "Option::is_none")]
+    pub is_error: Option<bool>,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<super::meta::Meta>,
+}
+
 /// Annotations that can be attached to content.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ContentAnnotations {

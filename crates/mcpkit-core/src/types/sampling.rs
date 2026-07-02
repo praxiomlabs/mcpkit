@@ -4,17 +4,88 @@
 //! This enables agentic workflows where servers can leverage
 //! the client's AI capabilities.
 
-use super::content::{Content, Role};
+use super::content::{
+    AudioContent, ImageContent, Role, TextContent, ToolResultContent, ToolUseContent,
+};
 use super::meta::Meta;
+use super::tool::Tool;
 use serde::{Deserialize, Serialize};
+
+/// A value that may be a single item or an array of items, matching the spec's
+/// `T | T[]` unions (e.g. sampling message content).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum OneOrMany<T> {
+    /// A single item.
+    One(T),
+    /// An array of items.
+    Many(Vec<T>),
+}
+
+/// A content block allowed in a sampling message (the spec's
+/// `SamplingMessageContentBlock`): text/image/audio, plus tool-use loop blocks.
+///
+/// Note this is *not* the general [`Content`](super::content::Content)
+/// (`ContentBlock`) — sampling excludes resource links/embeds and adds
+/// `tool_use`/`tool_result`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum SamplingContent {
+    /// Plain text.
+    Text(TextContent),
+    /// Image content.
+    Image(ImageContent),
+    /// Audio content.
+    Audio(AudioContent),
+    /// A tool call the model wants to make.
+    #[serde(rename = "tool_use")]
+    ToolUse(ToolUseContent),
+    /// The result of a tool call, fed back to the model.
+    #[serde(rename = "tool_result")]
+    ToolResult(ToolResultContent),
+}
+
+impl SamplingContent {
+    /// Create a text content block.
+    #[must_use]
+    pub fn text(text: impl Into<String>) -> Self {
+        Self::Text(TextContent {
+            text: text.into(),
+            annotations: None,
+        })
+    }
+}
+
+/// How the model may use tools during sampling.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ToolChoiceMode {
+    /// The model decides whether to use tools.
+    Auto,
+    /// The model must use at least one tool.
+    Required,
+    /// The model must not use tools.
+    None,
+}
+
+/// Controls tool selection for a sampling request.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ToolChoice {
+    /// The tool-use mode; absent means the model decides.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mode: Option<ToolChoiceMode>,
+}
 
 /// A message in a sampling conversation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SamplingMessage {
     /// The role of the message sender.
     pub role: Role,
-    /// The message content.
-    pub content: Content,
+    /// The message content (one block or an array of blocks).
+    pub content: OneOrMany<SamplingContent>,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 impl SamplingMessage {
@@ -23,7 +94,8 @@ impl SamplingMessage {
     pub fn user(text: impl Into<String>) -> Self {
         Self {
             role: Role::User,
-            content: Content::text(text),
+            content: OneOrMany::One(SamplingContent::text(text)),
+            meta: None,
         }
     }
 
@@ -32,14 +104,19 @@ impl SamplingMessage {
     pub fn assistant(text: impl Into<String>) -> Self {
         Self {
             role: Role::Assistant,
-            content: Content::text(text),
+            content: OneOrMany::One(SamplingContent::text(text)),
+            meta: None,
         }
     }
 
     /// Create a message with custom content.
     #[must_use]
-    pub const fn with_content(role: Role, content: Content) -> Self {
-        Self { role, content }
+    pub const fn with_content(role: Role, content: OneOrMany<SamplingContent>) -> Self {
+        Self {
+            role,
+            content,
+            meta: None,
+        }
     }
 }
 
@@ -143,6 +220,15 @@ pub struct CreateMessageRequest {
     /// Additional metadata.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<serde_json::Value>,
+    /// Tools the model may call during sampling (2025-11-25).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tools: Option<Vec<Tool>>,
+    /// Controls whether/how the model may call `tools`.
+    #[serde(rename = "toolChoice", skip_serializing_if = "Option::is_none")]
+    pub tool_choice: Option<ToolChoice>,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 impl CreateMessageRequest {
@@ -158,6 +244,9 @@ impl CreateMessageRequest {
             temperature: None,
             stop_sequences: None,
             metadata: None,
+            tools: None,
+            tool_choice: None,
+            meta: None,
         }
     }
 
@@ -224,8 +313,8 @@ pub enum IncludeContext {
 pub struct CreateMessageResult {
     /// The role of the response (always assistant).
     pub role: Role,
-    /// The generated content.
-    pub content: Content,
+    /// The generated content (one block or an array — e.g. parallel tool calls).
+    pub content: OneOrMany<SamplingContent>,
     /// The model used.
     pub model: String,
     /// Stop reason.
@@ -237,16 +326,23 @@ pub struct CreateMessageResult {
 }
 
 impl CreateMessageResult {
-    /// Get the text content if this is a text response.
+    /// Get the text if this is a single text-content response.
     #[must_use]
     pub fn as_text(&self) -> Option<&str> {
-        self.content.as_text()
+        match &self.content {
+            OneOrMany::One(SamplingContent::Text(t)) => Some(&t.text),
+            _ => None,
+        }
     }
 }
 
 /// Reason why sampling stopped.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+///
+/// An **open** string in the spec: the known values are `endTurn`,
+/// `stopSequence`, `maxTokens`, and `toolUse`, but implementations may report
+/// others (preserved as [`Other`](StopReason::Other)).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(from = "String", into = "String")]
 pub enum StopReason {
     /// Hit the end of the response.
     EndTurn,
@@ -254,21 +350,57 @@ pub enum StopReason {
     StopSequence,
     /// Hit the max token limit.
     MaxTokens,
+    /// The model stopped to call a tool.
+    ToolUse,
+    /// An implementation-specific stop reason.
+    Other(String),
+}
+
+impl StopReason {
+    /// The wire string for this stop reason.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::EndTurn => "endTurn",
+            Self::StopSequence => "stopSequence",
+            Self::MaxTokens => "maxTokens",
+            Self::ToolUse => "toolUse",
+            Self::Other(s) => s,
+        }
+    }
+}
+
+impl From<String> for StopReason {
+    fn from(s: String) -> Self {
+        match s.as_str() {
+            "endTurn" => Self::EndTurn,
+            "stopSequence" => Self::StopSequence,
+            "maxTokens" => Self::MaxTokens,
+            "toolUse" => Self::ToolUse,
+            _ => Self::Other(s),
+        }
+    }
+}
+
+impl From<StopReason> for String {
+    fn from(reason: StopReason) -> Self {
+        match reason {
+            StopReason::Other(s) => s,
+            other => other.as_str().to_string(),
+        }
+    }
 }
 
 impl std::fmt::Display for StopReason {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::EndTurn => write!(f, "end_turn"),
-            Self::StopSequence => write!(f, "stop_sequence"),
-            Self::MaxTokens => write!(f, "max_tokens"),
-        }
+        f.write_str(self.as_str())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::Content;
 
     #[test]
     fn test_sampling_message() {
@@ -315,5 +447,102 @@ mod tests {
         let json = serde_json::to_string(&request)?;
         assert!(json.contains("\"maxTokens\":100"));
         Ok(())
+    }
+
+    #[test]
+    fn stop_reason_uses_camelcase_and_preserves_unknown() {
+        use serde_json::json;
+        assert_eq!(
+            serde_json::to_value(StopReason::EndTurn).unwrap(),
+            json!("endTurn")
+        );
+        assert_eq!(
+            serde_json::to_value(StopReason::ToolUse).unwrap(),
+            json!("toolUse")
+        );
+        // Unknown values round-trip through `Other`.
+        let parsed: StopReason = serde_json::from_value(json!("guardrail")).unwrap();
+        assert_eq!(parsed, StopReason::Other("guardrail".into()));
+        assert_eq!(serde_json::to_value(&parsed).unwrap(), json!("guardrail"));
+        assert_eq!(
+            serde_json::from_value::<StopReason>(json!("maxTokens")).unwrap(),
+            StopReason::MaxTokens
+        );
+    }
+
+    #[test]
+    fn sampling_content_tool_blocks_round_trip() {
+        use serde_json::json;
+
+        let tool_use = SamplingContent::ToolUse(ToolUseContent {
+            id: "call-1".into(),
+            name: "search".into(),
+            input: json!({ "q": "rust" }),
+            meta: None,
+        });
+        assert_eq!(
+            serde_json::to_value(&tool_use).unwrap(),
+            json!({ "type": "tool_use", "id": "call-1", "name": "search", "input": { "q": "rust" } })
+        );
+
+        let tool_result = SamplingContent::ToolResult(ToolResultContent {
+            tool_use_id: "call-1".into(),
+            content: vec![Content::text("42")],
+            structured_content: None,
+            is_error: None,
+            meta: None,
+        });
+        let wire = serde_json::to_value(&tool_result).unwrap();
+        assert_eq!(wire["type"], json!("tool_result"));
+        assert_eq!(wire["toolUseId"], json!("call-1"));
+        // Round-trips back to the same variant.
+        let back: SamplingContent = serde_json::from_value(wire).unwrap();
+        assert!(matches!(back, SamplingContent::ToolResult(_)));
+    }
+
+    #[test]
+    fn one_or_many_serializes_single_and_array() {
+        use serde_json::json;
+        // Single block -> object; array -> array.
+        let one = SamplingMessage::user("hi");
+        assert_eq!(
+            serde_json::to_value(&one.content).unwrap(),
+            json!({ "type": "text", "text": "hi" })
+        );
+        let many: OneOrMany<SamplingContent> =
+            OneOrMany::Many(vec![SamplingContent::text("a"), SamplingContent::text("b")]);
+        assert!(serde_json::to_value(&many).unwrap().is_array());
+        // Both forms parse back.
+        assert!(matches!(
+            serde_json::from_value::<OneOrMany<SamplingContent>>(
+                json!({ "type": "text", "text": "x" })
+            )
+            .unwrap(),
+            OneOrMany::One(_)
+        ));
+        assert!(matches!(
+            serde_json::from_value::<OneOrMany<SamplingContent>>(
+                json!([{ "type": "text", "text": "x" }])
+            )
+            .unwrap(),
+            OneOrMany::Many(_)
+        ));
+    }
+
+    #[test]
+    fn request_carries_tools_and_tool_choice() {
+        let request = CreateMessageRequest {
+            tools: Some(vec![]),
+            tool_choice: Some(ToolChoice {
+                mode: Some(ToolChoiceMode::Required),
+            }),
+            ..CreateMessageRequest::simple("hi", 10)
+        };
+        let wire = serde_json::to_value(&request).unwrap();
+        assert!(wire.get("tools").is_some());
+        assert_eq!(
+            wire["toolChoice"],
+            serde_json::json!({ "mode": "required" })
+        );
     }
 }

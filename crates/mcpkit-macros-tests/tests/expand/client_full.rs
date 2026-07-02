@@ -3,7 +3,7 @@
 use mcpkit::mcp_client;
 use mcpkit::types::{
     CreateMessageRequest, CreateMessageResult, ElicitRequest, ElicitResult,
-    Role, TaskId, TaskProgress, Content, StopReason,
+    Role, TaskId, TaskProgress, OneOrMany, SamplingContent, StopReason,
 };
 use mcpkit::client::handler::Root;
 use mcpkit::error::McpError;
@@ -22,7 +22,7 @@ impl FullHandler {
         Ok(CreateMessageResult {
             model: "gpt-4".to_string(),
             role: Role::Assistant,
-            content: Content::text("Response"),
+            content: OneOrMany::One(SamplingContent::text("Response")),
             stop_reason: Some(StopReason::EndTurn),
             meta: None,
         })

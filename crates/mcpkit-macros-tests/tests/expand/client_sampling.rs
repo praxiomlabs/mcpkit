@@ -1,7 +1,7 @@
 //! Test: Client with sampling handler expands correctly
 
 use mcpkit::mcp_client;
-use mcpkit::types::{CreateMessageRequest, CreateMessageResult, Role, Content, StopReason};
+use mcpkit::types::{CreateMessageRequest, CreateMessageResult, OneOrMany, Role, SamplingContent, StopReason};
 use mcpkit::error::McpError;
 
 struct SamplingHandler;
@@ -13,7 +13,7 @@ impl SamplingHandler {
         Ok(CreateMessageResult {
             model: "test-model".to_string(),
             role: Role::Assistant,
-            content: Content::text("Hello!"),
+            content: OneOrMany::One(SamplingContent::text("Hello!")),
             stop_reason: Some(StopReason::EndTurn),
             meta: None,
         })
