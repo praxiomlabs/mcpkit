@@ -167,6 +167,7 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
             Arc::clone(&handler),
             Arc::clone(&running),
             outgoing_rx,
+            Arc::new(client_caps.clone()),
         );
 
         // Notify handler that connection is established
@@ -206,6 +207,7 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
         handler: Arc<H>,
         running: Arc<AtomicBool>,
         mut outgoing_rx: mpsc::Receiver<Message>,
+        client_caps: Arc<ClientCapabilities>,
     ) -> tokio::task::JoinHandle<()> {
         tokio::spawn(async move {
             debug!("Starting client message router");
@@ -240,6 +242,7 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
                                     &pending,
                                     &handler,
                                     &transport,
+                                    &client_caps,
                                 ).await;
                             }
                             Ok(None) => {
@@ -275,13 +278,14 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
         pending: &Arc<RwLock<HashMap<RequestId, oneshot::Sender<Response>>>>,
         handler: &Arc<H>,
         transport: &Arc<T>,
+        client_caps: &Arc<ClientCapabilities>,
     ) {
         match message {
             Message::Response(response) => {
                 Self::route_response(response, pending).await;
             }
             Message::Request(request) => {
-                Self::handle_server_request(request, handler, transport).await;
+                Self::handle_server_request(request, handler, transport, client_caps).await;
             }
             Message::Notification(notification) => {
                 Self::handle_notification(notification, handler).await;
@@ -316,11 +320,18 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
     }
 
     /// Handle a server-initiated request.
-    async fn handle_server_request(request: Request, handler: &Arc<H>, transport: &Arc<T>) {
+    async fn handle_server_request(
+        request: Request,
+        handler: &Arc<H>,
+        transport: &Arc<T>,
+        client_caps: &Arc<ClientCapabilities>,
+    ) {
         trace!(method = %request.method, "Handling server request");
 
         let response = match request.method.as_ref() {
-            "sampling/createMessage" => Self::handle_sampling_request(&request, handler).await,
+            "sampling/createMessage" => {
+                Self::handle_sampling_request(&request, handler, client_caps).await
+            }
             "elicitation/create" => Self::handle_elicitation_request(&request, handler).await,
             "roots/list" => Self::handle_roots_request(&request, handler).await,
             "ping" => {
@@ -343,7 +354,11 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
     }
 
     /// Handle a sampling/createMessage request.
-    async fn handle_sampling_request(request: &Request, handler: &Arc<H>) -> Response {
+    async fn handle_sampling_request(
+        request: &Request,
+        handler: &Arc<H>,
+        client_caps: &Arc<ClientCapabilities>,
+    ) -> Response {
         let params = match &request.params {
             Some(p) => match serde_json::from_value::<CreateMessageRequest>(p.clone()) {
                 Ok(req) => req,
@@ -361,6 +376,20 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
                 );
             }
         };
+
+        // Per spec, a client MUST reject tool-augmented sampling unless it
+        // declared the `sampling.tools` capability.
+        if (params.tools.is_some() || params.tool_choice.is_some())
+            && !client_caps.has_sampling_tools()
+        {
+            return Response::error(
+                request.id.clone(),
+                JsonRpcError::invalid_params(
+                    "sampling request includes tools/toolChoice but the client did not \
+                     declare the sampling.tools capability",
+                ),
+            );
+        }
 
         match handler.create_message(params).await {
             Ok(result) => match serde_json::to_value(result) {
@@ -1638,5 +1667,52 @@ mod tests {
         assert_eq!(seen[0].progress_token, ProgressToken::Number(5));
         assert!((seen[0].progress - 0.25).abs() < f64::EPSILON);
         assert_eq!(seen[0].total, Some(1.0));
+    }
+
+    /// Per spec, a client must reject tool-augmented sampling unless it declared
+    /// the `sampling.tools` capability.
+    #[tokio::test]
+    async fn sampling_tools_requires_declared_capability() {
+        let handler = Arc::new(crate::handler::NoOpHandler);
+        let request = Request::with_params(
+            "sampling/createMessage",
+            RequestId::Number(1),
+            serde_json::json!({
+                "messages": [],
+                "maxTokens": 10,
+                "tools": [],
+                "toolChoice": { "mode": "auto" }
+            }),
+        );
+
+        // Declared only `sampling` (not `sampling.tools`) -> gate rejects.
+        let caps = Arc::new(ClientCapabilities::new().with_sampling());
+        let resp = Client::<SilentTransport, crate::handler::NoOpHandler>::handle_sampling_request(
+            &request, &handler, &caps,
+        )
+        .await;
+        assert!(
+            resp.error
+                .expect("error")
+                .message
+                .contains("sampling.tools"),
+            "tools without sampling.tools must be rejected"
+        );
+
+        // Declared `sampling.tools` -> gate passes (NoOpHandler then declines
+        // with a different error).
+        let caps = Arc::new(ClientCapabilities::new().with_sampling_tools());
+        let resp = Client::<SilentTransport, crate::handler::NoOpHandler>::handle_sampling_request(
+            &request, &handler, &caps,
+        )
+        .await;
+        assert!(
+            !resp
+                .error
+                .expect("error")
+                .message
+                .contains("sampling.tools"),
+            "gate should pass once sampling.tools is declared"
+        );
     }
 }

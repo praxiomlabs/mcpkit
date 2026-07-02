@@ -243,6 +243,9 @@ impl ClientCapabilities {
     }
 
     /// Enable sampling support.
+    ///
+    /// Not `const`: `SamplingCapability` now holds `Option<serde_json::Value>`
+    /// sub-capabilities, whose destructor is not const-evaluable.
     #[must_use]
     pub fn with_sampling(mut self) -> Self {
         self.sampling = Some(SamplingCapability::default());

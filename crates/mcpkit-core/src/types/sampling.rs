@@ -296,7 +296,7 @@ impl CreateMessageRequest {
 
 /// What context to include in sampling.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "camelCase")]
 #[derive(Default)]
 pub enum IncludeContext {
     /// Include no additional context.
@@ -527,6 +527,23 @@ mod tests {
             .unwrap(),
             OneOrMany::Many(_)
         ));
+    }
+
+    #[test]
+    fn include_context_serializes_camelcase() {
+        use serde_json::json;
+        assert_eq!(
+            serde_json::to_value(IncludeContext::None).unwrap(),
+            json!("none")
+        );
+        assert_eq!(
+            serde_json::to_value(IncludeContext::ThisServer).unwrap(),
+            json!("thisServer")
+        );
+        assert_eq!(
+            serde_json::to_value(IncludeContext::AllServers).unwrap(),
+            json!("allServers")
+        );
     }
 
     #[test]
