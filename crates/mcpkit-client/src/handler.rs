@@ -246,6 +246,9 @@ mod tests {
                 max_tokens: 100,
                 stop_sequences: None,
                 metadata: None,
+                tools: None,
+                tool_choice: None,
+                meta: None,
             })
             .await;
         assert!(result.is_err());

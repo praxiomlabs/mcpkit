@@ -574,7 +574,9 @@ where
         // are released so we can push new background work.
         enum Step {
             Message(Option<Message>),
-            Progress(Option<BackgroundExec>),
+            // Boxed: `BackgroundExec` is large (it owns a `ContextData`), so an
+            // unboxed variant makes `Step` lopsided (`clippy::large_enum_variant`).
+            Progress(Option<Box<BackgroundExec>>),
         }
 
         let max = self.config.max_concurrent_requests.max(1);
@@ -611,14 +613,14 @@ where
                 match select(recv, progress).await {
                     Either::Left((Ok(opt), _)) => Step::Message(opt),
                     Either::Left((Err(e), _)) => break Err(e.into()),
-                    Either::Right((maybe_exec, _)) => Step::Progress(maybe_exec),
+                    Either::Right((maybe_exec, _)) => Step::Progress(maybe_exec.map(Box::new)),
                 }
             };
 
             // Borrows on the future sets are released here, so we may push work.
             match step {
                 Step::Progress(Some(exec)) => {
-                    background.push(self.run_task(exec));
+                    background.push(self.run_task(*exec));
                 }
                 Step::Progress(None) => {}
                 Step::Message(Some(Message::Request(request))) => {
@@ -1314,7 +1316,7 @@ mod tests {
 
     use mcpkit_core::capability::{ClientCapabilities, ServerInfo};
     use mcpkit_core::protocol::RequestId;
-    use mcpkit_core::types::content::{Content, Role};
+    use mcpkit_core::types::content::Role;
     use mcpkit_core::types::elicitation::ElicitRequest;
     use mcpkit_core::types::sampling::{CreateMessageRequest, CreateMessageResult};
     use mcpkit_transport::MemoryTransport;
@@ -1965,7 +1967,9 @@ mod tests {
         // Reply as the client with a generated message.
         let result = CreateMessageResult {
             role: Role::Assistant,
-            content: Content::text("a summary"),
+            content: mcpkit_core::types::OneOrMany::One(mcpkit_core::types::SamplingContent::text(
+                "a summary",
+            )),
             model: "test-model".to_string(),
             stop_reason: None,
             meta: None,

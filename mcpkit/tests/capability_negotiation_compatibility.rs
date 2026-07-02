@@ -562,7 +562,7 @@ fn test_completion_capability_serialization() -> Result<(), Box<dyn std::error::
 
 #[test]
 fn test_sampling_capability_serialization() -> Result<(), Box<dyn std::error::Error>> {
-    let cap = SamplingCapability {};
+    let cap = SamplingCapability::default();
 
     let json_str = serde_json::to_string(&cap)?;
 
@@ -931,7 +931,7 @@ fn test_empty_capability_structs_serialize_to_empty_object()
     // Per MCP spec, empty capability objects should be {}
     assert_eq!(serde_json::to_string(&LoggingCapability {})?, "{}");
     assert_eq!(serde_json::to_string(&CompletionCapability {})?, "{}");
-    assert_eq!(serde_json::to_string(&SamplingCapability {})?, "{}");
+    assert_eq!(serde_json::to_string(&SamplingCapability::default())?, "{}");
     assert_eq!(
         serde_json::to_string(&ElicitationCapability::default())?,
         "{}"

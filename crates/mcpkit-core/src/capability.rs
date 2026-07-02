@@ -244,8 +244,29 @@ impl ClientCapabilities {
 
     /// Enable sampling support.
     #[must_use]
-    pub const fn with_sampling(mut self) -> Self {
-        self.sampling = Some(SamplingCapability {});
+    pub fn with_sampling(mut self) -> Self {
+        self.sampling = Some(SamplingCapability::default());
+        self
+    }
+
+    /// Enable sampling with tool-use support (declares `sampling.tools`).
+    #[must_use]
+    pub fn with_sampling_tools(mut self) -> Self {
+        let sampling = self
+            .sampling
+            .get_or_insert_with(SamplingCapability::default);
+        sampling.tools = Some(serde_json::json!({}));
+        self
+    }
+
+    /// Enable sampling with context-inclusion support (declares
+    /// `sampling.context`).
+    #[must_use]
+    pub fn with_sampling_context(mut self) -> Self {
+        let sampling = self
+            .sampling
+            .get_or_insert_with(SamplingCapability::default);
+        sampling.context = Some(serde_json::json!({}));
         self
     }
 
@@ -310,6 +331,20 @@ impl ClientCapabilities {
     #[must_use]
     pub const fn has_sampling(&self) -> bool {
         self.sampling.is_some()
+    }
+
+    /// Whether the client declared tool-use support in sampling
+    /// (`sampling.tools`).
+    #[must_use]
+    pub const fn has_sampling_tools(&self) -> bool {
+        matches!(&self.sampling, Some(s) if s.tools.is_some())
+    }
+
+    /// Whether the client declared context-inclusion support in sampling
+    /// (`sampling.context`).
+    #[must_use]
+    pub const fn has_sampling_context(&self) -> bool {
+        matches!(&self.sampling, Some(s) if s.context.is_some())
     }
 
     /// Check if elicitation is supported.
@@ -400,7 +435,14 @@ pub struct RootsCapability {
 
 /// Sampling capability flags.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct SamplingCapability {}
+pub struct SamplingCapability {
+    /// Declared support for context inclusion (the `includeContext` parameter).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context: Option<serde_json::Value>,
+    /// Declared support for tool use in sampling requests.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tools: Option<serde_json::Value>,
+}
 
 /// Elicitation capability flags.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
