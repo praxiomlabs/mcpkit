@@ -29,8 +29,8 @@ use mcpkit_core::protocol::Message;
 use mcpkit_core::protocol_version::ProtocolVersion;
 use mcpkit_server::context::{Context, NoOpPeer};
 use mcpkit_server::{
-    PromptHandler, ResourceHandler, ServerHandler, ToolHandler, route_prompts, route_resources,
-    route_tools,
+    PromptHandler, ResourceHandler, ServerHandler, ToolHandler, route_logging, route_prompts,
+    route_resources, route_tools,
 };
 use std::convert::Infallible;
 use std::sync::Arc;
@@ -294,6 +294,22 @@ where
                 params,
                 &ctx,
                 state.list_page_size,
+            )
+            .await
+            {
+                return match result {
+                    Ok(value) => Response::success(request.id.clone(), value),
+                    Err(e) => Response::error(request.id.clone(), e.into()),
+                };
+            }
+
+            // Try routing logging/setLevel (gated on the advertised capability)
+            if let Some(result) = route_logging(
+                state.handler.as_ref(),
+                &state.handler.capabilities(),
+                method,
+                params,
+                &ctx,
             )
             .await
             {

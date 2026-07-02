@@ -48,6 +48,7 @@ use mcpkit_core::error::McpError;
 use mcpkit_core::protocol::{Notification, ProgressToken, RequestId, Response};
 use mcpkit_core::protocol_version::ProtocolVersion;
 use mcpkit_core::types::elicitation::{ElicitRequest, ElicitResult, UrlElicitRequest};
+use mcpkit_core::types::logging::{LoggingLevel, LoggingMessageNotificationParams};
 use mcpkit_core::types::notifications::ProgressNotificationParams;
 use mcpkit_core::types::sampling::{CreateMessageRequest, CreateMessageResult};
 use std::borrow::Cow;
@@ -338,6 +339,26 @@ impl<'a> Context<'a> {
             Some(serde_json::to_value(params)?),
         )
         .await
+    }
+
+    /// Emit a `notifications/message` log to the client at `level`, optionally
+    /// tagged with a `logger` name and carrying arbitrary JSON `data`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the notification could not be sent.
+    pub async fn log(
+        &self,
+        level: LoggingLevel,
+        logger: Option<&str>,
+        data: serde_json::Value,
+    ) -> Result<(), McpError> {
+        let params = LoggingMessageNotificationParams {
+            logger: logger.map(String::from),
+            ..LoggingMessageNotificationParams::new(level, data)
+        };
+        self.notify("notifications/message", Some(serde_json::to_value(params)?))
+            .await
     }
 
     /// Send a request to the client and await its response.

@@ -363,6 +363,29 @@ impl ServerNotifier {
         self.peer.notify(notification).await
     }
 
+    /// Emit a `notifications/message` log to the client at `level`, optionally
+    /// tagged with a `logger` name and carrying arbitrary JSON `data`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the notification could not be sent.
+    pub async fn log(
+        &self,
+        level: mcpkit_core::types::LoggingLevel,
+        logger: Option<&str>,
+        data: serde_json::Value,
+    ) -> Result<(), McpError> {
+        let params = mcpkit_core::types::LoggingMessageNotificationParams {
+            logger: logger.map(String::from),
+            ..mcpkit_core::types::LoggingMessageNotificationParams::new(level, data)
+        };
+        self.notify(
+            crate::router::notifications::MESSAGE,
+            Some(serde_json::to_value(params)?),
+        )
+        .await
+    }
+
     /// Notify the client that the available tool list has changed.
     ///
     /// # Errors
@@ -1205,6 +1228,14 @@ where
             if let Some(result) = route_tasks(handler, method, params, ctx).await {
                 return result;
             }
+        }
+        // `logging/setLevel` is handled by the base handler when the `logging`
+        // capability is advertised (shared with the HTTP adapters).
+        if let Some(result) =
+            crate::router::route_logging(self.handler(), self.capabilities(), method, params, ctx)
+                .await
+        {
+            return result;
         }
         Err(McpError::method_not_found(method))
     }
@@ -2345,5 +2376,134 @@ mod tests {
 
         drop(client);
         let _ = timeout(Duration::from_secs(2), handle).await;
+    }
+
+    #[tokio::test]
+    async fn logging_set_level_dispatches_when_advertised_else_method_not_found() {
+        use crate::builder::ServerBuilder;
+        use crate::context::NoOpPeer;
+        use crate::handler::ServerHandler;
+        use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
+        use mcpkit_core::protocol::RequestId;
+        use mcpkit_core::protocol_version::ProtocolVersion;
+        use mcpkit_core::types::LoggingLevel;
+        use std::sync::Mutex;
+
+        struct H(Arc<Mutex<Option<LoggingLevel>>>);
+        impl ServerHandler for H {
+            fn server_info(&self) -> ServerInfo {
+                ServerInfo::new("t", "1.0.0")
+            }
+            async fn set_log_level(
+                &self,
+                level: LoggingLevel,
+                _ctx: &Context<'_>,
+            ) -> Result<(), McpError> {
+                *self.0.lock().unwrap() = Some(level);
+                Ok(())
+            }
+        }
+
+        let request_id = RequestId::Number(1);
+        let client_caps = ClientCapabilities::default();
+        let server_caps = ServerCapabilities::default();
+        let peer = NoOpPeer;
+        let ctx = Context::new(
+            &request_id,
+            None,
+            &client_caps,
+            &server_caps,
+            ProtocolVersion::LATEST,
+            &peer,
+        );
+
+        // Advertised -> dispatched to the base handler, empty result.
+        let seen = Arc::new(Mutex::new(None));
+        let server = ServerBuilder::new(H(Arc::clone(&seen)))
+            .capabilities(ServerCapabilities::new().with_logging())
+            .build();
+        let out = server
+            .route(
+                "logging/setLevel",
+                Some(&serde_json::json!({ "level": "warning" })),
+                &ctx,
+            )
+            .await
+            .expect("setLevel dispatched");
+        assert_eq!(out, serde_json::json!({}));
+        assert_eq!(*seen.lock().unwrap(), Some(LoggingLevel::Warning));
+
+        // Invalid level -> invalid params.
+        assert!(
+            server
+                .route(
+                    "logging/setLevel",
+                    Some(&serde_json::json!({ "level": "loud" })),
+                    &ctx,
+                )
+                .await
+                .is_err()
+        );
+
+        // Not advertised -> method not found.
+        let plain = ServerBuilder::new(H(Arc::new(Mutex::new(None)))).build();
+        let err = plain
+            .route(
+                "logging/setLevel",
+                Some(&serde_json::json!({ "level": "info" })),
+                &ctx,
+            )
+            .await
+            .expect_err("no logging capability -> method not found");
+        assert!(matches!(err, McpError::MethodNotFound { .. }));
+    }
+
+    #[tokio::test]
+    async fn context_log_emits_message_notification() {
+        use crate::context::Peer;
+        use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
+        use mcpkit_core::protocol::RequestId;
+        use mcpkit_core::protocol_version::ProtocolVersion;
+        use mcpkit_core::types::LoggingLevel;
+        use std::pin::Pin;
+        use std::sync::Mutex;
+
+        struct RecPeer(Arc<Mutex<Vec<Notification>>>);
+        impl Peer for RecPeer {
+            fn notify(
+                &self,
+                notification: Notification,
+            ) -> Pin<Box<dyn std::future::Future<Output = Result<(), McpError>> + Send + '_>>
+            {
+                self.0.lock().unwrap().push(notification);
+                Box::pin(async { Ok(()) })
+            }
+        }
+
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let peer = RecPeer(Arc::clone(&seen));
+        let request_id = RequestId::Number(1);
+        let client_caps = ClientCapabilities::default();
+        let server_caps = ServerCapabilities::default();
+        let ctx = Context::new(
+            &request_id,
+            None,
+            &client_caps,
+            &server_caps,
+            ProtocolVersion::LATEST,
+            &peer,
+        );
+
+        ctx.log(LoggingLevel::Error, Some("db"), serde_json::json!("boom"))
+            .await
+            .expect("log sent");
+
+        let seen = seen.lock().unwrap();
+        assert_eq!(seen.len(), 1);
+        assert_eq!(seen[0].method.as_ref(), "notifications/message");
+        let params = seen[0].params.as_ref().expect("params");
+        assert_eq!(params["level"], serde_json::json!("error"));
+        assert_eq!(params["logger"], serde_json::json!("db"));
+        assert_eq!(params["data"], serde_json::json!("boom"));
     }
 }

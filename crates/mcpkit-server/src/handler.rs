@@ -86,6 +86,17 @@ pub trait ServerHandler: Send + Sync {
     fn on_shutdown(&self) -> impl Future<Output = ()> + Send {
         async {}
     }
+
+    /// Handle a `logging/setLevel` request: the client's requested minimum log
+    /// severity. Only reached when the server advertises the `logging`
+    /// capability. The default is a no-op.
+    fn set_log_level(
+        &self,
+        _level: LogLevel,
+        _ctx: &Context<'_>,
+    ) -> impl Future<Output = Result<(), McpError>> + Send {
+        async { Ok(()) }
+    }
 }
 
 /// Handler for tool-related operations.
@@ -252,50 +263,11 @@ pub trait CompletionHandler: Send + Sync {
     ) -> impl Future<Output = Result<Vec<String>, McpError>> + Send;
 }
 
-/// Handler for logging operations.
+/// The MCP logging severity, re-exported from core.
 ///
-/// Implement this trait to handle log messages from the client.
-pub trait LoggingHandler: Send + Sync {
-    /// Set the current logging level.
-    fn set_level(&self, level: LogLevel) -> impl Future<Output = Result<(), McpError>> + Send;
-}
-
-/// Log levels for MCP logging.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
-pub enum LogLevel {
-    /// Debug level - most verbose.
-    Debug,
-    /// Info level.
-    #[default]
-    Info,
-    /// Notice level.
-    Notice,
-    /// Warning level.
-    Warning,
-    /// Error level.
-    Error,
-    /// Critical level.
-    Critical,
-    /// Alert level.
-    Alert,
-    /// Emergency level - most severe.
-    Emergency,
-}
-
-impl std::fmt::Display for LogLevel {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Debug => write!(f, "debug"),
-            Self::Info => write!(f, "info"),
-            Self::Notice => write!(f, "notice"),
-            Self::Warning => write!(f, "warning"),
-            Self::Error => write!(f, "error"),
-            Self::Critical => write!(f, "critical"),
-            Self::Alert => write!(f, "alert"),
-            Self::Emergency => write!(f, "emergency"),
-        }
-    }
-}
+/// Inbound `logging/setLevel` is handled by [`ServerHandler::set_log_level`];
+/// outbound `notifications/message` is emitted via the server's `log` helpers.
+pub use mcpkit_core::types::LoggingLevel as LogLevel;
 
 // =============================================================================
 // Blanket implementations for Arc<T>
@@ -451,12 +423,6 @@ impl<T: CompletionHandler> CompletionHandler for Arc<T> {
         ctx: &Context<'_>,
     ) -> impl Future<Output = Result<Vec<String>, McpError>> + Send {
         (**self).complete_prompt_arg(prompt_name, arg_name, partial_value, ctx)
-    }
-}
-
-impl<T: LoggingHandler> LoggingHandler for Arc<T> {
-    fn set_level(&self, level: LogLevel) -> impl Future<Output = Result<(), McpError>> + Send {
-        (**self).set_level(level)
     }
 }
 

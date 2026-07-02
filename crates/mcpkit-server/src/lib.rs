@@ -74,14 +74,14 @@ pub mod validation;
 pub use builder::{FullServer, MinimalServer, NotRegistered, Registered, Server, ServerBuilder};
 pub use context::{CancellationToken, CancelledFuture, Context, ContextData, NoOpPeer, Peer};
 pub use handler::{
-    CompletionHandler, LogLevel, LoggingHandler, PromptHandler, ResourceHandler, ServerHandler,
-    TaskHandler, ToolHandler,
+    CompletionHandler, LogLevel, PromptHandler, ResourceHandler, ServerHandler, TaskHandler,
+    ToolHandler,
 };
 pub use health::{
     ComponentHealth, HealthChecker, HealthReport, HealthStatus, LivenessResponse, ReadinessResponse,
 };
 pub use metrics::{MethodStats, MetricsSnapshot, ServerMetrics};
-pub use router::{route_prompts, route_resources, route_tools};
+pub use router::{route_logging, route_prompts, route_resources, route_tools};
 pub use server::{
     RequestRouter, RuntimeConfig, ServerNotifier, ServerRuntime, ServerState, TransportPeer,
 };
@@ -97,8 +97,8 @@ pub mod prelude {
         CancellationToken, CancelledFuture, Context, ContextData, NoOpPeer, Peer,
     };
     pub use crate::handler::{
-        CompletionHandler, LogLevel, LoggingHandler, PromptHandler, ResourceHandler, ServerHandler,
-        TaskHandler, ToolHandler,
+        CompletionHandler, LogLevel, PromptHandler, ResourceHandler, ServerHandler, TaskHandler,
+        ToolHandler,
     };
     pub use crate::metrics::{MethodStats, MetricsSnapshot, ServerMetrics};
 }
