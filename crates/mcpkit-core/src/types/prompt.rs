@@ -28,6 +28,9 @@ pub struct Prompt {
     /// Arguments that the prompt accepts.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub arguments: Option<Vec<PromptArgument>>,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 impl Prompt {
@@ -40,6 +43,7 @@ impl Prompt {
             description: None,
             icons: None,
             arguments: None,
+            meta: None,
         }
     }
 
@@ -304,6 +308,18 @@ pub struct PromptListChangedNotification {}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn prompt_meta_round_trips_and_omits() -> Result<(), Box<dyn std::error::Error>> {
+        let p: Prompt = serde_json::from_value(serde_json::json!({"name":"n","_meta":{"k":"v"}}))?;
+        assert_eq!(serde_json::to_value(&p)?["_meta"]["k"], "v");
+        assert!(
+            serde_json::to_value(Prompt::new("n"))?
+                .get("_meta")
+                .is_none()
+        );
+        Ok(())
+    }
 
     #[test]
     fn test_prompt_builder() -> Result<(), Box<dyn std::error::Error>> {

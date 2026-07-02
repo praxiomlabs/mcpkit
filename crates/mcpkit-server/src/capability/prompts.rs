@@ -197,6 +197,7 @@ impl PromptBuilder {
             } else {
                 Some(self.arguments)
             },
+            meta: None,
         }
     }
 }

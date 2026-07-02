@@ -61,6 +61,9 @@ pub struct Tool {
     /// conform to this schema (MCP structured output).
     #[serde(rename = "outputSchema", skip_serializing_if = "Option::is_none")]
     pub output_schema: Option<serde_json::Value>,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 impl Tool {
@@ -79,6 +82,7 @@ impl Tool {
             annotations: None,
             execution: None,
             output_schema: None,
+            meta: None,
         }
     }
 
@@ -608,6 +612,16 @@ pub struct CallToolRequest {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tool_meta_round_trips_and_omits() -> Result<(), Box<dyn std::error::Error>> {
+        let t: Tool = serde_json::from_value(
+            serde_json::json!({"name":"n","inputSchema":{"type":"object"},"_meta":{"k":"v"}}),
+        )?;
+        assert_eq!(serde_json::to_value(&t)?["_meta"]["k"], "v");
+        assert!(serde_json::to_value(Tool::new("n"))?.get("_meta").is_none());
+        Ok(())
+    }
 
     #[test]
     fn with_param_coerces_non_object_properties_instead_of_panicking() {

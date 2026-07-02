@@ -59,6 +59,7 @@ fn test_resource_definition() -> Result<(), Box<dyn std::error::Error>> {
         size: Some(1024),
         icons: None,
         annotations: None,
+        meta: None,
     };
 
     let json = serde_json::to_value(&resource)?;
@@ -84,6 +85,7 @@ fn test_prompt_definition() -> Result<(), Box<dyn std::error::Error>> {
             description: Some("The code to review".to_string()),
             required: Some(true),
         }]),
+        meta: None,
     };
 
     let json = serde_json::to_value(&prompt)?;
@@ -164,6 +166,7 @@ fn test_resource_without_optional_fields() -> Result<(), Box<dyn std::error::Err
         size: None,
         icons: None,
         annotations: None,
+        meta: None,
     };
 
     let json = serde_json::to_value(&resource)?;
@@ -181,6 +184,7 @@ fn test_prompt_without_arguments() -> Result<(), Box<dyn std::error::Error>> {
         description: Some("A simple prompt".to_string()),
         icons: None,
         arguments: None,
+        meta: None,
     };
 
     let json = serde_json::to_value(&prompt)?;

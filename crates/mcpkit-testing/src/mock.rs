@@ -117,6 +117,7 @@ impl MockTool {
             annotations: self.annotations.clone(),
             execution: None,
             output_schema: None,
+            meta: None,
         }
     }
 
@@ -187,6 +188,7 @@ impl MockResource {
             size: Some(self.content.len() as u64),
             icons: None,
             annotations: None,
+            meta: None,
         }
     }
 
@@ -198,6 +200,7 @@ impl MockResource {
             mime_type: self.mime_type.clone(),
             text: Some(self.content.clone()),
             blob: None,
+            meta: None,
         }
     }
 }
@@ -243,6 +246,7 @@ impl MockPrompt {
             description: self.description.clone(),
             icons: None,
             arguments: None,
+            meta: None,
         }
     }
 }

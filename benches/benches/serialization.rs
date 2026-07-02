@@ -115,6 +115,7 @@ fn tool_definition() -> Tool {
         }),
         execution: None,
         output_schema: None,
+        meta: None,
     }
 }
 
