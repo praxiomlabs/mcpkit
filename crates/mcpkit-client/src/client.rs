@@ -420,19 +420,14 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
     async fn handle_roots_request(request: &Request, handler: &Arc<H>) -> Response {
         match handler.list_roots().await {
             Ok(roots) => {
-                let roots_json: Vec<serde_json::Value> = roots
-                    .into_iter()
-                    .map(|r| {
-                        serde_json::json!({
-                            "uri": r.uri,
-                            "name": r.name
-                        })
-                    })
-                    .collect();
-                Response::success(
-                    request.id.clone(),
-                    serde_json::json!({ "roots": roots_json }),
-                )
+                let result = mcpkit_core::types::ListRootsResult { roots, meta: None };
+                match serde_json::to_value(result) {
+                    Ok(value) => Response::success(request.id.clone(), value),
+                    Err(e) => Response::error(
+                        request.id.clone(),
+                        JsonRpcError::internal_error(e.to_string()),
+                    ),
+                }
             }
             Err(e) => Response::error(
                 request.id.clone(),
@@ -971,6 +966,28 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
             )
             .await?;
         Ok(())
+    }
+
+    /// Notify the server that this client's root list has changed
+    /// (`notifications/roots/list_changed`, sent with no params).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the notification could not be queued for sending.
+    pub async fn notify_roots_list_changed(&self) -> Result<(), McpError> {
+        self.outgoing_tx
+            .send(Message::Notification(Notification::new(
+                "notifications/roots/list_changed",
+            )))
+            .await
+            .map_err(|_| {
+                McpError::Transport(Box::new(TransportDetails {
+                    kind: TransportErrorKind::WriteFailed,
+                    message: "Failed to send roots/list_changed (channel closed)".to_string(),
+                    context: TransportContext::default(),
+                    source: None,
+                }))
+            })
     }
 
     // ==========================================================================

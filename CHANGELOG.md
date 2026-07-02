@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Roots as first-class protocol types (#111). `Root` moves into `mcpkit-core`
+  with serde derives (`name` omitted when absent, fixing the previous `name: null`
+  on the wire) and is re-exported from `mcpkit_client::handler` for compatibility.
+  Adds core `ListRootsResult { roots, _meta? }` and a `RootsListChangedNotification`
+  marker. The client now serializes the typed result for `roots/list` and gains
+  `Client::notify_roots_list_changed()`. Servers can request the client's roots
+  via a new `Context::list_roots()` (gated on the client's `roots` capability) —
+  previously there was no way to service the advertised capability from the server
+  side. Server *receipt* of `notifications/roots/list_changed` (and invoking the
+  currently-unwired `on_initialized`) is deferred to
+  [#141](https://github.com/praxiomlabs/mcpkit/issues/141)
+  ([#111](https://github.com/praxiomlabs/mcpkit/issues/111)).
 - Logging utility, now functional (#108). New core types `LoggingLevel` (the
   eight syslog levels, ordered by severity), `SetLevelRequest`, and
   `LoggingMessageNotificationParams { level, logger?, data, _meta? }`. Inbound

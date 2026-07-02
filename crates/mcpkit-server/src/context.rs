@@ -50,6 +50,7 @@ use mcpkit_core::protocol_version::ProtocolVersion;
 use mcpkit_core::types::elicitation::{ElicitRequest, ElicitResult, UrlElicitRequest};
 use mcpkit_core::types::logging::{LoggingLevel, LoggingMessageNotificationParams};
 use mcpkit_core::types::notifications::ProgressNotificationParams;
+use mcpkit_core::types::roots::{ListRootsResult, Root};
 use mcpkit_core::types::sampling::{CreateMessageRequest, CreateMessageResult};
 use std::borrow::Cow;
 use std::future::Future;
@@ -424,6 +425,25 @@ impl<'a> Context<'a> {
         serde_json::from_value(result).map_err(McpError::from)
     }
 
+    /// Request the roots this client exposes (`roots/list`).
+    ///
+    /// Requires the client to have declared the `roots` capability.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the client did not declare roots support, or the
+    /// request fails, times out, or the response could not be parsed.
+    pub async fn list_roots(&self) -> Result<Vec<Root>, McpError> {
+        if !self.client_caps.has_roots() {
+            return Err(McpError::internal(
+                "the client did not declare the roots capability",
+            ));
+        }
+        let result = self.request("roots/list", None).await?;
+        let result: ListRootsResult = serde_json::from_value(result).map_err(McpError::from)?;
+        Ok(result.roots)
+    }
+
     /// Request a URL-mode elicitation: ask the client to have the user navigate
     /// to a URL for an out-of-band interaction (e.g. authorization or payment).
     ///
@@ -702,5 +722,63 @@ mod tests {
         // Test feature detection via protocol version
         assert!(ctx.protocol_version.supports_elicitation());
         assert!(!ctx.protocol_version.supports_tasks()); // Tasks require 2025-11-25
+    }
+
+    #[tokio::test]
+    async fn list_roots_requests_and_parses_when_advertised() {
+        use mcpkit_core::protocol::Response;
+
+        struct RootsPeer;
+        impl Peer for RootsPeer {
+            fn notify(
+                &self,
+                _n: Notification,
+            ) -> Pin<Box<dyn Future<Output = Result<(), McpError>> + Send + '_>> {
+                Box::pin(async { Ok(()) })
+            }
+            fn request(
+                &self,
+                method: Cow<'static, str>,
+                _params: Option<serde_json::Value>,
+            ) -> Pin<Box<dyn Future<Output = Result<Response, McpError>> + Send + '_>> {
+                assert_eq!(method, "roots/list");
+                let result = serde_json::to_value(ListRootsResult {
+                    roots: vec![Root::new("file:///a").name("a")],
+                    meta: None,
+                })
+                .unwrap();
+                Box::pin(async move { Ok(Response::success(RequestId::Number(1), result)) })
+            }
+        }
+
+        let request_id = RequestId::Number(1);
+        let server_caps = ServerCapabilities::default();
+        let peer = RootsPeer;
+
+        // Advertised -> request sent and result parsed.
+        let client_caps = ClientCapabilities::default().with_roots();
+        let ctx = Context::new(
+            &request_id,
+            None,
+            &client_caps,
+            &server_caps,
+            ProtocolVersion::LATEST,
+            &peer,
+        );
+        let roots = ctx.list_roots().await.expect("roots listed");
+        assert_eq!(roots.len(), 1);
+        assert_eq!(roots[0].name.as_deref(), Some("a"));
+
+        // Not advertised -> error before any request.
+        let no_roots = ClientCapabilities::default();
+        let ctx = Context::new(
+            &request_id,
+            None,
+            &no_roots,
+            &server_caps,
+            ProtocolVersion::LATEST,
+            &peer,
+        );
+        assert!(ctx.list_roots().await.is_err());
     }
 }

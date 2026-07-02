@@ -181,29 +181,9 @@ pub trait ClientHandler: Send + Sync {
 }
 
 /// A root directory that the client exposes to servers.
-#[derive(Debug, Clone)]
-pub struct Root {
-    /// URI of the root (e.g., "<file:///home/user/project>").
-    pub uri: String,
-    /// Human-readable name for the root.
-    pub name: Option<String>,
-}
-
-impl Root {
-    /// Create a new root.
-    pub fn new(uri: impl Into<String>) -> Self {
-        Self {
-            uri: uri.into(),
-            name: None,
-        }
-    }
-
-    /// Set the name.
-    pub fn name(mut self, name: impl Into<String>) -> Self {
-        self.name = Some(name.into());
-        self
-    }
-}
+///
+/// Re-exported from `mcpkit-core`; kept here for backwards compatibility.
+pub use mcpkit_core::types::Root;
 
 /// A no-op handler that rejects all server requests.
 ///
