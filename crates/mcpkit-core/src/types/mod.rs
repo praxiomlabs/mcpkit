@@ -18,6 +18,7 @@
 pub mod completion;
 pub mod content;
 pub mod elicitation;
+pub mod logging;
 pub mod meta;
 pub mod metadata;
 pub mod notifications;
@@ -31,6 +32,7 @@ pub mod tool;
 pub use completion::*;
 pub use content::*;
 pub use elicitation::*;
+pub use logging::*;
 pub use meta::*;
 pub use metadata::*;
 pub use notifications::*;

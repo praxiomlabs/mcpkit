@@ -229,6 +229,14 @@ impl<H: ServerHandler> ServerHandler for ValidatingToolHandler<H> {
     fn on_shutdown(&self) -> impl Future<Output = ()> + Send {
         self.inner.on_shutdown()
     }
+
+    fn set_log_level(
+        &self,
+        level: crate::handler::LogLevel,
+        ctx: &Context<'_>,
+    ) -> impl Future<Output = Result<(), McpError>> + Send {
+        self.inner.set_log_level(level, ctx)
+    }
 }
 
 impl<H: ResourceHandler> ResourceHandler for ValidatingToolHandler<H> {
