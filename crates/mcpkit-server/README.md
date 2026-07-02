@@ -48,7 +48,7 @@ The server uses composable handler traits:
 | `SamplingHandler` | Handle server-initiated LLM requests |
 | `ElicitationHandler` | Handle structured user input requests |
 | `CompletionHandler` | Handle argument completion requests |
-| `LoggingHandler` | Handle log level changes |
+| `ServerHandler::set_log_level` | Handle `logging/setLevel` (log verbosity) |
 
 ## Context
 

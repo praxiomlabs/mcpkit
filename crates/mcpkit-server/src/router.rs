@@ -872,6 +872,35 @@ pub async fn route_tasks(
     }
 }
 
+/// Route `logging/setLevel` to the base handler's
+/// [`set_log_level`](crate::handler::ServerHandler::set_log_level), but only when
+/// the server advertises the `logging` capability.
+///
+/// Returns `None` for any other method (or when logging is not advertised) so the
+/// caller falls through to its normal not-found handling. Shared by the runtime
+/// router and the HTTP adapters so `logging/setLevel` behaves the same on every
+/// surface.
+pub async fn route_logging<H: crate::handler::ServerHandler>(
+    handler: &H,
+    server_caps: &mcpkit_core::capability::ServerCapabilities,
+    method: &str,
+    params: Option<&serde_json::Value>,
+    ctx: &Context<'_>,
+) -> Option<Result<serde_json::Value, McpError>> {
+    if method != methods::LOGGING_SET_LEVEL || !server_caps.has_logging() {
+        return None;
+    }
+    let result = async {
+        let params = params.ok_or_else(|| McpError::invalid_params(method, "missing params"))?;
+        let req: mcpkit_core::types::SetLevelRequest = serde_json::from_value(params.clone())
+            .map_err(|_| McpError::invalid_params(method, "invalid or missing level"))?;
+        handler.set_log_level(req.level, ctx).await?;
+        Ok(serde_json::json!({}))
+    }
+    .await;
+    Some(result)
+}
+
 /// Extract a required `taskId` parameter.
 fn parse_task_id(
     params: Option<&serde_json::Value>,

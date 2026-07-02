@@ -1229,19 +1229,13 @@ where
                 return result;
             }
         }
-        // `logging/setLevel` is handled by the base handler, but only when the
-        // `logging` capability is advertised (otherwise it is not a method we
-        // honor).
-        if method == crate::router::methods::LOGGING_SET_LEVEL
-            && self.capabilities().logging.is_some()
+        // `logging/setLevel` is handled by the base handler when the `logging`
+        // capability is advertised (shared with the HTTP adapters).
+        if let Some(result) =
+            crate::router::route_logging(self.handler(), self.capabilities(), method, params, ctx)
+                .await
         {
-            let params =
-                params.ok_or_else(|| McpError::invalid_params(method, "missing params"))?;
-            let req: mcpkit_core::types::SetLevelRequest =
-                serde_json::from_value(params.clone())
-                    .map_err(|_| McpError::invalid_params(method, "invalid or missing level"))?;
-            self.handler().set_log_level(req.level, ctx).await?;
-            return Ok(serde_json::json!({}));
+            return result;
         }
         Err(McpError::method_not_found(method))
     }

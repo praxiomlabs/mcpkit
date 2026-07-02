@@ -132,6 +132,12 @@ impl ServerCapabilities {
         self.completions.is_some()
     }
 
+    /// Check if logging is supported.
+    #[must_use]
+    pub const fn has_logging(&self) -> bool {
+        self.logging.is_some()
+    }
+
     /// Check if resource subscriptions are supported.
     #[must_use]
     pub fn has_resource_subscribe(&self) -> bool {

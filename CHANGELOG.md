@@ -12,8 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Logging utility, now functional (#108). New core types `LoggingLevel` (the
   eight syslog levels, ordered by severity), `SetLevelRequest`, and
   `LoggingMessageNotificationParams { level, logger?, data, _meta? }`. Inbound
-  `logging/setLevel` is now dispatched to a new `ServerHandler::set_log_level`
-  (default no-op), but only when the `logging` capability is advertised; outbound
+  `logging/setLevel` is now dispatched (via a shared `route_logging` helper, so it
+  works the same in the runtime router *and* the four HTTP adapters) to a new
+  `ServerHandler::set_log_level` (default no-op), but only when the `logging`
+  capability is advertised; outbound
   logs are emitted via `ServerNotifier::log(level, logger, data)` and the
   `Context::log(..)` convenience (both serialize the typed params). **Fixed:** the
   advertised `logging` capability was entirely non-functional — `logging/setLevel`
