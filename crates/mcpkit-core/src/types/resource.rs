@@ -341,6 +341,20 @@ pub struct ReadResourceResult {
     pub meta: Option<Meta>,
 }
 
+/// Request parameters for `resources/subscribe`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubscribeRequest {
+    /// URI of the resource to subscribe to for update notifications.
+    pub uri: String,
+}
+
+/// Request parameters for `resources/unsubscribe`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UnsubscribeRequest {
+    /// URI of the resource to stop receiving update notifications for.
+    pub uri: String,
+}
+
 /// Notification that a resource has changed.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResourceUpdatedNotification {
@@ -418,5 +432,20 @@ mod tests {
                 .contains("\"name\"")
         );
         Ok(())
+    }
+
+    #[test]
+    fn subscribe_requests_round_trip() {
+        let wire = serde_json::to_value(SubscribeRequest {
+            uri: "file:///x".into(),
+        })
+        .unwrap();
+        assert_eq!(wire, serde_json::json!({ "uri": "file:///x" }));
+        let back: SubscribeRequest = serde_json::from_value(wire).unwrap();
+        assert_eq!(back.uri, "file:///x");
+
+        let back: UnsubscribeRequest =
+            serde_json::from_value(serde_json::json!({ "uri": "file:///y" })).unwrap();
+        assert_eq!(back.uri, "file:///y");
     }
 }
