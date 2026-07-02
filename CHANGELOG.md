@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `_meta` preservation on nested and listed objects (#145). The 2025-11-25 schema
+  gives `_meta` to `TextContent`, `ImageContent`, `AudioContent`, the embedded
+  resource block and its nested `ResourceContents`, `ResourceLink`, and the
+  standalone `Resource`, `ResourceTemplate`, `Tool`, and `Prompt` objects — but
+  mcpkit dropped it on all of them, so metadata on `tools/list`, `resources/list`,
+  `prompts/list`, and content blocks was silently lost on (de)serialize. Each now
+  carries an optional `meta` field. **Wire-compatible, but Rust source-breaking:**
+  these structs are not `#[non_exhaustive]` and do not derive `Default`, so any
+  struct-literal construction (`Tool { .. }`, `Resource { .. }`, etc.) must add
+  `meta: None`; constructors and builders are unaffected. Object-typing of
+  `ToolUseContent.input`/`ToolResultContent.structured_content` (`Value` → object
+  map) is deferred as a separate codebase-wide consistency decision
+  ([#145](https://github.com/praxiomlabs/mcpkit/issues/145)).
 - Tool-augmented sampling — content + request surface (#110, phase A). New core
   `ToolUseContent`/`ToolResultContent` content blocks, a `SamplingContent` union
   (Text/Image/Audio/ToolUse/ToolResult — the spec's `SamplingMessageContentBlock`,

@@ -250,6 +250,7 @@ impl ToolBuilder {
             annotations,
             execution: None,
             output_schema: None,
+            meta: None,
         }
     }
 }

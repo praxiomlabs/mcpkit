@@ -36,6 +36,9 @@ pub struct Resource {
     /// Optional annotations.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub annotations: Option<ResourceAnnotations>,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 impl Resource {
@@ -51,6 +54,7 @@ impl Resource {
             size: None,
             icons: None,
             annotations: None,
+            meta: None,
         }
     }
 
@@ -146,6 +150,9 @@ pub struct ResourceTemplate {
     /// Optional annotations.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub annotations: Option<ResourceAnnotations>,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 impl ResourceTemplate {
@@ -160,6 +167,7 @@ impl ResourceTemplate {
             mime_type: None,
             icons: None,
             annotations: None,
+            meta: None,
         }
     }
 
@@ -213,6 +221,9 @@ pub struct ResourceContents {
     /// Binary content as base64 (mutually exclusive with text).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub blob: Option<String>,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 impl ResourceContents {
@@ -224,6 +235,7 @@ impl ResourceContents {
             mime_type: Some("text/plain".to_string()),
             text: Some(text.into()),
             blob: None,
+            meta: None,
         }
     }
 
@@ -242,6 +254,7 @@ impl ResourceContents {
             mime_type: Some("application/json".to_string()),
             text: Some(json),
             blob: None,
+            meta: None,
         })
     }
 
@@ -254,6 +267,7 @@ impl ResourceContents {
             mime_type: Some(mime_type.into()),
             text: None,
             blob: Some(base64::engine::general_purpose::STANDARD.encode(data)),
+            meta: None,
         }
     }
 
@@ -369,6 +383,43 @@ pub struct ResourceListChangedNotification {}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn resource_types_meta_round_trip() -> Result<(), Box<dyn std::error::Error>> {
+        let r: Resource =
+            serde_json::from_value(serde_json::json!({"uri":"u","name":"n","_meta":{"k":"v"}}))?;
+        assert_eq!(serde_json::to_value(&r)?["_meta"]["k"], "v");
+
+        let t: ResourceTemplate = serde_json::from_value(
+            serde_json::json!({"uriTemplate":"u/{id}","name":"n","_meta":{"k":"v"}}),
+        )?;
+        assert_eq!(serde_json::to_value(&t)?["_meta"]["k"], "v");
+
+        let c: ResourceContents =
+            serde_json::from_value(serde_json::json!({"uri":"u","text":"hi","_meta":{"k":"v"}}))?;
+        assert_eq!(serde_json::to_value(&c)?["_meta"]["k"], "v");
+        Ok(())
+    }
+
+    #[test]
+    fn resource_types_meta_omitted_when_absent() -> Result<(), Box<dyn std::error::Error>> {
+        assert!(
+            serde_json::to_value(Resource::new("u", "n"))?
+                .get("_meta")
+                .is_none()
+        );
+        assert!(
+            serde_json::to_value(ResourceTemplate::new("u/{id}", "n"))?
+                .get("_meta")
+                .is_none()
+        );
+        assert!(
+            serde_json::to_value(ResourceContents::text("u", "hi"))?
+                .get("_meta")
+                .is_none()
+        );
+        Ok(())
+    }
 
     #[test]
     fn test_resource_builder() {

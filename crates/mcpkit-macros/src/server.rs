@@ -606,6 +606,7 @@ fn generate_tool_handler(tools: &[ToolMethod], self_ty: &syn::Type) -> TokenStre
                     }),
                     execution: #execution,
                     output_schema: #output_schema,
+                    meta: None,
                 }
             }
         })
@@ -687,6 +688,7 @@ fn generate_resource_handler(resources: &[ResourceMethod], self_ty: &syn::Type) 
                         size: None,
                         icons: None,
                         annotations: None,
+                        meta: None,
                     },
                 })
             }
@@ -713,6 +715,7 @@ fn generate_resource_handler(resources: &[ResourceMethod], self_ty: &syn::Type) 
                         mime_type: Some(#mime_type.to_string()),
                         icons: None,
                         annotations: None,
+                        meta: None,
                     },
                 })
             } else {
@@ -865,6 +868,7 @@ fn generate_prompt_handler(prompts: &[PromptMethod], self_ty: &syn::Type) -> Tok
                     description: if #description.is_empty() { None } else { Some(#description.to_string()) },
                     icons: None,
                     arguments: #arguments_expr,
+                    meta: None,
                 }
             }
         })

@@ -33,6 +33,7 @@ impl Content {
         Self::Text(TextContent {
             text: text.into(),
             annotations: None,
+            meta: None,
         })
     }
 
@@ -42,6 +43,7 @@ impl Content {
         Self::Text(TextContent {
             text: text.into(),
             annotations: Some(annotations),
+            meta: None,
         })
     }
 
@@ -52,6 +54,7 @@ impl Content {
             data: data.into(),
             mime_type: mime_type.into(),
             annotations: None,
+            meta: None,
         })
     }
 
@@ -62,6 +65,7 @@ impl Content {
             data: data.into(),
             mime_type: mime_type.into(),
             annotations: None,
+            meta: None,
         })
     }
 
@@ -74,8 +78,10 @@ impl Content {
                 mime_type: None,
                 text: None,
                 blob: None,
+                meta: None,
             },
             annotations: None,
+            meta: None,
         })
     }
 
@@ -112,6 +118,7 @@ impl Content {
             description: None,
             mime_type: None,
             annotations: None,
+            meta: None,
         })
     }
 
@@ -139,6 +146,9 @@ pub struct TextContent {
     /// Optional annotations.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub annotations: Option<ContentAnnotations>,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<super::meta::Meta>,
 }
 
 /// Image content (base64 encoded).
@@ -152,6 +162,9 @@ pub struct ImageContent {
     /// Optional annotations.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub annotations: Option<ContentAnnotations>,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<super::meta::Meta>,
 }
 
 /// Audio content (base64 encoded).
@@ -165,6 +178,9 @@ pub struct AudioContent {
     /// Optional annotations.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub annotations: Option<ContentAnnotations>,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<super::meta::Meta>,
 }
 
 /// Embedded resource content.
@@ -178,6 +194,9 @@ pub struct ResourceContent {
     /// Optional annotations.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub annotations: Option<ContentAnnotations>,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<super::meta::Meta>,
 }
 
 /// A link to a resource (not embedded inline, just a URI reference).
@@ -196,6 +215,9 @@ pub struct ResourceLinkContent {
     /// Optional annotations.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub annotations: Option<ContentAnnotations>,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<super::meta::Meta>,
 }
 
 /// A tool call the model wants to make, in a sampling message
@@ -297,6 +319,52 @@ impl std::fmt::Display for Role {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn content_block_meta_round_trips() -> Result<(), Box<dyn std::error::Error>> {
+        // `_meta` on a content block must survive deserialize -> serialize.
+        for wire in [
+            serde_json::json!({"type":"text","text":"hi","_meta":{"k":"v"}}),
+            serde_json::json!({"type":"image","data":"d","mimeType":"image/png","_meta":{"k":"v"}}),
+            serde_json::json!({"type":"audio","data":"d","mimeType":"audio/wav","_meta":{"k":"v"}}),
+            serde_json::json!({"type":"resource_link","uri":"u","name":"n","_meta":{"k":"v"}}),
+        ] {
+            let c: Content = serde_json::from_value(wire.clone())?;
+            assert_eq!(
+                serde_json::to_value(&c)?["_meta"]["k"],
+                "v",
+                "content block dropped _meta: {wire}"
+            );
+        }
+        // Embedded resource: the outer block and the nested `ResourceContents`
+        // each carry their own `_meta`.
+        let wire = serde_json::json!({
+            "type":"resource",
+            "resource":{"uri":"u","_meta":{"rk":"rv"}},
+            "_meta":{"k":"v"}
+        });
+        let c: Content = serde_json::from_value(wire)?;
+        let back = serde_json::to_value(&c)?;
+        assert_eq!(back["_meta"]["k"], "v");
+        assert_eq!(back["resource"]["_meta"]["rk"], "rv");
+        Ok(())
+    }
+
+    #[test]
+    fn content_block_meta_omitted_when_absent() -> Result<(), Box<dyn std::error::Error>> {
+        // Constructed content has `meta: None` and must not emit an `_meta` key.
+        for c in [
+            Content::text("hi"),
+            Content::image("d", "image/png"),
+            Content::audio("d", "audio/wav"),
+            Content::resource("u"),
+            Content::resource_link("u", "n"),
+        ] {
+            let json = serde_json::to_value(&c)?;
+            assert!(json.get("_meta").is_none(), "unexpected _meta in {json}");
+        }
+        Ok(())
+    }
 
     #[test]
     fn test_text_content() {

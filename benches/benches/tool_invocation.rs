@@ -32,6 +32,7 @@ impl ToolHandler {
                 annotations: None,
                 execution: None,
                 output_schema: None,
+                meta: None,
             },
         );
 
@@ -54,6 +55,7 @@ impl ToolHandler {
                 annotations: None,
                 execution: None,
                 output_schema: None,
+                meta: None,
             },
         );
 

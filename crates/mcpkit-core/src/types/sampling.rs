@@ -52,6 +52,7 @@ impl SamplingContent {
         Self::Text(TextContent {
             text: text.into(),
             annotations: None,
+            meta: None,
         })
     }
 }

@@ -230,6 +230,7 @@ impl ResourceBuilder {
             size: None,
             icons: None,
             annotations: None,
+            meta: None,
         }
     }
 }
@@ -276,6 +277,7 @@ impl ResourceTemplateBuilder {
             mime_type: self.mime_type,
             icons: None,
             annotations: None,
+            meta: None,
         }
     }
 }
