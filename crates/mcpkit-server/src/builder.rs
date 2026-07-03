@@ -514,15 +514,15 @@ mod tests {
             &self,
             _id: &mcpkit_core::types::TaskId,
             _ctx: &Context<'_>,
-        ) -> Result<Option<mcpkit_core::types::Task>, McpError> {
+        ) -> Result<Option<mcpkit_core::types::GetTaskResult>, McpError> {
             Ok(None)
         }
         async fn cancel_task(
             &self,
             _id: &mcpkit_core::types::TaskId,
             _ctx: &Context<'_>,
-        ) -> Result<bool, McpError> {
-            Ok(false)
+        ) -> Result<Option<mcpkit_core::types::CancelTaskResult>, McpError> {
+            Ok(None)
         }
     }
 

@@ -880,9 +880,10 @@ where
                 let Some(id) = task_id() else {
                     return Some(Err(McpError::invalid_params("tasks/get", "missing taskId")));
                 };
-                self.task_store
-                    .get(&id)
-                    .map(|s| Ok(serde_json::to_value(s.task).unwrap_or_default()))
+                self.task_store.get(&id).map(|s| {
+                    let result = mcpkit_core::types::GetTaskResult::from(s.task);
+                    Ok(serde_json::to_value(result).unwrap_or_default())
+                })
             }
             "tasks/result" => {
                 let Some(id) = task_id() else {
@@ -914,7 +915,10 @@ where
                     Some(Ok(self
                         .task_store
                         .get(&id)
-                        .map(|s| serde_json::to_value(s.task).unwrap_or_default())
+                        .map(|s| {
+                            let result = mcpkit_core::types::CancelTaskResult::from(s.task);
+                            serde_json::to_value(result).unwrap_or_default()
+                        })
                         .unwrap_or_default()))
                 } else {
                     None

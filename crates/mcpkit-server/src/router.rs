@@ -840,7 +840,7 @@ pub async fn route_tasks(
             let result = async {
                 let id = parse_task_id(params, methods::TASKS_GET)?;
                 match handler.get_task(&id, ctx).await? {
-                    Some(task) => Ok(serde_json::to_value(task).unwrap_or_default()),
+                    Some(result) => Ok(serde_json::to_value(result).unwrap_or_default()),
                     None => Err(McpError::invalid_params(
                         methods::TASKS_GET,
                         format!("unknown task: {id}"),
@@ -853,16 +853,14 @@ pub async fn route_tasks(
         methods::TASKS_CANCEL => {
             let result = async {
                 let id = parse_task_id(params, methods::TASKS_CANCEL)?;
-                if !handler.cancel_task(&id, ctx).await? {
-                    return Err(McpError::invalid_params(
+                // `Ok(None)` is an unknown task; a real cancellation failure
+                // propagates as `Err` from the handler.
+                match handler.cancel_task(&id, ctx).await? {
+                    Some(result) => Ok(serde_json::to_value(result).unwrap_or_default()),
+                    None => Err(McpError::invalid_params(
                         methods::TASKS_CANCEL,
                         format!("unknown task: {id}"),
-                    ));
-                }
-                // CancelTaskResult is `Result & Task`: return the cancelled task.
-                match handler.get_task(&id, ctx).await? {
-                    Some(task) => Ok(serde_json::to_value(task).unwrap_or_default()),
-                    None => Ok(serde_json::json!({})),
+                    )),
                 }
             }
             .await;
@@ -1479,6 +1477,68 @@ mod tests {
                 .await
                 .is_none()
         );
+    }
+
+    #[tokio::test]
+    async fn route_tasks_get_and_cancel_emit_result_meta() {
+        use crate::context::NoOpPeer;
+        use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
+        use mcpkit_core::protocol::RequestId;
+        use mcpkit_core::protocol_version::ProtocolVersion;
+        use mcpkit_core::types::{CancelTaskResult, GetTaskResult, Meta, Task, TaskId};
+
+        // A handler that attaches result-level `_meta` on both get and cancel.
+        struct MetaTaskHandler;
+        impl crate::handler::TaskHandler for MetaTaskHandler {
+            async fn list_tasks(&self, _ctx: &Context<'_>) -> Result<Vec<Task>, McpError> {
+                Ok(vec![])
+            }
+            async fn get_task(
+                &self,
+                id: &TaskId,
+                _ctx: &Context<'_>,
+            ) -> Result<Option<GetTaskResult>, McpError> {
+                let meta = Meta::new().with("origin", serde_json::json!("test"));
+                Ok(Some(
+                    GetTaskResult::from(Task::new(id.clone())).with_meta(meta),
+                ))
+            }
+            async fn cancel_task(
+                &self,
+                id: &TaskId,
+                _ctx: &Context<'_>,
+            ) -> Result<Option<CancelTaskResult>, McpError> {
+                let meta = Meta::new().with("origin", serde_json::json!("test"));
+                Ok(Some(
+                    CancelTaskResult::from(Task::new(id.clone())).with_meta(meta),
+                ))
+            }
+        }
+
+        let handler = MetaTaskHandler;
+        let request_id = RequestId::Number(1);
+        let client_caps = ClientCapabilities::default();
+        let server_caps = ServerCapabilities::default();
+        let peer = NoOpPeer;
+        let ctx = Context::new(
+            &request_id,
+            None,
+            &client_caps,
+            &server_caps,
+            ProtocolVersion::LATEST,
+            &peer,
+        );
+        let params = serde_json::json!({ "taskId": "t-1" });
+
+        for method in [methods::TASKS_GET, methods::TASKS_CANCEL] {
+            let resp = route_tasks(&handler, method, Some(&params), &ctx)
+                .await
+                .expect("routed")
+                .expect("ok");
+            // Task fields flattened at the top level, plus result-level `_meta`.
+            assert_eq!(resp["taskId"], "t-1", "{method}");
+            assert_eq!(resp["_meta"]["origin"], "test", "{method}");
+        }
     }
 
     #[tokio::test]

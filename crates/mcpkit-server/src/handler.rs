@@ -37,8 +37,8 @@
 use mcpkit_core::capability::{ServerCapabilities, ServerInfo};
 use mcpkit_core::error::McpError;
 use mcpkit_core::types::{
-    GetPromptResult, Prompt, Resource, ResourceContents, ResourceTemplate, Task, TaskId, Tool,
-    ToolOutput,
+    CancelTaskResult, GetPromptResult, GetTaskResult, Prompt, Resource, ResourceContents,
+    ResourceTemplate, Task, TaskId, Tool, ToolOutput,
 };
 use serde_json::Value;
 use std::future::Future;
@@ -227,18 +227,26 @@ pub trait TaskHandler: Send + Sync {
     ) -> impl Future<Output = Result<Vec<Task>, McpError>> + Send;
 
     /// Get the current state of a task.
+    ///
+    /// Return `Ok(None)` for an unknown task. The [`GetTaskResult`] wrapper may
+    /// carry result-level `_meta`; `Task::into()` produces one with no metadata.
     fn get_task(
         &self,
         id: &TaskId,
         ctx: &Context<'_>,
-    ) -> impl Future<Output = Result<Option<Task>, McpError>> + Send;
+    ) -> impl Future<Output = Result<Option<GetTaskResult>, McpError>> + Send;
 
-    /// Cancel a running task.
+    /// Cancel a running task, returning its post-cancellation state.
+    ///
+    /// - `Ok(Some(result))` — cancellation accepted; `result` is the task's state
+    ///   afterwards (and may carry result-level `_meta`).
+    /// - `Ok(None)` — no such task.
+    /// - `Err(..)` — the task exists but cancellation failed (an internal error).
     fn cancel_task(
         &self,
         id: &TaskId,
         ctx: &Context<'_>,
-    ) -> impl Future<Output = Result<bool, McpError>> + Send;
+    ) -> impl Future<Output = Result<Option<CancelTaskResult>, McpError>> + Send;
 }
 
 /// Handler for completion suggestions.
@@ -393,7 +401,7 @@ impl<T: TaskHandler> TaskHandler for Arc<T> {
         &self,
         id: &TaskId,
         ctx: &Context<'_>,
-    ) -> impl Future<Output = Result<Option<Task>, McpError>> + Send {
+    ) -> impl Future<Output = Result<Option<GetTaskResult>, McpError>> + Send {
         (**self).get_task(id, ctx)
     }
 
@@ -401,7 +409,7 @@ impl<T: TaskHandler> TaskHandler for Arc<T> {
         &self,
         id: &TaskId,
         ctx: &Context<'_>,
-    ) -> impl Future<Output = Result<bool, McpError>> + Send {
+    ) -> impl Future<Output = Result<Option<CancelTaskResult>, McpError>> + Send {
         (**self).cancel_task(id, ctx)
     }
 }

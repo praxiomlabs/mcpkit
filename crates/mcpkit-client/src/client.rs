@@ -22,12 +22,12 @@ use mcpkit_core::error::{
 use mcpkit_core::protocol::{Message, Notification, Request, RequestId, Response};
 use mcpkit_core::protocol_version::ProtocolVersion;
 use mcpkit_core::types::{
-    CallToolRequest, CallToolResult, CancelTaskRequest, CompleteRequest, CompleteResult,
-    CompletionArgument, CompletionRef, CreateMessageRequest, ElicitRequestParams, GetPromptRequest,
-    GetPromptResult, GetTaskRequest, ListPromptsResult, ListResourceTemplatesResult,
-    ListResourcesResult, ListTasksRequest, ListTasksResult, ListToolsResult, Prompt,
-    ReadResourceRequest, ReadResourceResult, Resource, ResourceContents, ResourceTemplate,
-    SubscribeRequest, Task, TaskStatus, Tool, UnsubscribeRequest,
+    CallToolRequest, CallToolResult, CancelTaskRequest, CancelTaskResult, CompleteRequest,
+    CompleteResult, CompletionArgument, CompletionRef, CreateMessageRequest, ElicitRequestParams,
+    GetPromptRequest, GetPromptResult, GetTaskRequest, GetTaskResult, ListPromptsResult,
+    ListResourceTemplatesResult, ListResourcesResult, ListTasksRequest, ListTasksResult,
+    ListToolsResult, Prompt, ReadResourceRequest, ReadResourceResult, Resource, ResourceContents,
+    ResourceTemplate, SubscribeRequest, Task, TaskStatus, Tool, UnsubscribeRequest,
 };
 use mcpkit_transport::Transport;
 use std::collections::HashMap;
@@ -846,10 +846,13 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
 
     /// Get a task by ID.
     ///
+    /// Returns the [`GetTaskResult`] wrapper (`Result & Task`), preserving any
+    /// result-level `_meta`; the task state is in its `task` field.
+    ///
     /// # Errors
     ///
     /// Returns an error if tasks are not supported or the task is not found.
-    pub async fn get_task(&self, id: impl Into<String>) -> Result<Task, McpError> {
+    pub async fn get_task(&self, id: impl Into<String>) -> Result<GetTaskResult, McpError> {
         self.ensure_capability("tasks", self.has_tasks())?;
 
         let request = GetTaskRequest {
@@ -859,22 +862,23 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
             .await
     }
 
-    /// Cancel a running task.
+    /// Cancel a running task, returning its post-cancellation state.
+    ///
+    /// Returns the [`CancelTaskResult`] wrapper (`Result & Task`), preserving any
+    /// result-level `_meta`; the task state is in its `task` field.
     ///
     /// # Errors
     ///
     /// Returns an error if tasks are not supported, cancellation is not supported,
     /// or the task is not found.
-    pub async fn cancel_task(&self, id: impl Into<String>) -> Result<(), McpError> {
+    pub async fn cancel_task(&self, id: impl Into<String>) -> Result<CancelTaskResult, McpError> {
         self.ensure_capability("tasks", self.has_tasks())?;
 
         let request = CancelTaskRequest {
             task_id: id.into().into(),
         };
-        let _: serde_json::Value = self
-            .request("tasks/cancel", Some(serde_json::to_value(request)?))
-            .await?;
-        Ok(())
+        self.request("tasks/cancel", Some(serde_json::to_value(request)?))
+            .await
     }
 
     // ==========================================================================
