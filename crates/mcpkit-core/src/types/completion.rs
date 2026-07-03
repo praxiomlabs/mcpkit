@@ -140,6 +140,24 @@ pub struct CompleteResult {
     pub meta: Option<Meta>,
 }
 
+impl From<Completion> for CompleteResult {
+    fn from(completion: Completion) -> Self {
+        Self {
+            completion,
+            meta: None,
+        }
+    }
+}
+
+impl CompleteResult {
+    /// Attach result-level `_meta`.
+    #[must_use]
+    pub fn with_meta(mut self, meta: Meta) -> Self {
+        self.meta = Some(meta);
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

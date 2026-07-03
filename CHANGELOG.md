@@ -18,10 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A shared `route_completion` helper, gated on a registered handler, is invoked
     from `Server::route` and all four adapters (mirroring the logging pattern), so
     completion works everywhere the server routes requests.
-  - Register a handler with `Server::with_completion(..)` (runtime) or
-    `McpState::with_completion(..)` (adapters). Completion is a leaf capability, so
-    it is an optional field rather than a typestate slot — which is also the only
-    shape the adapters (flat combined handler) can carry.
+  - Register a handler with `Server::with_completion(..)` (runtime),
+    `McpRouter::with_completion(..)` (high-level adapters), or
+    `McpState::with_completion(..)` (low-level adapter state). Completion is a leaf
+    capability, so it is an optional field rather than a typestate slot — which is
+    also the only shape the adapters (flat combined handler) can carry. Registering
+    on an adapter also makes `initialize` advertise `completions` (via effective
+    capabilities) even when the base handler does not.
   - `CompleteRequest` gains the spec's `context` (`{ arguments?: {String:String} }`)
     for previously-resolved template/prompt variables.
   - The route layer enforces the spec's 100-value cap (`MAX_COMPLETION_VALUES`):
@@ -32,8 +35,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `complete_resource_argument` helpers delegate to it.
   - **Breaking:** `CompletionHandler` is reshaped from `complete_resource` /
     `complete_prompt_arg` (each returning `Vec<String>`) to a single
-    `complete(&CompleteRequest) -> Completion`, the only shape that can carry
-    `ref` + `argument` + `context` and return a real `total`/`hasMore`
+    `complete(&CompleteRequest) -> CompleteResult`, the only shape that can carry
+    `ref` + `argument` + `context` and return a real `total`/`hasMore` plus
+    result-level `_meta` (`Completion::into()` for the common case, or
+    `CompleteResult::with_meta`)
     ([#113](https://github.com/praxiomlabs/mcpkit/issues/113)).
 - Result-level `_meta` on task results and the status notification (#136). The
   spec types `tasks/get`/`tasks/cancel` results as `Result & Task` and the

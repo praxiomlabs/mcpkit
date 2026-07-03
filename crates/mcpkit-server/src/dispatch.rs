@@ -16,7 +16,7 @@ use crate::context::Context;
 use crate::handler::{CompletionHandler, PromptHandler, ResourceHandler, TaskHandler, ToolHandler};
 use mcpkit_core::error::McpError;
 use mcpkit_core::types::{
-    CancelTaskResult, CompleteRequest, Completion, GetPromptResult, GetTaskResult, Prompt,
+    CancelTaskResult, CompleteRequest, CompleteResult, GetPromptResult, GetTaskResult, Prompt,
     Resource, ResourceContents, ResourceTemplate, Task, TaskId, Tool, ToolOutput,
 };
 use serde_json::Value;
@@ -204,7 +204,7 @@ pub trait DynCompletionHandler: Send + Sync {
         &'a self,
         request: &'a CompleteRequest,
         ctx: &'a Context<'_>,
-    ) -> BoxFut<'a, Result<Completion, McpError>>;
+    ) -> BoxFut<'a, Result<CompleteResult, McpError>>;
 }
 
 impl<C: CompletionHandler> DynCompletionHandler for C {
@@ -212,7 +212,7 @@ impl<C: CompletionHandler> DynCompletionHandler for C {
         &'a self,
         request: &'a CompleteRequest,
         ctx: &'a Context<'_>,
-    ) -> BoxFut<'a, Result<Completion, McpError>> {
+    ) -> BoxFut<'a, Result<CompleteResult, McpError>> {
         Box::pin(CompletionHandler::complete(self, request, ctx))
     }
 }

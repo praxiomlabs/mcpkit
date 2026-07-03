@@ -2,7 +2,7 @@
 
 use crate::session::{SessionManager, SessionStore};
 use mcpkit_core::auth::ProtectedResourceMetadata;
-use mcpkit_core::capability::ServerInfo;
+use mcpkit_core::capability::{ServerCapabilities, ServerInfo};
 use mcpkit_transport::http::OriginValidator;
 use std::fmt;
 use std::sync::Arc;
@@ -155,5 +155,20 @@ impl<H> McpState<H> {
     ) -> Self {
         self.completion = Some(Arc::new(completion));
         self
+    }
+}
+
+impl<H: mcpkit_server::ServerHandler> McpState<H> {
+    /// The handler's advertised capabilities, plus `completions` when a
+    /// completion handler is registered on this adapter (the handler itself
+    /// cannot know it was registered here, so the adapter advertises it).
+    #[must_use]
+    pub fn effective_capabilities(&self) -> ServerCapabilities {
+        let caps = self.handler.capabilities();
+        if self.completion.is_some() && !caps.has_completions() {
+            caps.with_completions()
+        } else {
+            caps
+        }
     }
 }

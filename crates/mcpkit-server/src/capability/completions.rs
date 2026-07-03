@@ -6,7 +6,7 @@
 use crate::context::Context;
 use crate::handler::CompletionHandler;
 use mcpkit_core::error::McpError;
-use mcpkit_core::types::completion::{CompleteRequest, Completion, CompletionRef};
+use mcpkit_core::types::completion::{CompleteRequest, CompleteResult, Completion, CompletionRef};
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
@@ -130,7 +130,7 @@ impl CompletionHandler for CompletionService {
         &self,
         request: &CompleteRequest,
         ctx: &Context<'_>,
-    ) -> Result<Completion, McpError> {
+    ) -> Result<CompleteResult, McpError> {
         // Dispatch to the registered closure for this (ref, argument). Closures
         // return the matching values; `total`/`has_more` are derived here (a
         // handler that needs a real superset total or paging should implement
@@ -142,10 +142,10 @@ impl CompletionHandler for CompletionService {
         );
 
         let Some(registered) = self.completions.get(&key) else {
-            return Ok(Completion::new(Vec::new()));
+            return Ok(Completion::new(Vec::new()).into());
         };
         let values = (registered.handler)(&request.argument.value, ctx).await?;
-        Ok(Completion::new(values))
+        Ok(Completion::new(values).into())
     }
 }
 
@@ -315,8 +315,8 @@ mod tests {
             .value("py")
             .build();
 
-        let completion = service.complete(&request, &ctx).await?;
-        assert_eq!(completion.values, vec!["python"]);
+        let result = service.complete(&request, &ctx).await?;
+        assert_eq!(result.completion.values, vec!["python"]);
 
         Ok(())
     }

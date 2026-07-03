@@ -102,6 +102,21 @@ impl<H> McpState<H> {
     }
 }
 
+impl<H: mcpkit_server::ServerHandler> McpState<H> {
+    /// The handler's advertised capabilities, plus `completions` when a
+    /// completion handler is registered on this adapter (the handler itself
+    /// cannot know it was registered here, so the adapter advertises it).
+    #[must_use]
+    pub fn effective_capabilities(&self) -> ServerCapabilities {
+        let caps = self.handler.capabilities();
+        if self.completion.is_some() && !caps.has_completions() {
+            caps.with_completions()
+        } else {
+            caps
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

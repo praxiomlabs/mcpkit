@@ -925,10 +925,12 @@ pub async fn route_completion(
         let req: CompleteRequest = serde_json::from_value(params.clone()).map_err(|e| {
             McpError::invalid_params(method, format!("invalid completion request: {e}"))
         })?;
-        let completion = handler.complete(&req, ctx).await?.capped();
+        // Cap the values to the spec limit while preserving any result-level
+        // `_meta` the handler attached.
+        let CompleteResult { completion, meta } = handler.complete(&req, ctx).await?;
         let result = CompleteResult {
-            completion,
-            meta: None,
+            completion: completion.capped(),
+            meta,
         };
         Ok(serde_json::to_value(result).unwrap_or_default())
     }
@@ -1585,27 +1587,30 @@ mod tests {
         use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
         use mcpkit_core::protocol::RequestId;
         use mcpkit_core::protocol_version::ProtocolVersion;
-        use mcpkit_core::types::{CompleteRequest, Completion};
+        use mcpkit_core::types::{CompleteRequest, CompleteResult, Completion, Meta};
 
-        // Reads `context.arguments.owner` and returns more than the 100-value cap.
+        // Reads `context.arguments.owner`, returns more than the 100-value cap,
+        // and attaches result-level `_meta`.
         struct CtxCompletion;
         impl crate::handler::CompletionHandler for CtxCompletion {
             async fn complete(
                 &self,
                 request: &CompleteRequest,
                 _ctx: &Context<'_>,
-            ) -> Result<Completion, McpError> {
+            ) -> Result<CompleteResult, McpError> {
                 let owner = request
                     .context
                     .as_ref()
                     .and_then(|c| c.arguments.as_ref())
                     .and_then(|a| a.get("owner").cloned())
                     .unwrap_or_default();
-                Ok(Completion {
+                let completion = Completion {
                     values: (0..150).map(|i| format!("{owner}-{i}")).collect(),
                     total: Some(150),
                     has_more: Some(false),
-                })
+                };
+                Ok(CompleteResult::from(completion)
+                    .with_meta(Meta::new().with("origin", serde_json::json!("test"))))
             }
         }
 
@@ -1657,6 +1662,7 @@ mod tests {
         assert_eq!(values[0], "acme-0"); // context.arguments propagated
         assert_eq!(resp["completion"]["hasMore"], true); // forced true by the cap
         assert_eq!(resp["completion"]["total"], 150); // handler total preserved
+        assert_eq!(resp["_meta"]["origin"], "test"); // handler result-level _meta
     }
 
     #[tokio::test]

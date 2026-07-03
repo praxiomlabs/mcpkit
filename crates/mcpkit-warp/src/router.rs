@@ -104,6 +104,19 @@ where
         self
     }
 
+    /// Register a completion handler and advertise the `completions` capability.
+    #[must_use]
+    pub fn with_completion<C: mcpkit_server::CompletionHandler + 'static>(
+        mut self,
+        completion: C,
+    ) -> Self {
+        // The builder owns the only reference to the state at this point.
+        if let Some(state) = Arc::get_mut(&mut self.state) {
+            state.completion = Some(Arc::new(completion));
+        }
+        self
+    }
+
     fn set_origin_validator(&mut self, validator: OriginValidator) {
         // The builder owns the only reference to the state at this point, so
         // `get_mut` succeeds.

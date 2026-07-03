@@ -59,6 +59,16 @@ where
         self
     }
 
+    /// Register a completion handler and advertise the `completions` capability.
+    #[must_use]
+    pub fn with_completion<C: mcpkit_server::CompletionHandler + 'static>(
+        mut self,
+        completion: C,
+    ) -> Self {
+        self.state = self.state.with_completion(completion);
+        self
+    }
+
     /// Enable CORS with permissive defaults.
     #[must_use]
     pub const fn with_cors(mut self) -> Self {

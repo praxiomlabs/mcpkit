@@ -238,7 +238,7 @@ where
 
     // Create a context for the request
     let req_id = request.id.clone();
-    let server_caps = state.handler.capabilities();
+    let server_caps = state.effective_capabilities();
     let peer = NoOpPeer;
     let ctx = Context::new(
         &req_id,
@@ -255,7 +255,7 @@ where
             let init_result = serde_json::json!({
                 "protocolVersion": protocol_version.as_str(),
                 "serverInfo": state.server_info,
-                "capabilities": state.handler.capabilities(),
+                "capabilities": server_caps,
             });
             Response::success(request.id.clone(), init_result)
         }
@@ -309,14 +309,8 @@ where
             }
 
             // Try routing logging/setLevel (gated on the advertised capability)
-            if let Some(result) = route_logging(
-                state.handler.as_ref(),
-                &state.handler.capabilities(),
-                method,
-                params,
-                &ctx,
-            )
-            .await
+            if let Some(result) =
+                route_logging(state.handler.as_ref(), &server_caps, method, params, &ctx).await
             {
                 return match result {
                     Ok(value) => Response::success(request.id.clone(), value),

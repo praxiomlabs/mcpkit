@@ -37,7 +37,7 @@
 use mcpkit_core::capability::{ServerCapabilities, ServerInfo};
 use mcpkit_core::error::McpError;
 use mcpkit_core::types::{
-    CancelTaskResult, CompleteRequest, Completion, GetPromptResult, GetTaskResult, Prompt,
+    CancelTaskResult, CompleteRequest, CompleteResult, GetPromptResult, GetTaskResult, Prompt,
     Resource, ResourceContents, ResourceTemplate, Task, TaskId, Tool, ToolOutput,
 };
 use serde_json::Value;
@@ -256,16 +256,18 @@ pub trait TaskHandler: Send + Sync {
 /// passed so a handler can dispatch on the [`ref`](CompleteRequest::ref_),
 /// read the [`argument`](CompleteRequest::argument) being typed, and use any
 /// previously-resolved [`context`](CompleteRequest::context). Return a
-/// [`Completion`] with the suggested `values` and, if known, a real `total`
-/// and `has_more` (the route layer caps `values` at
-/// [`MAX_COMPLETION_VALUES`](mcpkit_core::types::MAX_COMPLETION_VALUES)).
+/// [`CompleteResult`] — build one from a
+/// [`Completion`](mcpkit_core::types::Completion) via `.into()` for the common
+/// case, or attach result-level `_meta` with [`CompleteResult::with_meta`]. The
+/// route layer caps `values` at
+/// [`MAX_COMPLETION_VALUES`](mcpkit_core::types::MAX_COMPLETION_VALUES).
 pub trait CompletionHandler: Send + Sync {
     /// Produce completion suggestions for the request.
     fn complete(
         &self,
         request: &CompleteRequest,
         ctx: &Context<'_>,
-    ) -> impl Future<Output = Result<Completion, McpError>> + Send;
+    ) -> impl Future<Output = Result<CompleteResult, McpError>> + Send;
 }
 
 /// The MCP logging severity, re-exported from core.
@@ -416,7 +418,7 @@ impl<T: CompletionHandler> CompletionHandler for Arc<T> {
         &self,
         request: &CompleteRequest,
         ctx: &Context<'_>,
-    ) -> impl Future<Output = Result<Completion, McpError>> + Send {
+    ) -> impl Future<Output = Result<CompleteResult, McpError>> + Send {
         (**self).complete(request, ctx)
     }
 }

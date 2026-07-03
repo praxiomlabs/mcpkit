@@ -10,8 +10,8 @@ use mcpkit_axum::McpState;
 use mcpkit_core::capability::{ServerCapabilities, ServerInfo};
 use mcpkit_core::error::McpError;
 use mcpkit_core::types::{
-    CompleteRequest, Completion, GetPromptResult, Prompt, Resource, ResourceContents, Tool,
-    ToolOutput,
+    CompleteRequest, CompleteResult, Completion, GetPromptResult, Prompt, Resource,
+    ResourceContents, Tool, ToolOutput,
 };
 use mcpkit_server::{
     CompletionHandler, Context, PromptHandler, ResourceHandler, ServerHandler, ToolHandler,
@@ -23,8 +23,10 @@ impl ServerHandler for H {
     fn server_info(&self) -> ServerInfo {
         ServerInfo::new("t", "1.0.0")
     }
+    // Deliberately does NOT advertise completions: registering a completion
+    // handler on the adapter must be what advertises it (regression: #113 review).
     fn capabilities(&self) -> ServerCapabilities {
-        ServerCapabilities::new().with_completions()
+        ServerCapabilities::new()
     }
 }
 impl ToolHandler for H {
@@ -77,14 +79,14 @@ impl CompletionHandler for Comp {
         &self,
         request: &CompleteRequest,
         _ctx: &Context<'_>,
-    ) -> Result<Completion, McpError> {
+    ) -> Result<CompleteResult, McpError> {
         let owner = request
             .context
             .as_ref()
             .and_then(|c| c.arguments.as_ref())
             .and_then(|a| a.get("owner").cloned())
             .unwrap_or_default();
-        Ok(Completion::new(vec![format!("{owner}-suggestion")]))
+        Ok(Completion::new(vec![format!("{owner}-suggestion")]).into())
     }
 }
 
@@ -117,6 +119,33 @@ async fn completion_complete_works_through_axum_adapter() {
         json["result"]["completion"]["values"][0], "acme-suggestion",
         "response: {json}"
     );
+}
+
+#[tokio::test]
+async fn with_completion_advertises_capability_in_initialize() {
+    // The base handler does not advertise completions; `.with_completion(..)`
+    // must cause `initialize` to advertise it (else clients never call it).
+    async fn init_caps(state: McpState<H>) -> serde_json::Value {
+        let body = serde_json::json!({
+            "jsonrpc": "2.0", "id": 1, "method": "initialize",
+            "params": { "protocolVersion": "2025-11-25", "capabilities": {} }
+        })
+        .to_string();
+        let response = mcpkit_axum::handle_mcp_post(State(state), HeaderMap::new(), None, body)
+            .await
+            .into_response();
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body");
+        let json: serde_json::Value = serde_json::from_slice(&bytes).expect("json");
+        json["result"]["capabilities"].clone()
+    }
+
+    let with = init_caps(McpState::new(H).with_completion(Comp)).await;
+    assert!(with.get("completions").is_some(), "caps: {with}");
+
+    let without = init_caps(McpState::new(H)).await;
+    assert!(without.get("completions").is_none(), "caps: {without}");
 }
 
 #[tokio::test]
