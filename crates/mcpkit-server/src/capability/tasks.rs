@@ -7,7 +7,7 @@ use crate::context::CancellationToken;
 use crate::context::Context;
 use crate::handler::TaskHandler;
 use mcpkit_core::error::McpError;
-use mcpkit_core::types::task::{Task, TaskId, TaskStatus};
+use mcpkit_core::types::task::{CancelTaskResult, GetTaskResult, Task, TaskId, TaskStatus};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -280,12 +280,28 @@ impl TaskHandler for TaskService {
         &self,
         task_id: &TaskId,
         _ctx: &Context<'_>,
-    ) -> Result<Option<Task>, McpError> {
-        Ok(self.manager.get(task_id).map(|s| s.task))
+    ) -> Result<Option<GetTaskResult>, McpError> {
+        Ok(self
+            .manager
+            .get(task_id)
+            .map(|s| GetTaskResult::from(s.task)))
     }
 
-    async fn cancel_task(&self, task_id: &TaskId, _ctx: &Context<'_>) -> Result<bool, McpError> {
-        Ok(self.manager.cancel(task_id).is_ok())
+    async fn cancel_task(
+        &self,
+        task_id: &TaskId,
+        _ctx: &Context<'_>,
+    ) -> Result<Option<CancelTaskResult>, McpError> {
+        // Unknown task -> Ok(None); a real internal failure (e.g. poisoned lock)
+        // must surface as Err, not be collapsed into "unknown".
+        if self.manager.get(task_id).is_none() {
+            return Ok(None);
+        }
+        self.manager.cancel(task_id)?;
+        Ok(self
+            .manager
+            .get(task_id)
+            .map(|s| CancelTaskResult::from(s.task)))
     }
 }
 

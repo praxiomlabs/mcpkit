@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Result-level `_meta` on task results and the status notification (#136). The
+  spec types `tasks/get`/`tasks/cancel` results as `Result & Task` and the
+  status notification as `NotificationParams & Task` — each flattens the `Task`
+  fields and adds a result/notification-level `_meta`. `GetTaskResult`,
+  `CancelTaskResult`, and the new `TaskStatusNotificationParams` are now real
+  `#[serde(flatten)] task + _meta` structs (previously bare `Task` aliases that
+  dropped `_meta`); the base `Task` stays `_meta`-free (so it does not leak into
+  `CreateTaskResult.task`/`ListTasksResult.tasks[]`). With `meta: None` the wire
+  shape is byte-identical to the old aliases. `From<Task>` and `.with_meta(..)`
+  keep construction ergonomic. **Breaking:** `TaskHandler::get_task` now returns
+  `Option<GetTaskResult>` and `cancel_task` returns `Option<CancelTaskResult>`
+  (was `Option<Task>` / `bool`) — the latter also returns the post-cancellation
+  task state and cleanly distinguishes unknown (`Ok(None)`) from an internal
+  failure (`Err`), instead of the old `.is_ok()` that reported a poisoned lock as
+  "unknown task". The client's `Client::get_task`/`cancel_task` return the typed
+  results (was `Task` / `()`) so `_meta` survives on the receiving side too. The
+  `tasks/list` route still bypasses `ListTasksResult` (its `nextCursor`/`_meta`
+  are unavailable) — tracked in
+  [#150](https://github.com/praxiomlabs/mcpkit/issues/150)
+  ([#136](https://github.com/praxiomlabs/mcpkit/issues/136)).
 - `_meta` preservation on nested and listed objects (#145). The 2025-11-25 schema
   gives `_meta` to `TextContent`, `ImageContent`, `AudioContent`, the embedded
   resource block and its nested `ResourceContents`, `ResourceLink`, and the

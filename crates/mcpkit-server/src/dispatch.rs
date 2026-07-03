@@ -16,8 +16,8 @@ use crate::context::Context;
 use crate::handler::{PromptHandler, ResourceHandler, TaskHandler, ToolHandler};
 use mcpkit_core::error::McpError;
 use mcpkit_core::types::{
-    GetPromptResult, Prompt, Resource, ResourceContents, ResourceTemplate, Task, TaskId, Tool,
-    ToolOutput,
+    CancelTaskResult, GetPromptResult, GetTaskResult, Prompt, Resource, ResourceContents,
+    ResourceTemplate, Task, TaskId, Tool, ToolOutput,
 };
 use serde_json::Value;
 use std::future::Future;
@@ -168,13 +168,13 @@ pub trait DynTaskHandler: Send + Sync {
         &'a self,
         id: &'a TaskId,
         ctx: &'a Context<'_>,
-    ) -> BoxFut<'a, Result<Option<Task>, McpError>>;
+    ) -> BoxFut<'a, Result<Option<GetTaskResult>, McpError>>;
     /// See [`TaskHandler::cancel_task`].
     fn cancel_task<'a>(
         &'a self,
         id: &'a TaskId,
         ctx: &'a Context<'_>,
-    ) -> BoxFut<'a, Result<bool, McpError>>;
+    ) -> BoxFut<'a, Result<Option<CancelTaskResult>, McpError>>;
 }
 
 impl<K: TaskHandler> DynTaskHandler for K {
@@ -185,14 +185,14 @@ impl<K: TaskHandler> DynTaskHandler for K {
         &'a self,
         id: &'a TaskId,
         ctx: &'a Context<'_>,
-    ) -> BoxFut<'a, Result<Option<Task>, McpError>> {
+    ) -> BoxFut<'a, Result<Option<GetTaskResult>, McpError>> {
         Box::pin(TaskHandler::get_task(self, id, ctx))
     }
     fn cancel_task<'a>(
         &'a self,
         id: &'a TaskId,
         ctx: &'a Context<'_>,
-    ) -> BoxFut<'a, Result<bool, McpError>> {
+    ) -> BoxFut<'a, Result<Option<CancelTaskResult>, McpError>> {
         Box::pin(TaskHandler::cancel_task(self, id, ctx))
     }
 }

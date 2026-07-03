@@ -193,21 +193,65 @@ pub struct CreateTaskResult {
     pub meta: Option<Meta>,
 }
 
-// NOTE: Per the spec, `tasks/get`/`tasks/cancel` results and the task-status
-// notification are `Result & Task` / `NotificationParams & Task`, i.e. they may
-// carry a result/notification-level `_meta`. That is intentionally *not* modeled
-// here: the base `Task` has no `_meta` (adding one would leak `_meta` into nested
-// `CreateTaskResult.task` and `ListTasksResult.tasks[]`), and the task handler API
-// returns a bare `Task` with nowhere to supply result-level metadata. Modeling it
-// would need dedicated result wrapper types + a handler-contract change — see
-// issue #136. `CreateTaskResult`/`ListTasksResult` do carry their own
-// result-level `_meta`.
+// The result and status-notification wrappers below are spec `Result & Task` /
+// `NotificationParams & Task`: they flatten the `Task` fields at the top level
+// and add a result/notification-level `_meta`. The base `Task` deliberately has
+// no `_meta` of its own (that would leak into nested `CreateTaskResult.task` and
+// `ListTasksResult.tasks[]`); the `_meta` lives only on these wrappers. When
+// `meta` is `None`, `#[serde(flatten)]` produces exactly the bare `Task` wire
+// shape, so the wrappers are wire-compatible with the earlier `= Task` aliases.
 
 /// Result of `tasks/get` — the task's current state (spec `Result & Task`).
-pub type GetTaskResult = Task;
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetTaskResult {
+    /// The task's current state.
+    #[serde(flatten)]
+    pub task: Task,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
+}
+
+impl From<Task> for GetTaskResult {
+    fn from(task: Task) -> Self {
+        Self { task, meta: None }
+    }
+}
+
+impl GetTaskResult {
+    /// Attach result-level `_meta`.
+    #[must_use]
+    pub fn with_meta(mut self, meta: Meta) -> Self {
+        self.meta = Some(meta);
+        self
+    }
+}
 
 /// Result of `tasks/cancel` — the task's state after cancellation (`Result & Task`).
-pub type CancelTaskResult = Task;
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CancelTaskResult {
+    /// The task's state after cancellation.
+    #[serde(flatten)]
+    pub task: Task,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
+}
+
+impl From<Task> for CancelTaskResult {
+    fn from(task: Task) -> Self {
+        Self { task, meta: None }
+    }
+}
+
+impl CancelTaskResult {
+    /// Attach result-level `_meta`.
+    #[must_use]
+    pub fn with_meta(mut self, meta: Meta) -> Self {
+        self.meta = Some(meta);
+        self
+    }
+}
 
 /// Result of `tasks/result` — the eventual payload of the augmented request
 /// (e.g. the `CallToolResult`). An arbitrary result object.
@@ -259,8 +303,22 @@ pub struct CancelTaskRequest {
 }
 
 /// Parameters for a task status notification (spec `NotificationParams & Task`):
-/// the task's current state.
-pub type TaskStatusNotification = Task;
+/// the task's current state plus optional notification-level `_meta`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskStatusNotificationParams {
+    /// The task's current state.
+    #[serde(flatten)]
+    pub task: Task,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
+}
+
+impl From<Task> for TaskStatusNotificationParams {
+    fn from(task: Task) -> Self {
+        Self { task, meta: None }
+    }
+}
 
 /// Task-domain progress information.
 ///
@@ -287,6 +345,52 @@ pub struct TaskProgress {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn get_task_result_round_trips_result_meta() -> Result<(), Box<dyn std::error::Error>> {
+        // Wire shape is `Result & Task`: Task fields at the top level plus _meta.
+        let wire = serde_json::json!({
+            "taskId": "t-1", "status": "working",
+            "createdAt": "t", "lastUpdatedAt": "t", "ttl": null,
+            "_meta": { "k": "v" }
+        });
+        let r: GetTaskResult = serde_json::from_value(wire)?;
+        assert_eq!(r.task.task_id, TaskId::new("t-1"));
+        let back = serde_json::to_value(&r)?;
+        assert_eq!(back["taskId"], "t-1"); // Task fields stay flattened.
+        assert_eq!(back["_meta"]["k"], "v"); // result-level _meta preserved.
+        Ok(())
+    }
+
+    #[test]
+    fn cancel_task_result_round_trips_result_meta() -> Result<(), Box<dyn std::error::Error>> {
+        let r = CancelTaskResult::from(Task::new(TaskId::new("t-1")))
+            .with_meta(Meta::new().with("k", serde_json::json!("v")));
+        let back = serde_json::to_value(&r)?;
+        assert_eq!(back["taskId"], "t-1");
+        assert_eq!(back["_meta"]["k"], "v");
+        let round: CancelTaskResult = serde_json::from_value(back)?;
+        assert_eq!(
+            round.meta.and_then(|m| m.get("k").cloned()),
+            Some(serde_json::json!("v"))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn task_result_wrappers_without_meta_match_bare_task() -> Result<(), Box<dyn std::error::Error>>
+    {
+        // With no _meta the wrapper must be wire-identical to a bare Task, so
+        // the switch from the old `type ... = Task` aliases is non-breaking.
+        let task = Task::new(TaskId::new("t-2"));
+        let bare = serde_json::to_value(&task)?;
+        assert_eq!(
+            serde_json::to_value(GetTaskResult::from(task.clone()))?,
+            bare
+        );
+        assert_eq!(serde_json::to_value(CancelTaskResult::from(task))?, bare);
+        Ok(())
+    }
 
     #[test]
     fn task_serializes_with_spec_field_names() {
