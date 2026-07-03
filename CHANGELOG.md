@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Functional, spec-complete argument completion (#113). `completion/complete`
+  was advertised (`with_completions()`), had a `CompletionHandler` trait, a
+  `CompletionService`, and client methods — but **nothing dispatched it**: the
+  runtime `route()` and all four HTTP adapters never routed completion, so a
+  client request got method-not-found (the same "advertised-but-non-functional"
+  gap as #107/#108). This wires it end-to-end:
+  - A shared `route_completion` helper, gated on a registered handler, is invoked
+    from `Server::route` and all four adapters (mirroring the logging pattern), so
+    completion works everywhere the server routes requests.
+  - Register a handler with `Server::with_completion(..)` (runtime) or
+    `McpState::with_completion(..)` (adapters). Completion is a leaf capability, so
+    it is an optional field rather than a typestate slot — which is also the only
+    shape the adapters (flat combined handler) can carry.
+  - `CompleteRequest` gains the spec's `context` (`{ arguments?: {String:String} }`)
+    for previously-resolved template/prompt variables.
+  - The route layer enforces the spec's 100-value cap (`MAX_COMPLETION_VALUES`):
+    oversized handler output is truncated and `hasMore` forced to `true`.
+  - `total`/`hasMore` now omit from the wire when `None` (they are optional).
+  - `Client::complete(CompleteRequest)` sends an arbitrary completion request
+    (including `context`); the existing `complete_prompt_argument`/
+    `complete_resource_argument` helpers delegate to it.
+  - **Breaking:** `CompletionHandler` is reshaped from `complete_resource` /
+    `complete_prompt_arg` (each returning `Vec<String>`) to a single
+    `complete(&CompleteRequest) -> Completion`, the only shape that can carry
+    `ref` + `argument` + `context` and return a real `total`/`hasMore`
+    ([#113](https://github.com/praxiomlabs/mcpkit/issues/113)).
 - Result-level `_meta` on task results and the status notification (#136). The
   spec types `tasks/get`/`tasks/cancel` results as `Result & Task` and the
   status notification as `NotificationParams & Task` — each flattens the `Task`

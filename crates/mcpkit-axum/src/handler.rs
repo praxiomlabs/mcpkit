@@ -29,8 +29,8 @@ use mcpkit_core::protocol::Message;
 use mcpkit_core::protocol_version::ProtocolVersion;
 use mcpkit_server::context::{Context, NoOpPeer};
 use mcpkit_server::{
-    PromptHandler, ResourceHandler, ServerHandler, ToolHandler, route_logging, route_prompts,
-    route_resources, route_tools,
+    PromptHandler, ResourceHandler, ServerHandler, ToolHandler, route_completion, route_logging,
+    route_prompts, route_resources, route_tools,
 };
 use std::convert::Infallible;
 use std::sync::Arc;
@@ -312,6 +312,16 @@ where
                 &ctx,
             )
             .await
+            {
+                return match result {
+                    Ok(value) => Response::success(request.id.clone(), value),
+                    Err(e) => Response::error(request.id.clone(), e.into()),
+                };
+            }
+
+            // Try routing completion/complete (when a completion handler is set)
+            if let Some(result) =
+                route_completion(state.completion.as_deref(), method, params, &ctx).await
             {
                 return match result {
                     Ok(value) => Response::success(request.id.clone(), value),

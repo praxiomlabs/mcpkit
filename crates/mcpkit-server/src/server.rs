@@ -1243,6 +1243,13 @@ where
         {
             return result;
         }
+        // `completion/complete` is handled when a completion handler is
+        // registered (shared with the HTTP adapters).
+        if let Some(result) =
+            crate::router::route_completion(self.completion.as_deref(), method, params, ctx).await
+        {
+            return result;
+        }
         Err(McpError::method_not_found(method))
     }
 
