@@ -220,6 +220,12 @@ pub struct Context<'a> {
     cancel: CancellationToken,
 }
 
+/// Sentinel [`RequestId`] for notification-scoped contexts (see
+/// [`Context::for_notification`]). Notifications have no request id; this is not
+/// a real JSON-RPC id.
+static NOTIFICATION_REQUEST_ID: std::sync::LazyLock<RequestId> =
+    std::sync::LazyLock::new(|| RequestId::String("__notification__".to_string()));
+
 impl<'a> Context<'a> {
     /// Create a new context with all required references.
     #[must_use]
@@ -261,6 +267,32 @@ impl<'a> Context<'a> {
             protocol_version,
             peer,
             cancel,
+        }
+    }
+
+    /// Create a context for handling an inbound client notification.
+    ///
+    /// Notifications carry no JSON-RPC request id, so
+    /// [`request_id`](Self::request_id) is a documented sentinel
+    /// (`__notification__`) that must **not** be treated as a real id. The
+    /// context is still outbound-capable: a hook may call
+    /// [`list_roots`](Self::list_roots) or send notifications, and those
+    /// server-to-client requests allocate their own ids via the peer.
+    #[must_use]
+    pub fn for_notification(
+        client_caps: &'a ClientCapabilities,
+        server_caps: &'a ServerCapabilities,
+        protocol_version: ProtocolVersion,
+        peer: &'a dyn Peer,
+    ) -> Self {
+        Self {
+            request_id: &NOTIFICATION_REQUEST_ID,
+            progress_token: None,
+            client_caps,
+            server_caps,
+            protocol_version,
+            peer,
+            cancel: CancellationToken::new(),
         }
     }
 

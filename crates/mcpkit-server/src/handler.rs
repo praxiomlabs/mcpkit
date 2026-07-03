@@ -82,6 +82,15 @@ pub trait ServerHandler: Send + Sync {
         async {}
     }
 
+    /// Called when the client sends `notifications/roots/list_changed`.
+    ///
+    /// Only invoked when the client advertised the `roots` capability. A good
+    /// place to invalidate cached roots and re-request them via
+    /// [`Context::list_roots`]. The default is a no-op.
+    fn on_roots_list_changed(&self, _ctx: &Context<'_>) -> impl Future<Output = ()> + Send {
+        async {}
+    }
+
     /// Called when the connection is about to be closed.
     fn on_shutdown(&self) -> impl Future<Output = ()> + Send {
         async {}
@@ -301,6 +310,10 @@ impl<T: ServerHandler> ServerHandler for Arc<T> {
 
     fn on_initialized(&self, ctx: &Context<'_>) -> impl Future<Output = ()> + Send {
         (**self).on_initialized(ctx)
+    }
+
+    fn on_roots_list_changed(&self, ctx: &Context<'_>) -> impl Future<Output = ()> + Send {
+        (**self).on_roots_list_changed(ctx)
     }
 
     fn on_shutdown(&self) -> impl Future<Output = ()> + Send {
