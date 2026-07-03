@@ -6,9 +6,7 @@
 use crate::context::Context;
 use crate::handler::CompletionHandler;
 use mcpkit_core::error::McpError;
-use mcpkit_core::types::completion::{
-    CompleteRequest, CompleteResult, Completion, CompletionArgument, CompletionRef,
-};
+use mcpkit_core::types::completion::{CompleteRequest, CompleteResult, Completion, CompletionRef};
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
@@ -115,44 +113,6 @@ impl CompletionService {
         );
     }
 
-    /// Complete an argument value.
-    pub async fn complete(
-        &self,
-        request: &CompleteRequest,
-        ctx: &Context<'_>,
-    ) -> Result<CompleteResult, McpError> {
-        let ref_type = request.ref_.ref_type().to_string();
-        let ref_value = request.ref_.value().to_string();
-        let arg_name = request.argument.name.clone();
-        let input = &request.argument.value;
-
-        let key = (ref_type, ref_value, arg_name);
-
-        if let Some(registered) = self.completions.get(&key) {
-            let values = (registered.handler)(input, ctx).await?;
-            let total = values.len();
-
-            Ok(CompleteResult {
-                completion: Completion {
-                    values,
-                    total: Some(total),
-                    has_more: Some(false),
-                },
-                meta: None,
-            })
-        } else {
-            // Return empty completions if no handler registered
-            Ok(CompleteResult {
-                completion: Completion {
-                    values: Vec::new(),
-                    total: Some(0),
-                    has_more: Some(false),
-                },
-                meta: None,
-            })
-        }
-    }
-
     /// Check if a completion provider exists.
     #[must_use]
     pub fn has_completion(&self, ref_type: &str, ref_value: &str, arg_name: &str) -> bool {
@@ -166,40 +126,26 @@ impl CompletionService {
 }
 
 impl CompletionHandler for CompletionService {
-    async fn complete_resource(
+    async fn complete(
         &self,
-        partial_uri: &str,
+        request: &CompleteRequest,
         ctx: &Context<'_>,
-    ) -> Result<Vec<String>, McpError> {
-        let request = CompleteRequest {
-            ref_: CompletionRef::resource(partial_uri),
-            argument: CompletionArgument {
-                name: "uri".to_string(),
-                value: partial_uri.to_string(),
-            },
+    ) -> Result<CompleteResult, McpError> {
+        // Dispatch to the registered closure for this (ref, argument). Closures
+        // return the matching values; `total`/`has_more` are derived here (a
+        // handler that needs a real superset total or paging should implement
+        // `CompletionHandler` directly rather than via the closure registry).
+        let key = (
+            request.ref_.ref_type().to_string(),
+            request.ref_.value().to_string(),
+            request.argument.name.clone(),
+        );
+
+        let Some(registered) = self.completions.get(&key) else {
+            return Ok(Completion::new(Vec::new()).into());
         };
-
-        let result = Self::complete(self, &request, ctx).await?;
-        Ok(result.completion.values)
-    }
-
-    async fn complete_prompt_arg(
-        &self,
-        prompt_name: &str,
-        arg_name: &str,
-        partial_value: &str,
-        ctx: &Context<'_>,
-    ) -> Result<Vec<String>, McpError> {
-        let request = CompleteRequest {
-            ref_: CompletionRef::prompt(prompt_name),
-            argument: CompletionArgument {
-                name: arg_name.to_string(),
-                value: partial_value.to_string(),
-            },
-        };
-
-        let result = Self::complete(self, &request, ctx).await?;
-        Ok(result.completion.values)
+        let values = (registered.handler)(&request.argument.value, ctx).await?;
+        Ok(Completion::new(values).into())
     }
 }
 
@@ -244,6 +190,7 @@ impl CompleteRequestBuilder {
                 name: self.arg_name,
                 value: self.arg_value,
             },
+            context: None,
         }
     }
 }

@@ -75,6 +75,19 @@ where
         self
     }
 
+    /// Register a completion handler and advertise the `completions` capability.
+    ///
+    /// Wires `completion/complete` for this adapter; `initialize` will advertise
+    /// `completions` even if the base handler does not.
+    #[must_use]
+    pub fn with_completion<C: mcpkit_server::CompletionHandler + 'static>(
+        mut self,
+        completion: C,
+    ) -> Self {
+        self.state = self.state.with_completion(completion);
+        self
+    }
+
     /// Enable CORS with permissive defaults.
     ///
     /// For production, you should use `with_cors_layer` with a custom configuration.

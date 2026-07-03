@@ -78,6 +78,16 @@ where
         self
     }
 
+    /// Register a completion handler and advertise the `completions` capability.
+    #[must_use]
+    pub fn with_completion<C: mcpkit_server::CompletionHandler + 'static>(
+        mut self,
+        completion: C,
+    ) -> Self {
+        self.state = self.state.with_completion(completion);
+        self
+    }
+
     /// Enable CORS with permissive defaults.
     ///
     /// For production, you should configure CORS manually with custom settings.

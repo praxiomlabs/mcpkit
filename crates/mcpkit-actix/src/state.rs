@@ -2,7 +2,7 @@
 
 use crate::session::{SessionManager, SessionStore};
 use mcpkit_core::auth::ProtectedResourceMetadata;
-use mcpkit_core::capability::ServerInfo;
+use mcpkit_core::capability::{ServerCapabilities, ServerInfo};
 use mcpkit_server::ServerHandler;
 use mcpkit_transport::http::OriginValidator;
 use std::sync::Arc;
@@ -26,7 +26,6 @@ impl<T: ServerHandler> HasServerInfo for T {
 ///
 /// Note: Clone is implemented manually to avoid requiring `H: Clone`.
 /// The handler is wrapped in `Arc`, so cloning only clones the Arc pointer.
-#[derive(Debug)]
 pub struct McpState<H> {
     /// The user's MCP handler.
     pub handler: Arc<H>,
@@ -41,6 +40,20 @@ pub struct McpState<H> {
     pub origin_validator: Arc<OriginValidator>,
     /// Page size for `*/list` results; `None` disables pagination.
     pub list_page_size: Option<usize>,
+    /// Optional completion handler for `completion/complete`.
+    pub completion: Option<Arc<dyn mcpkit_server::dispatch::DynCompletionHandler>>,
+}
+
+// Manual Debug to avoid requiring `H: Debug` and because the completion handler
+// is a trait object.
+impl<H> std::fmt::Debug for McpState<H> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("McpState")
+            .field("handler", &format_args!("Arc<H>"))
+            .field("server_info", &self.server_info)
+            .field("list_page_size", &self.list_page_size)
+            .finish_non_exhaustive()
+    }
 }
 
 impl<H> McpState<H>
@@ -57,6 +70,7 @@ where
             server_info,
             origin_validator: Arc::new(OriginValidator::default()),
             list_page_size: None,
+            completion: None,
         }
     }
 
@@ -70,6 +84,7 @@ where
             sse_sessions: Arc::new(sse_sessions),
             origin_validator: Arc::new(OriginValidator::default()),
             list_page_size: None,
+            completion: None,
         }
     }
 }
@@ -83,6 +98,7 @@ impl<H> Clone for McpState<H> {
             server_info: self.server_info.clone(),
             origin_validator: Arc::clone(&self.origin_validator),
             list_page_size: self.list_page_size,
+            completion: self.completion.clone(),
         }
     }
 }
@@ -114,5 +130,31 @@ impl<H> McpState<H> {
     pub const fn with_list_page_size(mut self, page_size: usize) -> Self {
         self.list_page_size = Some(page_size);
         self
+    }
+
+    /// Register a completion handler so this adapter answers
+    /// `completion/complete`.
+    #[must_use]
+    pub fn with_completion<C: mcpkit_server::CompletionHandler + 'static>(
+        mut self,
+        completion: C,
+    ) -> Self {
+        self.completion = Some(Arc::new(completion));
+        self
+    }
+}
+
+impl<H: mcpkit_server::ServerHandler> McpState<H> {
+    /// The handler's advertised capabilities, plus `completions` when a
+    /// completion handler is registered on this adapter (the handler itself
+    /// cannot know it was registered here, so the adapter advertises it).
+    #[must_use]
+    pub fn effective_capabilities(&self) -> ServerCapabilities {
+        let caps = self.handler.capabilities();
+        if self.completion.is_some() && !caps.has_completions() {
+            caps.with_completions()
+        } else {
+            caps
+        }
     }
 }

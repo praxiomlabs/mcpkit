@@ -324,6 +324,7 @@ where
             tasks: self.tasks,
             capabilities: self.capabilities,
             list_page_size: None,
+            completion: None,
         }
     }
 }
@@ -346,6 +347,10 @@ pub struct Server<H, T, R, P, K> {
     /// Page size for `*/list` results; `None` disables pagination (list
     /// responses return everything, no `nextCursor`).
     pub(crate) list_page_size: Option<usize>,
+    /// Optional completion handler (`completion/complete`). Not a typestate slot
+    /// — completion is a leaf capability registered post-build so it can also be
+    /// carried by the framework adapters, which take a flat combined handler.
+    pub(crate) completion: Option<std::sync::Arc<dyn crate::dispatch::DynCompletionHandler>>,
 }
 
 impl<H, T, R, P, K> Server<H, T, R, P, K>
@@ -368,6 +373,21 @@ where
     #[must_use]
     pub const fn list_page_size(mut self, page_size: usize) -> Self {
         self.list_page_size = Some(page_size);
+        self
+    }
+
+    /// Register a completion handler and advertise the `completions` capability.
+    ///
+    /// This wires `completion/complete` on both the runtime and the framework
+    /// adapters. Completion is a leaf capability, so unlike tools/resources/
+    /// prompts/tasks it is not tracked in the type parameters.
+    #[must_use]
+    pub fn with_completion<C: crate::handler::CompletionHandler + 'static>(
+        mut self,
+        completion: C,
+    ) -> Self {
+        self.completion = Some(std::sync::Arc::new(completion));
+        self.capabilities = self.capabilities.with_completions();
         self
     }
 

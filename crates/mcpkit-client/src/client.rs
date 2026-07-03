@@ -910,7 +910,23 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
                 name: argument_name.into(),
                 value: current_value.into(),
             },
+            context: None,
         };
+        self.complete(request).await
+    }
+
+    /// Send a completion request, including any previously-resolved
+    /// [`context`](CompleteRequest::context).
+    ///
+    /// The `complete_prompt_argument`/`complete_resource_argument` helpers cover
+    /// the common no-context case; use this for URI-template or multi-argument
+    /// completion where earlier values must be supplied.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if completions are not supported or the request fails.
+    pub async fn complete(&self, request: CompleteRequest) -> Result<CompleteResult, McpError> {
+        self.ensure_capability("completions", self.has_completions())?;
         self.request("completion/complete", Some(serde_json::to_value(request)?))
             .await
     }
@@ -940,9 +956,9 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
                 name: argument_name.into(),
                 value: current_value.into(),
             },
+            context: None,
         };
-        self.request("completion/complete", Some(serde_json::to_value(request)?))
-            .await
+        self.complete(request).await
     }
 
     // ==========================================================================

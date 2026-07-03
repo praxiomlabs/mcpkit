@@ -509,9 +509,13 @@ fn parse_list_params(params: Option<&Value>) -> ListParams {
 // =============================================================================
 
 use crate::context::Context;
-use crate::dispatch::{DynPromptHandler, DynResourceHandler, DynTaskHandler, DynToolHandler};
+use crate::dispatch::{
+    DynCompletionHandler, DynPromptHandler, DynResourceHandler, DynTaskHandler, DynToolHandler,
+};
 use mcpkit_core::pagination::paginate;
-use mcpkit_core::types::{CallToolResult, SubscribeRequest, TaskId, UnsubscribeRequest};
+use mcpkit_core::types::{
+    CallToolResult, CompleteRequest, CompleteResult, SubscribeRequest, TaskId, UnsubscribeRequest,
+};
 
 /// Build a paginated list result: the items under `key` plus an optional
 /// `nextCursor`.
@@ -894,6 +898,41 @@ pub async fn route_logging<H: crate::handler::ServerHandler>(
             .map_err(|_| McpError::invalid_params(method, "invalid or missing level"))?;
         handler.set_log_level(req.level, ctx).await?;
         Ok(serde_json::json!({}))
+    }
+    .await;
+    Some(result)
+}
+
+/// Route `completion/complete` to a registered completion handler.
+///
+/// Returns `None` when the method is not `completion/complete` or no completion
+/// handler is registered (so the caller falls through to its normal not-found
+/// handling). Shared by the runtime and the framework adapters so completion is
+/// dispatched consistently wherever the server routes requests. The response's
+/// `values` are capped at [`MAX_COMPLETION_VALUES`](mcpkit_core::types::MAX_COMPLETION_VALUES).
+pub async fn route_completion(
+    handler: Option<&dyn DynCompletionHandler>,
+    method: &str,
+    params: Option<&serde_json::Value>,
+    ctx: &Context<'_>,
+) -> Option<Result<serde_json::Value, McpError>> {
+    if method != methods::COMPLETION_COMPLETE {
+        return None;
+    }
+    let handler = handler?;
+    let result = async {
+        let params = params.ok_or_else(|| McpError::invalid_params(method, "missing params"))?;
+        let req: CompleteRequest = serde_json::from_value(params.clone()).map_err(|e| {
+            McpError::invalid_params(method, format!("invalid completion request: {e}"))
+        })?;
+        // Cap the values to the spec limit while preserving any result-level
+        // `_meta` the handler attached.
+        let CompleteResult { completion, meta } = handler.complete(&req, ctx).await?;
+        let result = CompleteResult {
+            completion: completion.capped(),
+            meta,
+        };
+        Ok(serde_json::to_value(result).unwrap_or_default())
     }
     .await;
     Some(result)
@@ -1539,6 +1578,91 @@ mod tests {
             assert_eq!(resp["taskId"], "t-1", "{method}");
             assert_eq!(resp["_meta"]["origin"], "test", "{method}");
         }
+    }
+
+    #[tokio::test]
+    async fn route_completion_dispatches_with_context_and_caps_values() {
+        use crate::context::NoOpPeer;
+        use crate::dispatch::DynCompletionHandler;
+        use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
+        use mcpkit_core::protocol::RequestId;
+        use mcpkit_core::protocol_version::ProtocolVersion;
+        use mcpkit_core::types::{CompleteRequest, CompleteResult, Completion, Meta};
+
+        // Reads `context.arguments.owner`, returns more than the 100-value cap,
+        // and attaches result-level `_meta`.
+        struct CtxCompletion;
+        impl crate::handler::CompletionHandler for CtxCompletion {
+            async fn complete(
+                &self,
+                request: &CompleteRequest,
+                _ctx: &Context<'_>,
+            ) -> Result<CompleteResult, McpError> {
+                let owner = request
+                    .context
+                    .as_ref()
+                    .and_then(|c| c.arguments.as_ref())
+                    .and_then(|a| a.get("owner").cloned())
+                    .unwrap_or_default();
+                let completion = Completion {
+                    values: (0..150).map(|i| format!("{owner}-{i}")).collect(),
+                    total: Some(150),
+                    has_more: Some(false),
+                };
+                Ok(CompleteResult::from(completion)
+                    .with_meta(Meta::new().with("origin", serde_json::json!("test"))))
+            }
+        }
+
+        let handler = CtxCompletion;
+        let dyn_handler: &dyn DynCompletionHandler = &handler;
+        let request_id = RequestId::Number(1);
+        let client_caps = ClientCapabilities::default();
+        let server_caps = ServerCapabilities::default();
+        let peer = NoOpPeer;
+        let ctx = Context::new(
+            &request_id,
+            None,
+            &client_caps,
+            &server_caps,
+            ProtocolVersion::LATEST,
+            &peer,
+        );
+        let params = serde_json::json!({
+            "ref": {"type": "ref/prompt", "name": "p"},
+            "argument": {"name": "a", "value": "x"},
+            "context": {"arguments": {"owner": "acme"}}
+        });
+
+        // No handler registered -> not dispatched (caller yields method-not-found).
+        assert!(
+            route_completion(None, methods::COMPLETION_COMPLETE, Some(&params), &ctx)
+                .await
+                .is_none()
+        );
+        // A non-completion method is not handled here.
+        assert!(
+            route_completion(Some(dyn_handler), methods::TOOLS_LIST, None, &ctx)
+                .await
+                .is_none()
+        );
+
+        // Dispatched: context propagates and the 100-value cap is enforced.
+        let resp = route_completion(
+            Some(dyn_handler),
+            methods::COMPLETION_COMPLETE,
+            Some(&params),
+            &ctx,
+        )
+        .await
+        .expect("routed")
+        .expect("ok");
+        let values = resp["completion"]["values"].as_array().expect("values");
+        assert_eq!(values.len(), 100); // capped from 150
+        assert_eq!(values[0], "acme-0"); // context.arguments propagated
+        assert_eq!(resp["completion"]["hasMore"], true); // forced true by the cap
+        assert_eq!(resp["completion"]["total"], 150); // handler total preserved
+        assert_eq!(resp["_meta"]["origin"], "test"); // handler result-level _meta
     }
 
     #[tokio::test]

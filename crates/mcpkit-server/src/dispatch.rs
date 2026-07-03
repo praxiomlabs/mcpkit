@@ -13,11 +13,11 @@
 
 use crate::builder::{NotRegistered, Registered};
 use crate::context::Context;
-use crate::handler::{PromptHandler, ResourceHandler, TaskHandler, ToolHandler};
+use crate::handler::{CompletionHandler, PromptHandler, ResourceHandler, TaskHandler, ToolHandler};
 use mcpkit_core::error::McpError;
 use mcpkit_core::types::{
-    CancelTaskResult, GetPromptResult, GetTaskResult, Prompt, Resource, ResourceContents,
-    ResourceTemplate, Task, TaskId, Tool, ToolOutput,
+    CancelTaskResult, CompleteRequest, CompleteResult, GetPromptResult, GetTaskResult, Prompt,
+    Resource, ResourceContents, ResourceTemplate, Task, TaskId, Tool, ToolOutput,
 };
 use serde_json::Value;
 use std::future::Future;
@@ -194,6 +194,26 @@ impl<K: TaskHandler> DynTaskHandler for K {
         ctx: &'a Context<'_>,
     ) -> BoxFut<'a, Result<Option<CancelTaskResult>, McpError>> {
         Box::pin(TaskHandler::cancel_task(self, id, ctx))
+    }
+}
+
+/// Object-safe form of [`CompletionHandler`].
+pub trait DynCompletionHandler: Send + Sync {
+    /// See [`CompletionHandler::complete`].
+    fn complete<'a>(
+        &'a self,
+        request: &'a CompleteRequest,
+        ctx: &'a Context<'_>,
+    ) -> BoxFut<'a, Result<CompleteResult, McpError>>;
+}
+
+impl<C: CompletionHandler> DynCompletionHandler for C {
+    fn complete<'a>(
+        &'a self,
+        request: &'a CompleteRequest,
+        ctx: &'a Context<'_>,
+    ) -> BoxFut<'a, Result<CompleteResult, McpError>> {
+        Box::pin(CompletionHandler::complete(self, request, ctx))
     }
 }
 

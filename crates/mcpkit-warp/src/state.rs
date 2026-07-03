@@ -33,6 +33,8 @@ pub struct McpState<H> {
     pub origin_validator: Arc<OriginValidator>,
     /// Page size for `*/list` results; `None` disables pagination.
     pub list_page_size: Option<usize>,
+    /// Optional completion handler for `completion/complete`.
+    pub completion: Option<Arc<dyn mcpkit_server::dispatch::DynCompletionHandler>>,
 }
 
 impl<H> McpState<H>
@@ -49,6 +51,7 @@ where
             sse_sessions: SessionStore::new(),
             origin_validator: Arc::new(OriginValidator::default()),
             list_page_size: None,
+            completion: None,
         }
     }
 
@@ -71,6 +74,7 @@ impl<H> Clone for McpState<H> {
             sse_sessions: self.sse_sessions.clone(),
             origin_validator: Arc::clone(&self.origin_validator),
             list_page_size: self.list_page_size,
+            completion: self.completion.clone(),
         }
     }
 }
@@ -84,6 +88,32 @@ impl<H> McpState<H> {
     pub const fn with_list_page_size(mut self, page_size: usize) -> Self {
         self.list_page_size = Some(page_size);
         self
+    }
+
+    /// Register a completion handler so this adapter answers
+    /// `completion/complete`.
+    #[must_use]
+    pub fn with_completion<C: mcpkit_server::CompletionHandler + 'static>(
+        mut self,
+        completion: C,
+    ) -> Self {
+        self.completion = Some(Arc::new(completion));
+        self
+    }
+}
+
+impl<H: mcpkit_server::ServerHandler> McpState<H> {
+    /// The handler's advertised capabilities, plus `completions` when a
+    /// completion handler is registered on this adapter (the handler itself
+    /// cannot know it was registered here, so the adapter advertises it).
+    #[must_use]
+    pub fn effective_capabilities(&self) -> ServerCapabilities {
+        let caps = self.handler.capabilities();
+        if self.completion.is_some() && !caps.has_completions() {
+            caps.with_completions()
+        } else {
+            caps
+        }
     }
 }
 

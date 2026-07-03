@@ -37,8 +37,8 @@
 use mcpkit_core::capability::{ServerCapabilities, ServerInfo};
 use mcpkit_core::error::McpError;
 use mcpkit_core::types::{
-    CancelTaskResult, GetPromptResult, GetTaskResult, Prompt, Resource, ResourceContents,
-    ResourceTemplate, Task, TaskId, Tool, ToolOutput,
+    CancelTaskResult, CompleteRequest, CompleteResult, GetPromptResult, GetTaskResult, Prompt,
+    Resource, ResourceContents, ResourceTemplate, Task, TaskId, Tool, ToolOutput,
 };
 use serde_json::Value;
 use std::future::Future;
@@ -249,26 +249,25 @@ pub trait TaskHandler: Send + Sync {
     ) -> impl Future<Output = Result<Option<CancelTaskResult>, McpError>> + Send;
 }
 
-/// Handler for completion suggestions.
+/// Handler for completion suggestions (`completion/complete`).
 ///
-/// Implement this trait to provide autocomplete suggestions for
-/// resource URIs, prompt arguments, etc.
+/// Implement this trait to provide autocomplete suggestions for prompt
+/// arguments and resource-template variables. The full [`CompleteRequest`] is
+/// passed so a handler can dispatch on the [`ref`](CompleteRequest::ref_),
+/// read the [`argument`](CompleteRequest::argument) being typed, and use any
+/// previously-resolved [`context`](CompleteRequest::context). Return a
+/// [`CompleteResult`] — build one from a
+/// [`Completion`](mcpkit_core::types::Completion) via `.into()` for the common
+/// case, or attach result-level `_meta` with [`CompleteResult::with_meta`]. The
+/// route layer caps `values` at
+/// [`MAX_COMPLETION_VALUES`](mcpkit_core::types::MAX_COMPLETION_VALUES).
 pub trait CompletionHandler: Send + Sync {
-    /// Complete a partial resource URI.
-    fn complete_resource(
+    /// Produce completion suggestions for the request.
+    fn complete(
         &self,
-        partial_uri: &str,
+        request: &CompleteRequest,
         ctx: &Context<'_>,
-    ) -> impl Future<Output = Result<Vec<String>, McpError>> + Send;
-
-    /// Complete a partial prompt argument.
-    fn complete_prompt_arg(
-        &self,
-        prompt_name: &str,
-        arg_name: &str,
-        partial_value: &str,
-        ctx: &Context<'_>,
-    ) -> impl Future<Output = Result<Vec<String>, McpError>> + Send;
+    ) -> impl Future<Output = Result<CompleteResult, McpError>> + Send;
 }
 
 /// The MCP logging severity, re-exported from core.
@@ -415,22 +414,12 @@ impl<T: TaskHandler> TaskHandler for Arc<T> {
 }
 
 impl<T: CompletionHandler> CompletionHandler for Arc<T> {
-    fn complete_resource(
+    fn complete(
         &self,
-        partial_uri: &str,
+        request: &CompleteRequest,
         ctx: &Context<'_>,
-    ) -> impl Future<Output = Result<Vec<String>, McpError>> + Send {
-        (**self).complete_resource(partial_uri, ctx)
-    }
-
-    fn complete_prompt_arg(
-        &self,
-        prompt_name: &str,
-        arg_name: &str,
-        partial_value: &str,
-        ctx: &Context<'_>,
-    ) -> impl Future<Output = Result<Vec<String>, McpError>> + Send {
-        (**self).complete_prompt_arg(prompt_name, arg_name, partial_value, ctx)
+    ) -> impl Future<Output = Result<CompleteResult, McpError>> + Send {
+        (**self).complete(request, ctx)
     }
 }
 

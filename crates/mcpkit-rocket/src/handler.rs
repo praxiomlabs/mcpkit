@@ -8,8 +8,8 @@ use mcpkit_core::protocol::Message;
 use mcpkit_core::protocol_version::ProtocolVersion;
 use mcpkit_server::context::{Context, NoOpPeer};
 use mcpkit_server::{
-    PromptHandler, ResourceHandler, ServerHandler, ToolHandler, route_logging, route_prompts,
-    route_resources, route_tools,
+    PromptHandler, ResourceHandler, ServerHandler, ToolHandler, route_completion, route_logging,
+    route_prompts, route_resources, route_tools,
 };
 use rocket::http::{ContentType, Header, Status};
 use rocket::request::{FromRequest, Outcome, Request};
@@ -355,7 +355,7 @@ where
 
     // Create a context for the request
     let req_id = request.id.clone();
-    let server_caps = state.handler.capabilities();
+    let server_caps = state.effective_capabilities();
     let peer = NoOpPeer;
     let ctx = Context::new(
         &req_id,
@@ -372,7 +372,7 @@ where
             let init_result = serde_json::json!({
                 "protocolVersion": protocol_version.as_str(),
                 "serverInfo": state.server_info,
-                "capabilities": state.handler.capabilities(),
+                "capabilities": server_caps,
             });
             Response::success(request.id.clone(), init_result)
         }
@@ -426,14 +426,18 @@ where
             }
 
             // Try routing logging/setLevel (gated on the advertised capability)
-            if let Some(result) = route_logging(
-                state.handler.as_ref(),
-                &state.handler.capabilities(),
-                method,
-                params,
-                &ctx,
-            )
-            .await
+            if let Some(result) =
+                route_logging(state.handler.as_ref(), &server_caps, method, params, &ctx).await
+            {
+                return match result {
+                    Ok(value) => Response::success(request.id.clone(), value),
+                    Err(e) => Response::error(request.id.clone(), e.into()),
+                };
+            }
+
+            // Try routing completion/complete (when a completion handler is set)
+            if let Some(result) =
+                route_completion(state.completion.as_deref(), method, params, &ctx).await
             {
                 return match result {
                     Ok(value) => Response::success(request.id.clone(), value),
