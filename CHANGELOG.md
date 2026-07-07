@@ -9,6 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Inbound client-notification dispatch to `ServerHandler` hooks (#141). The stdio
+  `ServerRuntime` previously logged `notifications/initialized` and never invoked
+  `ServerHandler::on_initialized` — the hook was orphaned — and had no way to react
+  to `notifications/roots/list_changed`. Now:
+  - `RequestRouter` gains `route_notification` (default no-op), the
+    notification-side analogue of `route()`, so the runtime can dispatch inbound
+    notifications to the typed server through the same abstraction it uses for
+    requests.
+  - `notifications/initialized` invokes `on_initialized`; `notifications/roots/list_changed`
+    invokes the new `ServerHandler::on_roots_list_changed(&self, ctx)` hook
+    (default no-op, forwarded through `Arc<T>` and `ValidatingToolHandler`), gated
+    on the client having advertised the `roots` capability.
+  - A hook receives a notification-scoped `Context` (`Context::for_notification`)
+    that is fully outbound-capable — e.g. `on_roots_list_changed` may call
+    `ctx.list_roots()` to re-fetch. Notifications carry no request id, so the
+    context's `request_id` is a documented sentinel, not a real JSON-RPC id.
+  - Notification hooks now run **concurrently** with the receive loop (like
+    requests), so a hook that issues its own server-to-client request no longer
+    deadlocks the loop waiting for its own reply.
+  - `notifications/cancelled` remains a runtime concern (the cancellation
+    registry), not a handler hook.
+  - Adapter notification-hook dispatch (HTTP) is tracked separately in
+    [#153](https://github.com/praxiomlabs/mcpkit/issues/153), as it is entangled
+    with the adapters' server-initiated-request path
+    ([#141](https://github.com/praxiomlabs/mcpkit/issues/141)).
 - Functional, spec-complete argument completion (#113). `completion/complete`
   was advertised (`with_completions()`), had a `CompletionHandler` trait, a
   `CompletionService`, and client methods — but **nothing dispatched it**: the

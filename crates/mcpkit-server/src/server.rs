@@ -510,26 +510,51 @@ enum TaskBegin {
 /// Make progress on in-flight requests and background task executions, returning
 /// any new background work an in-flight request just produced. Background tasks
 /// are polled here but do not count against the request concurrency limit.
-async fn drive_sets<F1, F2>(
+async fn drive_sets<F1, F2, F3>(
     in_flight: &mut futures::stream::FuturesUnordered<F1>,
     background: &mut futures::stream::FuturesUnordered<F2>,
+    notifications: &mut futures::stream::FuturesUnordered<F3>,
 ) -> Option<BackgroundExec>
 where
     F1: std::future::Future<Output = Option<BackgroundExec>>,
     F2: std::future::Future<Output = ()>,
+    F3: std::future::Future<Output = Result<(), McpError>>,
 {
     use futures::future::{Either, select};
     use futures::stream::StreamExt;
-    if in_flight.is_empty() {
-        background.next().await;
-        return None;
-    }
-    if background.is_empty() {
-        return in_flight.next().await.flatten();
-    }
-    match select(in_flight.next(), background.next()).await {
-        Either::Left((res, _)) => res.flatten(),
-        Either::Right((_finished, _)) => None,
+    use std::future::pending;
+    use std::pin::pin;
+
+    // Each set is polled only when non-empty; an empty set parks forever
+    // (`pending`) so it never wins the race or busy-loops. Only `in_flight` can
+    // surface a `BackgroundExec` (a request that spun off task-augmented work).
+    let requests = pin!(async {
+        if in_flight.is_empty() {
+            pending::<Option<BackgroundExec>>().await
+        } else {
+            in_flight.next().await.flatten()
+        }
+    });
+    let tasks = pin!(async {
+        if background.is_empty() {
+            pending::<()>().await;
+        } else {
+            background.next().await;
+        }
+    });
+    let notifs = pin!(async {
+        if notifications.is_empty() {
+            pending::<()>().await;
+        } else if let Some(Err(e)) = notifications.next().await {
+            tracing::error!(error = %e, "Error handling notification");
+        }
+    });
+    let unit = pin!(async {
+        let _ = select(tasks, notifs).await;
+    });
+    match select(requests, unit).await {
+        Either::Left((res, _)) => res,
+        Either::Right(((), _)) => None,
     }
 }
 
@@ -565,7 +590,8 @@ where
     /// reached, no new messages are accepted until an in-flight request
     /// completes (backpressure). Each request runs with panic isolation, so a
     /// panicking handler returns a JSON-RPC internal error instead of tearing
-    /// down the connection. Notifications are handled inline.
+    /// down the connection. Notification hooks run concurrently too, so a hook
+    /// that issues its own server-to-client request does not deadlock the loop.
     pub async fn run(&self) -> Result<(), McpError> {
         use futures::future::{Either, select};
         use futures::stream::{FuturesUnordered, StreamExt};
@@ -584,6 +610,10 @@ where
         // Task-augmented tool executions run here, off the request concurrency
         // limit, so long-running tasks never starve normal request handling.
         let mut background = FuturesUnordered::new();
+        // Notification hooks run here so a hook that makes its own server-to-client
+        // request (e.g. `on_roots_list_changed` calling `ctx.list_roots()`) does
+        // not block the loop from receiving that request's reply.
+        let mut notifications = FuturesUnordered::new();
         // Requests received while at the concurrency limit. They run as soon as a
         // slot frees. Crucially the loop keeps receiving in the meantime, so a
         // handler parked on its own server-initiated request (which needs an
@@ -602,14 +632,19 @@ where
             // Always receive (so responses to our own outbound requests are
             // routed even when every slot is parked) while making progress on
             // in-flight requests and background tasks.
-            let step = if in_flight.is_empty() && background.is_empty() {
+            let step = if in_flight.is_empty() && background.is_empty() && notifications.is_empty()
+            {
                 match self.transport.recv().await {
                     Ok(opt) => Step::Message(opt),
                     Err(e) => break Err(e.into()),
                 }
             } else {
                 let recv = std::pin::pin!(self.transport.recv());
-                let progress = std::pin::pin!(drive_sets(&mut in_flight, &mut background));
+                let progress = std::pin::pin!(drive_sets(
+                    &mut in_flight,
+                    &mut background,
+                    &mut notifications
+                ));
                 match select(recv, progress).await {
                     Either::Left((Ok(opt), _)) => Step::Message(opt),
                     Either::Left((Err(e), _)) => break Err(e.into()),
@@ -631,9 +666,10 @@ where
                     }
                 }
                 Step::Message(Some(Message::Notification(notification))) => {
-                    if let Err(e) = self.handle_notification(notification).await {
-                        tracing::error!(error = %e, "Error handling notification");
-                    }
+                    // Handle concurrently so a hook doing a server-to-client
+                    // request does not deadlock the receive loop. Errors are
+                    // logged when the future completes in `drive_sets`.
+                    notifications.push(self.handle_notification(notification));
                 }
                 Step::Message(Some(Message::Response(response))) => {
                     // A reply to a server-initiated request (elicitation, etc.).
@@ -653,6 +689,7 @@ where
         self.state.fail_pending_requests();
         while in_flight.next().await.is_some() {}
         while background.next().await.is_some() {}
+        while notifications.next().await.is_some() {}
 
         if let Err(ref err) = outcome {
             tracing::error!(error = %err, "Transport error");
@@ -1050,34 +1087,50 @@ where
 
         tracing::debug!(method = %method, "Handling notification");
 
-        match method {
-            "notifications/initialized" => {
-                tracing::info!("Client sent initialized notification");
-                Ok(())
+        // `notifications/cancelled` is a runtime concern — it trips the
+        // cancellation registry for an in-flight request, not a handler hook.
+        if method == "notifications/cancelled" {
+            if let Some(request_id) = notification
+                .params
+                .as_ref()
+                .and_then(|p| {
+                    serde_json::from_value::<mcpkit_core::types::CancelledNotificationParams>(
+                        p.clone(),
+                    )
+                    .ok()
+                })
+                .and_then(|c| c.request_id)
+            {
+                // Match the canonical id form `route_request` registers with,
+                // so numeric and string request ids both resolve.
+                self.state.cancel_request(&request_id.to_string());
             }
-            "notifications/cancelled" => {
-                if let Some(request_id) = notification
-                    .params
-                    .as_ref()
-                    .and_then(|p| {
-                        serde_json::from_value::<mcpkit_core::types::CancelledNotificationParams>(
-                            p.clone(),
-                        )
-                        .ok()
-                    })
-                    .and_then(|c| c.request_id)
-                {
-                    // Match the canonical id form `route_request` registers with,
-                    // so numeric and string request ids both resolve.
-                    self.state.cancel_request(&request_id.to_string());
-                }
-                Ok(())
-            }
-            _ => {
-                tracing::debug!(method = %method, "Ignoring unknown notification");
-                Ok(())
-            }
+            return Ok(());
         }
+
+        // Everything else is dispatched to the server's notification hooks with a
+        // notification-scoped, outbound-capable context (so a hook may call e.g.
+        // `ctx.list_roots()`). Unhandled methods are a no-op in `route_notification`.
+        let client_caps = self.state.client_caps();
+        let protocol_version = self
+            .state
+            .protocol_version()
+            .unwrap_or(ProtocolVersion::LATEST);
+        let peer = TransportPeer::with_outbound(
+            self.transport.clone(),
+            self.state.clone(),
+            self.config.outbound_request_timeout,
+        );
+        let ctx = Context::for_notification(
+            &client_caps,
+            &self.state.server_caps,
+            protocol_version,
+            &peer,
+        );
+        self.server
+            .route_notification(method, notification.params.as_ref(), &ctx)
+            .await;
+        Ok(())
     }
 }
 
@@ -1137,6 +1190,18 @@ pub trait RequestRouter: Send + Sync {
         params: Option<&serde_json::Value>,
         ctx: &Context<'_>,
     ) -> Result<serde_json::Value, McpError>;
+
+    /// Dispatch an inbound client notification (e.g. `notifications/initialized`
+    /// or `notifications/roots/list_changed`) to the server's lifecycle hooks.
+    /// Analogous to [`route`](Self::route) but for notifications — there is no
+    /// reply. Defaults to a no-op.
+    async fn route_notification(
+        &self,
+        _method: &str,
+        _params: Option<&serde_json::Value>,
+        _ctx: &Context<'_>,
+    ) {
+    }
 
     /// The task-augmentation support a tool declares (`Tool.execution.taskSupport`),
     /// used to gate task-augmented `tools/call`. Defaults to `Forbidden`.
@@ -1203,6 +1268,23 @@ where
 {
     fn server_info(&self) -> mcpkit_core::capability::ServerInfo {
         self.handler().server_info()
+    }
+
+    async fn route_notification(
+        &self,
+        method: &str,
+        _params: Option<&serde_json::Value>,
+        ctx: &Context<'_>,
+    ) {
+        match method {
+            "notifications/initialized" => self.handler().on_initialized(ctx).await,
+            // Only meaningful from a client that advertised the `roots`
+            // capability; ignore it otherwise.
+            "notifications/roots/list_changed" if ctx.client_caps.has_roots() => {
+                self.handler().on_roots_list_changed(ctx).await;
+            }
+            _ => {}
+        }
     }
 
     async fn route(
@@ -1525,6 +1607,153 @@ mod tests {
             Message::Response(r) => r,
             other => panic!("expected response, got {other:?}"),
         }
+    }
+
+    fn notif_msg(method: &str) -> Message {
+        Message::Notification(Notification::with_params(
+            method.to_string(),
+            serde_json::json!({}),
+        ))
+    }
+
+    /// Records lifecycle-hook invocations; `on_roots_list_changed` exercises the
+    /// notification-scoped context by calling `ctx.list_roots()`.
+    struct RootsHookHandler {
+        initialized: Arc<std::sync::atomic::AtomicBool>,
+        roots_changed: Arc<std::sync::atomic::AtomicUsize>,
+        seen_roots: Arc<std::sync::Mutex<Vec<mcpkit_core::types::Root>>>,
+        done: Arc<Notify>,
+    }
+
+    impl crate::handler::ServerHandler for RootsHookHandler {
+        fn server_info(&self) -> ServerInfo {
+            ServerInfo::new("roots-test", "0.0.0")
+        }
+        async fn on_initialized(&self, _ctx: &Context<'_>) {
+            self.initialized
+                .store(true, std::sync::atomic::Ordering::SeqCst);
+            self.done.notify_one();
+        }
+        async fn on_roots_list_changed(&self, ctx: &Context<'_>) {
+            self.roots_changed
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            if let Ok(roots) = ctx.list_roots().await {
+                *self.seen_roots.lock().expect("lock") = roots;
+            }
+            self.done.notify_one();
+        }
+    }
+
+    #[tokio::test]
+    async fn notification_hooks_fire_and_on_roots_list_changed_can_list_roots() {
+        use crate::builder::ServerBuilder;
+        use mcpkit_core::capability::ClientCapabilities;
+        use mcpkit_core::types::{ListRootsResult, Root};
+        use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+        let initialized = Arc::new(AtomicBool::new(false));
+        let roots_changed = Arc::new(AtomicUsize::new(0));
+        let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let done = Arc::new(Notify::new());
+        let handler = RootsHookHandler {
+            initialized: initialized.clone(),
+            roots_changed: roots_changed.clone(),
+            seen_roots: seen.clone(),
+            done: done.clone(),
+        };
+
+        let (client, server_tr) = MemoryTransport::pair();
+        let runtime = ServerRuntime::new(ServerBuilder::new(handler).build(), server_tr);
+        runtime.state().set_initialized();
+        runtime
+            .state()
+            .set_client_caps(ClientCapabilities::default().with_roots());
+        let handle = tokio::spawn(async move { runtime.run().await });
+
+        // `on_initialized` fires on notifications/initialized.
+        client
+            .send(notif_msg("notifications/initialized"))
+            .await
+            .expect("send");
+        timeout(Duration::from_secs(2), done.notified())
+            .await
+            .expect("on_initialized never ran");
+        assert!(initialized.load(Ordering::SeqCst));
+
+        // `on_roots_list_changed` fires and calls `ctx.list_roots()`, which issues
+        // a server->client roots/list request the loop must service concurrently.
+        client
+            .send(notif_msg("notifications/roots/list_changed"))
+            .await
+            .expect("send");
+        let roots_req = match timeout(Duration::from_secs(2), client.recv())
+            .await
+            .expect("no roots/list request")
+            .expect("recv ok")
+            .expect("some message")
+        {
+            Message::Request(r) => r,
+            other => panic!("expected roots/list, got {other:?}"),
+        };
+        assert_eq!(roots_req.method.as_ref(), "roots/list");
+        let result = ListRootsResult {
+            roots: vec![Root::new("file:///work")],
+            meta: None,
+        };
+        client
+            .send(Message::Response(Response::success(
+                roots_req.id.clone(),
+                serde_json::to_value(result).expect("serialize"),
+            )))
+            .await
+            .expect("send");
+
+        timeout(Duration::from_secs(2), done.notified())
+            .await
+            .expect("on_roots_list_changed never finished");
+        assert_eq!(roots_changed.load(Ordering::SeqCst), 1);
+        assert_eq!(seen.lock().expect("lock")[0].uri, "file:///work");
+
+        drop(client);
+        let _ = timeout(Duration::from_secs(2), handle).await;
+    }
+
+    #[tokio::test]
+    async fn roots_list_changed_is_ignored_without_roots_capability() {
+        use crate::builder::ServerBuilder;
+        use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+        let roots_changed = Arc::new(AtomicUsize::new(0));
+        let handler = RootsHookHandler {
+            initialized: Arc::new(AtomicBool::new(false)),
+            roots_changed: roots_changed.clone(),
+            seen_roots: Arc::new(std::sync::Mutex::new(Vec::new())),
+            done: Arc::new(Notify::new()),
+        };
+
+        let (client, server_tr) = MemoryTransport::pair();
+        // No `set_client_caps` with roots -> the client did not advertise roots.
+        let runtime = ServerRuntime::new(ServerBuilder::new(handler).build(), server_tr);
+        runtime.state().set_initialized();
+        let handle = tokio::spawn(async move { runtime.run().await });
+
+        client
+            .send(notif_msg("notifications/roots/list_changed"))
+            .await
+            .expect("send");
+        // A ping round-trips; the reply must be the ping response, never a
+        // roots/list request (which would mean the gated hook wrongly ran).
+        client.send(req("ping", 1)).await.expect("send");
+        let resp = next_response(&client).await;
+        assert_eq!(resp.id, RequestId::Number(1));
+        assert_eq!(
+            roots_changed.load(Ordering::SeqCst),
+            0,
+            "on_roots_list_changed must not fire without the roots capability"
+        );
+
+        drop(client);
+        let _ = timeout(Duration::from_secs(2), handle).await;
     }
 
     #[tokio::test]

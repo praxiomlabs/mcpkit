@@ -226,6 +226,10 @@ impl<H: ServerHandler> ServerHandler for ValidatingToolHandler<H> {
         self.inner.on_initialized(ctx)
     }
 
+    fn on_roots_list_changed(&self, ctx: &Context<'_>) -> impl Future<Output = ()> + Send {
+        self.inner.on_roots_list_changed(ctx)
+    }
+
     fn on_shutdown(&self) -> impl Future<Output = ()> + Send {
         self.inner.on_shutdown()
     }
