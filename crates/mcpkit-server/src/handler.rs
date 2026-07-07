@@ -130,6 +130,16 @@ pub trait ToolHandler: Send + Sync {
     /// (or [`ValidatingToolHandler`](crate::validation::ValidatingToolHandler) for
     /// adapter users) to enforce those schemas.
     ///
+    /// # CPU-bound or blocking work
+    ///
+    /// The stdio runtime drives requests cooperatively on one task, so a
+    /// `call_tool` that does heavy CPU work (or blocks) *before* awaiting stalls
+    /// all other in-flight requests until it yields. Offload the hot section to
+    /// your runtime's blocking/thread mechanism — `tokio::task::spawn_blocking`,
+    /// `std::thread`, `rayon`, etc. — and `.await` its result. The same applies to
+    /// task-augmented tools: background task futures are polled by the same
+    /// cooperative loop.
+    ///
     /// # Arguments
     ///
     /// * `name` - The name of the tool to call
