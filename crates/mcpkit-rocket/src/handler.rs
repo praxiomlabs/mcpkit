@@ -6,10 +6,12 @@ use mcpkit_core::auth::VerifiedUser;
 use mcpkit_core::capability::ClientCapabilities;
 use mcpkit_core::protocol::Message;
 use mcpkit_core::protocol_version::ProtocolVersion;
+use mcpkit_server::capability::tasks::{TaskManager, route_task_store};
 use mcpkit_server::context::{Context, NoOpPeer};
 use mcpkit_server::{
-    PromptHandler, ResourceHandler, ServerHandler, ToolHandler, route_completion, route_logging,
-    route_prompts, route_resources, route_tools,
+    AugmentedTaskOutcome, PromptHandler, ResourceHandler, ServerHandler, ToolHandler,
+    begin_augmented_task, route_completion, route_logging, route_prompts, route_resources,
+    route_tools,
 };
 use rocket::http::{ContentType, Header, Status};
 use rocket::request::{FromRequest, Outcome, Request};
@@ -286,9 +288,17 @@ where
                     || (ProtocolVersion::LATEST, ClientCapabilities::default()),
                     |(v, c)| (v, c.unwrap_or_default()),
                 );
+            // This session's task store (per-session isolation for `tasks/*`).
+            let task_store = state.sessions.tasks(&session_id);
 
-            let response =
-                create_response_for_request(state, &request, protocol_version, &client_caps).await;
+            let response = create_response_for_request(
+                state,
+                &request,
+                protocol_version,
+                &client_caps,
+                task_store.as_ref(),
+            )
+            .await;
 
             match serde_json::to_string(&Message::Response(response)) {
                 Ok(body) => McpResponse::success(body, session_id),
@@ -343,6 +353,7 @@ async fn create_response_for_request<H>(
     request: &mcpkit_core::protocol::Request,
     protocol_version: ProtocolVersion,
     client_caps: &ClientCapabilities,
+    task_store: Option<&Arc<TaskManager>>,
 ) -> mcpkit_core::protocol::Response
 where
     H: ServerHandler + ToolHandler + ResourceHandler + PromptHandler + Send + Sync + 'static,
@@ -377,6 +388,37 @@ where
             Response::success(request.id.clone(), init_result)
         }
         _ => {
+            // Task-augmented tools/call and tasks/* are served from this
+            // session's own task store (per-session isolation).
+            if let Some(store) = task_store {
+                if method == "tools/call" {
+                    match begin_augmented_task(
+                        state.handler.clone(),
+                        store,
+                        params,
+                        client_caps.clone(),
+                        server_caps.clone(),
+                        protocol_version,
+                    )
+                    .await
+                    {
+                        AugmentedTaskOutcome::Started(create_result, fut) => {
+                            tokio::spawn(fut);
+                            return Response::success(request.id.clone(), create_result);
+                        }
+                        AugmentedTaskOutcome::Rejected(e) => {
+                            return Response::error(request.id.clone(), e.into());
+                        }
+                        AugmentedTaskOutcome::NotApplicable => {}
+                    }
+                } else if let Some(result) = route_task_store(store, method, params) {
+                    return match result {
+                        Ok(value) => Response::success(request.id.clone(), value),
+                        Err(e) => Response::error(request.id.clone(), e.into()),
+                    };
+                }
+            }
+
             // Try routing to tools
             if let Some(result) = route_tools(
                 state.handler.as_ref(),
