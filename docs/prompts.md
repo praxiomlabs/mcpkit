@@ -20,6 +20,7 @@ impl PromptServer {
             messages: vec![
                 PromptMessage::user(format!("Please greet {} warmly.", name))
             ],
+            meta: None,
         }
     }
 }
@@ -49,6 +50,7 @@ async fn code_review(&self, code: String, language: String) -> GetPromptResult {
                 language, language, code
             ))
         ],
+        meta: None,
     }
 }
 ```
@@ -76,6 +78,7 @@ async fn code_review(
                 lang, code, focus_text
             ))
         ],
+        meta: None,
     }
 }
 ```
@@ -125,6 +128,7 @@ async fn debug_session(&self, error_message: String) -> GetPromptResult {
                  2. What changes did you make recently?"
             ),
         ],
+        meta: None,
     }
 }
 ```
@@ -148,6 +152,7 @@ async fn analyze_file(&self, file_path: String) -> GetPromptResult {
                 file_path, content
             ))
         ],
+        meta: None,
     }
 }
 ```
@@ -182,6 +187,7 @@ async fn generate_tests(
                 code
             ))
         ],
+        meta: None,
     }
 }
 ```
@@ -222,6 +228,7 @@ impl WritingAssistant {
                     text
                 )),
             ],
+            meta: None,
         }
     }
 
@@ -258,6 +265,7 @@ impl WritingAssistant {
                     length_instruction, format_instruction, content
                 )),
             ],
+            meta: None,
         }
     }
 
@@ -286,6 +294,7 @@ impl WritingAssistant {
                     target_language, tone_instruction, text
                 )),
             ],
+            meta: None,
         }
     }
 }

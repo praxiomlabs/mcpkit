@@ -486,12 +486,9 @@ impl ServerHandler for MyServer {
 impl ToolHandler for MyServer {
     async fn list_tools(&self, _ctx: &Context<'_>) -> Result<Vec<Tool>, McpError> {
         Ok(vec![
-            Tool {
-                name: "hello".to_string(),
-                description: Some("Say hello".to_string()),
-                input_schema: json!({"type": "object", "properties": {}}),
-                annotations: None,
-            }
+            Tool::new("hello")
+                .description("Say hello")
+                .input_schema(json!({"type": "object", "properties": {}})),
         ])
     }
 
