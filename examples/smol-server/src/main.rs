@@ -138,21 +138,23 @@ fn main() -> Result<(), McpError> {
 
         // Call the echo tool
         println!("Calling echo(\"Hello from smol!\")...");
-        let args = serde_json::json!({"message": "Hello from smol!"});
+        let args =
+            serde_json::from_value(serde_json::json!({"message": "Hello from smol!"})).unwrap();
         let result = <EchoServer as ToolHandler>::call_tool(&server, "echo", args, &ctx).await?;
         print_result(&result);
         println!();
 
         // Call echo again to increment counter
         println!("Calling echo(\"Second message\")...");
-        let args = serde_json::json!({"message": "Second message"});
+        let args =
+            serde_json::from_value(serde_json::json!({"message": "Second message"})).unwrap();
         let result = <EchoServer as ToolHandler>::call_tool(&server, "echo", args, &ctx).await?;
         print_result(&result);
         println!();
 
         // Check stats
         println!("Calling stats()...");
-        let args = serde_json::json!({});
+        let args = serde_json::from_value(serde_json::json!({})).unwrap();
         let result = <EchoServer as ToolHandler>::call_tool(&server, "stats", args, &ctx).await?;
         print_result(&result);
         println!();
@@ -160,7 +162,7 @@ fn main() -> Result<(), McpError> {
         // Demonstrate concurrent operations
         println!("Calling concurrent_demo()...");
         let start = std::time::Instant::now();
-        let args = serde_json::json!({});
+        let args = serde_json::from_value(serde_json::json!({})).unwrap();
         let result =
             <EchoServer as ToolHandler>::call_tool(&server, "concurrent_demo", args, &ctx).await?;
         println!("Completed in {:?}", start.elapsed());
@@ -251,7 +253,7 @@ mod tests {
             let test_ctx = TestContext::new();
             let ctx = test_ctx.as_context();
 
-            let args = serde_json::json!({"message": "test"});
+            let args = serde_json::from_value(serde_json::json!({"message": "test"})).unwrap();
             let result = <EchoServer as ToolHandler>::call_tool(&server, "echo", args, &ctx)
                 .await
                 .unwrap();
@@ -277,7 +279,7 @@ mod tests {
             let ctx = test_ctx.as_context();
 
             let start = std::time::Instant::now();
-            let args = serde_json::json!({});
+            let args = serde_json::from_value(serde_json::json!({})).unwrap();
             let _ = <EchoServer as ToolHandler>::call_tool(&server, "concurrent_demo", args, &ctx)
                 .await
                 .unwrap();

@@ -398,7 +398,7 @@ impl ToolHandler for ConditionalServer {
     async fn call_tool(
         &self,
         name: &str,
-        args: Value,
+        args: Object,
         ctx: &Context<'_>,
     ) -> Result<ToolOutput, McpError> {
         match name {
@@ -443,7 +443,7 @@ impl ToolHandler for DynamicServer {
     async fn call_tool(
         &self,
         name: &str,
-        args: Value,
+        args: Object,
         _ctx: &Context<'_>,
     ) -> Result<ToolOutput, McpError> {
         let tools = self.tools.read().await;
@@ -495,7 +495,7 @@ impl ToolHandler for MyServer {
     async fn call_tool(
         &self,
         name: &str,
-        _args: Value,
+        _args: Object,
         _ctx: &Context<'_>,
     ) -> Result<ToolOutput, McpError> {
         match name {

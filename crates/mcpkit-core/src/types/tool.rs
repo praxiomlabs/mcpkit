@@ -395,7 +395,7 @@ pub struct CallToolResult {
         default,
         skip_serializing_if = "Option::is_none"
     )]
-    pub structured_content: Option<serde_json::Value>,
+    pub structured_content: Option<super::object::Object>,
     /// Optional protocol metadata (`_meta`).
     #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
     pub meta: Option<Meta>,
@@ -437,7 +437,7 @@ impl CallToolResult {
 
     /// Attach structured content (matching the tool's `outputSchema`).
     #[must_use]
-    pub fn with_structured_content(mut self, value: serde_json::Value) -> Self {
+    pub fn with_structured_content(mut self, value: super::object::Object) -> Self {
         self.structured_content = Some(value);
         self
     }
@@ -537,14 +537,23 @@ impl From<ToolOutput> for CallToolResult {
 /// When a `#[tool]` method returns `Json<T>`, the `#[mcp_server]` macro also
 /// derives the tool's `outputSchema` from `T`, so `T` should derive `ToolInput`
 /// in addition to `serde::Serialize`.
+///
+/// The spec requires `structuredContent` to be a JSON **object**. If `T`
+/// serializes to a non-object (e.g. a bare number or array), only the text
+/// fallback is emitted and `structuredContent` is omitted.
 #[derive(Debug, Clone)]
 pub struct Json<T>(pub T);
 
 impl<T: Serialize> From<Json<T>> for ToolOutput {
     fn from(json: Json<T>) -> Self {
-        let structured = serde_json::to_value(&json.0).unwrap_or(serde_json::Value::Null);
         let text = serde_json::to_string_pretty(&json.0).unwrap_or_default();
-        Self::Success(CallToolResult::text(text).with_structured_content(structured))
+        let result = match serde_json::to_value(&json.0) {
+            Ok(serde_json::Value::Object(map)) => {
+                CallToolResult::text(text).with_structured_content(map)
+            }
+            _ => CallToolResult::text(text),
+        };
+        Self::Success(result)
     }
 }
 
@@ -606,7 +615,7 @@ pub struct CallToolRequest {
     pub name: String,
     /// Arguments to pass to the tool.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub arguments: Option<serde_json::Value>,
+    pub arguments: Option<super::object::Object>,
 }
 
 #[cfg(test)]
@@ -686,8 +695,9 @@ mod tests {
         let j = serde_json::to_value(&tool).unwrap();
         assert_eq!(j["outputSchema"], serde_json::json!({"type": "object"}));
 
-        let res =
-            CallToolResult::text("ok").with_structured_content(serde_json::json!({"answer": 42}));
+        let res = CallToolResult::text("ok").with_structured_content(
+            serde_json::from_value(serde_json::json!({"answer": 42})).expect("object"),
+        );
         let j = serde_json::to_value(&res).unwrap();
         assert_eq!(j["structuredContent"], serde_json::json!({"answer": 42}));
         // Round-trips and stays absent when unset.

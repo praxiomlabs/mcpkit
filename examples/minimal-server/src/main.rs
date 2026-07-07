@@ -113,13 +113,13 @@ async fn main() -> Result<(), McpError> {
     // Call tools and observe state changes
     println!();
     println!("Calling add(2, 3)...");
-    let args = serde_json::json!({"a": 2.0, "b": 3.0});
+    let args = serde_json::from_value(serde_json::json!({"a": 2.0, "b": 3.0})).unwrap();
     let result = <Calculator as ToolHandler>::call_tool(&calculator, "add", args, &ctx).await?;
     print_result(&result);
 
     println!();
     println!("Calling multiply(4, 5)...");
-    let args = serde_json::json!({"a": 4.0, "b": 5.0});
+    let args = serde_json::from_value(serde_json::json!({"a": 4.0, "b": 5.0})).unwrap();
     let result =
         <Calculator as ToolHandler>::call_tool(&calculator, "multiply", args, &ctx).await?;
     print_result(&result);
@@ -127,7 +127,7 @@ async fn main() -> Result<(), McpError> {
     // Check the operation count (demonstrates stateful behavior)
     println!();
     println!("Calling get_stats()...");
-    let args = serde_json::json!({});
+    let args = serde_json::from_value(serde_json::json!({})).unwrap();
     let result =
         <Calculator as ToolHandler>::call_tool(&calculator, "get_stats", args, &ctx).await?;
     print_result(&result);
@@ -243,7 +243,7 @@ mod tests {
         let calc = Calculator::new();
         let test_ctx = TestContext::new();
         let ctx = test_ctx.as_context();
-        let args = serde_json::json!({"a": 2.0, "b": 3.0});
+        let args = serde_json::from_value(serde_json::json!({"a": 2.0, "b": 3.0})).unwrap();
         let result = <Calculator as ToolHandler>::call_tool(&calc, "add", args, &ctx)
             .await
             .unwrap();
@@ -267,7 +267,7 @@ mod tests {
         let calc = Calculator::new();
         let test_ctx = TestContext::new();
         let ctx = test_ctx.as_context();
-        let args = serde_json::json!({"a": 4.0, "b": 5.0});
+        let args = serde_json::from_value(serde_json::json!({"a": 4.0, "b": 5.0})).unwrap();
         let result = <Calculator as ToolHandler>::call_tool(&calc, "multiply", args, &ctx)
             .await
             .unwrap();
@@ -292,13 +292,13 @@ mod tests {
         let ctx = test_ctx.as_context();
 
         // Perform some operations
-        let args = serde_json::json!({"a": 1.0, "b": 2.0});
+        let args = serde_json::from_value(serde_json::json!({"a": 1.0, "b": 2.0})).unwrap();
         let _ = <Calculator as ToolHandler>::call_tool(&calc, "add", args, &ctx).await;
-        let args = serde_json::json!({"a": 3.0, "b": 4.0});
+        let args = serde_json::from_value(serde_json::json!({"a": 3.0, "b": 4.0})).unwrap();
         let _ = <Calculator as ToolHandler>::call_tool(&calc, "multiply", args, &ctx).await;
 
         // Check operation count
-        let args = serde_json::json!({});
+        let args = serde_json::from_value(serde_json::json!({})).unwrap();
         let result = <Calculator as ToolHandler>::call_tool(&calc, "get_stats", args, &ctx)
             .await
             .unwrap();
@@ -355,7 +355,7 @@ mod tests {
         let calc = Calculator::new();
         let test_ctx = TestContext::new();
         let ctx = test_ctx.as_context();
-        let args = serde_json::json!({});
+        let args = serde_json::from_value(serde_json::json!({})).unwrap();
         let result = <Calculator as ToolHandler>::call_tool(&calc, "unknown", args, &ctx).await;
         assert!(result.is_err());
     }

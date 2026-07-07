@@ -54,7 +54,7 @@
 //!     async fn list_tools(&self, _ctx: &Context<'_>) -> Result<Vec<Tool>, McpError> {
 //!         Ok(vec![])
 //!     }
-//!     async fn call_tool(&self, _name: &str, _args: Value, _ctx: &Context<'_>) -> Result<ToolOutput, McpError> {
+//!     async fn call_tool(&self, _name: &str, _args: serde_json::Map<String, Value>, _ctx: &Context<'_>) -> Result<ToolOutput, McpError> {
 //!         Ok(ToolOutput::text("done"))
 //!     }
 //! }
@@ -495,7 +495,7 @@ mod tests {
         async fn call_tool(
             &self,
             _name: &str,
-            _args: Value,
+            _args: serde_json::Map<String, Value>,
             _ctx: &Context<'_>,
         ) -> Result<ToolOutput, McpError> {
             Ok(ToolOutput::text("test"))

@@ -229,7 +229,7 @@ pub struct ToolUseContent {
     /// The name of the tool to call.
     pub name: String,
     /// The tool arguments.
-    pub input: serde_json::Value,
+    pub input: super::object::Object,
     /// Optional protocol metadata (`_meta`).
     #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
     pub meta: Option<super::meta::Meta>,
@@ -250,7 +250,7 @@ pub struct ToolResultContent {
         default,
         skip_serializing_if = "Option::is_none"
     )]
-    pub structured_content: Option<serde_json::Value>,
+    pub structured_content: Option<super::object::Object>,
     /// Whether the tool call ended in an error.
     #[serde(rename = "isError", skip_serializing_if = "Option::is_none")]
     pub is_error: Option<bool>,

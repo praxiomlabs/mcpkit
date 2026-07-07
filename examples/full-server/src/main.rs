@@ -213,19 +213,20 @@ async fn main() -> Result<(), McpError> {
 
     // Test add tool
     println!("\nCalling add(2, 3)...");
-    let args = serde_json::json!({"a": 2.0, "b": 3.0});
+    let args = serde_json::from_value(serde_json::json!({"a": 2.0, "b": 3.0}))?;
     let result = <FullServer as ToolHandler>::call_tool(&server, "add", args, &ctx).await?;
     print_tool_result(&result);
 
     // Test save_note tool
     println!("\nCalling save_note('greeting', 'Hello, World!')...");
-    let args = serde_json::json!({"key": "greeting", "content": "Hello, World!"});
+    let args =
+        serde_json::from_value(serde_json::json!({"key": "greeting", "content": "Hello, World!"}))?;
     let result = <FullServer as ToolHandler>::call_tool(&server, "save_note", args, &ctx).await?;
     print_tool_result(&result);
 
     // Test get_note tool
     println!("\nCalling get_note('greeting')...");
-    let args = serde_json::json!({"key": "greeting"});
+    let args = serde_json::from_value(serde_json::json!({"key": "greeting"}))?;
     let result = <FullServer as ToolHandler>::call_tool(&server, "get_note", args, &ctx).await?;
     print_tool_result(&result);
 

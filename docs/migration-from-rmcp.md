@@ -225,7 +225,7 @@ impl ToolHandler for MyToolHandler {
     async fn call_tool(
         &self,
         name: &str,
-        args: serde_json::Value,
+        args: Object, // mcpkit::types::Object = serde_json::Map<String, Value>
         ctx: &Context<'_>,
     ) -> Result<ToolOutput, McpError> {
         match name {

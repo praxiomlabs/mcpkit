@@ -17,7 +17,7 @@ use crate::handler::{CompletionHandler, PromptHandler, ResourceHandler, TaskHand
 use mcpkit_core::error::McpError;
 use mcpkit_core::types::{
     CancelTaskResult, CompleteRequest, CompleteResult, GetPromptResult, GetTaskResult,
-    ListTasksResult, Prompt, Resource, ResourceContents, ResourceTemplate, TaskId, Tool,
+    ListTasksResult, Object, Prompt, Resource, ResourceContents, ResourceTemplate, TaskId, Tool,
     ToolOutput,
 };
 use serde_json::Value;
@@ -40,7 +40,7 @@ pub trait DynToolHandler: Send + Sync {
     fn call_tool<'a>(
         &'a self,
         name: &'a str,
-        args: Value,
+        args: Object,
         ctx: &'a Context<'_>,
     ) -> BoxFut<'a, Result<ToolOutput, McpError>>;
 }
@@ -52,7 +52,7 @@ impl<T: ToolHandler> DynToolHandler for T {
     fn call_tool<'a>(
         &'a self,
         name: &'a str,
-        args: Value,
+        args: Object,
         ctx: &'a Context<'_>,
     ) -> BoxFut<'a, Result<ToolOutput, McpError>> {
         Box::pin(ToolHandler::call_tool(self, name, args, ctx))

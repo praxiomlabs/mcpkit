@@ -275,7 +275,7 @@ mod tests {
             .iter()
             .find(|t| t.name == "add")
             .ok_or("add tool not found")?;
-        let result = add.call(serde_json::json!({"a": 5, "b": 3}))?;
+        let result = add.call(serde_json::from_value(serde_json::json!({"a": 5, "b": 3}))?)?;
         match result {
             ToolOutput::Success(r) => {
                 if let mcpkit_core::types::Content::Text(tc) = &r.content[0] {
@@ -290,7 +290,7 @@ mod tests {
             .iter()
             .find(|t| t.name == "divide")
             .ok_or("divide tool not found")?;
-        let result = divide.call(serde_json::json!({"a": 5, "b": 0}))?;
+        let result = divide.call(serde_json::from_value(serde_json::json!({"a": 5, "b": 0}))?)?;
         match result {
             ToolOutput::RecoverableError { message, .. } => {
                 assert!(message.contains("zero"));

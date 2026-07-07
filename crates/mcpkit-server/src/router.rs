@@ -15,6 +15,7 @@
 
 use mcpkit_core::error::McpError;
 use mcpkit_core::protocol::Request;
+use mcpkit_core::types::Object;
 use serde_json::Value;
 
 /// Standard MCP method names as defined in the MCP specification.
@@ -172,7 +173,7 @@ pub struct ToolCallParams {
     /// The name of the tool to call.
     pub name: String,
     /// Arguments to pass to the tool.
-    pub arguments: Value,
+    pub arguments: Object,
 }
 
 /// Resource read parameters.
@@ -202,7 +203,7 @@ pub struct PromptGetParams {
     /// The name of the prompt to get.
     pub name: String,
     /// Optional arguments to pass to the prompt.
-    pub arguments: Option<Value>,
+    pub arguments: Option<Object>,
 }
 
 /// Task get parameters.
@@ -310,10 +311,16 @@ pub fn parse_request(request: &Request) -> Result<ParsedRequest, McpError> {
                 .ok_or_else(|| McpError::invalid_params(method, "missing name"))?
                 .to_string();
 
-            let arguments = params
-                .get("arguments")
-                .cloned()
-                .unwrap_or_else(|| Value::Object(serde_json::Map::new()));
+            let arguments = match params.get("arguments") {
+                None => Object::new(),
+                Some(Value::Object(map)) => map.clone(),
+                Some(_) => {
+                    return Err(McpError::invalid_params(
+                        method,
+                        "arguments must be an object",
+                    ));
+                }
+            };
 
             Ok(ParsedRequest::ToolsCall(ToolCallParams { name, arguments }))
         }
@@ -379,7 +386,16 @@ pub fn parse_request(request: &Request) -> Result<ParsedRequest, McpError> {
                 .ok_or_else(|| McpError::invalid_params(method, "missing name"))?
                 .to_string();
 
-            let arguments = params.get("arguments").cloned();
+            let arguments = match params.get("arguments") {
+                None => None,
+                Some(Value::Object(map)) => Some(map.clone()),
+                Some(_) => {
+                    return Err(McpError::invalid_params(
+                        method,
+                        "arguments must be an object",
+                    ));
+                }
+            };
 
             Ok(ParsedRequest::PromptsGet(PromptGetParams {
                 name,
@@ -577,10 +593,16 @@ pub async fn route_tools(
                 let name = params.get("name").and_then(|v| v.as_str()).ok_or_else(|| {
                     McpError::invalid_params(methods::TOOLS_CALL, "missing tool name")
                 })?;
-                let args = params
-                    .get("arguments")
-                    .cloned()
-                    .unwrap_or_else(|| serde_json::json!({}));
+                let args = match params.get("arguments") {
+                    None => Object::new(),
+                    Some(Value::Object(map)) => map.clone(),
+                    Some(_) => {
+                        return Err(McpError::invalid_params(
+                            methods::TOOLS_CALL,
+                            "arguments must be an object",
+                        ));
+                    }
+                };
 
                 tracing::info!(tool = %name, "Calling tool");
                 let start = std::time::Instant::now();
@@ -637,7 +659,7 @@ pub async fn tool_task_support(
 pub async fn call_tool_json(
     handler: &dyn DynToolHandler,
     name: &str,
-    args: serde_json::Value,
+    args: Object,
     ctx: &Context<'_>,
 ) -> Result<serde_json::Value, McpError> {
     let output = handler.call_tool(name, args, ctx).await?;
@@ -659,7 +681,7 @@ pub async fn run_augmented_tool(
     handler: std::sync::Arc<dyn DynToolHandler>,
     handle: crate::capability::tasks::TaskHandle,
     name: String,
-    args: serde_json::Value,
+    args: Object,
     client_caps: mcpkit_core::capability::ClientCapabilities,
     server_caps: mcpkit_core::capability::ServerCapabilities,
     protocol_version: mcpkit_core::protocol_version::ProtocolVersion,
@@ -742,10 +764,12 @@ pub async fn begin_augmented_task(
         // Malformed; let the normal path report it.
         return AugmentedTaskOutcome::NotApplicable;
     };
-    let args = params
-        .and_then(|p| p.get("arguments"))
-        .cloned()
-        .unwrap_or_else(|| serde_json::json!({}));
+    let args = match params.and_then(|p| p.get("arguments")) {
+        None => Object::new(),
+        Some(Value::Object(map)) => map.clone(),
+        // Malformed; let the normal path report it.
+        Some(_) => return AugmentedTaskOutcome::NotApplicable,
+    };
     let ttl = task_meta.get("ttl").and_then(serde_json::Value::as_u64);
 
     // Gate on the tool's declared task support (a `forbidden` tool must not be
@@ -970,7 +994,16 @@ pub async fn route_prompts(
                 let name = params.get("name").and_then(|v| v.as_str()).ok_or_else(|| {
                     McpError::invalid_params(methods::PROMPTS_GET, "missing prompt name")
                 })?;
-                let args = params.get("arguments").and_then(|v| v.as_object()).cloned();
+                let args = match params.get("arguments") {
+                    None => None,
+                    Some(Value::Object(map)) => Some(map.clone()),
+                    Some(_) => {
+                        return Err(McpError::invalid_params(
+                            methods::PROMPTS_GET,
+                            "arguments must be an object",
+                        ));
+                    }
+                };
 
                 tracing::info!(prompt = %name, "Getting prompt");
                 let start = std::time::Instant::now();
@@ -1876,7 +1909,7 @@ mod tests {
             async fn call_tool(
                 &self,
                 _name: &str,
-                _args: Value,
+                _args: serde_json::Map<String, Value>,
                 _ctx: &Context<'_>,
             ) -> Result<ToolOutput, McpError> {
                 Ok(ToolOutput::text("x"))

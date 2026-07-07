@@ -99,7 +99,7 @@ impl ToolHandler for WarpHandler {
     async fn call_tool(
         &self,
         name: &str,
-        args: serde_json::Value,
+        args: serde_json::Map<String, serde_json::Value>,
         _ctx: &Context<'_>,
     ) -> Result<ToolOutput, McpError> {
         match name {

@@ -478,7 +478,7 @@ mod tests {
         let tool_use = SamplingContent::ToolUse(ToolUseContent {
             id: "call-1".into(),
             name: "search".into(),
-            input: json!({ "q": "rust" }),
+            input: serde_json::from_value(json!({ "q": "rust" })).unwrap(),
             meta: None,
         });
         assert_eq!(
