@@ -527,8 +527,8 @@ mod tests {
         async fn list_tasks(
             &self,
             _ctx: &Context<'_>,
-        ) -> Result<Vec<mcpkit_core::types::Task>, McpError> {
-            Ok(vec![])
+        ) -> Result<mcpkit_core::types::ListTasksResult, McpError> {
+            Ok(vec![].into())
         }
         async fn get_task(
             &self,

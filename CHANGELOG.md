@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `tasks/list` now routes through `ListTasksResult`, so it can carry `nextCursor`
+  and result-level `_meta` (#150). Both task-list paths (the runtime/adapter
+  built-in store and the user-`TaskHandler` route) previously hand-built
+  `{ "tasks": .. }`, bypassing the modeled wrapper — `get_task`/`cancel_task`
+  already returned `_meta`-capable wrappers (#136), leaving `list_tasks` the lone
+  outlier.
+  - **Breaking:** `TaskHandler::list_tasks` returns `ListTasksResult` instead of
+    `Vec<Task>`. `From<Vec<Task>> for ListTasksResult` keeps the common case
+    ergonomic (`Ok(tasks.into())`), mirroring `GetTaskResult::from(Task)`.
+  - The wire is unchanged for the common case (`nextCursor`/`_meta` omit when
+    `None`); only a handler that sets them changes the output.
+  - Request-cursor input (threading `ListTasksRequest.cursor` into `list_tasks`
+    for real cursor-driven pagination) is intentionally left as a follow-up —
+    this enables the wrapper, `_meta`, and the ability to emit `nextCursor`
+    ([#150](https://github.com/praxiomlabs/mcpkit/issues/150)).
 - TTL cleanup for terminal tasks (#121). `TaskManager::cleanup` existed but was
   never called and ignored each task's `ttl`, so terminal tasks accumulated for
   the store's lifetime — now magnified by #122's per-session adapter stores. Now:

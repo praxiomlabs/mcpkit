@@ -16,8 +16,9 @@ use crate::context::Context;
 use crate::handler::{CompletionHandler, PromptHandler, ResourceHandler, TaskHandler, ToolHandler};
 use mcpkit_core::error::McpError;
 use mcpkit_core::types::{
-    CancelTaskResult, CompleteRequest, CompleteResult, GetPromptResult, GetTaskResult, Prompt,
-    Resource, ResourceContents, ResourceTemplate, Task, TaskId, Tool, ToolOutput,
+    CancelTaskResult, CompleteRequest, CompleteResult, GetPromptResult, GetTaskResult,
+    ListTasksResult, Prompt, Resource, ResourceContents, ResourceTemplate, TaskId, Tool,
+    ToolOutput,
 };
 use serde_json::Value;
 use std::future::Future;
@@ -162,7 +163,10 @@ impl<P: PromptHandler> DynPromptHandler for P {
 /// Object-safe form of [`TaskHandler`].
 pub trait DynTaskHandler: Send + Sync {
     /// See [`TaskHandler::list_tasks`].
-    fn list_tasks<'a>(&'a self, ctx: &'a Context<'_>) -> BoxFut<'a, Result<Vec<Task>, McpError>>;
+    fn list_tasks<'a>(
+        &'a self,
+        ctx: &'a Context<'_>,
+    ) -> BoxFut<'a, Result<ListTasksResult, McpError>>;
     /// See [`TaskHandler::get_task`].
     fn get_task<'a>(
         &'a self,
@@ -178,7 +182,10 @@ pub trait DynTaskHandler: Send + Sync {
 }
 
 impl<K: TaskHandler> DynTaskHandler for K {
-    fn list_tasks<'a>(&'a self, ctx: &'a Context<'_>) -> BoxFut<'a, Result<Vec<Task>, McpError>> {
+    fn list_tasks<'a>(
+        &'a self,
+        ctx: &'a Context<'_>,
+    ) -> BoxFut<'a, Result<ListTasksResult, McpError>> {
         Box::pin(TaskHandler::list_tasks(self, ctx))
     }
     fn get_task<'a>(

@@ -1016,7 +1016,7 @@ pub async fn route_tasks(
     match method {
         methods::TASKS_LIST => {
             let result = handler.list_tasks(ctx).await;
-            Some(result.map(|tasks| serde_json::json!({ "tasks": tasks })))
+            Some(result.map(|r| serde_json::to_value(r).unwrap_or_default()))
         }
         methods::TASKS_GET => {
             let result = async {
@@ -1697,18 +1697,25 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn route_tasks_get_and_cancel_emit_result_meta() {
+    async fn route_tasks_list_get_and_cancel_emit_result_meta() {
         use crate::context::NoOpPeer;
         use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
         use mcpkit_core::protocol::RequestId;
         use mcpkit_core::protocol_version::ProtocolVersion;
-        use mcpkit_core::types::{CancelTaskResult, GetTaskResult, Meta, Task, TaskId};
+        use mcpkit_core::types::{
+            CancelTaskResult, GetTaskResult, ListTasksResult, Meta, Task, TaskId,
+        };
 
-        // A handler that attaches result-level `_meta` on both get and cancel.
+        // A handler that attaches result-level `_meta` on list/get/cancel and a
+        // `nextCursor` on list.
         struct MetaTaskHandler;
         impl crate::handler::TaskHandler for MetaTaskHandler {
-            async fn list_tasks(&self, _ctx: &Context<'_>) -> Result<Vec<Task>, McpError> {
-                Ok(vec![])
+            async fn list_tasks(&self, _ctx: &Context<'_>) -> Result<ListTasksResult, McpError> {
+                Ok(ListTasksResult {
+                    tasks: vec![],
+                    next_cursor: Some("page-2".to_string()),
+                    meta: Some(Meta::new().with("origin", serde_json::json!("test"))),
+                })
             }
             async fn get_task(
                 &self,
@@ -1756,6 +1763,15 @@ mod tests {
             assert_eq!(resp["taskId"], "t-1", "{method}");
             assert_eq!(resp["_meta"]["origin"], "test", "{method}");
         }
+
+        // tasks/list now carries `nextCursor` + result-level `_meta` through the
+        // `ListTasksResult` wrapper (previously hand-built as `{ "tasks": .. }`).
+        let listed = route_tasks(&handler, methods::TASKS_LIST, None, &ctx)
+            .await
+            .expect("routed")
+            .expect("ok");
+        assert_eq!(listed["nextCursor"], "page-2");
+        assert_eq!(listed["_meta"]["origin"], "test");
     }
 
     #[tokio::test]
