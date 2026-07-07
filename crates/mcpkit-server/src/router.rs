@@ -612,6 +612,90 @@ pub async fn route_tools(
     }
 }
 
+/// The task-augmentation support a tool declares (`Tool.execution.taskSupport`).
+///
+/// Defaults to `Forbidden` when the tool is unknown or declares nothing. Used to
+/// gate a task-augmented `tools/call` before creating the task. Shared by the
+/// stdio runtime and the HTTP adapters.
+pub async fn tool_task_support(
+    handler: &dyn DynToolHandler,
+    name: &str,
+    ctx: &Context<'_>,
+) -> mcpkit_core::types::TaskSupport {
+    use mcpkit_core::types::TaskSupport;
+    let tools = handler.list_tools(ctx).await.unwrap_or_default();
+    tools
+        .iter()
+        .find(|t| t.name == name)
+        .and_then(|t| t.execution.as_ref())
+        .and_then(|e| e.task_support)
+        .unwrap_or(TaskSupport::Forbidden)
+}
+
+/// Run a tool and return its `CallToolResult` as JSON (the `tasks/result`
+/// payload shape). Shared by the stdio runtime and the HTTP adapters.
+pub async fn call_tool_json(
+    handler: &dyn DynToolHandler,
+    name: &str,
+    args: serde_json::Value,
+    ctx: &Context<'_>,
+) -> Result<serde_json::Value, McpError> {
+    let output = handler.call_tool(name, args, ctx).await?;
+    let result: CallToolResult = output.into();
+    Ok(serde_json::to_value(result).unwrap_or_default())
+}
+
+/// Run a task-augmented tool to completion, writing the result (or failure) back
+/// through the task-store `handle`.
+///
+/// Built for HTTP adapters, which spawn this onto their own executor after
+/// replying with the initial `CreateTaskResult`. The background context uses a
+/// [`NoOpPeer`](crate::context::NoOpPeer): a task-augmented tool on an adapter
+/// cannot make server-to-client requests (elicitation/sampling) and its
+/// notifications/logging/progress are dropped. Cancellation still works — the
+/// handle's cancellation token is wired into the context, so a cooperative tool
+/// awaiting `ctx.cancelled()` observes `tasks/cancel`.
+pub async fn run_augmented_tool(
+    handler: std::sync::Arc<dyn DynToolHandler>,
+    handle: crate::capability::tasks::TaskHandle,
+    name: String,
+    args: serde_json::Value,
+    client_caps: mcpkit_core::capability::ClientCapabilities,
+    server_caps: mcpkit_core::capability::ServerCapabilities,
+    protocol_version: mcpkit_core::protocol_version::ProtocolVersion,
+) {
+    use crate::context::{Context, NoOpPeer};
+    let peer = NoOpPeer;
+    let request_id = mcpkit_core::protocol::RequestId::String(handle.id().as_str().to_string());
+    let ctx = match handle.cancel_token() {
+        Some(token) => Context::with_cancellation(
+            &request_id,
+            None,
+            &client_caps,
+            &server_caps,
+            protocol_version,
+            &peer,
+            token,
+        ),
+        None => Context::new(
+            &request_id,
+            None,
+            &client_caps,
+            &server_caps,
+            protocol_version,
+            &peer,
+        ),
+    };
+    match call_tool_json(handler.as_ref(), &name, args, &ctx).await {
+        Ok(payload) => {
+            let _ = handle.complete(payload);
+        }
+        Err(e) => {
+            let _ = handle.fail(e.to_string());
+        }
+    }
+}
+
 /// Route resource-related requests to a handler implementing
 /// [`ResourceHandler`](crate::handler::ResourceHandler).
 ///

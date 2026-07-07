@@ -905,64 +905,7 @@ where
         method: &str,
         params: Option<&serde_json::Value>,
     ) -> Option<Result<serde_json::Value, McpError>> {
-        let task_id = || {
-            params
-                .and_then(|p| p.get("taskId"))
-                .and_then(|v| v.as_str())
-                .map(mcpkit_core::types::TaskId::new)
-        };
-        match method {
-            "tasks/list" => Some(Ok(serde_json::json!({ "tasks": self.task_store.list() }))),
-            "tasks/get" => {
-                let Some(id) = task_id() else {
-                    return Some(Err(McpError::invalid_params("tasks/get", "missing taskId")));
-                };
-                self.task_store.get(&id).map(|s| {
-                    let result = mcpkit_core::types::GetTaskResult::from(s.task);
-                    Ok(serde_json::to_value(result).unwrap_or_default())
-                })
-            }
-            "tasks/result" => {
-                let Some(id) = task_id() else {
-                    return Some(Err(McpError::invalid_params(
-                        "tasks/result",
-                        "missing taskId",
-                    )));
-                };
-                if let Some(payload) = self.task_store.payload(&id) {
-                    Some(Ok(payload))
-                } else if self.task_store.get(&id).is_some() {
-                    Some(Err(McpError::invalid_params(
-                        "tasks/result",
-                        "task is not completed",
-                    )))
-                } else {
-                    None
-                }
-            }
-            "tasks/cancel" => {
-                let Some(id) = task_id() else {
-                    return Some(Err(McpError::invalid_params(
-                        "tasks/cancel",
-                        "missing taskId",
-                    )));
-                };
-                if self.task_store.get(&id).is_some() {
-                    let _ = self.task_store.cancel(&id);
-                    Some(Ok(self
-                        .task_store
-                        .get(&id)
-                        .map(|s| {
-                            let result = mcpkit_core::types::CancelTaskResult::from(s.task);
-                            serde_json::to_value(result).unwrap_or_default()
-                        })
-                        .unwrap_or_default()))
-                } else {
-                    None
-                }
-            }
-            _ => None,
-        }
+        crate::capability::tasks::route_task_store(&self.task_store, method, params)
     }
 
     /// Handle the initialize request.
@@ -1340,17 +1283,10 @@ where
         name: &str,
         ctx: &Context<'_>,
     ) -> mcpkit_core::types::TaskSupport {
-        use mcpkit_core::types::TaskSupport;
-        let Some(handler) = self.tools.as_tool_handler() else {
-            return TaskSupport::Forbidden;
-        };
-        let tools = handler.list_tools(ctx).await.unwrap_or_default();
-        tools
-            .iter()
-            .find(|t| t.name == name)
-            .and_then(|t| t.execution.as_ref())
-            .and_then(|e| e.task_support)
-            .unwrap_or(TaskSupport::Forbidden)
+        match self.tools.as_tool_handler() {
+            Some(handler) => crate::router::tool_task_support(handler, name, ctx).await,
+            None => mcpkit_core::types::TaskSupport::Forbidden,
+        }
     }
 
     async fn call_tool_json(
@@ -1359,12 +1295,10 @@ where
         args: serde_json::Value,
         ctx: &Context<'_>,
     ) -> Result<serde_json::Value, McpError> {
-        let Some(handler) = self.tools.as_tool_handler() else {
-            return Err(McpError::method_not_found(name));
-        };
-        let output = handler.call_tool(name, args, ctx).await?;
-        let result: mcpkit_core::types::CallToolResult = output.into();
-        Ok(serde_json::to_value(result).unwrap_or_default())
+        match self.tools.as_tool_handler() {
+            Some(handler) => crate::router::call_tool_json(handler, name, args, ctx).await,
+            None => Err(McpError::method_not_found(name)),
+        }
     }
 }
 

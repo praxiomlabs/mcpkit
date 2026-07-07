@@ -81,7 +81,10 @@ pub use health::{
     ComponentHealth, HealthChecker, HealthReport, HealthStatus, LivenessResponse, ReadinessResponse,
 };
 pub use metrics::{MethodStats, MetricsSnapshot, ServerMetrics};
-pub use router::{route_completion, route_logging, route_prompts, route_resources, route_tools};
+pub use router::{
+    call_tool_json, route_completion, route_logging, route_prompts, route_resources, route_tools,
+    run_augmented_tool, tool_task_support,
+};
 pub use server::{
     RequestRouter, RuntimeConfig, ServerNotifier, ServerRuntime, ServerState, TransportPeer,
 };

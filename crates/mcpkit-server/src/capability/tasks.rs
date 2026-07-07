@@ -238,6 +238,76 @@ impl TaskManager {
     }
 }
 
+/// Serve task queries from a [`TaskManager`] store.
+///
+/// Returns `None` for non-task methods, and for `tasks/get`/`tasks/result`/
+/// `tasks/cancel` whose id the store does not own (so a caller can fall through
+/// to a custom task handler). Shared by the stdio runtime and the HTTP adapters
+/// so both serve `tasks/*` identically against their own store.
+pub fn route_task_store(
+    store: &TaskManager,
+    method: &str,
+    params: Option<&Value>,
+) -> Option<Result<Value, McpError>> {
+    let task_id = || {
+        params
+            .and_then(|p| p.get("taskId"))
+            .and_then(|v| v.as_str())
+            .map(TaskId::new)
+    };
+    match method {
+        "tasks/list" => Some(Ok(serde_json::json!({ "tasks": store.list() }))),
+        "tasks/get" => {
+            let Some(id) = task_id() else {
+                return Some(Err(McpError::invalid_params("tasks/get", "missing taskId")));
+            };
+            store.get(&id).map(|s| {
+                let result = GetTaskResult::from(s.task);
+                Ok(serde_json::to_value(result).unwrap_or_default())
+            })
+        }
+        "tasks/result" => {
+            let Some(id) = task_id() else {
+                return Some(Err(McpError::invalid_params(
+                    "tasks/result",
+                    "missing taskId",
+                )));
+            };
+            if let Some(payload) = store.payload(&id) {
+                Some(Ok(payload))
+            } else if store.get(&id).is_some() {
+                Some(Err(McpError::invalid_params(
+                    "tasks/result",
+                    "task is not completed",
+                )))
+            } else {
+                None
+            }
+        }
+        "tasks/cancel" => {
+            let Some(id) = task_id() else {
+                return Some(Err(McpError::invalid_params(
+                    "tasks/cancel",
+                    "missing taskId",
+                )));
+            };
+            if store.get(&id).is_some() {
+                let _ = store.cancel(&id);
+                Some(Ok(store
+                    .get(&id)
+                    .map(|s| {
+                        let result = CancelTaskResult::from(s.task);
+                        serde_json::to_value(result).unwrap_or_default()
+                    })
+                    .unwrap_or_default()))
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
 /// Task service implementing the [`TaskHandler`] trait over a [`TaskManager`].
 pub struct TaskService {
     manager: Arc<TaskManager>,
