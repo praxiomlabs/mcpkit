@@ -124,6 +124,7 @@ ToolOutput::success(CallToolResult {
         Content::text("Second result"),
     ],
     is_error: Some(false),
+    ..Default::default()
 })
 ```
 
