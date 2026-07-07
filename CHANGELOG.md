@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- TTL cleanup for terminal tasks (#121). `TaskManager::cleanup` existed but was
+  never called and ignored each task's `ttl`, so terminal tasks accumulated for
+  the store's lifetime — now magnified by #122's per-session adapter stores. Now:
+  - `TaskManager::cleanup_expired()` evicts terminal tasks whose age since
+    creation exceeds their own `ttl` (ms); non-terminal tasks are always kept and
+    a task with `ttl` `None` is never evicted. Called on `create` and at the top
+    of the shared `route_task_store`, so it runs for the stdio runtime and every
+    adapter with no timer (executor-agnostic).
+  - An omitted `ttl` is **materialized at creation** to the store's configured
+    default, so the returned `CreateTaskResult` reports the task's actual
+    retention (rather than reporting `null` while being evicted anyway). `None`
+    stays truly unlimited.
+  - The default is configurable: `TaskManager::with_default_ttl(Option<u64>)`
+    (`None` = unlimited), `RuntimeConfig::default_task_ttl_ms` for the stdio
+    runtime, and `McpRouter::with_task_ttl` / `McpState::with_task_ttl` for the
+    axum/actix/warp/rocket adapters (per-session stores). Default retention is
+    `DEFAULT_TASK_TTL_MS` (1 hour)
+    ([#121](https://github.com/praxiomlabs/mcpkit/issues/121)).
 - Task-augmented `tools/call` and `tasks/*` on the HTTP adapters (#122). The
   axum/actix/warp/rocket adapters dispatched `tools/call` synchronously and
   ignored a `task` field, so task execution was runtime-only. Now:

@@ -500,6 +500,9 @@ pub struct SessionStore {
     sessions: DashMap<String, Session>,
     timeout: Duration,
     init_timeout: Duration,
+    /// Default task retention (ms) applied to each session's task store; `None`
+    /// means unlimited. Configure via `McpRouter::with_task_ttl`.
+    pub(crate) default_task_ttl: Option<u64>,
 }
 
 impl SessionStore {
@@ -513,6 +516,7 @@ impl SessionStore {
             sessions: DashMap::new(),
             timeout,
             init_timeout: DEFAULT_INIT_TIMEOUT,
+            default_task_ttl: Some(mcpkit_server::capability::tasks::DEFAULT_TASK_TTL_MS),
         }
     }
 
@@ -547,8 +551,11 @@ impl SessionStore {
     pub fn create_for_user(&self, user: Option<VerifiedUser>) -> String {
         self.cleanup_expired();
         let id = uuid::Uuid::new_v4().to_string();
-        self.sessions
-            .insert(id.clone(), Session::with_user(id.clone(), user));
+        let mut session = Session::with_user(id.clone(), user);
+        session.tasks = Arc::new(
+            mcpkit_server::capability::tasks::TaskManager::with_default_ttl(self.default_task_ttl),
+        );
+        self.sessions.insert(id.clone(), session);
         id
     }
 
