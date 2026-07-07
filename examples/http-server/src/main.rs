@@ -336,7 +336,16 @@ async fn handle_request(state: &AppState, session_id: &str, request: &Request) -
 
         "tools/call" => {
             let name = params["name"].as_str().unwrap_or("");
-            let args = params.get("arguments").cloned().unwrap_or(json!({}));
+            let args = match params.get("arguments") {
+                None => json!({}),
+                Some(v) if v.is_object() => v.clone(),
+                Some(_) => {
+                    return JsonRpcResponse::error(
+                        request.id.clone(),
+                        JsonRpcError::invalid_params("arguments must be an object"),
+                    );
+                }
+            };
 
             match call_tool(name, &args) {
                 Ok(output) => {

@@ -1542,6 +1542,32 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn call_tool_rejects_non_object_arguments_before_sending() {
+        let init = InitializeResult {
+            capabilities: ServerCapabilities::new().with_tools(),
+            ..test_init_result()
+        };
+        let client = Client::new(
+            SilentTransport,
+            init,
+            ClientInfo::new("test-client", "1.0.0"),
+            ClientCapabilities::default(),
+            Duration::from_secs(3600),
+        );
+
+        // Rejected locally, so this returns immediately even though the
+        // transport never answers.
+        let err = client
+            .call_tool("add", serde_json::json!(5))
+            .await
+            .expect_err("non-object arguments must be rejected");
+        assert!(
+            err.to_string().contains("arguments must be a JSON object"),
+            "expected invalid-params on arguments, got: {err}"
+        );
+    }
+
     /// A transport that serves `tools/list` in fixed-size pages, echoing an
     /// opaque numeric `nextCursor`. With `stuck_cursor` it always returns the
     /// same cursor, to exercise the non-advancing-cursor guard.

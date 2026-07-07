@@ -127,6 +127,8 @@ pub mod prelude {
         ListTasksRequest,
         ListTasksResult,
         ModelPreferences,
+        // The JSON object map used by object-typed spec fields
+        Object,
         Prompt,
         PromptArgument,
         PromptMessage,

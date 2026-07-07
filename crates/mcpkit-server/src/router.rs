@@ -1245,6 +1245,32 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_tools_call_rejects_non_object_arguments() {
+        let request = make_request(
+            "tools/call",
+            Some(serde_json::json!({ "name": "search", "arguments": 5 })),
+        );
+        let err = parse_request(&request).expect_err("non-object arguments must be rejected");
+        assert!(
+            err.to_string().contains("arguments must be an object"),
+            "expected invalid-params on arguments, got: {err}"
+        );
+    }
+
+    #[test]
+    fn test_parse_prompts_get_rejects_non_object_arguments() {
+        let request = make_request(
+            "prompts/get",
+            Some(serde_json::json!({ "name": "code-review", "arguments": ["rust"] })),
+        );
+        let err = parse_request(&request).expect_err("non-object arguments must be rejected");
+        assert!(
+            err.to_string().contains("arguments must be an object"),
+            "expected invalid-params on arguments, got: {err}"
+        );
+    }
+
+    #[test]
     fn test_parse_unknown_method() -> Result<(), Box<dyn std::error::Error>> {
         let request = make_request("unknown/method", None);
         let parsed = parse_request(&request)?;
