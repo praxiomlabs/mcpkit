@@ -37,8 +37,9 @@
 use mcpkit_core::capability::{ServerCapabilities, ServerInfo};
 use mcpkit_core::error::McpError;
 use mcpkit_core::types::{
-    CancelTaskResult, CompleteRequest, CompleteResult, GetPromptResult, GetTaskResult, Prompt,
-    Resource, ResourceContents, ResourceTemplate, Task, TaskId, Tool, ToolOutput,
+    CancelTaskResult, CompleteRequest, CompleteResult, GetPromptResult, GetTaskResult,
+    ListTasksResult, Prompt, Resource, ResourceContents, ResourceTemplate, TaskId, Tool,
+    ToolOutput,
 };
 use serde_json::Value;
 use std::future::Future;
@@ -239,11 +240,15 @@ pub trait PromptHandler: Send + Sync {
 /// Implement this trait to support long-running operations that can be
 /// tracked, monitored, and cancelled.
 pub trait TaskHandler: Send + Sync {
-    /// List all tasks, optionally filtered by status.
+    /// List all tasks.
+    ///
+    /// The [`ListTasksResult`] wrapper may carry `nextCursor` and result-level
+    /// `_meta`; `Vec<Task>::into()` produces one with neither. (Request-cursor
+    /// input for real pagination is not yet threaded — see #150.)
     fn list_tasks(
         &self,
         ctx: &Context<'_>,
-    ) -> impl Future<Output = Result<Vec<Task>, McpError>> + Send;
+    ) -> impl Future<Output = Result<ListTasksResult, McpError>> + Send;
 
     /// Get the current state of a task.
     ///
@@ -415,7 +420,7 @@ impl<T: TaskHandler> TaskHandler for Arc<T> {
     fn list_tasks(
         &self,
         ctx: &Context<'_>,
-    ) -> impl Future<Output = Result<Vec<Task>, McpError>> + Send {
+    ) -> impl Future<Output = Result<ListTasksResult, McpError>> + Send {
         (**self).list_tasks(ctx)
     }
 

@@ -7,7 +7,9 @@ use crate::context::CancellationToken;
 use crate::context::Context;
 use crate::handler::TaskHandler;
 use mcpkit_core::error::McpError;
-use mcpkit_core::types::task::{CancelTaskResult, GetTaskResult, Task, TaskId, TaskStatus};
+use mcpkit_core::types::task::{
+    CancelTaskResult, GetTaskResult, ListTasksResult, Task, TaskId, TaskStatus,
+};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -307,7 +309,12 @@ pub fn route_task_store(
             .map(TaskId::new)
     };
     match method {
-        "tasks/list" => Some(Ok(serde_json::json!({ "tasks": store.list() }))),
+        "tasks/list" => {
+            // Serialize through `ListTasksResult` (the built-in store has no
+            // cursor/`_meta` to add). `nextCursor`/`_meta` omit when `None`.
+            let result = ListTasksResult::from(store.list());
+            Some(Ok(serde_json::to_value(result).unwrap_or_default()))
+        }
         "tasks/get" => {
             let Some(id) = task_id() else {
                 return Some(Err(McpError::invalid_params("tasks/get", "missing taskId")));
@@ -393,8 +400,8 @@ impl TaskService {
 }
 
 impl TaskHandler for TaskService {
-    async fn list_tasks(&self, _ctx: &Context<'_>) -> Result<Vec<Task>, McpError> {
-        Ok(self.manager.list())
+    async fn list_tasks(&self, _ctx: &Context<'_>) -> Result<ListTasksResult, McpError> {
+        Ok(self.manager.list().into())
     }
 
     async fn get_task(

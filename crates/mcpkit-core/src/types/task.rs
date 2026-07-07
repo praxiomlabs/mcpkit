@@ -278,6 +278,17 @@ pub struct ListTasksResult {
     pub meta: Option<Meta>,
 }
 
+impl From<Vec<Task>> for ListTasksResult {
+    /// Wrap a task list with no `nextCursor` and no `_meta`.
+    fn from(tasks: Vec<Task>) -> Self {
+        Self {
+            tasks,
+            next_cursor: None,
+            meta: None,
+        }
+    }
+}
+
 /// Request parameters for `tasks/get`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetTaskRequest {
