@@ -25,8 +25,8 @@ use crate::handler::{PromptHandler, ResourceHandler, ServerHandler, ToolHandler}
 use mcpkit_core::capability::{ServerCapabilities, ServerInfo};
 use mcpkit_core::error::McpError;
 use mcpkit_core::types::{
-    CallToolResult, GetPromptResult, Prompt, Resource, ResourceContents, ResourceTemplate, Tool,
-    ToolOutput,
+    CallToolResult, GetPromptResult, Object, Prompt, Resource, ResourceContents, ResourceTemplate,
+    Tool, ToolOutput,
 };
 use serde_json::Value;
 use std::future::Future;
@@ -145,7 +145,7 @@ impl<H: ToolHandler> ToolHandler for ValidatingToolHandler<H> {
     async fn call_tool(
         &self,
         name: &str,
-        args: Value,
+        args: Object,
         ctx: &Context<'_>,
     ) -> Result<ToolOutput, McpError> {
         // Resolve this tool's declared schemas. If the list can't be fetched or
@@ -161,7 +161,9 @@ impl<H: ToolHandler> ToolHandler for ValidatingToolHandler<H> {
 
         if self.mode.inputs {
             if let Some(tool) = &tool {
-                if let Some(errors) = collect_errors(&tool.input_schema, &args) {
+                if let Some(errors) =
+                    collect_errors(&tool.input_schema, &Value::Object(args.clone()))
+                {
                     let message = format!(
                         "Input does not conform to the tool's inputSchema:\n{}",
                         errors.join("\n")
@@ -178,7 +180,8 @@ impl<H: ToolHandler> ToolHandler for ValidatingToolHandler<H> {
                 if let (Some(schema), Some(structured)) =
                     (&tool.output_schema, &result.structured_content)
                 {
-                    if let Some(errors) = collect_errors(schema, structured) {
+                    if let Some(errors) = collect_errors(schema, &Value::Object(structured.clone()))
+                    {
                         tracing::error!(
                             tool = name,
                             ?errors,
@@ -311,11 +314,19 @@ mod tests {
     use mcpkit_core::protocol_version::ProtocolVersion;
     use serde_json::json;
 
+    /// Unwrap a `json!` object literal into an `Object` map.
+    fn obj(v: Value) -> Object {
+        match v {
+            Value::Object(map) => map,
+            other => panic!("expected object, got {other}"),
+        }
+    }
+
     /// A tool "add" declaring an inputSchema (`{ n: number }`, required) and an
     /// outputSchema (`{ doubled: number }`, required). `call_tool` echoes back a
     /// configurable `structuredContent` so tests can drive output validation.
     struct SchemaHandler {
-        structured: Value,
+        structured: Object,
     }
 
     impl ToolHandler for SchemaHandler {
@@ -338,7 +349,7 @@ mod tests {
         async fn call_tool(
             &self,
             _name: &str,
-            _args: Value,
+            _args: serde_json::Map<String, Value>,
             _ctx: &Context<'_>,
         ) -> Result<ToolOutput, McpError> {
             Ok(ToolOutput::Success(
@@ -377,13 +388,13 @@ mod tests {
     #[tokio::test]
     async fn input_failure_is_a_tool_error_not_protocol_error() {
         let handler = SchemaHandler {
-            structured: json!({ "doubled": 84 }),
+            structured: obj(json!({ "doubled": 84 })),
         };
         let validating = ValidatingToolHandler::new(handler, ValidationMode::both());
         let out = with_ctx(|ctx| async move {
             // Missing required "n" -> fails inputSchema.
             validating
-                .call_tool("add", json!({}), &ctx)
+                .call_tool("add", obj(json!({})), &ctx)
                 .await
                 .expect("input failure is Ok(isError), not a protocol Err")
         })
@@ -397,12 +408,12 @@ mod tests {
     #[tokio::test]
     async fn valid_input_and_output_pass_through_untouched() {
         let handler = SchemaHandler {
-            structured: json!({ "doubled": 84 }),
+            structured: obj(json!({ "doubled": 84 })),
         };
         let validating = ValidatingToolHandler::new(handler, ValidationMode::both());
         let out = with_ctx(|ctx| async move {
             validating
-                .call_tool("add", json!({ "n": 42 }), &ctx)
+                .call_tool("add", obj(json!({ "n": 42 })), &ctx)
                 .await
                 .expect("routed")
         })
@@ -410,7 +421,10 @@ mod tests {
         match out {
             ToolOutput::Success(result) => {
                 assert!(!result.is_error());
-                assert_eq!(result.structured_content, Some(json!({ "doubled": 84 })));
+                assert_eq!(
+                    result.structured_content,
+                    Some(obj(json!({ "doubled": 84 })))
+                );
             }
             other => panic!("expected success, got {other:?}"),
         }
@@ -420,12 +434,12 @@ mod tests {
     async fn output_schema_violation_drops_structured_content() {
         let handler = SchemaHandler {
             // `doubled` must be a number; a string violates the outputSchema.
-            structured: json!({ "doubled": "not a number" }),
+            structured: obj(json!({ "doubled": "not a number" })),
         };
         let validating = ValidatingToolHandler::new(handler, ValidationMode::both());
         let out = with_ctx(|ctx| async move {
             validating
-                .call_tool("add", json!({ "n": 42 }), &ctx)
+                .call_tool("add", obj(json!({ "n": 42 })), &ctx)
                 .await
                 .expect("routed")
         })
@@ -445,12 +459,12 @@ mod tests {
     #[tokio::test]
     async fn inputs_only_mode_ignores_bad_output() {
         let handler = SchemaHandler {
-            structured: json!({ "doubled": "not a number" }),
+            structured: obj(json!({ "doubled": "not a number" })),
         };
         let validating = ValidatingToolHandler::new(handler, ValidationMode::inputs_only());
         let out = with_ctx(|ctx| async move {
             validating
-                .call_tool("add", json!({ "n": 42 }), &ctx)
+                .call_tool("add", obj(json!({ "n": 42 })), &ctx)
                 .await
                 .expect("routed")
         })
@@ -465,7 +479,7 @@ mod tests {
     #[tokio::test]
     async fn normal_tools_call_path_through_route_tools_is_validated() {
         let handler = SchemaHandler {
-            structured: json!({ "doubled": 84 }),
+            structured: obj(json!({ "doubled": 84 })),
         };
         let validating = ValidatingToolHandler::new(handler, ValidationMode::both());
         let result = with_ctx(|ctx| async move {
@@ -509,7 +523,7 @@ mod tests {
             async fn call_tool(
                 &self,
                 _name: &str,
-                _args: Value,
+                _args: serde_json::Map<String, Value>,
                 _ctx: &Context<'_>,
             ) -> Result<ToolOutput, McpError> {
                 Ok(ToolOutput::text("x"))
@@ -554,7 +568,7 @@ mod tests {
         // The escape hatch: without the decorator, bad input is not rejected.
         // Proves validation is strictly opt-in (feature compiled in, not applied).
         let handler = SchemaHandler {
-            structured: json!({ "doubled": 84 }),
+            structured: obj(json!({ "doubled": 84 })),
         };
         let result = with_ctx(|ctx| async move {
             route_tools(

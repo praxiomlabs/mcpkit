@@ -6,6 +6,7 @@
 use crate::context::Context;
 use crate::handler::ToolHandler;
 use mcpkit_core::error::McpError;
+use mcpkit_core::types::Object;
 use mcpkit_core::types::tool::{Tool, ToolOutput};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -16,7 +17,7 @@ use std::sync::Arc;
 /// A boxed async function for tool execution.
 pub type BoxedToolFn = Box<
     dyn for<'a> Fn(
-            Value,
+            Object,
             &'a Context<'a>,
         )
             -> Pin<Box<dyn Future<Output = Result<ToolOutput, McpError>> + Send + 'a>>
@@ -58,7 +59,7 @@ impl ToolService {
     /// Register a tool with a handler function.
     pub fn register<F, Fut>(&mut self, tool: Tool, handler: F)
     where
-        F: Fn(Value, &Context<'_>) -> Fut + Send + Sync + 'static,
+        F: Fn(Object, &Context<'_>) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = Result<ToolOutput, McpError>> + Send + 'static,
     {
         let name = tool.name.clone();
@@ -76,7 +77,7 @@ impl ToolService {
     pub fn register_arc<H>(&mut self, tool: Tool, handler: Arc<H>)
     where
         H: for<'a> Fn(
-                Value,
+                Object,
                 &'a Context<'a>,
             )
                 -> Pin<Box<dyn Future<Output = Result<ToolOutput, McpError>> + Send + 'a>>
@@ -129,7 +130,7 @@ impl ToolService {
     pub async fn call(
         &self,
         name: &str,
-        arguments: Value,
+        arguments: Object,
         ctx: &Context<'_>,
     ) -> Result<ToolOutput, McpError> {
         let registered = self.tools.get(name).ok_or_else(|| {
@@ -148,7 +149,7 @@ impl ToolHandler for ToolService {
     async fn call_tool(
         &self,
         name: &str,
-        arguments: Value,
+        arguments: Object,
         ctx: &Context<'_>,
     ) -> Result<ToolOutput, McpError> {
         self.call(name, arguments, ctx).await
@@ -305,7 +306,7 @@ mod tests {
             .build();
 
         service.register(tool, |args, _ctx| async move {
-            Ok(ToolOutput::text(args.to_string()))
+            Ok(ToolOutput::text(Value::Object(args).to_string()))
         });
 
         assert!(service.contains("echo"));
@@ -322,7 +323,11 @@ mod tests {
         );
 
         let result = service
-            .call("echo", serde_json::json!({"hello": "world"}), &ctx)
+            .call(
+                "echo",
+                serde_json::from_value(serde_json::json!({"hello": "world"}))?,
+                &ctx,
+            )
             .await?;
 
         // Convert to CallToolResult to check content

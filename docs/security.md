@@ -909,7 +909,7 @@ This section maps common OWASP vulnerabilities to MCP-specific mitigations.
 
 ```rust
 // Check capabilities before tool execution
-async fn call_tool(&self, name: &str, args: Value, ctx: &Context<'_>) -> Result<ToolOutput, McpError> {
+async fn call_tool(&self, name: &str, args: Object, ctx: &Context<'_>) -> Result<ToolOutput, McpError> {
     // Verify client is authorized for this tool
     if !self.is_authorized(ctx.request_meta(), name) {
         return Err(McpError::ResourceAccessDenied {

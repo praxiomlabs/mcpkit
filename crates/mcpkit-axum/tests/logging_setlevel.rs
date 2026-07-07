@@ -36,7 +36,7 @@ impl ToolHandler for H {
     async fn call_tool(
         &self,
         _name: &str,
-        _args: serde_json::Value,
+        _args: serde_json::Map<String, serde_json::Value>,
         _ctx: &Context<'_>,
     ) -> Result<ToolOutput, McpError> {
         Ok(ToolOutput::text("x"))

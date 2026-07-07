@@ -666,11 +666,14 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
     /// # Arguments
     ///
     /// * `name` - The name of the tool to call
-    /// * `arguments` - The arguments to pass to the tool (as JSON)
+    /// * `arguments` - The arguments to pass to the tool (as JSON). The spec
+    ///   requires `arguments` to be a JSON **object**; `null` is treated as
+    ///   "no arguments".
     ///
     /// # Errors
     ///
-    /// Returns an error if tools are not supported or the call fails.
+    /// Returns an error if tools are not supported, `arguments` is neither an
+    /// object nor `null`, or the call fails.
     pub async fn call_tool(
         &self,
         name: impl Into<String>,
@@ -678,9 +681,19 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
     ) -> Result<CallToolResult, McpError> {
         self.ensure_capability("tools", self.has_tools())?;
 
+        let arguments = match arguments {
+            serde_json::Value::Object(map) => Some(map),
+            serde_json::Value::Null => None,
+            _ => {
+                return Err(McpError::invalid_params(
+                    "tools/call",
+                    "arguments must be a JSON object",
+                ));
+            }
+        };
         let request = CallToolRequest {
             name: name.into(),
-            arguments: Some(arguments),
+            arguments,
         };
         self.request("tools/call", Some(serde_json::to_value(request)?))
             .await

@@ -414,6 +414,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking:** fields the 2025-11-25 schema types as JSON **objects**
+  (`{ [key: string]: unknown }`) are now modeled as an object map instead of
+  `serde_json::Value`, enforcing object-ness at the type level (#147). A new
+  `mcpkit_core::types::Object` alias (`serde_json::Map<String, serde_json::Value>`)
+  is used throughout:
+  - Wire types: `CallToolRequest.arguments` (`Option<Object>`),
+    `CallToolResult.structured_content` (`Option<Object>`),
+    `ToolResultContent.structured_content` (`Option<Object>`), and
+    `ToolUseContent.input` (`Object`).
+  - Handler surface: `ToolHandler::call_tool` (and `DynToolHandler`,
+    `ValidatingToolHandler`, `ToolService`/`BoxedToolFn`, `call_tool_json`,
+    `run_augmented_tool`, `MockTool`) now takes `args: Object`, mirroring
+    `PromptHandler::get_prompt`'s existing map argument. `#[mcp_server]`-generated
+    handlers no longer coerce a non-object `arguments` to `{}` — the router
+    rejects it first.
+  - Protocol boundary: `tools/call` and `prompts/get` with a non-object
+    `arguments` are now rejected with *invalid params* (previously passed
+    through or silently treated as absent), and `ToolCallParams.arguments` /
+    `PromptGetParams.arguments` are typed as `Object`.
+  - Conveniences kept: `Client::call_tool` still accepts `serde_json::Value`
+    (`json!({..})` ergonomics) but validates object-ness before sending (`null`
+    = no arguments); `CallToolResult::with_structured_content` takes `Object`;
+    a `Json<T>` tool return only emits `structuredContent` when `T` serializes
+    to an object (text fallback otherwise)
+    ([#147](https://github.com/praxiomlabs/mcpkit/issues/147)).
 - **Breaking (behavior):** the HTTP adapters now reject a request that presents an
   `mcp-session-id` for a session the server does not know (previously such a
   request was accepted and processed as if freshly created). Clients must use a

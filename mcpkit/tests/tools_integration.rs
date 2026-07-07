@@ -91,7 +91,11 @@ async fn test_tool_call() -> Result<(), Box<dyn std::error::Error>> {
 
     // Call the tool
     let result = service
-        .call("multiply", serde_json::json!({"a": 3.0, "b": 4.0}), &ctx)
+        .call(
+            "multiply",
+            serde_json::from_value(serde_json::json!({"a": 3.0, "b": 4.0}))?,
+            &ctx,
+        )
         .await;
     assert!(result.is_ok());
 
@@ -118,7 +122,7 @@ async fn test_tool_not_found() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let result = service
-        .call("nonexistent", serde_json::json!({}), &ctx)
+        .call("nonexistent", serde_json::Map::new(), &ctx)
         .await;
     assert!(result.is_err());
     Ok(())
@@ -152,7 +156,11 @@ async fn test_tool_handler_trait() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(tools.len(), 1);
 
     let result = service
-        .call_tool("greet", serde_json::json!({"name": "Alice"}), &ctx)
+        .call_tool(
+            "greet",
+            serde_json::from_value(serde_json::json!({"name": "Alice"}))?,
+            &ctx,
+        )
         .await;
     assert!(result.is_ok());
     Ok(())

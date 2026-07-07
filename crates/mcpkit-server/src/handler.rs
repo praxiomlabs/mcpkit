@@ -38,7 +38,7 @@ use mcpkit_core::capability::{ServerCapabilities, ServerInfo};
 use mcpkit_core::error::McpError;
 use mcpkit_core::types::{
     CancelTaskResult, CompleteRequest, CompleteResult, GetPromptResult, GetTaskResult,
-    ListTasksResult, Prompt, Resource, ResourceContents, ResourceTemplate, TaskId, Tool,
+    ListTasksResult, Object, Prompt, Resource, ResourceContents, ResourceTemplate, TaskId, Tool,
     ToolOutput,
 };
 use serde_json::Value;
@@ -144,12 +144,12 @@ pub trait ToolHandler: Send + Sync {
     /// # Arguments
     ///
     /// * `name` - The name of the tool to call
-    /// * `args` - The arguments as a JSON value
+    /// * `args` - The arguments as a JSON object map
     /// * `ctx` - The request context
     fn call_tool(
         &self,
         name: &str,
-        args: Value,
+        args: Object,
         ctx: &Context<'_>,
     ) -> impl Future<Output = Result<ToolOutput, McpError>> + Send;
 
@@ -347,7 +347,7 @@ impl<T: ToolHandler> ToolHandler for Arc<T> {
     fn call_tool(
         &self,
         name: &str,
-        args: Value,
+        args: Object,
         ctx: &Context<'_>,
     ) -> impl Future<Output = Result<ToolOutput, McpError>> + Send {
         (**self).call_tool(name, args, ctx)

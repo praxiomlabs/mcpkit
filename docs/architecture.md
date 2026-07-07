@@ -153,7 +153,7 @@ pub trait ToolHandler: Send + Sync {
     async fn call_tool(
         &self,
         name: &str,
-        arguments: Value,
+        arguments: Object, // mcpkit::types::Object = serde_json::Map<String, Value>
         ctx: &Context<'_>,
     ) -> Result<ToolOutput, McpError>;
 }
@@ -169,7 +169,7 @@ Request handlers receive a `Context` providing:
 - Peer communication channel
 
 ```rust
-async fn my_tool(args: Value, ctx: &Context<'_>) -> Result<ToolOutput, McpError> {
+async fn my_tool(args: Object, ctx: &Context<'_>) -> Result<ToolOutput, McpError> {
     // Check if client supports a feature
     if ctx.client_capabilities().has_sampling() {
         // Can request LLM sampling

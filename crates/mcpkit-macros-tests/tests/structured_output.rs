@@ -45,7 +45,7 @@ async fn json_return_populates_structured_content() {
     let output = <Calc as ToolHandler>::call_tool(
         &handler,
         "add",
-        serde_json::json!({"a": 2, "b": 3}),
+        serde_json::from_value(serde_json::json!({"a": 2, "b": 3})).expect("object"),
         &ctx,
     )
     .await
@@ -54,7 +54,7 @@ async fn json_return_populates_structured_content() {
     let result: CallToolResult = output.into();
     assert_eq!(
         result.structured_content,
-        Some(serde_json::json!({"total": 5})),
+        Some(serde_json::from_value(serde_json::json!({"total": 5})).expect("object")),
         "Json<T> return should populate structuredContent"
     );
     // A human-readable JSON fallback is still present in content.

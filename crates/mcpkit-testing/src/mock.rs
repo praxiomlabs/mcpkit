@@ -6,7 +6,7 @@
 use mcpkit_core::capability::{ServerCapabilities, ServerInfo};
 use mcpkit_core::error::McpError;
 use mcpkit_core::types::{
-    Content, GetPromptResult, Prompt, PromptMessage, Resource, ResourceContents, Tool,
+    Content, GetPromptResult, Object, Prompt, PromptMessage, Resource, ResourceContents, Tool,
     ToolAnnotations, ToolOutput,
 };
 use mcpkit_server::{Context, PromptHandler, ResourceHandler, ServerHandler, ToolHandler};
@@ -39,7 +39,7 @@ pub enum MockResponse {
     /// Return an error.
     Error(String),
     /// Return a dynamic response based on input.
-    Dynamic(Arc<dyn Fn(Value) -> Result<ToolOutput, McpError> + Send + Sync>),
+    Dynamic(Arc<dyn Fn(Object) -> Result<ToolOutput, McpError> + Send + Sync>),
 }
 
 impl MockTool {
@@ -99,7 +99,7 @@ impl MockTool {
     /// Set a dynamic handler.
     pub fn handler<F>(mut self, handler: F) -> Self
     where
-        F: Fn(Value) -> Result<ToolOutput, McpError> + Send + Sync + 'static,
+        F: Fn(Object) -> Result<ToolOutput, McpError> + Send + Sync + 'static,
     {
         self.response = MockResponse::Dynamic(Arc::new(handler));
         self
@@ -122,7 +122,7 @@ impl MockTool {
     }
 
     /// Call the tool.
-    pub fn call(&self, args: Value) -> Result<ToolOutput, McpError> {
+    pub fn call(&self, args: Object) -> Result<ToolOutput, McpError> {
         match &self.response {
             MockResponse::Text(text) => Ok(ToolOutput::text(text.clone())),
             MockResponse::Json(json) => Ok(ToolOutput::text(serde_json::to_string_pretty(json)?)),
@@ -433,7 +433,7 @@ impl ToolHandler for MockServer {
     fn call_tool(
         &self,
         name: &str,
-        args: Value,
+        args: Object,
         _ctx: &Context,
     ) -> impl Future<Output = Result<ToolOutput, McpError>> + Send {
         let result = if let Some(tool) = self.tools.get(name) {
@@ -516,7 +516,7 @@ mod tests {
     #[test]
     fn test_mock_tool_text() -> Result<(), Box<dyn std::error::Error>> {
         let tool = MockTool::new("greet").returns_text("Hello!");
-        let result = tool.call(serde_json::json!({}))?;
+        let result = tool.call(serde_json::Map::new())?;
         match result {
             ToolOutput::Success(r) => {
                 assert!(!r.is_error());
@@ -529,7 +529,7 @@ mod tests {
     #[test]
     fn test_mock_tool_error() -> Result<(), Box<dyn std::error::Error>> {
         let tool = MockTool::new("fail").returns_error("Something went wrong");
-        let result = tool.call(serde_json::json!({}))?;
+        let result = tool.call(serde_json::Map::new())?;
         match result {
             ToolOutput::RecoverableError { message, .. } => {
                 assert!(message.contains("went wrong"));
@@ -553,7 +553,7 @@ mod tests {
             Ok(ToolOutput::text(format!("{}", a + b)))
         });
 
-        let result = tool.call(serde_json::json!({"a": 1, "b": 2}))?;
+        let result = tool.call(serde_json::from_value(serde_json::json!({"a": 1, "b": 2}))?)?;
         match result {
             ToolOutput::Success(r) => {
                 if let Content::Text(tc) = &r.content[0] {

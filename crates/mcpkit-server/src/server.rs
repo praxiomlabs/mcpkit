@@ -496,7 +496,7 @@ where
 struct BackgroundExec {
     handle: crate::capability::tasks::TaskHandle,
     name: String,
-    args: serde_json::Value,
+    args: mcpkit_core::types::Object,
     ctx_data: ContextData,
     cancel: CancellationToken,
 }
@@ -786,10 +786,12 @@ where
             // Malformed call; let the normal path report it.
             return TaskBegin::NotApplicable;
         };
-        let args = params
-            .and_then(|p| p.get("arguments"))
-            .cloned()
-            .unwrap_or_else(|| serde_json::json!({}));
+        let args = match params.and_then(|p| p.get("arguments")) {
+            None => mcpkit_core::types::Object::new(),
+            Some(serde_json::Value::Object(map)) => map.clone(),
+            // Malformed call; let the normal path report it.
+            Some(_) => return TaskBegin::NotApplicable,
+        };
         let ttl = task_meta.get("ttl").and_then(serde_json::Value::as_u64);
 
         let client_caps = self.state.client_caps();
@@ -1162,7 +1164,7 @@ pub trait RequestRouter: Send + Sync {
     async fn call_tool_json(
         &self,
         name: &str,
-        _args: serde_json::Value,
+        _args: mcpkit_core::types::Object,
         _ctx: &Context<'_>,
     ) -> Result<serde_json::Value, McpError> {
         Err(McpError::method_not_found(name))
@@ -1292,7 +1294,7 @@ where
     async fn call_tool_json(
         &self,
         name: &str,
-        args: serde_json::Value,
+        args: mcpkit_core::types::Object,
         ctx: &Context<'_>,
     ) -> Result<serde_json::Value, McpError> {
         match self.tools.as_tool_handler() {
@@ -2305,7 +2307,7 @@ mod tests {
             async fn call_tool(
                 &self,
                 name: &str,
-                _args: serde_json::Value,
+                _args: serde_json::Map<String, serde_json::Value>,
                 _ctx: &Context<'_>,
             ) -> Result<ToolOutput, McpError> {
                 Ok(ToolOutput::text(format!("done:{name}")))
@@ -2414,7 +2416,7 @@ mod tests {
             async fn call_tool(
                 &self,
                 _name: &str,
-                _args: serde_json::Value,
+                _args: serde_json::Map<String, serde_json::Value>,
                 _ctx: &Context<'_>,
             ) -> Result<ToolOutput, McpError> {
                 Ok(ToolOutput::text("ok"))
@@ -2479,7 +2481,7 @@ mod tests {
             async fn call_tool(
                 &self,
                 name: &str,
-                _args: serde_json::Value,
+                _args: serde_json::Map<String, serde_json::Value>,
                 _ctx: &Context<'_>,
             ) -> Result<ToolOutput, McpError> {
                 Ok(ToolOutput::text(format!("done:{name}")))

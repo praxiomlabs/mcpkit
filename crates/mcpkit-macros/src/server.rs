@@ -638,18 +638,10 @@ fn generate_tool_handler(tools: &[ToolMethod], self_ty: &syn::Type) -> TokenStre
             fn call_tool(
                 &self,
                 name: &str,
-                args: ::serde_json::Value,
+                args: ::serde_json::Map<String, ::serde_json::Value>,
                 _ctx: &::mcpkit::Context,
             ) -> impl std::future::Future<Output = Result<::mcpkit::types::ToolOutput, ::mcpkit::error::McpError>> + Send {
-                // Convert args to a map for easier access
-                let args_clone = args.clone();
-
                 async move {
-                    let args = match args_clone.as_object() {
-                        Some(obj) => obj.clone(),
-                        None => ::serde_json::Map::new(),
-                    };
-
                     match name {
                         #(#dispatch_arms)*
                         _ => Err(::mcpkit::error::McpError::method_not_found_with_suggestions(

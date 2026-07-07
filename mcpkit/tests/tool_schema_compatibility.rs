@@ -404,7 +404,7 @@ fn test_list_tools_request_without_cursor() -> Result<(), Box<dyn std::error::Er
 fn test_call_tool_request_serialization() -> Result<(), Box<dyn std::error::Error>> {
     let request = CallToolRequest {
         name: "get_weather".to_string(),
-        arguments: Some(json!({"location": "New York"})),
+        arguments: Some(serde_json::from_value(json!({"location": "New York"}))?),
     };
 
     let json = serde_json::to_value(&request)?;
