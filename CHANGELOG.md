@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Object` is re-exported from the `mcpkit_core` prelude (and therefore
+  `mcpkit::prelude::*`), since `ToolHandler::call_tool` implementors now need it
+  in every signature (follow-up to #147). Also from the #147 review: regression
+  tests pinning the non-object `arguments` rejection (`tools/call` and
+  `prompts/get` parsing, `Client::call_tool`), and the hand-rolled JSON-RPC
+  examples (http-server, websocket-server, multi-service, with-middleware) now
+  reject a non-object `arguments` with invalid params instead of silently
+  defaulting it to `{}`.
 - `tasks/list` now routes through `ListTasksResult`, so it can carry `nextCursor`
   and result-level `_meta` (#150). Both task-list paths (the runtime/adapter
   built-in store and the user-`TaskHandler` route) previously hand-built
