@@ -25,15 +25,20 @@ pub struct TaskState {
     pub cancel_token: CancellationToken,
     /// When the task was last accessed (for cleanup).
     pub last_access: Instant,
+    /// When the task was created. TTL retention is measured from here (per the
+    /// `Task.ttl` "retention duration from creation" semantics).
+    pub created: Instant,
 }
 
 impl TaskState {
     fn new(task: Task) -> Self {
+        let now = Instant::now();
         Self {
             task,
             payload: None,
             cancel_token: CancellationToken::new(),
-            last_access: Instant::now(),
+            last_access: now,
+            created: now,
         }
     }
 
@@ -103,10 +108,17 @@ impl TaskHandle {
     }
 }
 
+/// Default retention for a terminal task whose `tools/call` omitted a `ttl`
+/// (one hour, in milliseconds). Override via [`TaskManager::with_default_ttl`].
+pub const DEFAULT_TASK_TTL_MS: u64 = 60 * 60 * 1000;
+
 /// Manager coordinating the lifecycle of tracked tasks.
 #[derive(Debug)]
 pub struct TaskManager {
     tasks: RwLock<HashMap<TaskId, TaskState>>,
+    /// Retention applied to a task when the request omits `ttl`. `None` means
+    /// unlimited (such tasks are never TTL-evicted).
+    default_ttl_ms: Option<u64>,
 }
 
 impl Default for TaskManager {
@@ -116,18 +128,33 @@ impl Default for TaskManager {
 }
 
 impl TaskManager {
-    /// Create a new task manager.
+    /// Create a new task manager retaining terminal tasks for
+    /// [`DEFAULT_TASK_TTL_MS`] when the request omits a `ttl`.
     #[must_use]
     pub fn new() -> Self {
+        Self::with_default_ttl(Some(DEFAULT_TASK_TTL_MS))
+    }
+
+    /// Create a task manager with a custom default retention (milliseconds) for
+    /// tasks whose request omits `ttl`. Pass `None` for unlimited retention (such
+    /// tasks are never TTL-evicted).
+    #[must_use]
+    pub fn with_default_ttl(default_ttl_ms: Option<u64>) -> Self {
         Self {
             tasks: RwLock::new(HashMap::new()),
+            default_ttl_ms,
         }
     }
 
     /// Create a new `working` task and return a handle to it.
+    ///
+    /// A `None` `ttl` is materialized to the manager's default so the returned
+    /// task reports its actual retention. Expired terminal tasks are swept first.
     pub fn create(self: &Arc<Self>, ttl: Option<u64>) -> TaskHandle {
+        self.cleanup_expired();
+
         let mut task = Task::create();
-        task.ttl = ttl;
+        task.ttl = ttl.or(self.default_ttl_ms);
         let task_id = task.task_id.clone();
 
         if let Ok(mut tasks) = self.tasks.write() {
@@ -237,6 +264,26 @@ impl TaskManager {
             });
         }
     }
+
+    /// Evict terminal tasks whose age since creation exceeds their own `ttl`
+    /// (milliseconds). Non-terminal tasks are always kept; a task with `ttl`
+    /// `None` (unlimited) is never evicted. Called on `create` and on task-store
+    /// access, so no timer is required.
+    pub fn cleanup_expired(&self) {
+        if let Ok(mut tasks) = self.tasks.write() {
+            tasks.retain(|_, state| {
+                if !state.task.status.is_terminal() {
+                    return true;
+                }
+                match state.task.ttl {
+                    Some(ttl_ms) => {
+                        state.created.elapsed() < std::time::Duration::from_millis(ttl_ms)
+                    }
+                    None => true,
+                }
+            });
+        }
+    }
 }
 
 /// Serve task queries from a [`TaskManager`] store.
@@ -250,6 +297,9 @@ pub fn route_task_store(
     method: &str,
     params: Option<&Value>,
 ) -> Option<Result<Value, McpError>> {
+    // Sweep expired terminal tasks on access, so a session that stops creating
+    // but keeps polling/listing still bounds its store.
+    store.cleanup_expired();
     let task_id = || {
         params
             .and_then(|p| p.get("taskId"))
@@ -453,5 +503,83 @@ mod tests {
         assert_eq!(service.manager().list().len(), 1);
         assert!(service.manager().get(&task_id).is_some());
         Ok(())
+    }
+
+    // --- #121: TTL cleanup ------------------------------------------------
+
+    #[test]
+    fn omitted_ttl_is_materialized_to_default() {
+        let manager = Arc::new(TaskManager::with_default_ttl(Some(5000)));
+        // Omitted ttl -> materialized to the default so the task reports it.
+        assert_eq!(manager.create(None).task().unwrap().ttl, Some(5000));
+        // An explicit ttl is preserved.
+        assert_eq!(manager.create(Some(1234)).task().unwrap().ttl, Some(1234));
+    }
+
+    #[test]
+    fn cleanup_expired_evicts_old_terminal_task() {
+        let manager = Arc::new(TaskManager::with_default_ttl(Some(1)));
+        let handle = manager.create(None); // ttl materialized to 1ms
+        let id = handle.id().clone();
+        handle.complete(serde_json::json!({})).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        manager.cleanup_expired();
+        assert!(
+            manager.get(&id).is_none(),
+            "expired terminal task not evicted"
+        );
+    }
+
+    #[test]
+    fn cleanup_expired_keeps_fresh_terminal_task() {
+        let manager = Arc::new(TaskManager::new());
+        let handle = manager.create(Some(60_000));
+        let id = handle.id().clone();
+        handle.complete(serde_json::json!({})).unwrap();
+        manager.cleanup_expired();
+        assert!(
+            manager.get(&id).is_some(),
+            "fresh terminal task wrongly evicted"
+        );
+    }
+
+    #[test]
+    fn cleanup_expired_keeps_non_terminal_task() {
+        let manager = Arc::new(TaskManager::with_default_ttl(Some(1)));
+        let handle = manager.create(None); // stays Working
+        let id = handle.id().clone();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        manager.cleanup_expired();
+        assert!(
+            manager.get(&id).is_some(),
+            "non-terminal task must never be evicted"
+        );
+    }
+
+    #[test]
+    fn unlimited_ttl_is_never_evicted() {
+        let manager = Arc::new(TaskManager::with_default_ttl(None));
+        let handle = manager.create(None); // ttl stays None (unlimited)
+        let id = handle.id().clone();
+        assert_eq!(handle.task().unwrap().ttl, None);
+        handle.complete(serde_json::json!({})).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        manager.cleanup_expired();
+        assert!(
+            manager.get(&id).is_some(),
+            "unlimited-ttl task wrongly evicted"
+        );
+    }
+
+    #[test]
+    fn route_task_store_access_triggers_cleanup() {
+        let manager = Arc::new(TaskManager::with_default_ttl(Some(1)));
+        let handle = manager.create(None);
+        let id = handle.id().clone();
+        handle.complete(serde_json::json!({})).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        // A tasks/* access (not just create) sweeps the store.
+        let _ = route_task_store(&manager, "tasks/list", None);
+        assert!(manager.get(&id).is_none(), "access did not trigger cleanup");
     }
 }

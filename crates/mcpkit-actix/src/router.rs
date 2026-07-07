@@ -88,6 +88,15 @@ where
         self
     }
 
+    /// Set the default task retention (milliseconds) for each session's task
+    /// store, applied when a task-augmented `tools/call` omits a `ttl`. Pass
+    /// `None` for unlimited retention.
+    #[must_use]
+    pub fn with_task_ttl(mut self, default_task_ttl: Option<u64>) -> Self {
+        self.state = self.state.with_task_ttl(default_task_ttl);
+        self
+    }
+
     /// Enable CORS with permissive defaults.
     ///
     /// For production, you should configure CORS manually with custom settings.

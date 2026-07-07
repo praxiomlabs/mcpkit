@@ -18,6 +18,9 @@ pub struct SessionStore {
     sessions: Arc<DashMap<String, SessionState>>,
     sse_channels: Arc<DashMap<String, broadcast::Sender<String>>>,
     idle_timeout: Duration,
+    /// Default task retention (ms) applied to each session's task store; `None`
+    /// means unlimited. Configure via `McpRouter::with_task_ttl`.
+    pub(crate) default_task_ttl: Option<u64>,
 }
 
 struct SessionState {
@@ -47,6 +50,7 @@ impl SessionStore {
             sessions: Arc::new(DashMap::new()),
             sse_channels: Arc::new(DashMap::new()),
             idle_timeout: DEFAULT_SESSION_TIMEOUT,
+            default_task_ttl: Some(mcpkit_server::capability::tasks::DEFAULT_TASK_TTL_MS),
         }
     }
 
@@ -83,7 +87,11 @@ impl SessionStore {
                 protocol_version: None,
                 client_capabilities: None,
                 user,
-                tasks: Arc::new(mcpkit_server::capability::tasks::TaskManager::new()),
+                tasks: Arc::new(
+                    mcpkit_server::capability::tasks::TaskManager::with_default_ttl(
+                        self.default_task_ttl,
+                    ),
+                ),
             },
         );
         id

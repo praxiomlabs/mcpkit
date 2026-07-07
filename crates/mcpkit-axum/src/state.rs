@@ -156,6 +156,18 @@ impl<H> McpState<H> {
         self.completion = Some(Arc::new(completion));
         self
     }
+
+    /// Set the default task retention (milliseconds) for each session's task
+    /// store, applied when a task-augmented `tools/call` omits a `ttl`. Pass
+    /// `None` for unlimited retention. Defaults to
+    /// [`DEFAULT_TASK_TTL_MS`](mcpkit_server::capability::tasks::DEFAULT_TASK_TTL_MS).
+    #[must_use]
+    pub fn with_task_ttl(mut self, default_task_ttl: Option<u64>) -> Self {
+        if let Some(store) = Arc::get_mut(&mut self.sessions) {
+            store.default_task_ttl = default_task_ttl;
+        }
+        self
+    }
 }
 
 impl<H: mcpkit_server::ServerHandler> McpState<H> {

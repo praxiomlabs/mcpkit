@@ -167,6 +167,23 @@ async fn task_augmented_call_creates_gets_and_results() {
 }
 
 #[tokio::test]
+async fn with_task_ttl_configures_session_store_retention() {
+    // McpRouter/McpState::with_task_ttl sets each session store's default, and an
+    // omitted `ttl` is materialized to it on the CreateTaskResult.
+    let observed = Arc::new(AtomicBool::new(false));
+    let state = McpState::new(H {
+        observed_cancel: observed,
+    })
+    .with_task_ttl(Some(1234));
+
+    let (resp, _) = post(&state, None, call_task(1, "echo")).await;
+    assert_eq!(
+        resp["result"]["task"]["ttl"], 1234,
+        "configured task ttl not materialized: {resp}"
+    );
+}
+
+#[tokio::test]
 async fn task_augmented_call_on_forbidden_tool_is_rejected() {
     let (state, _) = state();
     let (resp, _) = post(&state, None, call_task(1, "plain")).await;

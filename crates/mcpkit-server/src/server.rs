@@ -457,6 +457,9 @@ pub struct RuntimeConfig {
     /// How long a server-initiated request (e.g. elicitation, sampling) waits
     /// for the client's response before failing.
     pub outbound_request_timeout: Duration,
+    /// Retention (milliseconds) applied to a task whose `tools/call` omits a
+    /// `ttl`. `None` means unlimited (such tasks are never TTL-evicted).
+    pub default_task_ttl_ms: Option<u64>,
 }
 
 impl Default for RuntimeConfig {
@@ -465,6 +468,7 @@ impl Default for RuntimeConfig {
             auto_initialized: true,
             max_concurrent_requests: 100,
             outbound_request_timeout: Duration::from_secs(60),
+            default_task_ttl_ms: Some(crate::capability::tasks::DEFAULT_TASK_TTL_MS),
         }
     }
 }
@@ -1090,14 +1094,7 @@ where
 {
     /// Create a new server runtime.
     pub fn new(server: Server<H, T, R, P, K>, transport: Tr) -> Self {
-        let caps = server.capabilities().clone();
-        Self {
-            server,
-            transport: Arc::new(transport),
-            state: Arc::new(ServerState::new(caps)),
-            task_store: Arc::new(crate::capability::tasks::TaskManager::new()),
-            config: RuntimeConfig::default(),
-        }
+        Self::with_config(server, transport, RuntimeConfig::default())
     }
 
     /// Create a new server runtime with custom configuration.
@@ -1107,11 +1104,14 @@ where
         config: RuntimeConfig,
     ) -> Self {
         let caps = server.capabilities().clone();
+        let task_store = Arc::new(crate::capability::tasks::TaskManager::with_default_ttl(
+            config.default_task_ttl_ms,
+        ));
         Self {
             server,
             transport: Arc::new(transport),
             state: Arc::new(ServerState::new(caps)),
-            task_store: Arc::new(crate::capability::tasks::TaskManager::new()),
+            task_store,
             config,
         }
     }
