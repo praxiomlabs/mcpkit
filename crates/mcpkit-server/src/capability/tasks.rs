@@ -104,6 +104,7 @@ impl TaskHandle {
 }
 
 /// Manager coordinating the lifecycle of tracked tasks.
+#[derive(Debug)]
 pub struct TaskManager {
     tasks: RwLock<HashMap<TaskId, TaskState>>,
 }

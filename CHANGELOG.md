@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Task-augmented `tools/call` and `tasks/*` on the HTTP adapters (#122). The
+  axum/actix/warp/rocket adapters dispatched `tools/call` synchronously and
+  ignored a `task` field, so task execution was runtime-only. Now:
+  - The stdio task machinery is factored into executor-agnostic shared helpers
+    (`router::{tool_task_support, call_tool_json, run_augmented_tool,
+    begin_augmented_task}`, `capability::tasks::route_task_store`) reused by both
+    the runtime and the adapters.
+  - Each adapter intercepts a task-augmented `tools/call`: it gates on the tool's
+    declared `taskSupport`, creates the task, replies with `CreateTaskResult`
+    immediately, and runs the tool in the background via the adapter's own
+    `tokio::spawn`; later `tasks/get`/`tasks/result`/`tasks/cancel` are served
+    from the store.
+  - **Per-session isolation:** each MCP session owns its task store (mirroring the
+    stdio runtime's per-connection store), so one session cannot read or cancel
+    another's tasks.
+  - **Limitations (documented):** an adapter background task runs with a
+    `NoOpPeer`, so it cannot make server-to-client requests (elicitation/sampling)
+    and its notifications/logging/progress are dropped; cancellation via
+    `tasks/cancel` still trips the tool's `ctx.cancelled()`. Background tasks are
+    fire-and-forget (no graceful shutdown drain)
+    ([#122](https://github.com/praxiomlabs/mcpkit/issues/122)).
 - Inbound client-notification dispatch to `ServerHandler` hooks (#141). The stdio
   `ServerRuntime` previously logged `notifications/initialized` and never invoked
   `ServerHandler::on_initialized` — the hook was orphaned — and had no way to react

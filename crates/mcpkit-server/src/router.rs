@@ -696,6 +696,100 @@ pub async fn run_augmented_tool(
     }
 }
 
+/// Outcome of [`begin_augmented_task`] — the adapter's decision for a
+/// (potentially) task-augmented `tools/call`.
+pub enum AugmentedTaskOutcome {
+    /// Not a task-augmented call (no non-null `task` field, or malformed) — the
+    /// caller should fall through to the normal synchronous `tools/call` path.
+    NotApplicable,
+    /// Rejected before any task was created (e.g. the tool forbids task
+    /// augmentation) — reply with this error.
+    Rejected(McpError),
+    /// A task was created. Reply immediately with the JSON `CreateTaskResult`
+    /// (`.0`), then run the background future (`.1`) on the caller's executor
+    /// (e.g. `tokio::spawn`); it writes the result back into the store.
+    Started(serde_json::Value, futures::future::BoxFuture<'static, ()>),
+}
+
+/// Begin a task-augmented `tools/call` against a per-session task `store`.
+///
+/// Mirrors the stdio runtime's `try_begin_task`: detect the `task` field, gate on
+/// the tool's declared `taskSupport`, create the task, and return the initial
+/// `CreateTaskResult` plus a background future the caller spawns. Only call this
+/// for the `tools/call` method. See [`run_augmented_tool`] for the background
+/// context's limitations (no server-to-client from the tool).
+pub async fn begin_augmented_task(
+    handler: std::sync::Arc<dyn DynToolHandler>,
+    store: &std::sync::Arc<crate::capability::tasks::TaskManager>,
+    params: Option<&serde_json::Value>,
+    client_caps: mcpkit_core::capability::ClientCapabilities,
+    server_caps: mcpkit_core::capability::ServerCapabilities,
+    protocol_version: mcpkit_core::protocol_version::ProtocolVersion,
+) -> AugmentedTaskOutcome {
+    use mcpkit_core::types::TaskSupport;
+
+    let Some(task_meta) = params.and_then(|p| p.get("task")) else {
+        return AugmentedTaskOutcome::NotApplicable;
+    };
+    if task_meta.is_null() {
+        return AugmentedTaskOutcome::NotApplicable;
+    }
+    let Some(name) = params
+        .and_then(|p| p.get("name"))
+        .and_then(|v| v.as_str())
+        .map(str::to_string)
+    else {
+        // Malformed; let the normal path report it.
+        return AugmentedTaskOutcome::NotApplicable;
+    };
+    let args = params
+        .and_then(|p| p.get("arguments"))
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({}));
+    let ttl = task_meta.get("ttl").and_then(serde_json::Value::as_u64);
+
+    // Gate on the tool's declared task support (a `forbidden` tool must not be
+    // task-augmented). The gating context needs no real peer.
+    let support = {
+        use crate::context::{Context, NoOpPeer};
+        let peer = NoOpPeer;
+        let gate_id = mcpkit_core::protocol::RequestId::String("tasks/gate".to_string());
+        let ctx = Context::new(
+            &gate_id,
+            None,
+            &client_caps,
+            &server_caps,
+            protocol_version,
+            &peer,
+        );
+        tool_task_support(handler.as_ref(), &name, &ctx).await
+    };
+    if support == TaskSupport::Forbidden {
+        return AugmentedTaskOutcome::Rejected(McpError::invalid_params(
+            "tools/call",
+            format!("tool '{name}' does not support task-augmented execution"),
+        ));
+    }
+
+    let handle = store.create(ttl);
+    let task = handle
+        .task()
+        .unwrap_or_else(|| mcpkit_core::types::Task::new(handle.id().clone()));
+    let create_result =
+        serde_json::to_value(mcpkit_core::types::CreateTaskResult { task, meta: None })
+            .unwrap_or_default();
+    let fut = run_augmented_tool(
+        handler,
+        handle,
+        name,
+        args,
+        client_caps,
+        server_caps,
+        protocol_version,
+    );
+    AugmentedTaskOutcome::Started(create_result, Box::pin(fut))
+}
+
 /// Route resource-related requests to a handler implementing
 /// [`ResourceHandler`](crate::handler::ResourceHandler).
 ///

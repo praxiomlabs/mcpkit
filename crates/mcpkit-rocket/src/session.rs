@@ -30,6 +30,9 @@ struct SessionState {
     client_capabilities: Option<ClientCapabilities>,
     /// The verified user this session is bound to, if any.
     user: Option<VerifiedUser>,
+    /// This session's task store for task-augmented `tools/call` (per-session
+    /// isolation for `tasks/*`).
+    tasks: Arc<mcpkit_server::capability::tasks::TaskManager>,
 }
 
 impl Default for SessionStore {
@@ -83,6 +86,7 @@ impl SessionStore {
                 protocol_version: None,
                 client_capabilities: None,
                 user,
+                tasks: Arc::new(mcpkit_server::capability::tasks::TaskManager::new()),
             },
         );
         id
@@ -137,6 +141,12 @@ impl SessionStore {
                 s.client_capabilities.clone(),
             )
         })
+    }
+
+    /// This session's task store, if the session exists.
+    #[must_use]
+    pub fn tasks(&self, id: &str) -> Option<Arc<mcpkit_server::capability::tasks::TaskManager>> {
+        self.sessions.get(id).map(|s| s.tasks.clone())
     }
 
     /// Check if a session exists.

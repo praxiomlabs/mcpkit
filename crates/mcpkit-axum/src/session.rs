@@ -29,6 +29,10 @@ pub struct Session {
     /// The verified user this session is bound to, if any. Once bound, the
     /// session may only be used by the same user (see [`SessionBindingError`]).
     pub user: Option<VerifiedUser>,
+    /// This session's task store for task-augmented `tools/call`. Scoped per
+    /// session so one session cannot read or cancel another's tasks (matching
+    /// the stdio runtime's per-connection store).
+    pub tasks: Arc<mcpkit_server::capability::tasks::TaskManager>,
 }
 
 impl Session {
@@ -50,6 +54,7 @@ impl Session {
             client_capabilities: None,
             protocol_version: None,
             user,
+            tasks: Arc::new(mcpkit_server::capability::tasks::TaskManager::new()),
         }
     }
 
