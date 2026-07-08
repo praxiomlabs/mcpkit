@@ -9,6 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Task-augmented sampling, phase 2 of #143 — the receiver-side task machinery
+  (`TaskManager`, `TaskHandle`, `TaskState`, `route_task_store`,
+  `CancellationToken`) moves from mcpkit-server to the new
+  `mcpkit_core::tasks` module so the client (phase 3) can reuse it;
+  mcpkit-server re-exports everything at its existing paths. The move fixes
+  three spec deviations in the shared store, on both the stdio runtime and the
+  HTTP adapters:
+  - **`tasks/result` now blocks until the task reaches a terminal status**
+    (spec MUST; previously it returned `-32602 "task is not completed"`).
+    The wait parks on a per-task event — the runtime's cooperative loop and
+    concurrent requests stay live while a `tasks/result` waits, and
+    `tasks/cancel` unblocks waiters.
+  - **`tasks/result` reproduces the underlying request's outcome exactly.**
+    The store's terminal payload is now two-variant (`TaskPayload::Success` /
+    `TaskPayload::Error(JsonRpcError)`); a failed request's JSON-RPC error is
+    stored via the new `TaskHandle::fail_with_error` and returned verbatim
+    (code, message, data) through the new pass-through `McpError::JsonRpc`
+    variant. Per spec, a `tools/call` result with `isError: true` now moves
+    the task to `failed` (new `TaskHandle::fail_with_result`) while
+    `tasks/result` still returns that result.
+  - **Successful `tasks/result` responses carry
+    `_meta["io.modelcontextprotocol/related-task"]`** (spec MUST), merged with
+    any existing `_meta`. Error responses carry no such metadata: the schema's
+    `Error` object has no `_meta` slot, so the requirement is unsatisfiable
+    there (documented spec gap; the requestor knows the task id it asked for).
+  - **Breaking:** `TaskState.payload` is `Option<TaskPayload>` (was
+    `Option<Value>`), `TaskManager::payload` returns the new type, and
+    `route_task_store` is now `async`
+    ([#143](https://github.com/praxiomlabs/mcpkit/issues/143)).
 - Task-augmented sampling, phase 1 of #143 — types and capabilities:
   - `CreateMessageRequest` gains the spec's `task: Option<TaskMetadata>` field
     (2025-11-25 `CreateMessageRequestParams extends TaskAugmentedRequestParams`)
