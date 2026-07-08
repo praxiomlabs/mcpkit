@@ -709,11 +709,23 @@ pub async fn run_augmented_tool(
         ),
     };
     match call_tool_json(handler.as_ref(), &name, args, &ctx).await {
+        // Per spec, a tool result with `isError: true` moves the task to
+        // `failed`, while `tasks/result` still returns that result.
+        Ok(payload)
+            if payload
+                .get("isError")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false) =>
+        {
+            let _ = handle.fail_with_result(payload, Some("tool reported an error".to_string()));
+        }
         Ok(payload) => {
             let _ = handle.complete(payload);
         }
+        // `tasks/result` must reproduce the JSON-RPC error the request would
+        // have returned.
         Err(e) => {
-            let _ = handle.fail(e.to_string());
+            let _ = handle.fail_with_error(e.into());
         }
     }
 }

@@ -68,6 +68,7 @@ pub mod protocol;
 pub mod protocol_version;
 pub mod schema;
 pub mod state;
+pub mod tasks;
 pub mod types;
 
 // Re-export commonly used types at the crate root

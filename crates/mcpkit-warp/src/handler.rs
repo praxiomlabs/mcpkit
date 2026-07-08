@@ -294,7 +294,7 @@ where
                         }
                         AugmentedTaskOutcome::NotApplicable => {}
                     }
-                } else if let Some(result) = route_task_store(store, method, params) {
+                } else if let Some(result) = route_task_store(store, method, params).await {
                     return match result {
                         Ok(value) => Response::success(request.id.clone(), value),
                         Err(e) => Response::error(request.id.clone(), e.into()),

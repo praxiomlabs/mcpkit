@@ -68,6 +68,10 @@ impl JsonRpcError {
 
 impl From<&McpError> for JsonRpcError {
     fn from(err: &McpError) -> Self {
+        // A wrapped raw JSON-RPC error passes through verbatim.
+        if let McpError::JsonRpc(e) = err {
+            return e.clone();
+        }
         let code = err.code();
         let message = err.to_string();
         let data = match err {

@@ -236,6 +236,16 @@ pub enum McpError {
         /// error `data.elicitations`).
         elicitations: Vec<crate::types::UrlElicitRequest>,
     },
+
+    /// A raw JSON-RPC error preserved verbatim (code, message, data).
+    ///
+    /// Round-trips through `JsonRpcError` without re-mapping. Used where a
+    /// stored or forwarded wire error must be reproduced exactly — e.g.
+    /// `tasks/result` returning the error the underlying request would have
+    /// returned.
+    #[error("JSON-RPC error {}: {}", .0.code, .0.message)]
+    #[diagnostic(code(mcp::jsonrpc))]
+    JsonRpc(super::jsonrpc::JsonRpcError),
 }
 
 // ============================================================================
@@ -493,6 +503,7 @@ impl McpError {
             Self::WithContext { source, .. } => source.code(),
             Self::InternalMessage { .. } => codes::INTERNAL_ERROR,
             Self::UrlElicitationRequired { .. } => codes::URL_ELICITATION_REQUIRED,
+            Self::JsonRpc(e) => e.code,
         }
     }
 

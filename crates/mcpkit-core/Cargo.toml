@@ -22,6 +22,7 @@ miette.workspace = true
 
 # Async (minimal - no runtime dependency)
 futures.workspace = true
+event-listener = "5.4"
 
 # Utilities
 uuid.workspace = true
@@ -43,7 +44,7 @@ getrandom = { version = "0.2", features = ["js"] }
 
 [dev-dependencies]
 pretty_assertions.workspace = true
-tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }
 proptest.workspace = true
 
 # For JWT signature verification tests

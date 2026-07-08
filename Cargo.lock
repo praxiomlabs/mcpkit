@@ -2715,6 +2715,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "criterion",
+ "event-listener",
  "futures",
  "getrandom 0.2.16",
  "jsonwebtoken",

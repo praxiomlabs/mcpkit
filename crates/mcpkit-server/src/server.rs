@@ -894,11 +894,24 @@ where
             cancel,
         );
         match self.server.call_tool_json(&name, args, &ctx).await {
+            // Per spec, a tool result with `isError: true` moves the task to
+            // `failed`, while `tasks/result` still returns that result.
+            Ok(payload)
+                if payload
+                    .get("isError")
+                    .and_then(serde_json::Value::as_bool)
+                    .unwrap_or(false) =>
+            {
+                let _ =
+                    handle.fail_with_result(payload, Some("tool reported an error".to_string()));
+            }
             Ok(payload) => {
                 let _ = handle.complete(payload);
             }
+            // `tasks/result` must reproduce the JSON-RPC error the request
+            // would have returned.
             Err(e) => {
-                let _ = handle.fail(e.to_string());
+                let _ = handle.fail_with_error(e.into());
             }
         }
     }
@@ -906,12 +919,12 @@ where
     /// Serve task queries from the built-in task store. Returns `None` for
     /// non-task methods, and for `tasks/get`/`tasks/result`/`tasks/cancel` whose
     /// id the store does not own (so a custom `with_tasks` handler can serve it).
-    fn route_runtime_tasks(
+    async fn route_runtime_tasks(
         &self,
         method: &str,
         params: Option<&serde_json::Value>,
     ) -> Option<Result<serde_json::Value, McpError>> {
-        crate::capability::tasks::route_task_store(&self.task_store, method, params)
+        crate::capability::tasks::route_task_store(&self.task_store, method, params).await
     }
 
     /// Handle the initialize request.
@@ -986,7 +999,7 @@ where
 
         // Serve task queries from the built-in store first (falling through to a
         // custom `with_tasks` handler for ids the store does not own).
-        if let Some(result) = self.route_runtime_tasks(method, params) {
+        if let Some(result) = self.route_runtime_tasks(method, params).await {
             return result;
         }
 
@@ -2390,6 +2403,114 @@ mod tests {
             .expect("send");
         let got = next_response(&client).await;
         assert_eq!(got.result.expect("task")["status"], "completed");
+
+        drop(client);
+        let _ = timeout(Duration::from_secs(2), handle).await;
+    }
+
+    #[tokio::test]
+    async fn tasks_result_blocks_while_loop_stays_live() {
+        use crate::builder::ServerBuilder;
+        use crate::handler::{ServerHandler, ToolHandler};
+        use mcpkit_core::protocol::Request;
+        use mcpkit_core::types::{TaskSupport, Tool, ToolOutput};
+
+        // A tool that finishes only when released, so tasks/result issued
+        // mid-run must block (spec) — without stalling the cooperative loop:
+        // a concurrent request is still answered while tasks/result waits.
+        struct H(Arc<tokio::sync::Notify>);
+        impl ServerHandler for H {
+            fn server_info(&self) -> ServerInfo {
+                ServerInfo::new("t", "1.0.0")
+            }
+        }
+        impl ToolHandler for H {
+            async fn list_tools(&self, _ctx: &Context<'_>) -> Result<Vec<Tool>, McpError> {
+                Ok(vec![Tool::new("gated").task_support(TaskSupport::Optional)])
+            }
+            async fn call_tool(
+                &self,
+                _name: &str,
+                _args: serde_json::Map<String, serde_json::Value>,
+                _ctx: &Context<'_>,
+            ) -> Result<ToolOutput, McpError> {
+                self.0.notified().await;
+                Ok(ToolOutput::text("released"))
+            }
+        }
+
+        let request = |id: u64, method: &'static str, params: serde_json::Value| {
+            Message::Request(Request {
+                jsonrpc: "2.0".into(),
+                id: RequestId::Number(id),
+                method: method.into(),
+                params: Some(params),
+            })
+        };
+
+        let release = Arc::new(tokio::sync::Notify::new());
+        let (client, server_tr) = MemoryTransport::pair();
+        let built = ServerBuilder::new(H(release.clone()))
+            .with_tools(H(release.clone()))
+            .build();
+        let runtime = ServerRuntime::new(built, server_tr);
+        runtime.state().set_initialized();
+        let handle = tokio::spawn(async move { runtime.run().await });
+
+        client
+            .send(request(
+                1,
+                "tools/call",
+                serde_json::json!({ "name": "gated", "arguments": {}, "task": {} }),
+            ))
+            .await
+            .expect("send");
+        let resp = next_response(&client).await;
+        let task_id = resp.result.expect("create result")["task"]["taskId"]
+            .as_str()
+            .expect("taskId")
+            .to_string();
+
+        // tasks/result while the tool is still gated: blocks, no response yet.
+        client
+            .send(request(
+                2,
+                "tasks/result",
+                serde_json::json!({ "taskId": task_id }),
+            ))
+            .await
+            .expect("send");
+
+        // The loop must stay live: an unrelated request is answered while
+        // tasks/result waits.
+        client
+            .send(request(3, "tools/list", serde_json::json!({})))
+            .await
+            .expect("send");
+        let live = timeout(Duration::from_secs(2), next_response(&client))
+            .await
+            .expect("loop stalled while tasks/result was blocking");
+        assert_eq!(live.id, RequestId::Number(3), "expected tools/list reply");
+
+        // Release the tool; the blocked tasks/result now yields the payload.
+        release.notify_one();
+        let result = timeout(Duration::from_secs(2), next_response(&client))
+            .await
+            .expect("blocked tasks/result never completed");
+        assert_eq!(result.id, RequestId::Number(2));
+        let payload = result.result.expect("payload");
+        assert!(
+            payload["content"][0]["text"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("released"),
+            "unexpected payload: {payload}"
+        );
+        // Spec MUST: the tasks/result response carries the related-task _meta.
+        assert_eq!(
+            payload["_meta"]["io.modelcontextprotocol/related-task"]["taskId"],
+            task_id.as_str()
+        );
 
         drop(client);
         let _ = timeout(Duration::from_secs(2), handle).await;
