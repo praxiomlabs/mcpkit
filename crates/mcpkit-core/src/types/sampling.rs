@@ -227,6 +227,15 @@ pub struct CreateMessageRequest {
     /// Controls whether/how the model may call `tools`.
     #[serde(rename = "toolChoice", skip_serializing_if = "Option::is_none")]
     pub tool_choice: Option<ToolChoice>,
+    /// Request task-augmented execution (2025-11-25).
+    ///
+    /// When set, a client that declared
+    /// `tasks.requests.sampling.createMessage` replies with a
+    /// `CreateTaskResult` immediately and the `CreateMessageResult` is
+    /// retrieved later via `tasks/result`. A client that did not declare it
+    /// processes the request normally, ignoring this field (per spec).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub task: Option<super::task::TaskMetadata>,
     /// Optional protocol metadata (`_meta`).
     #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
     pub meta: Option<Meta>,
@@ -247,6 +256,7 @@ impl CreateMessageRequest {
             metadata: None,
             tools: None,
             tool_choice: None,
+            task: None,
             meta: None,
         }
     }
@@ -291,6 +301,13 @@ impl CreateMessageRequest {
         self.stop_sequences
             .get_or_insert_with(Vec::new)
             .push(seq.into());
+        self
+    }
+
+    /// Request task-augmented execution (2025-11-25).
+    #[must_use]
+    pub const fn with_task(mut self, task: super::task::TaskMetadata) -> Self {
+        self.task = Some(task);
         self
     }
 }
@@ -402,6 +419,21 @@ impl std::fmt::Display for StopReason {
 mod tests {
     use super::*;
     use crate::types::Content;
+
+    #[test]
+    fn create_message_task_field_round_trips_and_omits() {
+        // Omitted when unset (wire-compatible with pre-task requests).
+        let req = CreateMessageRequest::simple("hi", 10);
+        let json = serde_json::to_value(&req).unwrap();
+        assert!(json.get("task").is_none());
+
+        // Round-trips when set.
+        let req = req.with_task(crate::types::task::TaskMetadata { ttl: Some(60_000) });
+        let json = serde_json::to_value(&req).unwrap();
+        assert_eq!(json["task"], serde_json::json!({ "ttl": 60000 }));
+        let back: CreateMessageRequest = serde_json::from_value(json).unwrap();
+        assert_eq!(back.task.unwrap().ttl, Some(60_000));
+    }
 
     #[test]
     fn test_sampling_message() {

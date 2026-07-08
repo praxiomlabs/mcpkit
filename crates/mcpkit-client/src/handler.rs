@@ -248,6 +248,7 @@ mod tests {
                 metadata: None,
                 tools: None,
                 tool_choice: None,
+                task: None,
                 meta: None,
             })
             .await;

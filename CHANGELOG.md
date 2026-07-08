@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Task-augmented sampling, phase 1 of #143 — types and capabilities:
+  - `CreateMessageRequest` gains the spec's `task: Option<TaskMetadata>` field
+    (2025-11-25 `CreateMessageRequestParams extends TaskAugmentedRequestParams`)
+    plus a `with_task` builder. Omitted from the wire when unset.
+  - New spec-shaped `TasksCapability` (`{ list, cancel, requests: { sampling,
+    elicitation, tools } }`) shared by both sides. `ClientCapabilities` gains
+    `tasks` with `with_tasks()` / `with_task_sampling()` / `has_task_sampling()`.
+  - **Breaking:** `ServerCapabilities.tasks` migrates from the non-spec
+    `TaskCapability { cancellable }` (no such key exists in the schema) to
+    `TasksCapability`. `ServerCapabilities::with_tasks()` now declares
+    `{ list: {}, cancel: {} }`; task-augmented `tools/call` is declared via the
+    new `with_task_tools()`. The `#[mcp_server]` macro (for tools declaring
+    `task_support`) and `ServerBuilder` advertise the full shape — the builder
+    upgrades to `requests.tools.call` when both tool and task handlers are
+    registered, in either registration order.
+  - Per spec, a receiver that has not declared task support for a request type
+    MUST process it normally, ignoring task metadata: the client now strips
+    `task` before invoking `ClientHandler::create_message`, so handlers cannot
+    observe a field the spec requires the client to ignore. (The task-augmented
+    execution path — client task store, `tasks/*` serving, `CreateTaskResult`
+    responses — is phase 2/3 of
+    [#143](https://github.com/praxiomlabs/mcpkit/issues/143).)
 - `Object` is re-exported from the `mcpkit_core` prelude (and therefore
   `mcpkit::prelude::*`), since `ToolHandler::call_tool` implementors now need it
   in every signature (follow-up to #147). Also from the #147 review: regression

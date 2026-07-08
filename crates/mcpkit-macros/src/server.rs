@@ -508,9 +508,10 @@ fn generate_server_handler(
         capability_chain.push(quote!(.with_prompts()));
     }
     // A tool declaring `task_support` other than "forbidden" makes the server
-    // task-augmentable, so advertise the `tasks` capability.
+    // task-augmentable, so advertise the `tasks` capability including
+    // task-augmented `tools/call`.
     if has_task_tools {
-        capability_chain.push(quote!(.with_tasks()));
+        capability_chain.push(quote!(.with_tasks().with_task_tools()));
     }
 
     // Join the capability chain

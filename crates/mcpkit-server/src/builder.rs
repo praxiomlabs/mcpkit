@@ -158,13 +158,19 @@ where
         self,
         tools: TH,
     ) -> ServerBuilder<H, Registered<TH>, R, P, K> {
+        // Task-augmented `tools/call` needs both sides; upgrade the tasks
+        // capability regardless of registration order.
+        let mut capabilities = self.capabilities.with_tools();
+        if capabilities.tasks.is_some() {
+            capabilities = capabilities.with_task_tools();
+        }
         ServerBuilder {
             handler: self.handler,
             tools: Registered(tools),
             resources: self.resources,
             prompts: self.prompts,
             tasks: self.tasks,
-            capabilities: self.capabilities.with_tools(),
+            capabilities,
         }
     }
 }
@@ -291,13 +297,19 @@ where
         self,
         tasks: KH,
     ) -> ServerBuilder<H, T, R, P, Registered<KH>> {
+        // Task-augmented `tools/call` needs both sides; upgrade the tasks
+        // capability regardless of registration order.
+        let mut capabilities = self.capabilities.with_tasks();
+        if capabilities.tools.is_some() {
+            capabilities = capabilities.with_task_tools();
+        }
         ServerBuilder {
             handler: self.handler,
             tools: self.tools,
             resources: self.resources,
             prompts: self.prompts,
             tasks: Registered(tasks),
-            capabilities: self.capabilities.with_tasks(),
+            capabilities,
         }
     }
 }
@@ -554,6 +566,41 @@ mod tests {
             .build();
 
         assert!(server.capabilities().has_tasks());
+    }
+
+    #[test]
+    fn tasks_capability_shape_is_registration_order_independent() {
+        // Task-augmented `tools/call` (`tasks.requests.tools.call`) must be
+        // advertised when both handlers are registered, in either order.
+        fn tools_call(caps: &mcpkit_core::capability::ServerCapabilities) -> serde_json::Value {
+            serde_json::to_value(caps).unwrap()["tasks"].clone()
+        }
+
+        let tasks_first = ServerBuilder::new(TestHandler)
+            .with_tasks(TestTaskHandler)
+            .with_tools(TestToolHandler)
+            .build();
+        let tools_first = ServerBuilder::new(TestHandler)
+            .with_tools(TestToolHandler)
+            .with_tasks(TestTaskHandler)
+            .build();
+
+        let expected = serde_json::json!({
+            "list": {},
+            "cancel": {},
+            "requests": { "tools": { "call": {} } }
+        });
+        assert_eq!(tools_call(tasks_first.capabilities()), expected);
+        assert_eq!(tools_call(tools_first.capabilities()), expected);
+
+        // A TaskHandler alone must not claim task-augmented tools/call.
+        let tasks_only = ServerBuilder::new(TestHandler)
+            .with_tasks(TestTaskHandler)
+            .build();
+        assert_eq!(
+            tools_call(tasks_only.capabilities()),
+            serde_json::json!({ "list": {}, "cancel": {} })
+        );
     }
 
     #[test]

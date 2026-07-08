@@ -14,7 +14,7 @@ use mcpkit::capability::{
     ClientCapabilities, ClientInfo, CompletionCapability, ElicitationCapability, InitializeRequest,
     InitializeResult, LoggingCapability, PROTOCOL_VERSION, PromptCapability, ResourceCapability,
     RootsCapability, SUPPORTED_PROTOCOL_VERSIONS, SamplingCapability, ServerCapabilities,
-    ServerInfo, TaskCapability, ToolCapability, VersionNegotiationResult, is_version_supported,
+    ServerInfo, TasksCapability, ToolCapability, VersionNegotiationResult, is_version_supported,
     negotiate_version, negotiate_version_detailed,
 };
 use serde_json::json;
@@ -514,14 +514,32 @@ fn test_prompt_capability_serialization() -> Result<(), Box<dyn std::error::Erro
 }
 
 #[test]
-fn test_task_capability_serialization() -> Result<(), Box<dyn std::error::Error>> {
-    let cap = TaskCapability {
-        cancellable: Some(true),
-    };
+fn test_tasks_capability_serialization() -> Result<(), Box<dyn std::error::Error>> {
+    // Server shape from the 2025-11-25 tasks spec page.
+    let caps = ServerCapabilities::new().with_tasks().with_task_tools();
+    let json = serde_json::to_value(&caps)?;
+    assert_eq!(
+        json["tasks"],
+        json!({ "list": {}, "cancel": {}, "requests": { "tools": { "call": {} } } })
+    );
 
-    let json = serde_json::to_value(&cap)?;
+    // Client shape from the same page (sampling only here).
+    let caps = ClientCapabilities::new().with_tasks().with_task_sampling();
+    let json = serde_json::to_value(&caps)?;
+    assert_eq!(
+        json["tasks"],
+        json!({
+            "list": {},
+            "cancel": {},
+            "requests": { "sampling": { "createMessage": {} } }
+        })
+    );
+    assert!(caps.has_task_sampling());
+    assert!(!ClientCapabilities::new().has_task_sampling());
 
-    assert_eq!(json["cancellable"], true);
+    // Round-trips.
+    let back: TasksCapability = serde_json::from_value(json["tasks"].clone())?;
+    assert_eq!(serde_json::to_value(&back)?, json["tasks"]);
     Ok(())
 }
 
@@ -598,7 +616,9 @@ fn test_server_capabilities_deserialization_from_rmcp() -> Result<(), Box<dyn st
             "listChanged": false
         },
         "tasks": {
-            "cancellable": true
+            "list": {},
+            "cancel": {},
+            "requests": { "tools": { "call": {} } }
         },
         "logging": {},
         "completions": {},
@@ -939,7 +959,7 @@ fn test_empty_capability_structs_serialize_to_empty_object()
     assert_eq!(serde_json::to_string(&ToolCapability::default())?, "{}");
     assert_eq!(serde_json::to_string(&ResourceCapability::default())?, "{}");
     assert_eq!(serde_json::to_string(&PromptCapability::default())?, "{}");
-    assert_eq!(serde_json::to_string(&TaskCapability::default())?, "{}");
+    assert_eq!(serde_json::to_string(&TasksCapability::default())?, "{}");
     assert_eq!(serde_json::to_string(&RootsCapability::default())?, "{}");
     Ok(())
 }
