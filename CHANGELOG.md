@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Task-augmented sampling, phase 3 of #143 — the client executes it:
+  - A client that declares `tasks.requests.sampling.createMessage`
+    (`ClientBuilder::with_task_sampling()`) answers a task-augmented
+    `sampling/createMessage` with `CreateTaskResult` immediately, runs
+    `ClientHandler::create_message` in the background, and serves the server's
+    `tasks/get` / `tasks/result` / `tasks/list` / `tasks/cancel` against a
+    per-connection task store (the shared `mcpkit_core::tasks` machinery).
+    `tasks/list` and `tasks/cancel` are gated on their own declared
+    capabilities; an undeclared client keeps processing such requests normally
+    with the `task` field ignored (spec).
+  - **Breaking:** `ClientHandler::create_message` gains a
+    `ctx: &RequestContext` parameter carrying the request's cancellation
+    signal — for a task-augmented request it is wired to the task, so a
+    server's `tasks/cancel` can abort the in-flight (expensive) LLM call.
+  - Inbound server requests are now handled off the client's router loop, so
+    a slow handler or a spec-blocking `tasks/result` no longer stalls response
+    routing (or the `tasks/cancel` that would unblock it).
+  - Shared-store hardening (spec): terminal task statuses are now final — a
+    cancelled task stays `cancelled` even if its execution later completes
+    (the late outcome is discarded), and `tasks/cancel` on an already-terminal
+    task is rejected with `-32602`
+    ([#143](https://github.com/praxiomlabs/mcpkit/issues/143)).
 - Task-augmented sampling, phase 2 of #143 — the receiver-side task machinery
   (`TaskManager`, `TaskHandle`, `TaskState`, `route_task_store`,
   `CancellationToken`) moves from mcpkit-server to the new

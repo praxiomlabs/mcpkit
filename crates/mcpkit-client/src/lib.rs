@@ -76,7 +76,7 @@ pub mod pool;
 pub use builder::ClientBuilder;
 pub use client::Client;
 pub use discovery::{DiscoveredServer, ServerDiscovery};
-pub use handler::ClientHandler;
+pub use handler::{ClientHandler, RequestContext};
 pub use pool::{ClientPool, ClientPoolBuilder, PoolConfig, PoolStats};
 
 /// Prelude module for convenient imports.
@@ -84,6 +84,6 @@ pub mod prelude {
     pub use crate::builder::ClientBuilder;
     pub use crate::client::Client;
     pub use crate::discovery::{DiscoveredServer, ServerDiscovery};
-    pub use crate::handler::ClientHandler;
+    pub use crate::handler::{ClientHandler, RequestContext};
     pub use crate::pool::{ClientPool, ClientPoolBuilder, PoolConfig, PoolStats};
 }

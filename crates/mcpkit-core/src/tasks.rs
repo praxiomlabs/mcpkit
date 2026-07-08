@@ -394,6 +394,9 @@ impl TaskManager {
     }
 
     /// Cancel a task.
+    ///
+    /// Cancelling a task already in a terminal status is rejected with
+    /// *invalid params* (spec).
     pub fn cancel(&self, id: &TaskId) -> Result<(), McpError> {
         let mut tasks = self
             .tasks
@@ -401,6 +404,15 @@ impl TaskManager {
             .map_err(|_| McpError::internal("Failed to acquire task lock"))?;
 
         if let Some(state) = tasks.get_mut(id) {
+            if state.task.status.is_terminal() {
+                return Err(McpError::invalid_params(
+                    "tasks/cancel",
+                    format!(
+                        "Cannot cancel task: already in terminal status '{}'",
+                        state.task.status
+                    ),
+                ));
+            }
             state.cancel_token.cancel();
             state.task.set_status(TaskStatus::Cancelled);
             state.last_access = Instant::now();
@@ -427,6 +439,18 @@ impl TaskManager {
             .map_err(|_| McpError::internal("Failed to acquire task lock"))?;
 
         if let Some(state) = tasks.get_mut(id) {
+            // Terminal statuses are final (spec): in particular, a cancelled
+            // task stays cancelled even if its execution later finishes.
+            if state.task.status.is_terminal() {
+                return Err(McpError::invalid_params(
+                    "tasks/get",
+                    format!(
+                        "task {} is already terminal ('{}')",
+                        id.as_str(),
+                        state.task.status
+                    ),
+                ));
+            }
             state.task.set_status(status);
             if message.is_some() {
                 state.task.status_message = message;
@@ -458,6 +482,19 @@ impl TaskManager {
             .map_err(|_| McpError::internal("Failed to acquire task lock"))?;
 
         if let Some(state) = tasks.get_mut(id) {
+            // Terminal statuses are final (spec): a cancelled task stays
+            // cancelled even if its execution later completes or fails, and
+            // its outcome is discarded.
+            if state.task.status.is_terminal() {
+                return Err(McpError::invalid_params(
+                    "tasks/result",
+                    format!(
+                        "task {} is already terminal ('{}')",
+                        id.as_str(),
+                        state.task.status
+                    ),
+                ));
+            }
             state.task.set_status(status);
             if message.is_some() {
                 state.task.status_message = message;
@@ -612,7 +649,10 @@ pub async fn route_task_store(
                 )));
             };
             if store.get(&id).is_some() {
-                let _ = store.cancel(&id);
+                // Cancelling an already-terminal task is -32602 (spec).
+                if let Err(e) = store.cancel(&id) {
+                    return Some(Err(e));
+                }
                 Some(Ok(store
                     .get(&id)
                     .map(|s| {
@@ -956,6 +996,44 @@ mod tests {
         .expect("owned task");
         assert!(outcome.is_err(), "cancelled task has no result");
         canceller.await.unwrap();
+    }
+
+    // --- terminal-state immutability (spec: terminal statuses are final) ---
+
+    #[test]
+    fn cancelled_task_stays_cancelled_when_execution_completes() {
+        let manager = Arc::new(TaskManager::new());
+        let handle = manager.create(None);
+        let id = handle.id().clone();
+        manager.cancel(&id).unwrap();
+
+        // The background execution finishes anyway; the outcome is discarded.
+        assert!(handle.complete(serde_json::json!({ "late": 1 })).is_err());
+        assert!(handle.fail("late failure").is_err());
+
+        let state = manager.get(&id).unwrap();
+        assert_eq!(state.task.status, TaskStatus::Cancelled);
+        assert!(state.payload.is_none(), "late outcome must be discarded");
+    }
+
+    #[tokio::test]
+    async fn cancel_on_terminal_task_is_invalid_params() {
+        let manager = Arc::new(TaskManager::new());
+        let handle = manager.create(None);
+        let id = handle.id().clone();
+        handle.complete(serde_json::json!({})).unwrap();
+
+        // Direct store call.
+        let err = manager.cancel(&id).expect_err("terminal cancel rejected");
+        assert_eq!(err.code(), -32602);
+
+        // And through the route.
+        let params = result_params(&id);
+        let err = route_task_store(&manager, "tasks/cancel", Some(&params))
+            .await
+            .expect("owned task")
+            .expect_err("terminal cancel rejected");
+        assert_eq!(err.code(), -32602);
     }
 
     // --- cancellation token (moved with the token from mcpkit-server) ------

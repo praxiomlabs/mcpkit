@@ -93,6 +93,22 @@ impl ClientBuilder {
         self
     }
 
+    /// Enable task-augmented sampling (2025-11-25).
+    ///
+    /// Declares `tasks.list`, `tasks.cancel`, and
+    /// `tasks.requests.sampling.createMessage`: the server may then augment
+    /// `sampling/createMessage` with a `task`, receiving a `CreateTaskResult`
+    /// immediately while the client runs
+    /// [`ClientHandler::create_message`](crate::ClientHandler::create_message)
+    /// in the background and serves `tasks/get` / `tasks/result` /
+    /// `tasks/list` / `tasks/cancel` against its own task store. Declare plain
+    /// sampling separately via [`with_sampling`](Self::with_sampling).
+    #[must_use]
+    pub fn with_task_sampling(mut self) -> Self {
+        self.capabilities = self.capabilities.with_tasks().with_task_sampling();
+        self
+    }
+
     /// Enable roots capability.
     ///
     /// When enabled, the client exposes file system roots to the server.
