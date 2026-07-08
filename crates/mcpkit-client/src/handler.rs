@@ -9,11 +9,46 @@
 //! This module defines traits that clients can implement to handle these requests.
 
 use mcpkit_core::error::McpError;
+use mcpkit_core::tasks::{CancellationToken, CancelledFuture};
 use mcpkit_core::types::{
     CreateMessageRequest, CreateMessageResult, ElicitRequest, ElicitResult,
     ProgressNotificationParams, TaskId, TaskProgress, UrlElicitRequest,
 };
 use std::future::Future;
+
+/// Context for a server-initiated request delivered to a [`ClientHandler`].
+///
+/// Carries the request's cancellation signal. For a task-augmented request
+/// (e.g. task-augmented `sampling/createMessage`), the token is wired to the
+/// task, so a `tasks/cancel` from the server cancels the in-flight handler
+/// work; for a plain request the token is currently never cancelled.
+#[derive(Debug, Clone, Default)]
+pub struct RequestContext {
+    cancel: CancellationToken,
+}
+
+impl RequestContext {
+    /// A context with a cancellation token (e.g. a task's token).
+    #[must_use]
+    pub fn with_cancellation(cancel: CancellationToken) -> Self {
+        Self { cancel }
+    }
+
+    /// Check if the request has been cancelled.
+    #[must_use]
+    pub fn is_cancelled(&self) -> bool {
+        self.cancel.is_cancelled()
+    }
+
+    /// A future that completes when the request is cancelled.
+    ///
+    /// Long-running handlers (LLM sampling in particular) should select
+    /// against this and abandon work when it fires.
+    #[must_use]
+    pub fn cancelled(&self) -> CancelledFuture {
+        self.cancel.cancelled()
+    }
+}
 
 /// Handler trait for server-initiated requests.
 ///
@@ -39,12 +74,18 @@ pub trait ClientHandler: Send + Sync {
     /// The server is asking the client's LLM to generate a response.
     /// This is used for agentic workflows where the server needs LLM capabilities.
     ///
+    /// For a task-augmented request, `ctx` carries the task's cancellation
+    /// signal: a long-running implementation should watch
+    /// [`RequestContext::cancelled`] and abandon the (expensive) LLM call when
+    /// the server cancels the task.
+    ///
     /// # Errors
     ///
     /// Returns an error if sampling is not supported or the request fails.
     fn create_message(
         &self,
         _request: CreateMessageRequest,
+        _ctx: &RequestContext,
     ) -> impl Future<Output = Result<CreateMessageResult, McpError>> + Send {
         async {
             Err(McpError::CapabilityNotSupported {
@@ -217,6 +258,7 @@ where
     fn create_message(
         &self,
         request: CreateMessageRequest,
+        _ctx: &RequestContext,
     ) -> impl Future<Output = Result<CreateMessageResult, McpError>> + Send {
         (self.handler)(request)
     }
@@ -237,20 +279,23 @@ mod tests {
     async fn test_noop_handler() {
         let handler = NoOpHandler;
         let result = handler
-            .create_message(CreateMessageRequest {
-                messages: vec![],
-                model_preferences: None,
-                system_prompt: None,
-                include_context: None,
-                temperature: None,
-                max_tokens: 100,
-                stop_sequences: None,
-                metadata: None,
-                tools: None,
-                tool_choice: None,
-                task: None,
-                meta: None,
-            })
+            .create_message(
+                CreateMessageRequest {
+                    messages: vec![],
+                    model_preferences: None,
+                    system_prompt: None,
+                    include_context: None,
+                    temperature: None,
+                    max_tokens: 100,
+                    stop_sequences: None,
+                    metadata: None,
+                    tools: None,
+                    tool_choice: None,
+                    task: None,
+                    meta: None,
+                },
+                &RequestContext::default(),
+            )
             .await;
         assert!(result.is_err());
     }

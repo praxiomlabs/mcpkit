@@ -43,7 +43,8 @@ use async_lock::RwLock;
 #[cfg(feature = "tokio-runtime")]
 use tokio::sync::mpsc;
 
-use crate::handler::ClientHandler;
+use crate::handler::{ClientHandler, RequestContext};
+use mcpkit_core::tasks::{TaskManager, route_task_store};
 
 /// An MCP client connected to a server.
 ///
@@ -160,6 +161,13 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
         // Create channel for outgoing messages
         let (outgoing_tx, outgoing_rx) = mpsc::channel::<Message>(256);
 
+        // Per-connection task store for task-augmented server->client requests
+        // (only when the client declared the `tasks` capability).
+        let tasks = client_caps
+            .tasks
+            .is_some()
+            .then(|| Arc::new(TaskManager::new()));
+
         // Start background message routing task
         let background_handle = Self::spawn_message_router(
             Arc::clone(&transport),
@@ -168,6 +176,7 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
             Arc::clone(&running),
             outgoing_rx,
             Arc::new(client_caps.clone()),
+            tasks,
         );
 
         // Notify handler that connection is established
@@ -208,6 +217,7 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
         running: Arc<AtomicBool>,
         mut outgoing_rx: mpsc::Receiver<Message>,
         client_caps: Arc<ClientCapabilities>,
+        tasks: Option<Arc<TaskManager>>,
     ) -> tokio::task::JoinHandle<()> {
         tokio::spawn(async move {
             debug!("Starting client message router");
@@ -243,6 +253,7 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
                                     &handler,
                                     &transport,
                                     &client_caps,
+                                    tasks.as_ref(),
                                 ).await;
                             }
                             Ok(None) => {
@@ -279,13 +290,31 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
         handler: &Arc<H>,
         transport: &Arc<T>,
         client_caps: &Arc<ClientCapabilities>,
+        tasks: Option<&Arc<TaskManager>>,
     ) {
         match message {
             Message::Response(response) => {
                 Self::route_response(response, pending).await;
             }
             Message::Request(request) => {
-                Self::handle_server_request(request, handler, transport, client_caps).await;
+                // Handle off the router loop: a slow handler (or a spec-blocking
+                // `tasks/result`, which waits for the task to reach a terminal
+                // status) must not stall response routing or the `tasks/cancel`
+                // that would unblock it.
+                let handler = Arc::clone(handler);
+                let transport = Arc::clone(transport);
+                let client_caps = Arc::clone(client_caps);
+                let tasks = tasks.cloned();
+                tokio::spawn(async move {
+                    Self::handle_server_request(
+                        request,
+                        &handler,
+                        &transport,
+                        &client_caps,
+                        tasks.as_ref(),
+                    )
+                    .await;
+                });
             }
             Message::Notification(notification) => {
                 Self::handle_notification(notification, handler).await;
@@ -325,12 +354,16 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
         handler: &Arc<H>,
         transport: &Arc<T>,
         client_caps: &Arc<ClientCapabilities>,
+        tasks: Option<&Arc<TaskManager>>,
     ) {
         trace!(method = %request.method, "Handling server request");
 
         let response = match request.method.as_ref() {
             "sampling/createMessage" => {
-                Self::handle_sampling_request(&request, handler, client_caps).await
+                Self::handle_sampling_request(&request, handler, client_caps, tasks).await
+            }
+            method @ ("tasks/get" | "tasks/result" | "tasks/list" | "tasks/cancel") => {
+                Self::handle_tasks_request(&request, method, client_caps, tasks).await
             }
             "elicitation/create" => Self::handle_elicitation_request(&request, handler).await,
             "roots/list" => Self::handle_roots_request(&request, handler).await,
@@ -358,6 +391,7 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
         request: &Request,
         handler: &Arc<H>,
         client_caps: &Arc<ClientCapabilities>,
+        tasks: Option<&Arc<TaskManager>>,
     ) -> Response {
         let mut params = match &request.params {
             Some(p) => match serde_json::from_value::<CreateMessageRequest>(p.clone()) {
@@ -377,13 +411,6 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
             }
         };
 
-        // Task-augmented sampling is not supported yet (#143): the client does
-        // not declare `tasks.requests.sampling.createMessage`, and per spec an
-        // undeclared receiver MUST process the request normally, ignoring the
-        // task metadata. Strip it so handlers cannot observe a field the spec
-        // requires us to ignore.
-        params.task = None;
-
         // Per spec, a client MUST reject tool-augmented sampling unless it
         // declared the `sampling.tools` capability.
         if (params.tools.is_some() || params.tool_choice.is_some())
@@ -398,7 +425,60 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
             );
         }
 
-        match handler.create_message(params).await {
+        if params.task.is_some() {
+            // Task-augmented path: only when the client declared
+            // `tasks.requests.sampling.createMessage`. Reply with
+            // `CreateTaskResult` immediately and run the sampling in the
+            // background; the store holds the outcome for the server's later
+            // `tasks/get` / `tasks/result`.
+            if let (true, Some(store)) = (client_caps.has_task_sampling(), tasks) {
+                let ttl = params.task.as_ref().and_then(|t| t.ttl);
+                let handle = store.create(ttl);
+                let task = handle
+                    .task()
+                    .unwrap_or_else(|| mcpkit_core::types::Task::new(handle.id().clone()));
+                let create_result =
+                    serde_json::to_value(mcpkit_core::types::CreateTaskResult { task, meta: None })
+                        .unwrap_or_default();
+
+                // The handler never observes the task metadata; its
+                // cancellation arrives through the context instead.
+                params.task = None;
+                let ctx =
+                    RequestContext::with_cancellation(handle.cancel_token().unwrap_or_default());
+                let handler = Arc::clone(handler);
+                tokio::spawn(async move {
+                    match handler.create_message(params, &ctx).await {
+                        Ok(result) => match serde_json::to_value(result) {
+                            Ok(value) => {
+                                // Fails only if the task went terminal first
+                                // (e.g. cancelled) -- the outcome is discarded.
+                                let _ = handle.complete(value);
+                            }
+                            Err(e) => {
+                                let _ = handle.fail(format!("Serialization error: {e}"));
+                            }
+                        },
+                        // tasks/result must reproduce the JSON-RPC error the
+                        // request would have returned.
+                        Err(e) => {
+                            let _ = handle.fail_with_error((&e).into());
+                        }
+                    }
+                });
+                return Response::success(request.id.clone(), create_result);
+            }
+
+            // Undeclared: per spec the request is processed normally, ignoring
+            // the task metadata. Strip it so handlers cannot observe a field
+            // the spec requires us to ignore.
+            params.task = None;
+        }
+
+        match handler
+            .create_message(params, &RequestContext::default())
+            .await
+        {
             Ok(result) => match serde_json::to_value(result) {
                 Ok(value) => Response::success(request.id.clone(), value),
                 Err(e) => Response::error(
@@ -409,6 +489,52 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
             Err(e) => Response::error(
                 request.id.clone(),
                 JsonRpcError::internal_error(e.to_string()),
+            ),
+        }
+    }
+
+    /// Serve a server-initiated `tasks/*` request against the client's own
+    /// task store (tasks created by task-augmented server->client requests).
+    async fn handle_tasks_request(
+        request: &Request,
+        method: &str,
+        client_caps: &Arc<ClientCapabilities>,
+        tasks: Option<&Arc<TaskManager>>,
+    ) -> Response {
+        // No declared `tasks` capability -> unknown method (the pre-tasks
+        // behavior).
+        let Some(store) = tasks else {
+            return Response::error(
+                request.id.clone(),
+                JsonRpcError::method_not_found(format!("Unknown method: {method}")),
+            );
+        };
+        // `tasks/list` and `tasks/cancel` are separately declared operations;
+        // `tasks/get` / `tasks/result` are implied by any `tasks` declaration.
+        let declared = match method {
+            "tasks/list" => client_caps.tasks.as_ref().is_some_and(|t| t.list.is_some()),
+            "tasks/cancel" => client_caps
+                .tasks
+                .as_ref()
+                .is_some_and(|t| t.cancel.is_some()),
+            _ => true,
+        };
+        if !declared {
+            return Response::error(
+                request.id.clone(),
+                JsonRpcError::method_not_found(format!(
+                    "{method} is not declared in the client's tasks capability"
+                )),
+            );
+        }
+        match route_task_store(store, method, request.params.as_ref()).await {
+            Some(Ok(value)) => Response::success(request.id.clone(), value),
+            Some(Err(e)) => Response::error(request.id.clone(), (&e).into()),
+            // The store does not own this id; the client has no fallback
+            // handler, so an unknown taskId is invalid params (spec).
+            None => Response::error(
+                request.id.clone(),
+                JsonRpcError::invalid_params("Unknown task"),
             ),
         }
     }
@@ -1754,7 +1880,7 @@ mod tests {
         // Declared only `sampling` (not `sampling.tools`) -> gate rejects.
         let caps = Arc::new(ClientCapabilities::new().with_sampling());
         let resp = Client::<SilentTransport, crate::handler::NoOpHandler>::handle_sampling_request(
-            &request, &handler, &caps,
+            &request, &handler, &caps, None,
         )
         .await;
         assert!(
@@ -1769,7 +1895,7 @@ mod tests {
         // with a different error).
         let caps = Arc::new(ClientCapabilities::new().with_sampling_tools());
         let resp = Client::<SilentTransport, crate::handler::NoOpHandler>::handle_sampling_request(
-            &request, &handler, &caps,
+            &request, &handler, &caps, None,
         )
         .await;
         assert!(
@@ -1794,6 +1920,7 @@ mod tests {
             async fn create_message(
                 &self,
                 request: CreateMessageRequest,
+                _ctx: &RequestContext,
             ) -> Result<mcpkit_core::types::CreateMessageResult, McpError> {
                 *self.seen.lock().unwrap() = Some(request);
                 Ok(mcpkit_core::types::CreateMessageResult {
@@ -1827,9 +1954,10 @@ mod tests {
         );
         let caps = Arc::new(ClientCapabilities::new().with_sampling());
 
-        let resp =
-            Client::<SilentTransport, TaskSpy>::handle_sampling_request(&request, &handler, &caps)
-                .await;
+        let resp = Client::<SilentTransport, TaskSpy>::handle_sampling_request(
+            &request, &handler, &caps, None,
+        )
+        .await;
 
         // Processed normally: a plain CreateMessageResult, not a task.
         let result = resp.result.expect("normal result");
@@ -1842,5 +1970,252 @@ mod tests {
             request_seen.task.is_none(),
             "handler must not observe the task field"
         );
+    }
+
+    // --- #143 phase 3: task-augmented sampling ------------------------------
+
+    fn assistant_result() -> mcpkit_core::types::CreateMessageResult {
+        mcpkit_core::types::CreateMessageResult {
+            role: mcpkit_core::types::Role::Assistant,
+            content: mcpkit_core::types::OneOrMany::One(mcpkit_core::types::SamplingContent::Text(
+                mcpkit_core::types::TextContent {
+                    text: "ok".into(),
+                    annotations: None,
+                    meta: None,
+                },
+            )),
+            model: "m".into(),
+            stop_reason: None,
+            meta: None,
+        }
+    }
+
+    fn task_caps() -> Arc<ClientCapabilities> {
+        Arc::new(
+            ClientCapabilities::new()
+                .with_sampling()
+                .with_tasks()
+                .with_task_sampling(),
+        )
+    }
+
+    fn sampling_request_with_task() -> Request {
+        Request::with_params(
+            "sampling/createMessage",
+            RequestId::Number(1),
+            serde_json::json!({
+                "messages": [],
+                "maxTokens": 10,
+                "task": { "ttl": 60000 }
+            }),
+        )
+    }
+
+    fn tasks_request(id: u64, method: &'static str, task_id: &str) -> Request {
+        Request::with_params(
+            method,
+            RequestId::Number(id),
+            serde_json::json!({ "taskId": task_id }),
+        )
+    }
+
+    /// A handler whose sampling completes only when released; records whether
+    /// it observed the task field and whether its context was cancelled.
+    struct GatedSampler {
+        release: Arc<tokio::sync::Notify>,
+        saw_task: Arc<std::sync::Mutex<Option<bool>>>,
+        cancelled: Arc<AtomicBool>,
+    }
+    impl crate::handler::ClientHandler for GatedSampler {
+        async fn create_message(
+            &self,
+            request: CreateMessageRequest,
+            ctx: &RequestContext,
+        ) -> Result<mcpkit_core::types::CreateMessageResult, McpError> {
+            *self.saw_task.lock().unwrap() = Some(request.task.is_some());
+            tokio::select! {
+                () = self.release.notified() => Ok(assistant_result()),
+                () = ctx.cancelled() => {
+                    self.cancelled.store(true, Ordering::SeqCst);
+                    Err(McpError::cancelled("sampling"))
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn task_augmented_sampling_returns_task_then_result() {
+        type C = Client<SilentTransport, GatedSampler>;
+        let release = Arc::new(tokio::sync::Notify::new());
+        let saw_task = Arc::new(std::sync::Mutex::new(None));
+        let handler = Arc::new(GatedSampler {
+            release: release.clone(),
+            saw_task: saw_task.clone(),
+            cancelled: Arc::new(AtomicBool::new(false)),
+        });
+        let caps = task_caps();
+        let store = Arc::new(TaskManager::new());
+
+        // Task-augmented request -> immediate CreateTaskResult, status working.
+        let resp = C::handle_sampling_request(
+            &sampling_request_with_task(),
+            &handler,
+            &caps,
+            Some(&store),
+        )
+        .await;
+        let result = resp.result.expect("CreateTaskResult");
+        assert_eq!(result["task"]["status"], "working");
+        assert_eq!(result["task"]["ttl"], 60000);
+        let task_id = result["task"]["taskId"].as_str().expect("id").to_string();
+
+        // tasks/get while the sampling is still gated: working.
+        let got = C::handle_tasks_request(
+            &tasks_request(2, "tasks/get", &task_id),
+            "tasks/get",
+            &caps,
+            Some(&store),
+        )
+        .await;
+        assert_eq!(got.result.expect("task")["status"], "working");
+
+        // tasks/result blocks until the handler is released, then returns the
+        // CreateMessageResult with the related-task metadata attached.
+        let waiter = {
+            let caps = Arc::clone(&caps);
+            let store = Arc::clone(&store);
+            let task_id = task_id.clone();
+            tokio::spawn(async move {
+                C::handle_tasks_request(
+                    &tasks_request(3, "tasks/result", &task_id),
+                    "tasks/result",
+                    &caps,
+                    Some(&store),
+                )
+                .await
+            })
+        };
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert!(
+            !waiter.is_finished(),
+            "tasks/result must block until terminal"
+        );
+        release.notify_one();
+        let resp = tokio::time::timeout(Duration::from_secs(5), waiter)
+            .await
+            .expect("blocked tasks/result never completed")
+            .expect("join");
+        let payload = resp.result.expect("sampling result");
+        assert_eq!(payload["role"], "assistant");
+        assert_eq!(
+            payload["_meta"]["io.modelcontextprotocol/related-task"]["taskId"],
+            task_id.as_str()
+        );
+        // The handler never observed the task field.
+        assert_eq!(*saw_task.lock().unwrap(), Some(false));
+    }
+
+    #[tokio::test]
+    async fn tasks_cancel_cancels_in_flight_sampling() {
+        type C = Client<SilentTransport, GatedSampler>;
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let handler = Arc::new(GatedSampler {
+            release: Arc::new(tokio::sync::Notify::new()),
+            saw_task: Arc::new(std::sync::Mutex::new(None)),
+            cancelled: cancelled.clone(),
+        });
+        let caps = task_caps();
+        let store = Arc::new(TaskManager::new());
+
+        let resp = C::handle_sampling_request(
+            &sampling_request_with_task(),
+            &handler,
+            &caps,
+            Some(&store),
+        )
+        .await;
+        let task_id = resp.result.expect("CreateTaskResult")["task"]["taskId"]
+            .as_str()
+            .expect("id")
+            .to_string();
+
+        // Cancel while the sampling is in flight.
+        let resp = C::handle_tasks_request(
+            &tasks_request(2, "tasks/cancel", &task_id),
+            "tasks/cancel",
+            &caps,
+            Some(&store),
+        )
+        .await;
+        assert_eq!(resp.result.expect("cancel result")["status"], "cancelled");
+
+        // The handler's context observed the cancellation.
+        for _ in 0..100 {
+            if cancelled.load(Ordering::SeqCst) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        assert!(
+            cancelled.load(Ordering::SeqCst),
+            "handler must observe cancellation via its RequestContext"
+        );
+
+        // The task stays cancelled; tasks/result reports no result.
+        let resp = C::handle_tasks_request(
+            &tasks_request(3, "tasks/result", &task_id),
+            "tasks/result",
+            &caps,
+            Some(&store),
+        )
+        .await;
+        let err = resp.error.expect("cancelled task has no result");
+        assert_eq!(err.code, -32602);
+        // Status remains cancelled even though the handler returned an error
+        // after cancellation.
+        let got = C::handle_tasks_request(
+            &tasks_request(4, "tasks/get", &task_id),
+            "tasks/get",
+            &caps,
+            Some(&store),
+        )
+        .await;
+        assert_eq!(got.result.expect("task")["status"], "cancelled");
+    }
+
+    #[tokio::test]
+    async fn tasks_list_and_cancel_are_capability_gated() {
+        type C = Client<SilentTransport, crate::handler::NoOpHandler>;
+        // Declared task sampling but NOT tasks.list / tasks.cancel.
+        let caps = Arc::new(ClientCapabilities::new().with_task_sampling());
+        let store = Arc::new(TaskManager::new());
+
+        let resp = C::handle_tasks_request(
+            &Request::with_params("tasks/list", RequestId::Number(1), serde_json::json!({})),
+            "tasks/list",
+            &caps,
+            Some(&store),
+        )
+        .await;
+        assert_eq!(resp.error.expect("gated").code, -32601);
+
+        let resp = C::handle_tasks_request(
+            &tasks_request(2, "tasks/cancel", "nope"),
+            "tasks/cancel",
+            &caps,
+            Some(&store),
+        )
+        .await;
+        assert_eq!(resp.error.expect("gated").code, -32601);
+
+        // tasks/get is implied by any tasks declaration; unknown id -> -32602.
+        let resp = C::handle_tasks_request(
+            &tasks_request(3, "tasks/get", "nope"),
+            "tasks/get",
+            &caps,
+            Some(&store),
+        )
+        .await;
+        assert_eq!(resp.error.expect("unknown task").code, -32602);
     }
 }

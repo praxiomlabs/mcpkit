@@ -155,6 +155,7 @@ fn generate_client_handler(
                 fn create_message(
                     &self,
                     request: ::mcpkit::types::CreateMessageRequest,
+                    _ctx: &::mcpkit::client::RequestContext,
                 ) -> impl std::future::Future<Output = Result<::mcpkit::types::CreateMessageResult, ::mcpkit::error::McpError>> + Send {
                     async move {
                         #call
@@ -166,6 +167,7 @@ fn generate_client_handler(
                 fn create_message(
                     &self,
                     request: ::mcpkit::types::CreateMessageRequest,
+                    _ctx: &::mcpkit::client::RequestContext,
                 ) -> impl std::future::Future<Output = Result<::mcpkit::types::CreateMessageResult, ::mcpkit::error::McpError>> + Send {
                     async move {
                         Ok(#call)
