@@ -359,7 +359,7 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
         handler: &Arc<H>,
         client_caps: &Arc<ClientCapabilities>,
     ) -> Response {
-        let params = match &request.params {
+        let mut params = match &request.params {
             Some(p) => match serde_json::from_value::<CreateMessageRequest>(p.clone()) {
                 Ok(req) => req,
                 Err(e) => {
@@ -376,6 +376,13 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
                 );
             }
         };
+
+        // Task-augmented sampling is not supported yet (#143): the client does
+        // not declare `tasks.requests.sampling.createMessage`, and per spec an
+        // undeclared receiver MUST process the request normally, ignoring the
+        // task metadata. Strip it so handlers cannot observe a field the spec
+        // requires us to ignore.
+        params.task = None;
 
         // Per spec, a client MUST reject tool-augmented sampling unless it
         // declared the `sampling.tools` capability.
@@ -1772,6 +1779,68 @@ mod tests {
                 .message
                 .contains("sampling.tools"),
             "gate should pass once sampling.tools is declared"
+        );
+    }
+
+    /// Per spec, a receiver that has not declared task support for a request
+    /// type must process it normally, ignoring the task metadata — the handler
+    /// must never observe `task`.
+    #[tokio::test]
+    async fn undeclared_task_augmented_sampling_is_processed_normally() {
+        struct TaskSpy {
+            seen: Arc<std::sync::Mutex<Option<CreateMessageRequest>>>,
+        }
+        impl crate::handler::ClientHandler for TaskSpy {
+            async fn create_message(
+                &self,
+                request: CreateMessageRequest,
+            ) -> Result<mcpkit_core::types::CreateMessageResult, McpError> {
+                *self.seen.lock().unwrap() = Some(request);
+                Ok(mcpkit_core::types::CreateMessageResult {
+                    role: mcpkit_core::types::Role::Assistant,
+                    content: mcpkit_core::types::OneOrMany::One(
+                        mcpkit_core::types::SamplingContent::Text(
+                            mcpkit_core::types::TextContent {
+                                text: "ok".into(),
+                                annotations: None,
+                                meta: None,
+                            },
+                        ),
+                    ),
+                    model: "m".into(),
+                    stop_reason: None,
+                    meta: None,
+                })
+            }
+        }
+
+        let seen = Arc::new(std::sync::Mutex::new(None));
+        let handler = Arc::new(TaskSpy { seen: seen.clone() });
+        let request = Request::with_params(
+            "sampling/createMessage",
+            RequestId::Number(1),
+            serde_json::json!({
+                "messages": [],
+                "maxTokens": 10,
+                "task": { "ttl": 60000 }
+            }),
+        );
+        let caps = Arc::new(ClientCapabilities::new().with_sampling());
+
+        let resp =
+            Client::<SilentTransport, TaskSpy>::handle_sampling_request(&request, &handler, &caps)
+                .await;
+
+        // Processed normally: a plain CreateMessageResult, not a task.
+        let result = resp.result.expect("normal result");
+        assert!(result.get("task").is_none());
+        assert_eq!(result["role"], "assistant");
+        // The handler observed the request with `task` stripped.
+        let seen = seen.lock().unwrap();
+        let request_seen = seen.as_ref().expect("handler was invoked");
+        assert!(
+            request_seen.task.is_none(),
+            "handler must not observe the task field"
         );
     }
 }

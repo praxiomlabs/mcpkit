@@ -20,9 +20,9 @@ pub struct ServerCapabilities {
     /// Prompt capabilities.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prompts: Option<PromptCapability>,
-    /// Task capabilities.
+    /// Task capabilities (2025-11-25).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tasks: Option<TaskCapability>,
+    pub tasks: Option<TasksCapability>,
     /// Logging capabilities.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub logging: Option<LoggingCapability>,
@@ -81,10 +81,31 @@ impl ServerCapabilities {
         self
     }
 
-    /// Enable task support.
+    /// Enable task support (`tasks/list` and `tasks/cancel`).
+    ///
+    /// This declares the base task operations only. It does **not** advertise
+    /// task augmentation for any request type — a server whose tools accept
+    /// task-augmented `tools/call` must additionally declare it via
+    /// [`with_task_tools`](Self::with_task_tools).
     #[must_use]
     pub fn with_tasks(mut self) -> Self {
-        self.tasks = Some(TaskCapability::default());
+        let tasks = self.tasks.get_or_insert_with(TasksCapability::default);
+        tasks.list = Some(serde_json::json!({}));
+        tasks.cancel = Some(serde_json::json!({}));
+        self
+    }
+
+    /// Declare task-augmented `tools/call` support
+    /// (`tasks.requests.tools.call`).
+    #[must_use]
+    pub fn with_task_tools(mut self) -> Self {
+        self.tasks
+            .get_or_insert_with(TasksCapability::default)
+            .requests
+            .get_or_insert_with(TaskRequestsCapability::default)
+            .tools
+            .get_or_insert_with(ToolsTaskCapability::default)
+            .call = Some(serde_json::json!({}));
         self
     }
 
@@ -214,6 +235,10 @@ pub struct ClientCapabilities {
     /// Elicitation capabilities.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub elicitation: Option<ElicitationCapability>,
+    /// Task capabilities (2025-11-25): which client-handled requests accept
+    /// task augmentation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tasks: Option<TasksCapability>,
     /// Experimental capabilities.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub experimental: Option<serde_json::Value>,
@@ -303,6 +328,46 @@ impl ClientCapabilities {
             .get_or_insert_with(ElicitationCapability::default)
             .url = Some(serde_json::json!({}));
         self
+    }
+
+    /// Enable task support (`tasks/list` and `tasks/cancel`).
+    ///
+    /// This declares the base task operations only; declare which requests
+    /// accept task augmentation via
+    /// [`with_task_sampling`](Self::with_task_sampling).
+    #[must_use]
+    pub fn with_tasks(mut self) -> Self {
+        let tasks = self.tasks.get_or_insert_with(TasksCapability::default);
+        tasks.list = Some(serde_json::json!({}));
+        tasks.cancel = Some(serde_json::json!({}));
+        self
+    }
+
+    /// Declare task-augmented `sampling/createMessage` support
+    /// (`tasks.requests.sampling.createMessage`).
+    ///
+    /// Declare plain sampling support separately via
+    /// [`with_sampling`](Self::with_sampling).
+    #[must_use]
+    pub fn with_task_sampling(mut self) -> Self {
+        self.tasks
+            .get_or_insert_with(TasksCapability::default)
+            .requests
+            .get_or_insert_with(TaskRequestsCapability::default)
+            .sampling
+            .get_or_insert_with(SamplingTaskCapability::default)
+            .create_message = Some(serde_json::json!({}));
+        self
+    }
+
+    /// Check if task-augmented `sampling/createMessage` is declared.
+    #[must_use]
+    pub fn has_task_sampling(&self) -> bool {
+        self.tasks
+            .as_ref()
+            .and_then(|t| t.requests.as_ref())
+            .and_then(|r| r.sampling.as_ref())
+            .is_some_and(|s| s.create_message.is_some())
     }
 
     /// Check if form-mode elicitation is supported.
@@ -412,12 +477,62 @@ pub struct PromptCapability {
     pub list_changed: Option<bool>,
 }
 
-/// Task capability flags.
+/// `capabilities.tasks` (2025-11-25).
+///
+/// Declared by whichever side *receives* task-augmented requests: servers
+/// declare it for `tools/call`, clients for `sampling/createMessage` /
+/// `elicitation/create`. Per the spec, the `requests` set is exhaustive —
+/// a request type not listed does not support task augmentation.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct TaskCapability {
-    /// If true, the server supports task cancellation.
+pub struct TasksCapability {
+    /// Whether this party supports `tasks/list`.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub cancellable: Option<bool>,
+    pub list: Option<serde_json::Value>,
+    /// Whether this party supports `tasks/cancel`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cancel: Option<serde_json::Value>,
+    /// Which request types can be augmented with tasks.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub requests: Option<TaskRequestsCapability>,
+}
+
+/// `capabilities.tasks.requests`: the request types that accept a `task`
+/// field, by category.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct TaskRequestsCapability {
+    /// Task support for sampling requests (declared by clients).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sampling: Option<SamplingTaskCapability>,
+    /// Task support for elicitation requests (declared by clients).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub elicitation: Option<ElicitationTaskCapability>,
+    /// Task support for tool requests (declared by servers).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tools: Option<ToolsTaskCapability>,
+}
+
+/// `capabilities.tasks.requests.sampling`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SamplingTaskCapability {
+    /// Whether task-augmented `sampling/createMessage` is supported.
+    #[serde(rename = "createMessage", skip_serializing_if = "Option::is_none")]
+    pub create_message: Option<serde_json::Value>,
+}
+
+/// `capabilities.tasks.requests.elicitation`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ElicitationTaskCapability {
+    /// Whether task-augmented `elicitation/create` is supported.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub create: Option<serde_json::Value>,
+}
+
+/// `capabilities.tasks.requests.tools`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ToolsTaskCapability {
+    /// Whether task-augmented `tools/call` is supported.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub call: Option<serde_json::Value>,
 }
 
 /// Logging capability flags.
