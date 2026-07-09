@@ -23,9 +23,9 @@ For more granular control, use individual crates:
 
 ```toml
 [dependencies]
-mcpkit-client = "0.5"
-mcpkit-transport = "0.5"
-mcpkit-core = "0.5"
+mcpkit-client = "0.7"
+mcpkit-transport = "0.7"
+mcpkit-core = "0.7"
 tokio = { version = "1", features = ["full"] }
 ```
 

@@ -17,8 +17,8 @@ Tokio is the default runtime and requires no additional configuration:
 
 ```toml
 [dependencies]
-mcpkit-transport = "0.5"
-mcpkit-server = "0.5"
+mcpkit-transport = "0.7"
+mcpkit-server = "0.7"
 tokio = { version = "1", features = ["full"] }
 ```
 
