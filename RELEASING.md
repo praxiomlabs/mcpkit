@@ -374,6 +374,12 @@ just publish-dry    # Dry-run publish all crates in dependency order
 - [ ] Run `just publish-dry` - all crates succeed
 - [ ] No unexpected files included in package
 - [ ] Package size is reasonable
+- [ ] `CARGO_REGISTRY_TOKEN` repository secret is still valid (a rotated or
+      expired token fails the publish only after the tag is pushed — the
+      v0.6.0 incident)
+- [ ] The release workflow's toolchain installs the `clippy` component
+      (`release.yml` `components: clippy`) — its absence also surfaced in the
+      v0.6.0 release
 
 ### Cargo.toml Metadata
 

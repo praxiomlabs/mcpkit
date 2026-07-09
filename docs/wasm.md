@@ -59,7 +59,7 @@ For WASM-compatible projects:
 
 ```toml
 [dependencies]
-mcpkit-core = "0.5"
+mcpkit-core = "0.7"
 # Don't include transport or server - they have platform dependencies
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

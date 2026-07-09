@@ -46,7 +46,7 @@ Simply update your dependency:
 
 ```toml
 # Before
-mcpkit = "0.7"
+mcpkit = "0.6"
 
 # After
 mcpkit = "1"
@@ -232,7 +232,7 @@ If migration causes critical issues, you can roll back to your previous version.
 
 ```toml
 # Revert Cargo.toml
-mcpkit = "0.7"
+mcpkit = "0.6"
 ```
 
 ```bash
@@ -331,7 +331,8 @@ If you encounter issues during migration:
 | mcpkit | MCP Protocol | Rust | Status |
 |--------|--------------|------|--------|
 | 1.0.x  | 2024-11-05 → 2025-11-25 | 1.85+ | Stable |
-| 0.6.x  | 2024-11-05 → 2025-11-25 | 1.85+ | Current RC |
+| 0.7.x  | 2024-11-05 → 2025-11-25 | 1.85+ | Current RC |
+| 0.6.x  | 2024-11-05 → 2025-11-25 | 1.85+ | Maintenance |
 | 0.4.x  | 2024-11-05 → 2025-11-25 | 1.85+ | Maintenance |
 | 0.3.x  | 2024-11-05 → 2025-11-25 | 1.85+ | Security Only |
 | 0.2.x  | 2024-11-05 → 2025-06-18 | 1.82+ | End of Life |

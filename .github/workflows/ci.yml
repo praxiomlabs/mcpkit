@@ -104,19 +104,38 @@ jobs:
           MAJOR_MINOR=$(echo "$VERSION" | cut -d. -f1,2)
 
           echo "Checking documentation references mcpkit version $MAJOR_MINOR..."
+          FAIL=0
 
-          # Check README.md
-          if ! grep -q "mcpkit = \"$MAJOR_MINOR\"" README.md; then
-            echo "ERROR: README.md does not reference mcpkit = \"$MAJOR_MINOR\""
-            exit 1
+          # Every snippet-bearing doc must reference the current version at
+          # least once (umbrella crate or subcrate — all published mcpkit-*
+          # crates share the workspace version).
+          for f in README.md docs/getting-started.md docs/client-guide.md \
+                   docs/extensions.md docs/runtimes.md docs/wasm.md \
+                   docs/migration-from-rmcp.md; do
+            if ! grep -qE "mcpkit(-[a-z]+)? = \"$MAJOR_MINOR\"" "$f"; then
+              echo "ERROR: $f does not reference mcpkit(-*) = \"$MAJOR_MINOR\""
+              FAIL=1
+            fi
+          done
+
+          # No doc may pin any OTHER mcpkit version — this catches partially
+          # bumped files, which the per-file presence check alone would pass.
+          # Allowlisted: files where old versions are intentional (migration
+          # rollback targets, stability policy examples, point-in-time ADRs).
+          STALE=$(grep -rnE "mcpkit(-[a-z]+)? = \"[0-9]" README.md docs/ \
+              --exclude=migration-to-1.0.md \
+              --exclude=api-stability.md \
+              --exclude-dir=adr \
+            | grep -vE "mcpkit(-[a-z]+)? = \"$MAJOR_MINOR\"" || true)
+          if [ -n "$STALE" ]; then
+            echo "ERROR: stale mcpkit version references (expected $MAJOR_MINOR):"
+            echo "$STALE"
+            FAIL=1
           fi
 
-          # Check getting-started.md
-          if ! grep -q "mcpkit = \"$MAJOR_MINOR\"" docs/getting-started.md; then
-            echo "ERROR: docs/getting-started.md does not reference mcpkit = \"$MAJOR_MINOR\""
+          if [ "$FAIL" -ne 0 ]; then
             exit 1
           fi
-
           echo "All version references are correct!"
 
   link-check:

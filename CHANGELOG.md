@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Ten documentation install snippets still pinned `mcpkit-*` subcrates at
+  `0.5` (client-guide, extensions, runtimes, wasm) — under 0.x semver those
+  resolve to a two-minor-versions-old API. Bumped to the current version, and
+  the CI `version-sync` job now checks **all** snippet-bearing docs for the
+  current version (umbrella and subcrate names) plus a repo-wide sweep that
+  fails on any *other* pinned mcpkit version, so a partially-bumped file can
+  no longer pass. Files where old versions are intentional
+  (migration-to-1.0.md rollback targets, api-stability.md policy examples,
+  point-in-time ADRs) are excluded from the sweep; two lines in
+  migration-to-1.0.md that an earlier mechanical bump had corrupted (the
+  "From 0.6.x" before-snippet and the 0.6.x rollback target showed `0.7`)
+  are fixed editorially, and its version matrix now lists 0.7.x as current
+  ([#53](https://github.com/praxiomlabs/mcpkit/issues/53)).
+
 ### Added
 
 - Task-augmented sampling, phase 3 of #143 — the client executes it:
