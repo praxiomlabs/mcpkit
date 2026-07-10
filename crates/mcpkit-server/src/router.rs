@@ -801,9 +801,12 @@ pub async fn begin_augmented_task(
         tool_task_support(handler.as_ref(), &name, &ctx).await
     };
     if support == TaskSupport::Forbidden {
-        return AugmentedTaskOutcome::Rejected(McpError::invalid_params(
-            "tools/call",
-            format!("tool '{name}' does not support task-augmented execution"),
+        // Spec: servers SHOULD return -32601 (Method not found) when a client
+        // task-augments a tool whose taskSupport is absent/forbidden.
+        return AugmentedTaskOutcome::Rejected(McpError::JsonRpc(
+            mcpkit_core::error::JsonRpcError::method_not_found(format!(
+                "tool '{name}' does not support task-augmented execution"
+            )),
         ));
     }
 

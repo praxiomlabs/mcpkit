@@ -188,7 +188,11 @@ async fn task_augmented_call_on_forbidden_tool_is_rejected() {
     let (state, _) = state();
     let (resp, _) = post(&state, None, call_task(1, "plain")).await;
     // A tool without taskSupport must be rejected, not run as a task.
-    assert!(!resp["error"].is_null(), "expected rejection, got: {resp}");
+    // Spec: -32601 (Method not found), not -32602.
+    assert_eq!(
+        resp["error"]["code"], -32601,
+        "expected -32601, got: {resp}"
+    );
     assert!(resp["result"]["task"].is_null());
 }
 
