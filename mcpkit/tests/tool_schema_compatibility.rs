@@ -405,6 +405,7 @@ fn test_call_tool_request_serialization() -> Result<(), Box<dyn std::error::Erro
     let request = CallToolRequest {
         name: "get_weather".to_string(),
         arguments: Some(serde_json::from_value(json!({"location": "New York"}))?),
+        task: None,
     };
 
     let json = serde_json::to_value(&request)?;
@@ -415,10 +416,35 @@ fn test_call_tool_request_serialization() -> Result<(), Box<dyn std::error::Erro
 }
 
 #[test]
+fn test_call_tool_request_task_field_round_trips_and_omits()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Omitted when unset (wire-compatible with pre-task requests).
+    let request = CallToolRequest {
+        name: "slow".to_string(),
+        arguments: None,
+        task: None,
+    };
+    assert!(serde_json::to_value(&request)?.get("task").is_none());
+
+    // Round-trips when set (2025-11-25 TaskAugmentedRequestParams).
+    let request = CallToolRequest {
+        name: "slow".to_string(),
+        arguments: None,
+        task: Some(mcpkit::types::TaskMetadata { ttl: Some(60_000) }),
+    };
+    let json = serde_json::to_value(&request)?;
+    assert_eq!(json["task"], json!({ "ttl": 60000 }));
+    let back: CallToolRequest = serde_json::from_value(json)?;
+    assert_eq!(back.task.and_then(|t| t.ttl), Some(60_000));
+    Ok(())
+}
+
+#[test]
 fn test_call_tool_request_without_arguments() -> Result<(), Box<dyn std::error::Error>> {
     let request = CallToolRequest {
         name: "ping".to_string(),
         arguments: None,
+        task: None,
     };
 
     let json_str = serde_json::to_string(&request)?;

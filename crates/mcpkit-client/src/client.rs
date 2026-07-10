@@ -827,6 +827,7 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
         let request = CallToolRequest {
             name: name.into(),
             arguments,
+            task: None,
         };
         self.request("tools/call", Some(serde_json::to_value(request)?))
             .await
