@@ -616,6 +616,14 @@ pub struct CallToolRequest {
     /// Arguments to pass to the tool.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub arguments: Option<super::object::Object>,
+    /// Request task-augmented execution (2025-11-25).
+    ///
+    /// When set, a server that declared `tasks.requests.tools.call` (and a
+    /// tool whose `execution.taskSupport` allows it) replies with a
+    /// `CreateTaskResult` immediately; the `CallToolResult` is retrieved
+    /// later via `tasks/result`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub task: Option<super::task::TaskMetadata>,
 }
 
 #[cfg(test)]

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `CallToolRequest` gains the spec's `task: Option<TaskMetadata>` field
+  (2025-11-25 `CallToolRequestParams extends TaskAugmentedRequestParams`),
+  matching `CreateMessageRequest`; omitted from the wire when unset. The
+  server previously read `task` raw from params (unchanged); the typed field
+  lets clients build task-augmented `tools/call` through the typed request
+  ([#166](https://github.com/praxiomlabs/mcpkit/issues/166)).
+
 ### Fixed
 
 - Task-augmenting a tool whose `execution.taskSupport` is absent or
