@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Task-augmenting a tool whose `execution.taskSupport` is absent or
+  `forbidden` is now rejected with `-32601` (Method not found) per spec,
+  instead of `-32602` (Invalid params), on the stdio runtime and the HTTP
+  adapters ([#165](https://github.com/praxiomlabs/mcpkit/issues/165)).
 - Ten documentation install snippets still pinned `mcpkit-*` subcrates at
   `0.5` (client-guide, extensions, runtimes, wasm) — under 0.x semver those
   resolve to a two-minor-versions-old API. Bumped to the current version, and

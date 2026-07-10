@@ -819,10 +819,11 @@ where
             self.server.tool_task_support(&name, &ctx).await
         };
         if support == mcpkit_core::types::TaskSupport::Forbidden {
-            let err = McpError::invalid_params(
-                "tools/call",
+            // Spec: -32601 (Method not found) for task-augmenting a
+            // forbidden tool.
+            let err = McpError::JsonRpc(mcpkit_core::error::JsonRpcError::method_not_found(
                 format!("tool '{name}' does not support task-augmented execution"),
-            );
+            ));
             let _ = self
                 .transport
                 .send(Message::Response(Response::error(
@@ -2559,10 +2560,11 @@ mod tests {
             .await
             .expect("send");
         let resp = next_response(&client).await;
-        assert!(
-            resp.error.is_some(),
-            "a forbidden tool must reject task augmentation"
-        );
+        let err = resp
+            .error
+            .expect("a forbidden tool must reject task augmentation");
+        // Spec: -32601 (Method not found), not -32602.
+        assert_eq!(err.code, -32601, "wrong rejection code: {err:?}");
 
         drop(client);
         let _ = timeout(Duration::from_secs(2), handle).await;
