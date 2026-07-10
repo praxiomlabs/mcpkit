@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The release publish logic is extracted from `release.yml` into
+  `scripts/publish-crates.sh` and covered by a committed harness
+  (`scripts/publish-crates-test.sh`) that CI runs whenever release tooling
+  changes. The harness exercises the clean-publish, partial-re-run
+  (already-uploaded tolerated), and real-error-aborts paths against a stub
+  `cargo`, invoking the script file exactly as the workflow does
+  (`bash -e`), so the tested shell semantics are the released ones. Native
+  `cargo publish --workspace` was evaluated and rejected: its upfront
+  already-published check hard-fails a partial-publish re-run instead of
+  skipping (verified against cargo's `verify_unpublished`), which is the
+  recovery property the v0.6.0 incident showed matters
+  (see `docs/adr/0005-v0.6.0-release-incident.md`).
+
 - `CallToolRequest` gains the spec's `task: Option<TaskMetadata>` field
   (2025-11-25 `CallToolRequestParams extends TaskAugmentedRequestParams`),
   matching `CreateMessageRequest`; omitted from the wire when unset. The
