@@ -14,6 +14,7 @@ An Architecture Decision Record captures an important architectural decision mad
 | [0002](0002-typestate-pattern.md) | Typestate Pattern for Connection Lifecycle | Accepted |
 | [0003](0003-unified-error-type.md) | Unified Error Type | Accepted |
 | [0004](0004-runtime-agnostic-design.md) | Runtime-Agnostic Design | Accepted |
+| [0005](0005-v0.6.0-release-incident.md) | v0.6.0 Release Incident and Release-Process Hardening | Accepted |
 
 ## Creating a New ADR
 
