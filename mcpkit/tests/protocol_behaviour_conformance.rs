@@ -367,6 +367,74 @@ async fn terminal_tasks_are_evicted_once_their_ttl_lapses() {
 /// classified — either mcpkit emits it as a server, or it is one a server only
 /// receives. A notification added to the spec, or a constant added here without
 /// an emitter, lands in neither set and fails.
+/// The method-name constants must cover the spec exactly.
+///
+/// Anchored to the vendored schema, and spelling the literals out rather than
+/// comparing constants to themselves — a constant-to-constant assertion is
+/// vacuous, which is how a non-spec `"initialized"` survived in the debug
+/// validator and in the test harness.
+///
+/// Before these constants moved to core they were incomplete: `roots/list` and
+/// `tasks/result` were implemented but had no constant, so any caller had to
+/// write the literal.
+#[test]
+fn method_constants_cover_the_spec_exactly() {
+    use mcpkit_core::methods as m;
+
+    let schema: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../spec/2025-11-25/schema.json"
+        ))
+        .expect("vendored schema"),
+    )
+    .expect("schema parses");
+
+    let mut spec: Vec<String> = schema["$defs"]
+        .as_object()
+        .expect("$defs")
+        .values()
+        .filter_map(|d| d["properties"]["method"]["const"].as_str())
+        .filter(|s| !s.starts_with("notifications/"))
+        .map(String::from)
+        .collect();
+    spec.sort();
+    spec.dedup();
+
+    let mut declared: Vec<String> = [
+        m::INITIALIZE,
+        m::PING,
+        m::TOOLS_LIST,
+        m::TOOLS_CALL,
+        m::RESOURCES_LIST,
+        m::RESOURCES_READ,
+        m::RESOURCES_TEMPLATES_LIST,
+        m::RESOURCES_SUBSCRIBE,
+        m::RESOURCES_UNSUBSCRIBE,
+        m::PROMPTS_LIST,
+        m::PROMPTS_GET,
+        m::TASKS_LIST,
+        m::TASKS_GET,
+        m::TASKS_CANCEL,
+        m::TASKS_RESULT,
+        m::ROOTS_LIST,
+        m::SAMPLING_CREATE_MESSAGE,
+        m::COMPLETION_COMPLETE,
+        m::LOGGING_SET_LEVEL,
+        m::ELICITATION_CREATE,
+    ]
+    .iter()
+    .map(|s| (*s).to_string())
+    .collect();
+    declared.sort();
+    declared.dedup();
+
+    assert_eq!(
+        declared, spec,
+        "the request-method constants must match the schema's set exactly"
+    );
+}
+
 #[test]
 fn every_spec_notification_is_classified_as_emitted_or_receive_only() {
     use mcpkit_server::router::notifications as n;

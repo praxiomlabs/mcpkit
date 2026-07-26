@@ -1187,7 +1187,7 @@ where
 
         // `notifications/cancelled` is a runtime concern — it trips the
         // cancellation registry for an in-flight request, not a handler hook.
-        if method == "notifications/cancelled" {
+        if method == crate::router::notifications::CANCELLED {
             if let Some(request_id) = notification
                 .params
                 .as_ref()
