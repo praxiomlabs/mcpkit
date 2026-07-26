@@ -598,6 +598,9 @@ pub struct ListToolsRequest {
     /// Cursor for pagination.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cursor: Option<String>,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 /// Response for listing tools.
@@ -629,12 +632,19 @@ pub struct CallToolRequest {
     /// later via `tasks/result`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task: Option<super::task::TaskMetadata>,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 /// Notification that the tool list has changed
 /// (`notifications/tools/list_changed`).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct ToolListChangedNotification {}
+pub struct ToolListChangedNotification {
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
+}
 
 #[cfg(test)]
 mod tests {

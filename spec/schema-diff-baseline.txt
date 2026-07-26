@@ -32,6 +32,7 @@
 #   for the extractor to find. A modelling-shape difference, not a gap.
 #
 #
+#
 # ---------------------------------------------------------------------------
 # Tier 2 (structural). Every $def with a same-named mcpkit struct is diffed —
 # 75 types. `type` discriminators are filtered (mcpkit supplies them from the
@@ -40,19 +41,14 @@
 # `anyOf` union (ElicitRequestParams) or an abstract JSON-RPC base
 # (Request/Notification).
 #
-# Everything below is one of two things:
+# The 21 missing `_meta` fields recorded here previously are closed: every type
+# the schema declares `_meta` on now carries it. What remains is one modelling
+# difference, and it is benign:
 #
-#   `<Type> _meta` (21) — a REAL capability gap, not a conformance failure.
-#   `_meta` is optional everywhere, so its absence is not peer-detectable, but
-#   mcpkit cannot carry or surface protocol metadata on these types. mcpkit
-#   already implements `_meta` on 35 types; the schema declares it on 53. These
-#   are the remainder of a pattern that is ~62% complete. Tracked as its own
-#   item — closing it is a breaking change on 21 types.
-#
-#   `ResourceContents blob|text` (2) — a modelling difference, benign. The
-#   schema splits TextResourceContents and BlobResourceContents into sibling
-#   defs extending ResourceContents; mcpkit flattens them into one struct with
-#   optional `text` and `blob`. A peer sees exactly one of them either way.
+#   `ResourceContents blob|text` — the schema splits TextResourceContents and
+#   BlobResourceContents into sibling defs extending ResourceContents; mcpkit
+#   flattens them into one struct with optional `text` and `blob`. A peer sees
+#   exactly one of them either way.
 # ---------------------------------------------------------------------------
 content-type in-mcpkit-not-in-schema: Custom
 content-type in-mcpkit-not-in-schema: Error
@@ -68,24 +64,3 @@ content-type in-schema-not-in-mcpkit: boolean
 content-type in-schema-not-in-mcpkit: string
 field in-mcpkit-not-in-schema: ResourceContents blob
 field in-mcpkit-not-in-schema: ResourceContents text
-field in-schema-not-in-mcpkit: CallToolRequest _meta
-field in-schema-not-in-mcpkit: CompleteRequest _meta
-field in-schema-not-in-mcpkit: GetPromptRequest _meta
-field in-schema-not-in-mcpkit: InitializedNotification _meta
-field in-schema-not-in-mcpkit: ListPromptsRequest _meta
-field in-schema-not-in-mcpkit: ListPromptsResult _meta
-field in-schema-not-in-mcpkit: ListResourcesRequest _meta
-field in-schema-not-in-mcpkit: ListResourceTemplatesRequest _meta
-field in-schema-not-in-mcpkit: ListTasksRequest _meta
-field in-schema-not-in-mcpkit: ListToolsRequest _meta
-field in-schema-not-in-mcpkit: PingRequest _meta
-field in-schema-not-in-mcpkit: PromptListChangedNotification _meta
-field in-schema-not-in-mcpkit: ReadResourceRequest _meta
-field in-schema-not-in-mcpkit: ResourceListChangedNotification _meta
-field in-schema-not-in-mcpkit: ResourceUpdatedNotification _meta
-field in-schema-not-in-mcpkit: Root _meta
-field in-schema-not-in-mcpkit: RootsListChangedNotification _meta
-field in-schema-not-in-mcpkit: SetLevelRequest _meta
-field in-schema-not-in-mcpkit: SubscribeRequest _meta
-field in-schema-not-in-mcpkit: ToolListChangedNotification _meta
-field in-schema-not-in-mcpkit: UnsubscribeRequest _meta

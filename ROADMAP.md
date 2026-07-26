@@ -7,9 +7,9 @@ This document outlines the path to a stable 1.0 release of mcpkit.
 mcpkit implements every method the MCP 2025-11-25 schema defines, across stdio,
 WebSocket, Unix, in-memory and the four HTTP framework adapters.
 
-Most 1.0 criteria below are met. The one that is not is structural spec
-conformance: method coverage is complete and CI-verified, but `_meta` is absent
-from 21 types. See the tables for what is verified and how.
+All 1.0 criteria below are met. Method coverage, structural conformance and the
+behavioural checks a schema diff cannot make are each verified in CI against the
+vendored spec — see the tables for what is checked and how.
 
 ## 1.0 Release Criteria
 
@@ -17,7 +17,7 @@ from 21 types. See the tables for what is verified and how.
 
 | Requirement | Status | Notes |
 |-------------|--------|-------|
-| Full MCP 2025-11-25 compliance | ⚠️ Partly verified | All 31 schema-defined methods implemented and diffed against the vendored schema in CI. Structural conformance now covers every `$def` with a same-named type — 75 of 145, the rest being envelopes, unions and aliases with no 1:1 Rust type. The only outstanding gap is `_meta` on 21 types (optional, so not peer-detectable) |
+| Full MCP 2025-11-25 compliance | ✅ Complete | All 31 schema-defined methods, diffed against the vendored schema in CI. Structural conformance covers every `$def` with a same-named type — 75 of 145, the rest being envelopes, unions and aliases with no 1:1 Rust type — with no outstanding field gaps |
 | Protocol version negotiation | ✅ Complete | All 4 published versions; table-driven conformance tests |
 | OAuth 2.1 + PKCE support | ✅ Complete | RFC 9728, 8414, 7636 compliant |
 | Tasks (async operations) | ✅ Complete | Full task lifecycle support |

@@ -852,6 +852,7 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
             name: name.into(),
             arguments,
             task: None,
+            meta: None,
         };
         self.request("tools/call", Some(serde_json::to_value(request)?))
             .await
@@ -914,7 +915,10 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
     ) -> Result<Vec<ResourceContents>, McpError> {
         self.ensure_capability("resources", self.has_resources())?;
 
-        let request = ReadResourceRequest { uri: uri.into() };
+        let request = ReadResourceRequest {
+            uri: uri.into(),
+            meta: None,
+        };
         let result: ReadResourceResult = self
             .request("resources/read", Some(serde_json::to_value(request)?))
             .await?;
@@ -968,6 +972,7 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
         let request = GetPromptRequest {
             name: name.into(),
             arguments,
+            meta: None,
         };
         self.request("prompts/get", Some(serde_json::to_value(request)?))
             .await
@@ -1005,6 +1010,7 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
         // returned page client-side when a status is requested.
         let request = ListTasksRequest {
             cursor: cursor.map(String::from),
+            meta: None,
         };
         let mut result: ListTasksResult = self
             .request("tasks/list", Some(serde_json::to_value(request)?))
@@ -1082,6 +1088,7 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
                 value: current_value.into(),
             },
             context: None,
+            meta: None,
         };
         self.complete(request).await
     }
@@ -1128,6 +1135,7 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
                 value: current_value.into(),
             },
             context: None,
+            meta: None,
         };
         self.complete(request).await
     }
@@ -1155,7 +1163,10 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
             });
         }
 
-        let request = SubscribeRequest { uri: uri.into() };
+        let request = SubscribeRequest {
+            uri: uri.into(),
+            meta: None,
+        };
         let _: serde_json::Value = self
             .request("resources/subscribe", Some(serde_json::to_value(request)?))
             .await?;
@@ -1178,7 +1189,10 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
             });
         }
 
-        let request = UnsubscribeRequest { uri: uri.into() };
+        let request = UnsubscribeRequest {
+            uri: uri.into(),
+            meta: None,
+        };
         let _: serde_json::Value = self
             .request(
                 "resources/unsubscribe",

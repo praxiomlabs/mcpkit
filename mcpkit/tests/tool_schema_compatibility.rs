@@ -374,6 +374,7 @@ fn test_list_tools_result_without_cursor() -> Result<(), Box<dyn std::error::Err
 fn test_list_tools_request_serialization() -> Result<(), Box<dyn std::error::Error>> {
     let request = ListToolsRequest {
         cursor: Some("page-token".to_string()),
+        meta: None,
     };
 
     let json = serde_json::to_value(&request)?;
@@ -406,6 +407,7 @@ fn test_call_tool_request_serialization() -> Result<(), Box<dyn std::error::Erro
         name: "get_weather".to_string(),
         arguments: Some(serde_json::from_value(json!({"location": "New York"}))?),
         task: None,
+        meta: None,
     };
 
     let json = serde_json::to_value(&request)?;
@@ -423,6 +425,7 @@ fn test_call_tool_request_task_field_round_trips_and_omits()
         name: "slow".to_string(),
         arguments: None,
         task: None,
+        meta: None,
     };
     assert!(serde_json::to_value(&request)?.get("task").is_none());
 
@@ -431,6 +434,7 @@ fn test_call_tool_request_task_field_round_trips_and_omits()
         name: "slow".to_string(),
         arguments: None,
         task: Some(mcpkit::types::TaskMetadata { ttl: Some(60_000) }),
+        meta: None,
     };
     let json = serde_json::to_value(&request)?;
     assert_eq!(json["task"], json!({ "ttl": 60000 }));
@@ -445,6 +449,7 @@ fn test_call_tool_request_without_arguments() -> Result<(), Box<dyn std::error::
         name: "ping".to_string(),
         arguments: None,
         task: None,
+        meta: None,
     };
 
     let json_str = serde_json::to_string(&request)?;

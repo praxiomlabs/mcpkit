@@ -984,11 +984,19 @@ pub fn negotiate_version_detailed(requested_version: &str) -> VersionNegotiation
 
 /// Initialized notification (sent by client after receiving initialize result).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct InitializedNotification {}
+pub struct InitializedNotification {
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
+}
 
 /// Ping request for keep-alive.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct PingRequest {}
+pub struct PingRequest {
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
+}
 
 /// Ping response.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

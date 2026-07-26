@@ -11,6 +11,9 @@ pub struct Root {
     /// Optional human-readable name for the root.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 impl Root {
@@ -20,6 +23,7 @@ impl Root {
         Self {
             uri: uri.into(),
             name: None,
+            meta: None,
         }
     }
 
@@ -47,7 +51,11 @@ pub struct ListRootsResult {
 /// The notification is sent with no params; this type is a marker for coverage
 /// and deserialization symmetry.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct RootsListChangedNotification {}
+pub struct RootsListChangedNotification {
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
+}
 
 #[cfg(test)]
 mod tests {

@@ -299,6 +299,9 @@ pub struct ListResourcesRequest {
     /// Cursor for pagination.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cursor: Option<String>,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 /// Response for listing resources.
@@ -320,6 +323,9 @@ pub struct ListResourceTemplatesRequest {
     /// Cursor for pagination.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cursor: Option<String>,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 /// Response for listing resource templates.
@@ -341,6 +347,9 @@ pub struct ListResourceTemplatesResult {
 pub struct ReadResourceRequest {
     /// URI of the resource to read.
     pub uri: String,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 /// Response for reading a resource.
@@ -358,6 +367,9 @@ pub struct ReadResourceResult {
 pub struct SubscribeRequest {
     /// URI of the resource to subscribe to for update notifications.
     pub uri: String,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 /// Request parameters for `resources/unsubscribe`.
@@ -365,6 +377,9 @@ pub struct SubscribeRequest {
 pub struct UnsubscribeRequest {
     /// URI of the resource to stop receiving update notifications for.
     pub uri: String,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 /// Notification that a resource has changed.
@@ -372,11 +387,18 @@ pub struct UnsubscribeRequest {
 pub struct ResourceUpdatedNotification {
     /// URI of the updated resource.
     pub uri: String,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 /// Notification that the resource list has changed.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct ResourceListChangedNotification {}
+pub struct ResourceListChangedNotification {
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
+}
 
 #[cfg(test)]
 mod tests {
@@ -487,6 +509,7 @@ mod tests {
     fn subscribe_requests_round_trip() {
         let wire = serde_json::to_value(SubscribeRequest {
             uri: "file:///x".into(),
+            meta: None,
         })
         .unwrap();
         assert_eq!(wire, serde_json::json!({ "uri": "file:///x" }));
