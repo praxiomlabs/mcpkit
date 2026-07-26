@@ -57,7 +57,9 @@ notification inline: a notification is one small frame, so that costs less than
 carrying a fourth future set through `drive_sets`.
 
 Mapping between the two is a small server-side adapter (`TaskStatusNotifier`),
-the only place that decides a transition is worth telling the client about.
+the only place that decides a transition is worth telling the client about. It
+is parameterized over a `NotificationSink` rather than bound to this pump, so
+the same mapping serves transports that reach their client differently.
 
 The property that matters: **the loop grows one drain, not one arm per feature.**
 Later ambient sources reuse it without touching `run()` again.
@@ -69,9 +71,15 @@ Later ambient sources reuse it without touching `run()` again.
   This matches the spec's treatment of notifications, and `tasks/status` in
   particular is optional ("Receivers MAY send"). `RuntimeConfig::task_status_notifications`
   gates it, defaulting on.
-- Notifications published where no run loop is draining (an HTTP adapter, where
-  each request is its own short-lived exchange) are queued and discarded with the
-  session.
+- The HTTP adapters have no run loop and never construct a `ServerState`, so the
+  pump does not reach them. They were addressed by generalizing the destination
+  rather than adding a second notifier: `NotificationSink` is implemented for
+  both `ServerState` (this pump) and `StreamRegistry` (store-and-forward onto the
+  session's SSE stream), and `session_task_store` is the single place a
+  per-session store is wired to its registry. The transition-to-notification
+  mapping is therefore written once for every transport.
+- Delivery there is still best-effort: with no live SSE stream the event is
+  dropped, and a client that never reconnects misses it.
 - `TaskManager` gained public API (`TaskEvent`, `TaskObserver`, `set_observer`),
   which is semver-relevant on a crate heading to 1.0.
 - Server tests must tolerate notifications interleaving with responses; the

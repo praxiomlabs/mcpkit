@@ -11,8 +11,8 @@ This document provides an honest, transparent comparison between `mcpkit` and `r
 | **Macro Approach** | Single `#[mcp_server]` macro | Multiple macros (`#[tool_router]`, etc.) |
 | **Transport Options** | 5 built-in (stdio, WebSocket, HTTP, Unix, Memory) | 4 (stdio, Streamable HTTP, SSE [legacy], child-process) |
 | **Error Handling** | `McpError` + `ToolOutput::error()` | `Result<CallToolResult, Error>` |
-| **Maturity** | Pre-1.0 | Established (1.7.x) |
-| **Protocol Version** | 2025-11-25 (all 4 versions) | 2025-11-25 (all 4 versions) |
+| **Maturity** | Pre-1.0 | Established (2.x) |
+| **Protocol Version** | 2025-11-25 (all 4 published versions) | 2025-11-25 (all 4, plus `2026-07-28`) |
 
 ## Code Size Comparison
 
@@ -150,7 +150,16 @@ Both SDKs use Rust's ownership system, ensuring no memory leaks by design. mcpki
 
 mcpkit includes automatic version negotiation and capability negotiation.
 
-**rmcp protocol support:** As of June 2026 (rmcp 1.7.0), rmcp ships the same four protocol versions and defaults to the latest, `2025-11-25` — the two SDKs are at protocol parity. Check [rmcp's repository](https://github.com/modelcontextprotocol/rust-sdk) for the current status.
+**rmcp protocol support (measured 2026-07-26 against rmcp 2.2.0):** on the current
+published revision, `2025-11-25`, both SDKs implement all 31 methods the schema
+defines. rmcp additionally accepts a fifth protocol version, `2026-07-28`, which
+mcpkit does not — that revision has no published schema upstream yet (the spec
+repo carries the four versions above plus `draft`), so it is next-revision work
+rather than a gap against the current spec.
+
+Version-pinned comparisons go stale quickly; check
+[rmcp's repository](https://github.com/modelcontextprotocol/rust-sdk) for current
+status rather than relying on this line.
 
 ### mcpkit-Specific Features
 

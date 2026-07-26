@@ -2,9 +2,15 @@
 
 This document outlines the path to a stable 1.0 release of mcpkit.
 
-## Current Status: v0.6.0
+## Current Status: v0.7.0 (unreleased)
 
-mcpkit is feature-complete and ready for 1.0. The SDK implements the full MCP 2025-11-25 specification with comprehensive transport and framework support. All 1.0 release criteria have been met.
+mcpkit implements every method the MCP 2025-11-25 schema defines, across stdio,
+WebSocket, Unix, in-memory and the four HTTP framework adapters.
+
+Most 1.0 criteria below are met. Two are not yet, and are tracked as blockers
+rather than marked complete: an outstanding advisory in a transitive dependency,
+and structural spec conformance that has been sampled rather than verified
+exhaustively. See the tables for which is which.
 
 ## 1.0 Release Criteria
 
@@ -12,8 +18,8 @@ mcpkit is feature-complete and ready for 1.0. The SDK implements the full MCP 20
 
 | Requirement | Status | Notes |
 |-------------|--------|-------|
-| Full MCP 2025-11-25 compliance | ✅ Complete | All protocol features implemented |
-| Protocol version negotiation | ✅ Complete | Supports 4 protocol versions |
+| Full MCP 2025-11-25 compliance | ⚠️ Partly verified | All 31 schema-defined methods implemented and diffed against the vendored schema in CI. Structural (field-level) conformance is sampled, not exhaustive — 7 of 145 `$defs` checked |
+| Protocol version negotiation | ✅ Complete | All 4 published versions; table-driven conformance tests |
 | OAuth 2.1 + PKCE support | ✅ Complete | RFC 9728, 8414, 7636 compliant |
 | Tasks (async operations) | ✅ Complete | Full task lifecycle support |
 | Elicitation | ✅ Complete | Server-initiated user input |
@@ -26,8 +32,8 @@ mcpkit is feature-complete and ready for 1.0. The SDK implements the full MCP 20
 | Rocket integration | ✅ Complete | Router, SSE, session management |
 | Warp integration | ✅ Complete | Router, SSE, CORS support |
 | Extension infrastructure | ✅ Complete | Structured extension support |
-| Comprehensive documentation | ✅ Complete | 28+ doc files, ADRs |
-| Test coverage | ✅ Complete | 100+ tests, integration tests |
+| Comprehensive documentation | ✅ Complete | 34 doc files, 6 ADRs |
+| Test coverage | ✅ Complete | 1,437 tests incl. spec-anchored conformance suites |
 | Fuzzing | ✅ Complete | 6 fuzz targets, CI integration |
 | Zero clippy warnings | ✅ Complete | Strict lint configuration |
 
@@ -44,8 +50,8 @@ mcpkit is feature-complete and ready for 1.0. The SDK implements the full MCP 20
 
 | Requirement | Status | Notes |
 |-------------|--------|-------|
-| No security vulnerabilities | ✅ Complete | Regular `cargo audit` |
-| Performance benchmarks | ✅ Complete | Criterion benchmarks vs rmcp |
+| No security vulnerabilities | ❌ Blocked | RUSTSEC-2026-0185 (quinn-proto, 7.5 high) is open and unsuppressed; fix is an upgrade to >=0.11.15. RUSTSEC-2023-0071 is deliberately ignored with rationale in `deny.toml` |
+| Performance benchmarks | ✅ Complete | Criterion benchmarks vs rmcp (dev-dep pinned at 1.7; rmcp is now 2.x) |
 | Memory safety | ✅ Complete | `#![deny(unsafe_code)]` |
 | Error handling consistency | ✅ Complete | Unified McpError type |
 
@@ -104,4 +110,4 @@ No specific timeline is set for 1.0. Release will occur when all criteria above 
 
 ---
 
-*Last updated: December 2025*
+*Last updated: 2026-07-26*
