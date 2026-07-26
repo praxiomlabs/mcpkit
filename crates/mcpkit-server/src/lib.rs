@@ -67,6 +67,8 @@ pub mod metrics;
 pub mod router;
 pub mod server;
 pub mod state;
+#[cfg(feature = "tokio")]
+pub mod streams;
 #[cfg(feature = "schema-validation")]
 pub mod validation;
 

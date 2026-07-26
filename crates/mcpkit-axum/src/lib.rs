@@ -101,10 +101,9 @@ mod state;
 
 pub use error::ExtensionError;
 pub use handler::{handle_mcp_post, handle_oauth_protected_resource, handle_sse};
+pub use mcpkit_server::streams::{StoredEvent, StreamConfig, StreamRegistry};
 pub use router::McpRouter;
-pub use session::{
-    DEFAULT_INIT_TIMEOUT, EventStore, EventStoreConfig, Session, SessionStore, StoredEvent,
-};
+pub use session::{DEFAULT_INIT_TIMEOUT, Session, SessionStore};
 pub use state::{McpState, OAuthState};
 
 /// Prelude module for convenient imports.
@@ -118,10 +117,9 @@ pub mod prelude {
     pub use crate::error::ExtensionError;
     pub use crate::handler::{handle_mcp_post, handle_oauth_protected_resource, handle_sse};
     pub use crate::router::McpRouter;
-    pub use crate::session::{
-        DEFAULT_INIT_TIMEOUT, EventStore, EventStoreConfig, Session, SessionStore, StoredEvent,
-    };
+    pub use crate::session::{DEFAULT_INIT_TIMEOUT, Session, SessionStore};
     pub use crate::state::{McpState, OAuthState};
+    pub use mcpkit_server::streams::{StoredEvent, StreamConfig, StreamRegistry};
 }
 
 /// Protocol versions supported by this extension.

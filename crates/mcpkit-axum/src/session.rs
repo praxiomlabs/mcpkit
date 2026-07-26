@@ -4,12 +4,9 @@ use dashmap::DashMap;
 use mcpkit_core::auth::{SessionBindingError, VerifiedUser, check_session_binding};
 use mcpkit_core::capability::ClientCapabilities;
 use mcpkit_core::protocol_version::ProtocolVersion;
-use std::collections::VecDeque;
+use mcpkit_server::streams::{StreamConfig, StreamRegistry};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
-use tokio::sync::RwLock;
-use tokio::sync::broadcast;
 
 /// A single MCP session.
 #[derive(Debug, Clone)]
@@ -33,12 +30,11 @@ pub struct Session {
     /// session so one session cannot read or cancel another's tasks (matching
     /// the stdio runtime's per-connection store).
     pub tasks: Arc<mcpkit_server::capability::tasks::TaskManager>,
-    /// Sender for this session's SSE stream(s). Owned by the session (#153
-    /// PR 1): streams attach to the POST-created session rather than a
-    /// separate SSE registry with its own id space.
-    pub tx: broadcast::Sender<String>,
-    /// Stored events for SSE resumability (`Last-Event-ID` replay).
-    pub events: Arc<EventStore>,
+    /// This session's SSE stream registry (#153 PR 2): per-stream bounded
+    /// channels, single-stream delivery, `{stream_id}-{seq}` event ids, and
+    /// same-stream `Last-Event-ID` replay — shared adapter logic from
+    /// `mcpkit_server::streams`.
+    pub streams: Arc<StreamRegistry>,
 }
 
 impl Session {
@@ -52,7 +48,6 @@ impl Session {
     #[must_use]
     pub fn with_user(id: String, user: Option<VerifiedUser>) -> Self {
         let now = Instant::now();
-        let (tx, _rx) = broadcast::channel(100);
         Self {
             id,
             created_at: now,
@@ -62,8 +57,7 @@ impl Session {
             protocol_version: None,
             user,
             tasks: Arc::new(mcpkit_server::capability::tasks::TaskManager::new()),
-            tx,
-            events: Arc::new(EventStore::new(EventStoreConfig::default())),
+            streams: Arc::new(StreamRegistry::new(StreamConfig::default())),
         }
     }
 
@@ -104,246 +98,6 @@ impl Session {
     }
 }
 
-/// A stored SSE event for replay support.
-#[derive(Debug, Clone)]
-pub struct StoredEvent {
-    /// The event ID (globally unique within the session stream).
-    pub id: String,
-    /// The event type (e.g., "message", "connected").
-    pub event_type: String,
-    /// The event data.
-    pub data: String,
-    /// When the event was stored.
-    pub stored_at: Instant,
-}
-
-impl StoredEvent {
-    /// Create a new stored event.
-    #[must_use]
-    pub fn new(id: String, event_type: impl Into<String>, data: impl Into<String>) -> Self {
-        Self {
-            id,
-            event_type: event_type.into(),
-            data: data.into(),
-            stored_at: Instant::now(),
-        }
-    }
-}
-
-/// Configuration for event store retention.
-#[derive(Debug, Clone)]
-pub struct EventStoreConfig {
-    /// Maximum number of events to retain per stream.
-    pub max_events: usize,
-    /// Maximum age of events to retain.
-    pub max_age: Duration,
-}
-
-impl Default for EventStoreConfig {
-    fn default() -> Self {
-        Self {
-            max_events: 1000,
-            max_age: Duration::from_secs(300), // 5 minutes
-        }
-    }
-}
-
-impl EventStoreConfig {
-    /// Create a new event store configuration.
-    #[must_use]
-    pub const fn new(max_events: usize, max_age: Duration) -> Self {
-        Self {
-            max_events,
-            max_age,
-        }
-    }
-
-    /// Set the maximum number of events to retain.
-    #[must_use]
-    pub const fn with_max_events(mut self, max_events: usize) -> Self {
-        self.max_events = max_events;
-        self
-    }
-
-    /// Set the maximum age of events to retain.
-    #[must_use]
-    pub const fn with_max_age(mut self, max_age: Duration) -> Self {
-        self.max_age = max_age;
-        self
-    }
-}
-
-/// Event store for SSE message resumability.
-///
-/// Per the MCP Streamable HTTP specification, servers MAY store events
-/// with IDs to support client reconnection with `Last-Event-ID`.
-///
-/// # Example
-///
-/// ```rust
-/// use mcpkit_axum::{EventStore, EventStoreConfig};
-/// use std::time::Duration;
-///
-/// let config = EventStoreConfig::new(500, Duration::from_secs(120));
-/// let store = EventStore::new(config);
-///
-/// // Store an event
-/// store.store("evt-001", "message", r#"{"jsonrpc":"2.0",...}"#);
-///
-/// // Get events after a specific ID for replay (async)
-/// // let events = store.get_events_after("evt-000").await;
-/// ```
-#[derive(Debug)]
-pub struct EventStore {
-    events: RwLock<VecDeque<StoredEvent>>,
-    config: EventStoreConfig,
-    next_id: AtomicU64,
-}
-
-impl EventStore {
-    /// Create a new event store with the given configuration.
-    #[must_use]
-    pub fn new(config: EventStoreConfig) -> Self {
-        Self {
-            events: RwLock::new(VecDeque::with_capacity(config.max_events)),
-            config,
-            next_id: AtomicU64::new(1),
-        }
-    }
-
-    /// Create a new event store with default configuration.
-    #[must_use]
-    pub fn with_defaults() -> Self {
-        Self::new(EventStoreConfig::default())
-    }
-
-    /// Generate the next event ID.
-    #[must_use]
-    pub fn next_event_id(&self) -> String {
-        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
-        format!("evt-{id}")
-    }
-
-    /// Store an event with automatic ID generation.
-    ///
-    /// Returns the generated event ID.
-    pub fn store_auto_id(&self, event_type: impl Into<String>, data: impl Into<String>) -> String {
-        let id = self.next_event_id();
-        self.store(id.clone(), event_type, data);
-        id
-    }
-
-    /// Store an event with a specific ID.
-    pub fn store(
-        &self,
-        id: impl Into<String>,
-        event_type: impl Into<String>,
-        data: impl Into<String>,
-    ) {
-        let event = StoredEvent::new(id.into(), event_type, data);
-
-        // Use blocking write since we can't use async in this sync method
-        // In production, consider using parking_lot::RwLock for better sync performance
-        let mut events = futures::executor::block_on(self.events.write());
-
-        // Add the new event
-        events.push_back(event);
-
-        // Enforce max_events limit
-        while events.len() > self.config.max_events {
-            events.pop_front();
-        }
-
-        // Enforce max_age limit
-        let now = Instant::now();
-        while let Some(front) = events.front() {
-            if now.duration_since(front.stored_at) > self.config.max_age {
-                events.pop_front();
-            } else {
-                break;
-            }
-        }
-    }
-
-    /// Store an event asynchronously.
-    pub async fn store_async(
-        &self,
-        id: impl Into<String>,
-        event_type: impl Into<String>,
-        data: impl Into<String>,
-    ) {
-        let event = StoredEvent::new(id.into(), event_type, data);
-        let mut events = self.events.write().await;
-
-        events.push_back(event);
-
-        // Enforce limits
-        while events.len() > self.config.max_events {
-            events.pop_front();
-        }
-
-        let now = Instant::now();
-        while let Some(front) = events.front() {
-            if now.duration_since(front.stored_at) > self.config.max_age {
-                events.pop_front();
-            } else {
-                break;
-            }
-        }
-    }
-
-    /// Get all events after the specified event ID.
-    ///
-    /// Used for replaying events when a client reconnects with `Last-Event-ID`.
-    /// Returns events in chronological order.
-    pub async fn get_events_after(&self, last_event_id: &str) -> Vec<StoredEvent> {
-        let events = self.events.read().await;
-
-        // Find the index of the last event ID
-        // Start from the next event after last_event_id, or 0 if not found
-        let start_idx = events
-            .iter()
-            .position(|e| e.id == last_event_id)
-            .map_or(0, |i| i + 1);
-
-        events.iter().skip(start_idx).cloned().collect()
-    }
-
-    /// Get all stored events.
-    pub async fn get_all_events(&self) -> Vec<StoredEvent> {
-        let events = self.events.read().await;
-        events.iter().cloned().collect()
-    }
-
-    /// Get the number of stored events.
-    pub async fn len(&self) -> usize {
-        self.events.read().await.len()
-    }
-
-    /// Check if the store is empty.
-    pub async fn is_empty(&self) -> bool {
-        self.events.read().await.is_empty()
-    }
-
-    /// Clear all stored events.
-    pub async fn clear(&self) {
-        self.events.write().await.clear();
-    }
-
-    /// Clean up expired events.
-    pub async fn cleanup_expired(&self) {
-        let mut events = self.events.write().await;
-        let now = Instant::now();
-        while let Some(front) = events.front() {
-            if now.duration_since(front.stored_at) > self.config.max_age {
-                events.pop_front();
-            } else {
-                break;
-            }
-        }
-    }
-}
-
 /// Default timeout after which a session created but never initialized is
 /// reaped.
 pub const DEFAULT_INIT_TIMEOUT: Duration = Duration::from_secs(30);
@@ -359,8 +113,8 @@ pub struct SessionStore {
     /// Default task retention (ms) applied to each session's task store; `None`
     /// means unlimited. Configure via `McpRouter::with_task_ttl`.
     pub(crate) default_task_ttl: Option<u64>,
-    /// Event-store configuration applied to each session's SSE event buffer.
-    event_store_config: EventStoreConfig,
+    /// Stream configuration applied to each session's SSE stream registry.
+    stream_config: StreamConfig,
 }
 
 impl SessionStore {
@@ -375,7 +129,7 @@ impl SessionStore {
             timeout,
             init_timeout: DEFAULT_INIT_TIMEOUT,
             default_task_ttl: Some(mcpkit_server::capability::tasks::DEFAULT_TASK_TTL_MS),
-            event_store_config: EventStoreConfig::default(),
+            stream_config: StreamConfig::default(),
         }
     }
 
@@ -393,53 +147,27 @@ impl SessionStore {
         self
     }
 
-    /// Set the event-store configuration applied to each new session's SSE
-    /// event buffer.
+    /// Set the stream configuration applied to each new session's SSE
+    /// stream registry.
     #[must_use]
-    pub fn with_event_store_config(mut self, config: EventStoreConfig) -> Self {
-        self.event_store_config = config;
+    pub fn with_stream_config(mut self, config: StreamConfig) -> Self {
+        self.stream_config = config;
         self
     }
 
-    /// Subscribe to a session's SSE stream. `None` if the session is unknown.
-    #[must_use]
-    pub fn subscribe(&self, id: &str) -> Option<broadcast::Receiver<String>> {
-        self.sessions.get(id).map(|s| s.tx.subscribe())
-    }
-
-    /// The event store backing a session's SSE resumability. `None` if the
-    /// session is unknown.
-    #[must_use]
-    pub fn events(&self, id: &str) -> Option<Arc<EventStore>> {
-        self.sessions.get(id).map(|s| Arc::clone(&s.events))
-    }
-
-    /// Store `message` for resumability and send it on the session's SSE
-    /// stream, returning the stored event id. `None` if the session is
+    /// The SSE stream registry for a session. `None` if the session is
     /// unknown.
     #[must_use]
-    pub fn send_with_storage(
-        &self,
-        id: &str,
-        event_type: impl Into<String>,
-        message: String,
-    ) -> Option<String> {
-        let session = self.sessions.get(id)?;
-        let event_id = session.events.store_auto_id(event_type, message.clone());
-        // Ignore send errors (no receivers): the event is stored for replay.
-        let _ = session.tx.send(message);
-        Some(event_id)
+    pub fn streams(&self, id: &str) -> Option<Arc<StreamRegistry>> {
+        self.sessions.get(id).map(|s| Arc::clone(&s.streams))
     }
 
-    /// Get events after `last_event_id` for `Last-Event-ID` replay. `None` if
-    /// the session is unknown.
-    pub async fn events_for_replay(
-        &self,
-        id: &str,
-        last_event_id: &str,
-    ) -> Option<Vec<StoredEvent>> {
-        let store = self.events(id)?;
-        Some(store.get_events_after(last_event_id).await)
+    /// Store `message` on the session's designated stream and queue it for
+    /// delivery, returning the allocated event id. `None` if the session is
+    /// unknown or has no live stream.
+    #[must_use]
+    pub fn send_event(&self, id: &str, event_type: &str, message: String) -> Option<String> {
+        self.sessions.get(id)?.streams.send(event_type, message)
     }
 
     /// Create a new session and return its ID.
@@ -463,7 +191,7 @@ impl SessionStore {
         session.tasks = Arc::new(
             mcpkit_server::capability::tasks::TaskManager::with_default_ttl(self.default_task_ttl),
         );
-        session.events = Arc::new(EventStore::new(self.event_store_config.clone()));
+        session.streams = Arc::new(StreamRegistry::new(self.stream_config.clone()));
         self.sessions.insert(id.clone(), session);
         id
     }
@@ -683,197 +411,55 @@ mod tests {
     async fn session_stream_send_and_receive() -> Result<(), Box<dyn std::error::Error>> {
         let store = SessionStore::with_default_timeout();
         let id = store.create();
-        let mut rx = store.subscribe(&id).ok_or("session missing")?;
+        let registry = store.streams(&id).ok_or("session missing")?;
+        let (mut handle, prime) = registry.open("connected", id.clone());
+        assert_eq!(prime.event_type, "connected");
 
-        // Send a message (stored + broadcast).
+        // Send an event (stored + queued on the designated stream).
+        let event_id = store.send_event(&id, "message", "test message".to_string());
+        assert!(event_id.is_some());
+
+        let got = handle.recv().await.ok_or("stream closed")?;
+        assert_eq!(got.data, "test message");
+        assert_eq!(Some(got.id), event_id);
+
+        // Unknown session: no registry, no send.
+        assert!(store.streams("nope").is_none());
         assert!(
             store
-                .send_with_storage(&id, "message", "test message".to_string())
-                .is_some()
-        );
-
-        let msg = rx.recv().await?;
-        assert_eq!(msg, "test message");
-
-        // Unknown session: no subscription, no send.
-        assert!(store.subscribe("nope").is_none());
-        assert!(
-            store
-                .send_with_storage("nope", "message", "x".to_string())
+                .send_event("nope", "message", "x".to_string())
                 .is_none()
         );
         Ok(())
     }
 
     #[tokio::test]
-    async fn test_event_store_creation() {
-        let store = EventStore::with_defaults();
-        assert!(store.is_empty().await);
-        assert_eq!(store.len().await, 0);
-    }
-
-    #[tokio::test]
-    async fn test_event_store_store_and_retrieve() {
-        let store = EventStore::with_defaults();
-
-        store.store_async("evt-1", "message", "data1").await;
-        store.store_async("evt-2", "message", "data2").await;
-        store.store_async("evt-3", "message", "data3").await;
-
-        assert_eq!(store.len().await, 3);
-
-        let all_events = store.get_all_events().await;
-        assert_eq!(all_events.len(), 3);
-        assert_eq!(all_events[0].id, "evt-1");
-        assert_eq!(all_events[1].id, "evt-2");
-        assert_eq!(all_events[2].id, "evt-3");
-    }
-
-    #[tokio::test]
-    async fn test_event_store_get_events_after() {
-        let store = EventStore::with_defaults();
-
-        store.store_async("evt-1", "message", "data1").await;
-        store.store_async("evt-2", "message", "data2").await;
-        store.store_async("evt-3", "message", "data3").await;
-
-        // Get events after evt-1
-        let events = store.get_events_after("evt-1").await;
-        assert_eq!(events.len(), 2);
-        assert_eq!(events[0].id, "evt-2");
-        assert_eq!(events[1].id, "evt-3");
-
-        // Get events after evt-2
-        let events = store.get_events_after("evt-2").await;
-        assert_eq!(events.len(), 1);
-        assert_eq!(events[0].id, "evt-3");
-
-        // Get events after evt-3 (should be empty)
-        let events = store.get_events_after("evt-3").await;
-        assert_eq!(events.len(), 0);
-
-        // Get events after unknown ID (should return all)
-        let events = store.get_events_after("unknown").await;
-        assert_eq!(events.len(), 3);
-    }
-
-    #[tokio::test]
-    async fn test_event_store_auto_id() {
-        let store = EventStore::with_defaults();
-
-        let id1 = store.store_auto_id("message", "data1");
-        let id2 = store.store_auto_id("message", "data2");
-
-        assert!(id1.starts_with("evt-"));
-        assert!(id2.starts_with("evt-"));
-        assert_ne!(id1, id2);
-
-        assert_eq!(store.len().await, 2);
-    }
-
-    #[tokio::test]
-    async fn test_event_store_max_events_limit() {
-        let config = EventStoreConfig::new(3, Duration::from_secs(300));
-        let store = EventStore::new(config);
-
-        store.store_async("evt-1", "message", "data1").await;
-        store.store_async("evt-2", "message", "data2").await;
-        store.store_async("evt-3", "message", "data3").await;
-        store.store_async("evt-4", "message", "data4").await;
-
-        // Should only have 3 events (oldest removed)
-        assert_eq!(store.len().await, 3);
-
-        let events = store.get_all_events().await;
-        assert_eq!(events[0].id, "evt-2"); // evt-1 was evicted
-        assert_eq!(events[1].id, "evt-3");
-        assert_eq!(events[2].id, "evt-4");
-    }
-
-    #[tokio::test]
-    async fn test_event_store_clear() {
-        let store = EventStore::with_defaults();
-
-        store.store_async("evt-1", "message", "data1").await;
-        store.store_async("evt-2", "message", "data2").await;
-
-        assert_eq!(store.len().await, 2);
-
-        store.clear().await;
-
-        assert!(store.is_empty().await);
-        assert_eq!(store.len().await, 0);
-    }
-
-    #[tokio::test]
-    async fn session_has_event_store() -> Result<(), Box<dyn std::error::Error>> {
+    async fn session_without_live_stream_drops_sends() {
+        // The event is not deliverable (send_event -> None) when no GET
+        // stream was ever opened; nothing panics and nothing leaks.
         let store = SessionStore::with_default_timeout();
         let id = store.create();
-
-        // Event store is created with the session.
-        let events = store.events(&id);
-        assert!(events.is_some());
-        assert!(events.ok_or("Event store not found")?.is_empty().await);
-        Ok(())
+        assert!(store.send_event(&id, "message", "x".to_string()).is_none());
     }
 
     #[tokio::test]
-    async fn session_send_with_storage_stores_event() -> Result<(), Box<dyn std::error::Error>> {
+    async fn session_replay_after_stream_death() -> Result<(), Box<dyn std::error::Error>> {
         let store = SessionStore::with_default_timeout();
         let id = store.create();
-        let mut rx = store.subscribe(&id).ok_or("session missing")?;
+        let registry = store.streams(&id).ok_or("session missing")?;
+        let (handle, _prime) = registry.open("connected", id.clone());
 
-        let event_id = store.send_with_storage(&id, "message", "test data".to_string());
-        assert!(event_id.is_some());
+        let evt1 = store
+            .send_event(&id, "message", "msg1".to_string())
+            .ok_or("send failed")?;
+        let _ = store.send_event(&id, "message", "msg2".to_string());
+        drop(handle); // stream dies (client disconnect)
 
-        let msg = rx.recv().await?;
-        assert_eq!(msg, "test data");
-
-        let events = store.events(&id).ok_or("Event store not found")?;
-        assert_eq!(events.len().await, 1);
+        // Resume with Last-Event-ID = evt1: replay only what followed, on the
+        // same stream identity.
+        let (_h2, replay) = registry.resume(&evt1).ok_or("not resumable")?;
+        assert_eq!(replay.len(), 1);
+        assert_eq!(replay[0].data, "msg2");
         Ok(())
-    }
-
-    #[tokio::test]
-    async fn session_replay_returns_events_after_last_id() -> Result<(), Box<dyn std::error::Error>>
-    {
-        let store = SessionStore::with_default_timeout();
-        let id = store.create();
-
-        let _ = store.send_with_storage(&id, "message", "msg1".to_string());
-        let evt2 = store.send_with_storage(&id, "message", "msg2".to_string());
-        let _ = store.send_with_storage(&id, "message", "msg3".to_string());
-
-        // Simulate reconnection: get events after evt2.
-        let events = store
-            .events_for_replay(&id, &evt2.ok_or("Failed to get event ID")?)
-            .await
-            .ok_or("Failed to get events for replay")?;
-
-        assert_eq!(events.len(), 1);
-        assert_eq!(events[0].data, "msg3");
-        Ok(())
-    }
-
-    #[test]
-    fn test_event_store_config() {
-        let config = EventStoreConfig::default();
-        assert_eq!(config.max_events, 1000);
-        assert_eq!(config.max_age, Duration::from_secs(300));
-
-        let config = EventStoreConfig::new(500, Duration::from_secs(120))
-            .with_max_events(600)
-            .with_max_age(Duration::from_secs(180));
-
-        assert_eq!(config.max_events, 600);
-        assert_eq!(config.max_age, Duration::from_secs(180));
-    }
-
-    #[test]
-    fn test_stored_event() {
-        let event = StoredEvent::new("evt-123".to_string(), "message", "test data");
-        assert_eq!(event.id, "evt-123");
-        assert_eq!(event.event_type, "message");
-        assert_eq!(event.data, "test data");
     }
 }
