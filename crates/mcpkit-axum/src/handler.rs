@@ -38,6 +38,82 @@ use std::convert::Infallible;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 
+/// Delivers peer messages onto the session's SSE stream registry.
+struct SessionStreamSink {
+    registry: Arc<mcpkit_server::streams::StreamRegistry>,
+}
+
+impl mcpkit_server::adapter_peer::SessionSink for SessionStreamSink {
+    fn send_notification(
+        &self,
+        message: Message,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<Output = Result<(), mcpkit_server::adapter_peer::SinkError>>
+                + Send
+                + '_,
+        >,
+    > {
+        Box::pin(async move {
+            let json = serde_json::to_string(&message).map_err(|e| {
+                mcpkit_server::adapter_peer::SinkError::Serialization(e.to_string())
+            })?;
+            // Best-effort: with no live stream the notification is dropped
+            // (runtime parity — a client without a stream misses it).
+            let _ = self.registry.send("message", json);
+            Ok(())
+        })
+    }
+
+    fn send_request(
+        &self,
+        message: Message,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<Output = Result<(), mcpkit_server::adapter_peer::SinkError>>
+                + Send
+                + '_,
+        >,
+    > {
+        Box::pin(async move {
+            let json = serde_json::to_string(&message).map_err(|e| {
+                mcpkit_server::adapter_peer::SinkError::Serialization(e.to_string())
+            })?;
+            self.registry
+                .send("message", json)
+                .map(|_| ())
+                .ok_or(mcpkit_server::adapter_peer::SinkError::NoClientStream)
+        })
+    }
+
+    fn has_live_stream(&self) -> bool {
+        self.registry.has_live_stream()
+    }
+}
+
+/// Build the request-capable peer for a session (#153 PR 4).
+///
+/// Takes the session's parts rather than a `Session` snapshot so callers can
+/// drop the snapshot before awaiting: a snapshot holds the session's
+/// `Arc<OutboundOwner>`, and a request awaiting a peer response while holding
+/// one would keep the owner alive — preventing DELETE/reap from failing that
+/// very request.
+fn session_peer<H>(
+    state: &McpState<H>,
+    streams: Arc<mcpkit_server::streams::StreamRegistry>,
+    outbound: Arc<mcpkit_server::adapter_peer::SessionOutbound>,
+) -> mcpkit_server::adapter_peer::SessionPeer
+where
+    H: HasServerInfo + Send + Sync + 'static,
+{
+    mcpkit_server::adapter_peer::SessionPeer::new(
+        Arc::new(SessionStreamSink { registry: streams }),
+        outbound,
+        state.peer_timeouts,
+    )
+    .with_reconnect_grace(state.reconnect_grace)
+}
+
 /// Whether this message is an `initialize` request — the only message allowed
 /// to omit `mcp-session-id` (the server assigns the id in its response).
 fn is_initialize(msg: &Message) -> bool {
@@ -172,17 +248,33 @@ where
             // This session's task store (per-session isolation for `tasks/*`).
             let task_store = session.as_ref().map(|s| s.tasks.clone());
             let client_caps = session
-                .and_then(|s| s.client_capabilities)
+                .as_ref()
+                .and_then(|s| s.client_capabilities.clone())
                 .unwrap_or_default();
 
-            // Create a basic response using the handler's capabilities
-            // In a full implementation, this would route to the handler's methods
+            // Route with a request-capable peer (#153 PR 4): handlers can
+            // call ctx.elicit()/ctx.list_roots()/sampling; the request rides
+            // the session's SSE stream and the client answers via a response
+            // POST correlated below.
+            let peer: Box<dyn mcpkit_server::Peer> = match &session {
+                Some(s) => Box::new(session_peer(
+                    &state,
+                    Arc::clone(&s.streams),
+                    Arc::clone(s.outbound_owner.outbound()),
+                )),
+                None => Box::new(NoOpPeer),
+            };
+            // Release the snapshot before awaiting: it holds the session's
+            // OutboundOwner, and a request blocked in ctx.elicit() must not
+            // keep DELETE/reap from failing its own pending request.
+            drop(session);
             let response = create_response_for_request(
                 &state,
                 &request,
                 protocol_version,
                 &client_caps,
                 task_store.as_ref(),
+                peer.as_ref(),
             )
             .await;
 
@@ -205,6 +297,43 @@ where
                 session_id = %session_id,
                 "Received notification"
             );
+            // Dispatch to the ServerHandler hooks off the request path
+            // (#153 PR 4): a hook may call ctx.list_roots(), whose response
+            // arrives via a separate POST — the 202 must not wait for that
+            // round-trip. Spawned into the session's JoinSet, whose teardown
+            // aborts in-flight hooks (deliberate: the session is gone).
+            if let Some(session) = state.sessions.get(&session_id) {
+                let state2 = state.clone();
+                let sid = session_id.clone();
+                let method = notification.method.to_string();
+                if let Ok(mut hooks) = session.hooks.lock() {
+                    hooks.spawn(async move {
+                        let Some(session) = state2.sessions.get(&sid) else {
+                            return;
+                        };
+                        let peer = session_peer(
+                            &state2,
+                            Arc::clone(&session.streams),
+                            Arc::clone(session.outbound_owner.outbound()),
+                        );
+                        let client_caps = session.client_capabilities.clone().unwrap_or_default();
+                        let server_caps = state2.effective_capabilities();
+                        let version = session.protocol_version.unwrap_or(ProtocolVersion::LATEST);
+                        // Release the snapshot: a hook blocked in
+                        // ctx.list_roots() must not hold the OutboundOwner.
+                        drop(session);
+                        let ctx =
+                            Context::for_notification(&client_caps, &server_caps, version, &peer);
+                        mcpkit_server::dispatch_notification_hooks(
+                            state2.handler.as_ref(),
+                            &method,
+                            &ctx,
+                        )
+                        .await;
+                        debug!(method = %method, "notification hook completed");
+                    });
+                }
+            }
             (
                 StatusCode::ACCEPTED,
                 [("mcp-session-id", session_id.as_str())],
@@ -219,11 +348,19 @@ where
         // log-and-drop, matching the runtime's `route_response` for ids that
         // match no pending request.
         Message::Response(response) => {
-            debug!(
-                id = %response.id,
-                session_id = %session_id,
-                "Received client response (no pending server-initiated request; dropped)"
-            );
+            // Correlate with a pending server-initiated request (#153 PR 4);
+            // an unmatched id is logged and dropped (runtime parity), and the
+            // spec-mandated 202 is returned either way.
+            let resolved = state
+                .sessions
+                .outbound(&session_id)
+                .is_some_and(|outbound| outbound.resolve(response));
+            if !resolved {
+                debug!(
+                    session_id = %session_id,
+                    "client response matched no pending server-initiated request; dropped"
+                );
+            }
             (
                 StatusCode::ACCEPTED,
                 [("mcp-session-id", session_id.as_str())],
@@ -263,6 +400,7 @@ async fn create_response_for_request<H>(
     protocol_version: ProtocolVersion,
     client_caps: &ClientCapabilities,
     task_store: Option<&Arc<TaskManager>>,
+    peer: &dyn mcpkit_server::Peer,
 ) -> mcpkit_core::protocol::Response
 where
     H: ServerHandler + ToolHandler + ResourceHandler + PromptHandler + Send + Sync + 'static,
@@ -276,14 +414,13 @@ where
     // Create a context for the request
     let req_id = request.id.clone();
     let server_caps = state.effective_capabilities();
-    let peer = NoOpPeer;
     let ctx = Context::new(
         &req_id,
         None,
         client_caps,
         &server_caps,
         protocol_version,
-        &peer,
+        peer,
     );
 
     match method {
@@ -404,6 +541,41 @@ where
             )
         }
     }
+}
+
+/// Handle MCP DELETE requests: explicit session termination.
+///
+/// Per spec (§Session Management item 5). Removing the session drops its
+/// `OutboundOwner`, so every pending server-initiated request fails
+/// immediately; subsequent requests with the id get 404.
+pub async fn handle_mcp_delete<H>(
+    State(state): State<McpState<H>>,
+    headers: HeaderMap,
+    user: Option<Extension<VerifiedUser>>,
+) -> impl IntoResponse
+where
+    H: HasServerInfo + Send + Sync + 'static,
+{
+    let origin = headers.get("origin").and_then(|v| v.to_str().ok());
+    if !state.origin_validator.is_allowed(origin) {
+        return (StatusCode::FORBIDDEN, "origin not allowed").into_response();
+    }
+    let user = user.map(|Extension(u)| u);
+    let Some(id) = headers
+        .get("mcp-session-id")
+        .and_then(|v| v.to_str().ok())
+        .map(String::from)
+    else {
+        return (StatusCode::BAD_REQUEST, "missing mcp-session-id").into_response();
+    };
+    match state.sessions.get_verified(&id, user.as_ref()) {
+        Ok(Some(_)) => {}
+        Ok(None) => return (StatusCode::NOT_FOUND, "unknown session id").into_response(),
+        Err(e) => return (StatusCode::FORBIDDEN, e.to_string()).into_response(),
+    }
+    let _ = state.sessions.remove(&id);
+    info!(session_id = %id, "Session terminated by client DELETE");
+    StatusCode::NO_CONTENT.into_response()
 }
 
 /// Handle SSE connections for server-to-client streaming.

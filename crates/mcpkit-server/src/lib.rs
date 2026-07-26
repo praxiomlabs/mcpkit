@@ -85,8 +85,9 @@ pub use health::{
 };
 pub use metrics::{MethodStats, MetricsSnapshot, ServerMetrics};
 pub use router::{
-    AugmentedTaskOutcome, begin_augmented_task, call_tool_json, route_completion, route_logging,
-    route_prompts, route_resources, route_tools, run_augmented_tool, tool_task_support,
+    AugmentedTaskOutcome, begin_augmented_task, call_tool_json, dispatch_notification_hooks,
+    route_completion, route_logging, route_prompts, route_resources, route_tools,
+    run_augmented_tool, tool_task_support,
 };
 pub use server::{
     RequestRouter, RuntimeConfig, ServerNotifier, ServerRuntime, ServerState, TransportPeer,

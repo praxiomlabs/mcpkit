@@ -25,6 +25,11 @@ pub struct McpState<H> {
     /// Validates request `Origin` headers (DNS-rebinding protection). Defaults
     /// to loopback-only.
     pub origin_validator: Arc<OriginValidator>,
+    /// Timeouts for server-initiated (peer) requests, by method class.
+    pub peer_timeouts: mcpkit_server::adapter_peer::PeerTimeouts,
+    /// Reconnect grace for peer requests. Fixed by design; overridable only
+    /// for tests via `McpRouter::with_reconnect_grace`.
+    pub(crate) reconnect_grace: std::time::Duration,
     /// Page size for `*/list` results; `None` disables pagination.
     pub list_page_size: Option<usize>,
     /// Optional completion handler for `completion/complete`.
@@ -39,6 +44,8 @@ impl<H> Clone for McpState<H> {
             server_info: self.server_info.clone(),
             sessions: Arc::clone(&self.sessions),
             origin_validator: Arc::clone(&self.origin_validator),
+            peer_timeouts: self.peer_timeouts,
+            reconnect_grace: self.reconnect_grace,
             list_page_size: self.list_page_size,
             completion: self.completion.clone(),
         }
@@ -53,6 +60,8 @@ impl<H> fmt::Debug for McpState<H> {
             .field("server_info", &self.server_info)
             .field("sessions", &self.sessions)
             .field("origin_validator", &self.origin_validator)
+            .field("peer_timeouts", &self.peer_timeouts)
+            .field("reconnect_grace", &self.reconnect_grace)
             .field("list_page_size", &self.list_page_size)
             .field(
                 "completion",
@@ -74,6 +83,8 @@ impl<H> McpState<H> {
             server_info,
             sessions: Arc::new(SessionStore::with_default_timeout()),
             origin_validator: Arc::new(OriginValidator::default()),
+            peer_timeouts: mcpkit_server::adapter_peer::PeerTimeouts::default(),
+            reconnect_grace: mcpkit_server::adapter_peer::RECONNECT_GRACE,
             list_page_size: None,
             completion: None,
         }
@@ -90,6 +101,8 @@ impl<H> McpState<H> {
             server_info,
             sessions: Arc::new(sessions),
             origin_validator: Arc::new(OriginValidator::default()),
+            peer_timeouts: mcpkit_server::adapter_peer::PeerTimeouts::default(),
+            reconnect_grace: mcpkit_server::adapter_peer::RECONNECT_GRACE,
             list_page_size: None,
             completion: None,
         }
