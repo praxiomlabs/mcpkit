@@ -415,10 +415,10 @@ fn test_reserved_error_codes_range() {
     // Standard error codes: -32700, -32600, -32601, -32602, -32603
 
     assert!(codes::PARSE_ERROR < -32600);
-    assert!(codes::INVALID_REQUEST == -32600);
-    assert!(codes::METHOD_NOT_FOUND == -32601);
-    assert!(codes::INVALID_PARAMS == -32602);
-    assert!(codes::INTERNAL_ERROR == -32603);
+    assert_eq!(codes::INVALID_REQUEST, -32600);
+    assert_eq!(codes::METHOD_NOT_FOUND, -32601);
+    assert_eq!(codes::INVALID_PARAMS, -32602);
+    assert_eq!(codes::INTERNAL_ERROR, -32603);
 }
 
 #[test]
