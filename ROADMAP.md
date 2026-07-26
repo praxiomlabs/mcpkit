@@ -51,7 +51,7 @@ exhaustively. See the tables for which is which.
 | Requirement | Status | Notes |
 |-------------|--------|-------|
 | No security vulnerabilities | ❌ Blocked | RUSTSEC-2026-0185 (quinn-proto, 7.5 high) is open and unsuppressed; fix is an upgrade to >=0.11.15. RUSTSEC-2023-0071 is deliberately ignored with rationale in `deny.toml` |
-| Performance benchmarks | ✅ Complete | Criterion benchmarks vs rmcp (dev-dep pinned at 1.7; rmcp is now 2.x) |
+| Performance benchmarks | ✅ Complete | Criterion benchmarks vs rmcp 2.2 |
 | Memory safety | ✅ Complete | `#![deny(unsafe_code)]` |
 | Error handling consistency | ✅ Complete | Unified McpError type |
 
@@ -74,6 +74,25 @@ exhaustively. See the tables for which is which.
 - `mcpkit` CLI tool for scaffolding
 - Integration test harness improvements
 - Debug/trace tooling
+
+### Next protocol revision
+
+A revision after `2025-11-25` is in flight upstream. As of 2026-07-26 it has **no
+published schema** — `modelcontextprotocol/modelcontextprotocol` carries the four
+released revisions plus `draft` — so mcpkit supporting all four published
+versions is current, not behind.
+
+Two things to watch:
+
+- `rmcp` 2.2.0 already accepts a `2026-07-28` protocol version and gates
+  behaviour on it (SEP-2164: `INVALID_PARAMS` for peers negotiating it or newer).
+- The upstream `draft` schema is a substantial restructure, not an increment —
+  21 methods against 2025-11-25's 31, adding `server/discover`,
+  `subscriptions/listen` and `notifications/subscriptions/acknowledged`.
+
+Decision needed: track the next revision early behind a feature, as rmcp is
+doing, or wait for publication. `spec/` and the `schema-check` CI job are already
+structured to vendor a second revision alongside the current one.
 
 ### Future Considerations
 

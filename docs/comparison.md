@@ -2,7 +2,7 @@
 
 This document provides an honest, transparent comparison between `mcpkit` and `rmcp` (the official Rust MCP SDK) to help you choose the right tool for your project.
 
-> **Last verified**: June 2026 (rmcp 1.7.0). SDK ecosystems evolve rapidly—always check the respective repositories for the latest information.
+> **Last verified**: 2026-07-26 (rmcp 2.2.0). Protocol coverage and version support were re-measured against rmcp's published sources on that date; the feature and ergonomics comparisons below are older. SDK ecosystems evolve rapidly—always check the respective repositories for the latest information.
 
 ## Executive Summary
 
