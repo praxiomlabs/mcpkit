@@ -2631,6 +2631,7 @@ dependencies = [
  "mcpkit-server",
  "mcpkit-transport",
  "reqwest",
+ "rmcp",
  "serde",
  "serde_json",
  "tokio",
