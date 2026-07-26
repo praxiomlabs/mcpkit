@@ -89,7 +89,7 @@ pub mod notifications {
     /// Sent when a URL-mode elicitation's out-of-band interaction has completed.
     pub const ELICITATION_COMPLETE: &str = "notifications/elicitation/complete";
     /// Sent by a task receiver when a task changes status. Optional per spec:
-    /// requestors must not rely on receiving it.
+    /// the requesting peer must not rely on receiving it.
     pub const TASK_STATUS: &str = "notifications/tasks/status";
 }
 

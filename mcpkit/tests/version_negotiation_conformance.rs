@@ -85,7 +85,10 @@ async fn every_published_version_is_accepted_without_downgrade() {
 /// about the same value.
 #[test]
 fn the_four_published_versions_are_distinct() {
-    let mut seen: Vec<&str> = ProtocolVersion::ALL.iter().map(|v| v.as_str()).collect();
+    let mut seen: Vec<&str> = ProtocolVersion::ALL
+        .iter()
+        .map(ProtocolVersion::as_str)
+        .collect();
     let total = seen.len();
     seen.sort_unstable();
     seen.dedup();

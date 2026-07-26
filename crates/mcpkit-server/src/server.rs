@@ -94,7 +94,7 @@ impl ServerState {
 
     /// Queue a notification produced by an *ambient* source — a state change
     /// that no inbound request triggered, and which therefore has no
-    /// request-scoped [`Peer`](crate::context::Peer) to send on.
+    /// request-scoped [`Peer`] to send on.
     ///
     /// The run loop drains this queue and writes to the transport. Publishing is
     /// synchronous and non-blocking, so it is safe to call from a lock-free
@@ -475,7 +475,7 @@ pub struct RuntimeConfig {
     /// Whether to publish `notifications/tasks/status` when a task changes
     /// status. Optional per spec ("Receivers MAY send"), so this can be turned
     /// off for a chattier-than-wanted session without affecting conformance;
-    /// requestors must not rely on receiving it either way.
+    /// the requesting peer must not rely on receiving it either way.
     pub task_status_notifications: bool,
 }
 
