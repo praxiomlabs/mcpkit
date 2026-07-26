@@ -107,15 +107,39 @@ impl PromptHandler for TestHandler {
     }
 }
 
+/// POST `initialize` against a filter and yield the assigned session id
+/// (required since #153 PR 0b: only `initialize` may omit `mcp-session-id`).
+/// A macro rather than a fn: `warp::test`'s filter bounds are unnameable.
+macro_rules! init_session {
+    ($filter:expr) => {{
+        let response = warp::test::request()
+            .method("POST")
+            .path("/mcp")
+            .header("content-type", "application/json")
+            .header("mcp-protocol-version", "2025-11-25")
+            .body(r#"{"jsonrpc":"2.0","method":"initialize","params":{},"id":0}"#)
+            .reply($filter)
+            .await;
+        response
+            .headers()
+            .get("mcp-session-id")
+            .and_then(|v| v.to_str().ok())
+            .map(String::from)
+            .expect("initialize must assign a session id")
+    }};
+}
+
 #[tokio::test]
 async fn test_ping_request() {
     let filter = McpRouter::new(TestHandler).into_filter();
+    let sid = init_session!(&filter);
 
     let response = warp::test::request()
         .method("POST")
         .path("/mcp")
         .header("content-type", "application/json")
         .header("mcp-protocol-version", "2025-11-25")
+        .header("mcp-session-id", sid.as_str())
         .body(r#"{"jsonrpc":"2.0","method":"ping","id":1}"#)
         .reply(&filter)
         .await;
@@ -163,12 +187,14 @@ async fn test_unsupported_protocol_version() {
 #[tokio::test]
 async fn test_list_tools() {
     let filter = McpRouter::new(TestHandler).into_filter();
+    let sid = init_session!(&filter);
 
     let response = warp::test::request()
         .method("POST")
         .path("/mcp")
         .header("content-type", "application/json")
         .header("mcp-protocol-version", "2025-11-25")
+        .header("mcp-session-id", sid.as_str())
         .body(r#"{"jsonrpc":"2.0","method":"tools/list","id":1}"#)
         .reply(&filter)
         .await;
@@ -183,12 +209,14 @@ async fn test_list_tools() {
 #[tokio::test]
 async fn test_call_tool() {
     let filter = McpRouter::new(TestHandler).into_filter();
+    let sid = init_session!(&filter);
 
     let response = warp::test::request()
         .method("POST")
         .path("/mcp")
         .header("content-type", "application/json")
         .header("mcp-protocol-version", "2025-11-25")
+        .header("mcp-session-id", sid.as_str())
         .body(
             r#"{"jsonrpc":"2.0","method":"tools/call","params":{"name":"echo","arguments":{"message":"hello"}},"id":1}"#,
         )
@@ -204,12 +232,14 @@ async fn test_call_tool() {
 #[tokio::test]
 async fn test_notification() {
     let filter = McpRouter::new(TestHandler).into_filter();
+    let sid = init_session!(&filter);
 
     let response = warp::test::request()
         .method("POST")
         .path("/mcp")
         .header("content-type", "application/json")
         .header("mcp-protocol-version", "2025-11-25")
+        .header("mcp-session-id", sid.as_str())
         .body(r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#)
         .reply(&filter)
         .await;
@@ -236,12 +266,14 @@ async fn test_invalid_json() {
 #[tokio::test]
 async fn test_method_not_found() {
     let filter = McpRouter::new(TestHandler).into_filter();
+    let sid = init_session!(&filter);
 
     let response = warp::test::request()
         .method("POST")
         .path("/mcp")
         .header("content-type", "application/json")
         .header("mcp-protocol-version", "2025-11-25")
+        .header("mcp-session-id", sid.as_str())
         .body(r#"{"jsonrpc":"2.0","method":"unknown/method","id":1}"#)
         .reply(&filter)
         .await;
@@ -256,12 +288,14 @@ async fn test_method_not_found() {
 #[tokio::test]
 async fn test_cors_headers() {
     let filter = McpRouter::new(TestHandler).into_filter();
+    let sid = init_session!(&filter);
 
     let response = warp::test::request()
         .method("POST")
         .path("/mcp")
         .header("content-type", "application/json")
         .header("mcp-protocol-version", "2025-11-25")
+        .header("mcp-session-id", sid.as_str())
         .header("origin", "http://localhost:3000")
         .body(r#"{"jsonrpc":"2.0","method":"ping","id":1}"#)
         .reply(&filter)
@@ -299,12 +333,14 @@ async fn test_cors_preflight() {
 #[tokio::test]
 async fn test_without_cors() {
     let filter = McpRouter::new(TestHandler).into_filter_without_cors();
+    let sid = init_session!(&filter);
 
     let response = warp::test::request()
         .method("POST")
         .path("/mcp")
         .header("content-type", "application/json")
         .header("mcp-protocol-version", "2025-11-25")
+        .header("mcp-session-id", sid.as_str())
         .body(r#"{"jsonrpc":"2.0","method":"ping","id":1}"#)
         .reply(&filter)
         .await;
@@ -324,15 +360,34 @@ async fn test_without_cors() {
 #[tokio::test]
 async fn response_post_is_accepted_with_202() {
     let filter = McpRouter::new(TestHandler).into_filter();
+    let sid = init_session!(&filter);
 
     let response = warp::test::request()
         .method("POST")
         .path("/mcp")
         .header("content-type", "application/json")
         .header("mcp-protocol-version", "2025-11-25")
+        .header("mcp-session-id", sid.as_str())
         .body(r#"{"jsonrpc":"2.0","id":42,"result":{"roots":[]}}"#)
         .reply(&filter)
         .await;
 
     assert_eq!(response.status(), 202);
+}
+
+/// #153 PR 0b: a non-initialize message without `mcp-session-id` is 400.
+#[tokio::test]
+async fn missing_session_id_on_non_initialize_is_400() {
+    let filter = McpRouter::new(TestHandler).into_filter();
+
+    let response = warp::test::request()
+        .method("POST")
+        .path("/mcp")
+        .header("content-type", "application/json")
+        .header("mcp-protocol-version", "2025-11-25")
+        .body(r#"{"jsonrpc":"2.0","method":"ping","id":1}"#)
+        .reply(&filter)
+        .await;
+
+    assert_eq!(response.status(), 400);
 }

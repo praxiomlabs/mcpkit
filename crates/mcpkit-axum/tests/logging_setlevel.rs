@@ -72,6 +72,36 @@ impl PromptHandler for H {
     }
 }
 
+/// Initialize a session, then POST `body` within it, returning the parsed
+/// response (required since #153 PR 0b: only `initialize` may omit
+/// `mcp-session-id`).
+async fn post_in_session(state: McpState<H>, body: String) -> serde_json::Value {
+    use axum::http::HeaderValue;
+    let init = serde_json::json!({
+        "jsonrpc": "2.0", "id": 0, "method": "initialize",
+        "params": { "protocolVersion": "2025-11-25", "capabilities": {} }
+    })
+    .to_string();
+    let response = mcpkit_axum::handle_mcp_post(State(state.clone()), HeaderMap::new(), None, init)
+        .await
+        .into_response();
+    let sid = response
+        .headers()
+        .get("mcp-session-id")
+        .and_then(|v| v.to_str().ok())
+        .map(String::from)
+        .expect("initialize must assign a session id");
+    let mut headers = HeaderMap::new();
+    headers.insert("mcp-session-id", HeaderValue::from_str(&sid).expect("sid"));
+    let response = mcpkit_axum::handle_mcp_post(State(state), headers, None, body)
+        .await
+        .into_response();
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("body");
+    serde_json::from_slice(&bytes).expect("json")
+}
+
 #[tokio::test]
 async fn logging_set_level_works_through_axum_adapter() {
     let seen = Arc::new(Mutex::new(None));
@@ -84,13 +114,7 @@ async fn logging_set_level_works_through_axum_adapter() {
     })
     .to_string();
 
-    let response = mcpkit_axum::handle_mcp_post(State(state), HeaderMap::new(), None, body)
-        .await
-        .into_response();
-    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .expect("body");
-    let json: serde_json::Value = serde_json::from_slice(&bytes).expect("json");
+    let json: serde_json::Value = post_in_session(state, body).await;
 
     assert_eq!(json["result"], serde_json::json!({}), "response: {json}");
     assert_eq!(*seen.lock().unwrap(), Some(LoggingLevel::Warning));

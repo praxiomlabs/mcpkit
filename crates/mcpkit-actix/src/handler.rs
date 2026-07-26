@@ -21,6 +21,12 @@ use std::sync::Arc;
 use std::time::Duration;
 use tracing::{debug, info, warn};
 
+/// Whether this message is an `initialize` request — the only message allowed
+/// to omit `mcp-session-id` (the server assigns the id in its response).
+fn is_initialize(msg: &Message) -> bool {
+    matches!(msg, Message::Request(r) if r.method.as_ref() == "initialize")
+}
+
 /// Handle MCP POST requests.
 ///
 /// This handler processes JSON-RPC messages sent via HTTP POST.
@@ -74,6 +80,11 @@ where
     // middleware via a request extension; mcpkit binds the session to it.
     let user = req.extensions().get::<VerifiedUser>().cloned();
 
+    // Parse the message first: whether a missing session id is acceptable
+    // depends on whether this is an `initialize` request.
+    let msg: Message =
+        serde_json::from_str(&body).map_err(|e| ExtensionError::InvalidMessage(e.to_string()))?;
+
     // Get or create session
     let session_id = req
         .headers()
@@ -94,14 +105,17 @@ where
                 return Ok(HttpResponse::Forbidden().body(e.to_string()));
             }
         },
-        None => state.sessions.create_for_user(user),
+        // Spec: a server assigning session ids does so at initialization;
+        // other requests without `mcp-session-id` are 400 Bad Request.
+        None if is_initialize(&msg) => state.sessions.create_for_user(user),
+        None => {
+            warn!("Rejected: missing mcp-session-id on non-initialize message");
+            return Ok(HttpResponse::BadRequest()
+                .body("missing mcp-session-id (required for all messages after initialize)"));
+        }
     };
 
     debug!(session_id = %session_id, "Processing MCP request");
-
-    // Parse message
-    let msg: Message =
-        serde_json::from_str(&body).map_err(|e| ExtensionError::InvalidMessage(e.to_string()))?;
 
     // Process message
     match msg {

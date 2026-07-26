@@ -38,6 +38,12 @@ use std::convert::Infallible;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 
+/// Whether this message is an `initialize` request — the only message allowed
+/// to omit `mcp-session-id` (the server assigns the id in its response).
+fn is_initialize(msg: &Message) -> bool {
+    matches!(msg, Message::Request(r) if r.method.as_ref() == "initialize")
+}
+
 /// Handle MCP POST requests.
 ///
 /// This handler processes JSON-RPC messages sent via HTTP POST.
@@ -91,6 +97,16 @@ where
         .into_response();
     }
 
+    // Parse the message first: whether a missing session id is acceptable
+    // depends on whether this is an `initialize` request.
+    let msg: Message = match serde_json::from_str(&body) {
+        Ok(m) => m,
+        Err(e) => {
+            warn!(error = %e, "Failed to parse JSON-RPC message");
+            return ExtensionError::InvalidMessage(e.to_string()).into_response();
+        }
+    };
+
     // Get or create session
     let session_id = headers
         .get("mcp-session-id")
@@ -110,19 +126,20 @@ where
                 return (StatusCode::FORBIDDEN, e.to_string()).into_response();
             }
         },
-        None => state.sessions.create_for_user(user),
+        // Spec: a server assigning session ids does so at initialization;
+        // other requests without `mcp-session-id` are 400 Bad Request.
+        None if is_initialize(&msg) => state.sessions.create_for_user(user),
+        None => {
+            warn!("Rejected: missing mcp-session-id on non-initialize message");
+            return (
+                StatusCode::BAD_REQUEST,
+                "missing mcp-session-id (required for all messages after initialize)",
+            )
+                .into_response();
+        }
     };
 
     debug!(session_id = %session_id, "Processing MCP request");
-
-    // Parse message
-    let msg: Message = match serde_json::from_str(&body) {
-        Ok(m) => m,
-        Err(e) => {
-            warn!(error = %e, "Failed to parse JSON-RPC message");
-            return ExtensionError::InvalidMessage(e.to_string()).into_response();
-        }
-    };
 
     // Process message
     match msg {

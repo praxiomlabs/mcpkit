@@ -121,14 +121,32 @@ fn create_test_client() -> Client {
     Client::tracked(rocket).expect("valid rocket instance")
 }
 
+/// POST `initialize` and return the assigned session id (required since
+/// #153 PR 0b: only `initialize` may omit `mcp-session-id`).
+fn init_session(client: &Client) -> String {
+    let response = client
+        .post("/mcp")
+        .header(ContentType::JSON)
+        .header(Header::new("mcp-protocol-version", "2025-11-25"))
+        .body(r#"{"jsonrpc":"2.0","method":"initialize","params":{},"id":0}"#)
+        .dispatch();
+    response
+        .headers()
+        .get_one("mcp-session-id")
+        .map(String::from)
+        .expect("initialize must assign a session id")
+}
+
 #[test]
 fn test_ping_request() {
     let client = create_test_client();
+    let sid = init_session(&client);
 
     let response = client
         .post("/mcp")
         .header(ContentType::JSON)
         .header(Header::new("mcp-protocol-version", "2025-11-25"))
+        .header(Header::new("mcp-session-id", sid))
         .body(r#"{"jsonrpc":"2.0","method":"ping","id":1}"#)
         .dispatch();
 
@@ -173,19 +191,9 @@ fn test_unsupported_protocol_version() {
 fn test_session_persistence() {
     let client = create_test_client();
 
-    // First request - get a session
-    let response1 = client
-        .post("/mcp")
-        .header(ContentType::JSON)
-        .header(Header::new("mcp-protocol-version", "2025-11-25"))
-        .body(r#"{"jsonrpc":"2.0","method":"ping","id":1}"#)
-        .dispatch();
-
-    let session_id = response1
-        .headers()
-        .get_one("mcp-session-id")
-        .unwrap()
-        .to_string();
+    // First request: initialize assigns the session (#153 PR 0b: only
+    // initialize may omit mcp-session-id).
+    let session_id = init_session(&client);
 
     // Second request - reuse session
     let response2 = client
@@ -206,11 +214,13 @@ fn test_session_persistence() {
 #[test]
 fn test_list_tools() {
     let client = create_test_client();
+    let sid = init_session(&client);
 
     let response = client
         .post("/mcp")
         .header(ContentType::JSON)
         .header(Header::new("mcp-protocol-version", "2025-11-25"))
+        .header(Header::new("mcp-session-id", sid))
         .body(r#"{"jsonrpc":"2.0","method":"tools/list","id":1}"#)
         .dispatch();
 
@@ -224,11 +234,13 @@ fn test_list_tools() {
 #[test]
 fn test_call_tool() {
     let client = create_test_client();
+    let sid = init_session(&client);
 
     let response = client
         .post("/mcp")
         .header(ContentType::JSON)
         .header(Header::new("mcp-protocol-version", "2025-11-25"))
+        .header(Header::new("mcp-session-id", sid))
         .body(
             r#"{"jsonrpc":"2.0","method":"tools/call","params":{"name":"echo","arguments":{"message":"hello"}},"id":1}"#,
         )
@@ -243,11 +255,13 @@ fn test_call_tool() {
 #[test]
 fn test_notification() {
     let client = create_test_client();
+    let sid = init_session(&client);
 
     let response = client
         .post("/mcp")
         .header(ContentType::JSON)
         .header(Header::new("mcp-protocol-version", "2025-11-25"))
+        .header(Header::new("mcp-session-id", sid))
         .body(r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#)
         .dispatch();
 
@@ -271,11 +285,13 @@ fn test_invalid_json() {
 #[test]
 fn test_method_not_found() {
     let client = create_test_client();
+    let sid = init_session(&client);
 
     let response = client
         .post("/mcp")
         .header(ContentType::JSON)
         .header(Header::new("mcp-protocol-version", "2025-11-25"))
+        .header(Header::new("mcp-session-id", sid))
         .body(r#"{"jsonrpc":"2.0","method":"unknown/method","id":1}"#)
         .dispatch();
 
@@ -294,12 +310,14 @@ fn test_cors_headers() {
         .mount("/", rocket::routes![mcp_post, mcp_sse])
         .attach(Cors);
     let client = Client::tracked(rocket).expect("valid rocket instance");
+    let sid = init_session(&client);
 
     // Make a normal request and check CORS headers are present
     let response = client
         .post("/mcp")
         .header(ContentType::JSON)
         .header(Header::new("mcp-protocol-version", "2025-11-25"))
+        .header(Header::new("mcp-session-id", sid))
         .header(Header::new("Origin", "http://localhost:3000"))
         .body(r#"{"jsonrpc":"2.0","method":"ping","id":1}"#)
         .dispatch();
@@ -318,13 +336,30 @@ fn test_cors_headers() {
 #[test]
 fn response_post_is_accepted_with_202() {
     let client = create_test_client();
+    let sid = init_session(&client);
 
     let response = client
         .post("/mcp")
         .header(ContentType::JSON)
         .header(Header::new("mcp-protocol-version", "2025-11-25"))
+        .header(Header::new("mcp-session-id", sid))
         .body(r#"{"jsonrpc":"2.0","id":42,"result":{"roots":[]}}"#)
         .dispatch();
 
     assert_eq!(response.status(), Status::Accepted);
+}
+
+/// #153 PR 0b: a non-initialize message without `mcp-session-id` is 400.
+#[test]
+fn missing_session_id_on_non_initialize_is_400() {
+    let client = create_test_client();
+
+    let response = client
+        .post("/mcp")
+        .header(ContentType::JSON)
+        .header(Header::new("mcp-protocol-version", "2025-11-25"))
+        .body(r#"{"jsonrpc":"2.0","method":"ping","id":1}"#)
+        .dispatch();
+
+    assert_eq!(response.status(), Status::BadRequest);
 }

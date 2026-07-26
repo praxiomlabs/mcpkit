@@ -118,6 +118,21 @@ async fn post(
     (json, sid)
 }
 
+/// POST `initialize` and return the session id the server assigned
+/// (required since #153 PR 0b: only `initialize` may omit `mcp-session-id`).
+async fn init_session(state: &McpState<H>) -> String {
+    let (_, sid) = post(
+        state,
+        None,
+        serde_json::json!({
+            "jsonrpc": "2.0", "id": 0, "method": "initialize",
+            "params": { "protocolVersion": "2025-11-25", "capabilities": {} }
+        }),
+    )
+    .await;
+    sid.expect("initialize must assign a session id")
+}
+
 fn call_task(id: u64, name: &str) -> serde_json::Value {
     serde_json::json!({
         "jsonrpc": "2.0", "id": id, "method": "tools/call",
@@ -137,8 +152,8 @@ async fn task_augmented_call_creates_gets_and_results() {
     let (state, _) = state();
 
     // Augmented tools/call returns CreateTaskResult (status "working") immediately.
-    let (resp, sid) = post(&state, None, call_task(1, "echo")).await;
-    let sid = sid.expect("session id");
+    let sid = init_session(&state).await;
+    let (resp, _) = post(&state, Some(&sid), call_task(1, "echo")).await;
     assert!(resp["error"].is_null(), "augmented call errored: {resp}");
     assert_eq!(resp["result"]["task"]["status"], "working");
     let task_id = resp["result"]["task"]["taskId"]
@@ -176,7 +191,8 @@ async fn with_task_ttl_configures_session_store_retention() {
     })
     .with_task_ttl(Some(1234));
 
-    let (resp, _) = post(&state, None, call_task(1, "echo")).await;
+    let sid = init_session(&state).await;
+    let (resp, _) = post(&state, Some(&sid), call_task(1, "echo")).await;
     assert_eq!(
         resp["result"]["task"]["ttl"], 1234,
         "configured task ttl not materialized: {resp}"
@@ -186,7 +202,8 @@ async fn with_task_ttl_configures_session_store_retention() {
 #[tokio::test]
 async fn task_augmented_call_on_forbidden_tool_is_rejected() {
     let (state, _) = state();
-    let (resp, _) = post(&state, None, call_task(1, "plain")).await;
+    let sid = init_session(&state).await;
+    let (resp, _) = post(&state, Some(&sid), call_task(1, "plain")).await;
     // A tool without taskSupport must be rejected, not run as a task.
     // Spec: -32601 (Method not found), not -32602.
     assert_eq!(
@@ -201,8 +218,8 @@ async fn tasks_cancel_trips_ctx_cancelled() {
     let (state, observed) = state();
 
     // Start a task whose tool parks on ctx.cancelled().
-    let (resp, sid) = post(&state, None, call_task(1, "waiter")).await;
-    let sid = sid.expect("session id");
+    let sid = init_session(&state).await;
+    let (resp, _) = post(&state, Some(&sid), call_task(1, "waiter")).await;
     let task_id = resp["result"]["task"]["taskId"]
         .as_str()
         .expect("taskId")
@@ -236,16 +253,16 @@ async fn tasks_are_isolated_per_session() {
     let (state, _) = state();
 
     // Session A creates a task.
-    let (resp, sid_a) = post(&state, None, call_task(1, "echo")).await;
-    let sid_a = sid_a.expect("session A id");
+    let sid_a = init_session(&state).await;
+    let (resp, _) = post(&state, Some(&sid_a), call_task(1, "echo")).await;
     let task_id = resp["result"]["task"]["taskId"]
         .as_str()
         .expect("taskId")
         .to_string();
 
     // Session B is a distinct session (no session header -> new session).
-    let (_probe, sid_b) = post(&state, None, call_task(2, "echo")).await;
-    let sid_b = sid_b.expect("session B id");
+    let sid_b = init_session(&state).await;
+    let (_probe, _) = post(&state, Some(&sid_b), call_task(2, "echo")).await;
     assert_ne!(sid_a, sid_b, "expected two distinct sessions");
 
     // Session B must not be able to read session A's task.
@@ -266,13 +283,35 @@ async fn tasks_are_isolated_per_session() {
 async fn response_post_is_accepted_with_202() {
     use axum::response::IntoResponse;
     let (state, _) = state();
+    let sid = init_session(&state).await;
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        "mcp-session-id",
+        HeaderValue::from_str(&sid).expect("session header"),
+    );
     let response = mcpkit_axum::handle_mcp_post(
         State(state),
-        HeaderMap::new(),
+        headers,
         None,
         r#"{"jsonrpc":"2.0","id":42,"result":{"roots":[]}}"#.to_string(),
     )
     .await
     .into_response();
     assert_eq!(response.status(), axum::http::StatusCode::ACCEPTED);
+}
+
+/// #153 PR 0b: a non-initialize message without `mcp-session-id` is 400.
+#[tokio::test]
+async fn missing_session_id_on_non_initialize_is_400() {
+    use axum::response::IntoResponse;
+    let (state, _) = state();
+    let response = mcpkit_axum::handle_mcp_post(
+        State(state),
+        HeaderMap::new(),
+        None,
+        call_task(1, "echo").to_string(),
+    )
+    .await
+    .into_response();
+    assert_eq!(response.status(), axum::http::StatusCode::BAD_REQUEST);
 }
