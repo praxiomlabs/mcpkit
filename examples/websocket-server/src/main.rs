@@ -533,7 +533,7 @@ async fn handle_connection(stream: TcpStream, addr: SocketAddr, state: Arc<Serve
                     }
                     Message::Notification(notif) => {
                         // Handle notification (no response)
-                        if notif.method == "initialized" {
+                        if notif.method == mcpkit_server::router::notifications::INITIALIZED {
                             info!(addr = %addr, "Client initialized");
                         }
                         None

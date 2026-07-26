@@ -260,7 +260,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             Message::Notification(ref notif) => {
                 info!(method = %notif.method, "Received notification");
-                if notif.method == "initialized" {
+                if notif.method == mcpkit_server::router::notifications::INITIALIZED {
                     info!("Client initialized");
                 }
                 None
