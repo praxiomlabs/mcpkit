@@ -460,7 +460,22 @@ impl ServerNotifier {
 }
 
 /// Server runtime configuration.
+///
+/// Marked `#[non_exhaustive]`: the runtime gains settings over time, and with an
+/// exhaustive struct every one of those additions is a breaking change for any
+/// downstream struct-literal construction. Build one with
+/// [`new`](Self::new)/[`default`](Default::default) and the setters below, which
+/// keeps later additions compatible. (Doing this before 1.0 is the whole point —
+/// after 1.0 the type would be stuck exhaustive.)
+///
+/// ```
+/// use mcpkit_server::RuntimeConfig;
+/// let config = RuntimeConfig::new()
+///     .max_concurrent_requests(32)
+///     .task_status_notifications(false);
+/// ```
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct RuntimeConfig {
     /// Whether to automatically send initialized notification.
     pub auto_initialized: bool,
@@ -488,6 +503,50 @@ impl Default for RuntimeConfig {
             default_task_ttl_ms: Some(crate::capability::tasks::DEFAULT_TASK_TTL_MS),
             task_status_notifications: true,
         }
+    }
+}
+
+impl RuntimeConfig {
+    /// Create a runtime configuration with default values.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Whether to automatically send the `initialized` notification.
+    #[must_use]
+    pub const fn auto_initialized(mut self, yes: bool) -> Self {
+        self.auto_initialized = yes;
+        self
+    }
+
+    /// Maximum number of requests processed concurrently.
+    #[must_use]
+    pub const fn max_concurrent_requests(mut self, max: usize) -> Self {
+        self.max_concurrent_requests = max;
+        self
+    }
+
+    /// How long a server-initiated request waits for the client's response.
+    #[must_use]
+    pub const fn outbound_request_timeout(mut self, timeout: Duration) -> Self {
+        self.outbound_request_timeout = timeout;
+        self
+    }
+
+    /// Retention applied to a task whose `tools/call` omits a `ttl`.
+    /// `None` means unlimited.
+    #[must_use]
+    pub const fn default_task_ttl_ms(mut self, ttl_ms: Option<u64>) -> Self {
+        self.default_task_ttl_ms = ttl_ms;
+        self
+    }
+
+    /// Whether to publish `notifications/tasks/status` on task transitions.
+    #[must_use]
+    pub const fn task_status_notifications(mut self, yes: bool) -> Self {
+        self.task_status_notifications = yes;
+        self
     }
 }
 
@@ -1845,10 +1904,7 @@ mod tests {
         let (client, server) = MemoryTransport::pair();
         let state = Arc::new(ServerState::new(ServerCapabilities::default()));
         state.set_initialized();
-        let config = RuntimeConfig {
-            task_status_notifications: false,
-            ..RuntimeConfig::default()
-        };
+        let config = RuntimeConfig::new().task_status_notifications(false);
         // Mirrors `with_config`: the observer is simply not installed.
         let task_store = Arc::new(crate::capability::tasks::TaskManager::new());
         let runtime = ServerRuntime {
