@@ -56,6 +56,7 @@ use std::time::{Duration, Instant};
 
 /// Configuration for MCP telemetry.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct TelemetryConfig {
     /// Service name for span attributes.
     pub service_name: String,

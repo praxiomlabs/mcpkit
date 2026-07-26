@@ -827,6 +827,7 @@ impl WwwAuthenticate {
 
 /// Client authorization configuration.
 #[derive(Clone)]
+#[non_exhaustive]
 pub struct AuthorizationConfig {
     /// The authorization server URL.
     pub authorization_server: String,

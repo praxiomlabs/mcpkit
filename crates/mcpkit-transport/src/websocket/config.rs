@@ -4,6 +4,7 @@ use std::time::Duration;
 
 /// Configuration for WebSocket transport.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct WebSocketConfig {
     /// WebSocket URL (ws:// or wss://).
     pub url: String,

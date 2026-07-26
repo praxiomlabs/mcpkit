@@ -113,6 +113,7 @@ use std::time::Duration;
 
 /// Rate limiting configuration.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct RateLimitConfig {
     /// Maximum number of requests allowed in the window.
     pub max_requests: u64,

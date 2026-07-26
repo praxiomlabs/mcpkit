@@ -24,6 +24,7 @@ pub const DEFAULT_MAX_MESSAGE_SIZE: usize = 16 * 1024 * 1024;
 
 /// Configuration for HTTP transport.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct HttpTransportConfig {
     /// Base URL for the MCP endpoint.
     pub base_url: String,

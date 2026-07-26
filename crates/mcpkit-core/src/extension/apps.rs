@@ -277,6 +277,7 @@ pub enum UiDisplayMode {
 /// This structure configures the Apps extension capabilities.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[non_exhaustive]
 pub struct AppsConfig {
     /// Whether UI resources are supported.
     #[serde(default = "default_true")]
@@ -311,6 +312,13 @@ impl AppsConfig {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Set whether UI resources are supported.
+    #[must_use]
+    pub const fn with_ui_resources(mut self, supported: bool) -> Self {
+        self.ui_resources = supported;
+        self
     }
 
     /// Set sandbox permissions.
