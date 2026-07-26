@@ -20,10 +20,22 @@
 #   string literals and carries no conformance signal.
 #   Rows 3 and 4 are reported in both directions.
 #
-# Usage: scripts/schema-diff.sh
+# Usage:
+#   scripts/schema-diff.sh              human-readable report
+#   scripts/schema-diff.sh --baseline   machine-readable difference set, one per
+#                                       line, sorted — diffed against
+#                                       spec/schema-diff-baseline.txt by CI.
+#
+# The baseline is a set of *accepted* differences, not an expected-failure count.
+# It is empty today: mcpkit implements 31/31 spec methods. Any new line is a
+# regression; a removed line means a difference was closed and the baseline
+# should be updated in the same commit.
+#
 # Requires: jq, grep, awk. Run from the repo root.
 
 set -euo pipefail
+
+MODE="${1:-report}"
 
 SCHEMA="spec/2025-11-25/schema.json"
 SRC_GLOB="crates"
@@ -36,6 +48,17 @@ command -v jq >/dev/null || { echo "error: jq not found" >&2; exit 1; }
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
+BASELINE="$WORK/baseline.txt"
+: > "$BASELINE"
+
+# In --baseline mode the human-readable report is suppressed; only the
+# difference set reaches stdout.
+if [ "$MODE" = "--baseline" ]; then
+	exec 3>&1 1>/dev/null
+fi
+
+# emit <category> < lines-on-stdin — record each difference for the baseline.
+emit() { sed "s|^|$1: |" >> "$BASELINE"; }
 
 hr() { printf '\n== %s ==\n' "$1"; }
 
@@ -150,6 +173,7 @@ printf 'intersect with schema methods : %s / %s\n' \
 printf 'in-schema-not-in-mcpkit       :\n'
 only_in "$WORK/schema_methods.txt" "$WORK/mcpkit_literals.txt" | sed 's/^/  /' || true
 only_in "$WORK/schema_methods.txt" "$WORK/mcpkit_literals.txt" | grep -q . || printf '  (none)\n'
+only_in "$WORK/schema_methods.txt" "$WORK/mcpkit_literals.txt" | emit 'method in-schema-not-in-mcpkit'
 
 # ===========================================================================
 # Row 2 — notification methods
@@ -166,6 +190,7 @@ printf 'intersect                      : %s / %s\n' \
 printf 'in-schema-not-in-mcpkit        :\n'
 only_in "$WORK/schema_notifs.txt" "$WORK/mcpkit_notifs.txt" | sed 's/^/  /' || true
 only_in "$WORK/schema_notifs.txt" "$WORK/mcpkit_notifs.txt" | grep -q . || printf '  (none)\n'
+only_in "$WORK/schema_notifs.txt" "$WORK/mcpkit_notifs.txt" | emit 'notification in-schema-not-in-mcpkit'
 
 # ===========================================================================
 # Row 3 — closed enum variants (both directions, per enum)
@@ -190,6 +215,8 @@ for name in $(jq -r '.["$defs"] | to_entries[] | select(.value.enum) | .key' "$S
 		"$(only_in "$WORK/se.txt" "$WORK/me.txt" | wc -l)" \
 		"$(only_in "$WORK/se.txt" "$WORK/me.txt" | paste -sd, - | sed 's/^/  -> /;s/^  -> $//')"
 	printf '  both                   : %s\n' "$(both_in "$WORK/se.txt" "$WORK/me.txt" | wc -l)"
+	only_in "$WORK/me.txt" "$WORK/se.txt" | emit "enum $name in-mcpkit-not-in-schema"
+	only_in "$WORK/se.txt" "$WORK/me.txt" | emit "enum $name in-schema-not-in-mcpkit"
 done
 
 # ===========================================================================
@@ -230,6 +257,8 @@ only_in "$WORK/mcpkit_types.txt" "$WORK/schema_types.txt" | sed 's/^/    /'
 printf '  in-schema-not-in-mcpkit: %s\n' "$(only_in "$WORK/schema_types.txt" "$WORK/mcpkit_types.txt" | wc -l)"
 only_in "$WORK/schema_types.txt" "$WORK/mcpkit_types.txt" | sed 's/^/    /'
 printf '  both                   : %s\n' "$(both_in "$WORK/schema_types.txt" "$WORK/mcpkit_types.txt" | wc -l)"
+only_in "$WORK/mcpkit_types.txt" "$WORK/schema_types.txt" | emit 'content-type in-mcpkit-not-in-schema'
+only_in "$WORK/schema_types.txt" "$WORK/mcpkit_types.txt" | emit 'content-type in-schema-not-in-mcpkit'
 
 # ===========================================================================
 # Error codes — manual-check aid only, NOT a set difference.
@@ -428,3 +457,8 @@ while IFS='|' read -r ty file path; do
 done <<< "$TIER2"
 
 printf '\ndone.\n'
+
+if [ "$MODE" = "--baseline" ]; then
+	exec 1>&3
+	sort "$BASELINE"
+fi

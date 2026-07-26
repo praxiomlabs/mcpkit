@@ -181,6 +181,44 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # Diffs mcpkit's wire vocabulary against the vendored official schema.
+  # Ungated on purpose: spec/** and scripts/** match no path filter in the
+  # `changes` job, so without this job nothing in CI validates either artifact.
+  schema-check:
+    name: Schema Conformance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Diff against the vendored 2025-11-25 schema
+        run: |
+          set -euo pipefail
+          scripts/schema-diff.sh > /tmp/schema-report.txt
+          scripts/schema-diff.sh --baseline > /tmp/schema-actual.txt
+          grep -vE '^\s*(#|$)' spec/schema-diff-baseline.txt > /tmp/schema-expected.txt
+          if diff -u /tmp/schema-expected.txt /tmp/schema-actual.txt; then
+            echo "Schema difference set matches the baseline."
+          else
+            echo "::error::mcpkit's wire vocabulary drifted from the vendored schema."
+            echo "Lines prefixed '+' are new differences (a regression)."
+            echo "Lines prefixed '-' were closed — update spec/schema-diff-baseline.txt."
+            echo "Regenerate with: scripts/schema-diff.sh --baseline"
+            exit 1
+          fi
+      - name: Report
+        if: always()
+        run: cat /tmp/schema-report.txt
+      - name: Verify the vendored schema still matches its pinned upstream commit
+        run: |
+          set -euo pipefail
+          sha="$(grep -oE '\b[0-9a-f]{40}\b' spec/PROVENANCE.md | head -1)"
+          curl -fsSL -o /tmp/upstream-schema.json \
+            "https://raw.githubusercontent.com/modelcontextprotocol/modelcontextprotocol/$sha/schema/2025-11-25/schema.json"
+          if ! diff -q /tmp/upstream-schema.json spec/2025-11-25/schema.json; then
+            echo "::error::spec/2025-11-25/schema.json differs from upstream commit $sha"
+            exit 1
+          fi
+          echo "Vendored schema matches upstream $sha."
+
   # ==========================================================================
   # Core tests - run after fast checks pass
   # ==========================================================================
@@ -377,6 +415,7 @@ jobs:
         check,
         version-sync,
         link-check,
+        schema-check,
         test,
         deny,
         docs,
