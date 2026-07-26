@@ -15,6 +15,7 @@ An Architecture Decision Record captures an important architectural decision mad
 | [0003](0003-unified-error-type.md) | Unified Error Type | Accepted |
 | [0004](0004-runtime-agnostic-design.md) | Runtime-Agnostic Design | Accepted |
 | [0005](0005-v0.6.0-release-incident.md) | v0.6.0 Release Incident and Release-Process Hardening | Accepted |
+| [0006](0006-ambient-notification-seam.md) | Ambient Notification Seam | Accepted |
 
 ## Creating a New ADR
 
