@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `mcpkit_server::adapter_peer` — the server->client request/response peer
+  primitive for the HTTP adapters (#153 PR 3): `SessionOutbound` (per-session
+  outbound-id allocation + oneshot response correlation; the stdio runtime's
+  `ServerState` now delegates to the same implementation, so exactly one
+  correlation registry exists), `OutboundOwner` (session-map-exclusive owner
+  token whose drop fails all pending requests — reap/DELETE cannot strand
+  waiters), the dyn-able `SessionSink` trait (notifications store-and-drop
+  and never fail on a missing stream; requests fail fast with a matchable
+  `SinkError::NoClientStream`), and `SessionPeer` implementing `Peer` with
+  per-method timeouts (`PeerTimeouts { default: 60s, elicitation: 300s }`,
+  resolved by method name since `Peer::request` carries no timeout) and a
+  fixed 5s reconnect grace applied both at send time and mid-flight (a
+  session briefly between SSE streams survives an ordinary blip; one gone
+  for the full grace fails fast instead of running out the request timeout).
+  Runtime-agnostic (futures oneshot + the transport runtime timer). The
+  adapters wire it up in the next slice
+  ([#153](https://github.com/praxiomlabs/mcpkit/issues/153)).
+
 ### Changed
 
 - **Breaking (axum):** SSE delivery is rebuilt on a shared per-stream module,

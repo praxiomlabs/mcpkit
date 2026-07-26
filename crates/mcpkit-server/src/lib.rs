@@ -57,6 +57,7 @@
 
 #![deny(missing_docs)]
 
+pub mod adapter_peer;
 pub mod builder;
 pub mod capability;
 pub mod context;

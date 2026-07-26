@@ -46,7 +46,7 @@ use mcpkit_transport::Transport;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::RwLock;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 /// State for a running server.
@@ -64,11 +64,10 @@ pub struct ServerState {
     /// This is stored as a `ProtocolVersion` enum for type-safe feature detection.
     /// Use methods like `protocol_version().supports_tasks()` to check capabilities.
     pub negotiated_version: RwLock<Option<ProtocolVersion>>,
-    /// Response channels for in-flight server-initiated (outbound) requests,
-    /// keyed by the outbound request id.
-    pending_requests: RwLock<HashMap<RequestId, oneshot::Sender<Response>>>,
-    /// Monotonic counter for allocating outbound request ids.
-    outbound_id: AtomicU64,
+    /// Correlation registry for server-initiated (outbound) requests — the
+    /// same implementation the adapter session peer uses (#153), so a
+    /// correlation bug can only exist in one place.
+    outbound: crate::adapter_peer::SessionOutbound,
 }
 
 impl ServerState {
@@ -81,56 +80,38 @@ impl ServerState {
             initialized: AtomicBool::new(false),
             cancellations: RwLock::new(HashMap::new()),
             negotiated_version: RwLock::new(None),
-            pending_requests: RwLock::new(HashMap::new()),
-            outbound_id: AtomicU64::new(1),
+            outbound: crate::adapter_peer::SessionOutbound::new(),
         }
     }
 
     /// Allocate a unique id for a server-initiated (outbound) request.
     pub(crate) fn next_outbound_id(&self) -> RequestId {
-        RequestId::Number(self.outbound_id.fetch_add(1, Ordering::Relaxed))
+        self.outbound.next_id()
     }
 
     /// Register a pending outbound request, returning the receiver that resolves
     /// when the matching response arrives.
     pub(crate) fn register_outbound(&self, id: RequestId) -> oneshot::Receiver<Response> {
-        let (tx, rx) = oneshot::channel();
-        if let Ok(mut pending) = self.pending_requests.write() {
-            pending.insert(id, tx);
-        }
-        rx
+        self.outbound.register(id)
     }
 
     /// Drop a pending outbound request (e.g. on timeout or cancellation).
     pub(crate) fn remove_outbound(&self, id: &RequestId) {
-        if let Ok(mut pending) = self.pending_requests.write() {
-            pending.remove(id);
-        }
+        self.outbound.remove(id);
     }
 
     /// Route an inbound response to the outbound request that is waiting for it.
     pub(crate) fn route_response(&self, response: Response) {
-        let sender = self
-            .pending_requests
-            .write()
-            .ok()
-            .and_then(|mut pending| pending.remove(&response.id));
-        match sender {
-            Some(sender) => {
-                let _ = sender.send(response);
-            }
-            None => {
-                tracing::debug!(id = %response.id, "response did not match a pending request");
-            }
+        let id = response.id.clone();
+        if !self.outbound.resolve(response) {
+            tracing::debug!(id = %id, "response did not match a pending request");
         }
     }
 
     /// Fail every pending outbound request (e.g. the connection closed). Dropping
     /// the senders makes the waiting receivers resolve with an error.
     pub(crate) fn fail_pending_requests(&self) {
-        if let Ok(mut pending) = self.pending_requests.write() {
-            pending.clear();
-        }
+        self.outbound.fail_all();
     }
 
     /// Get the negotiated protocol version.
