@@ -382,8 +382,13 @@ pub struct CallToolResult {
     /// The content returned by the tool.
     ///
     /// Defaults to empty when omitted, so a result that carries only `isError`
-    /// (or is `{}`) still deserializes — some peers send empty results without a
-    /// `content` field.
+    /// (or is `{}`) still deserializes.
+    ///
+    /// This is required for interop, not mere leniency: the schema marks
+    /// `content` required, but the 2025-11-25 prose says a tool returning
+    /// structured content **SHOULD** — not MUST — also return the serialized
+    /// JSON in a text block. A conforming peer may therefore send a
+    /// `structuredContent`-only result with no `content` at all.
     #[serde(default)]
     pub content: Vec<Content>,
     /// If true, this result represents an error.
