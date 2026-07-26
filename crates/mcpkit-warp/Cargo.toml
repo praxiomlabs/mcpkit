@@ -21,7 +21,6 @@ warp = "0.3"
 
 # Async runtime
 tokio = { workspace = true, features = ["sync", "rt"] }
-tokio-stream = { version = "0.1", features = ["sync"] }
 bytes = { workspace = true }
 
 # Serialization

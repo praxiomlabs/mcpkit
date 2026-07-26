@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The warp adapter reaches the axum baseline** (#153 PR 5, second of the
+  three ports): unified session registry (SSE binding enforced against the
+  registry holding the user binding — 400 missing id / 404 unknown-and-never-
+  adopted / 403 mismatched user; warp previously never checked the session id
+  on GET at all), GET and DELETE served on the MCP endpoint (old `/mcp/sse`
+  path kept as deprecated alias), per-stream delivery with `{stream_id}-{seq}`
+  event ids, working `Last-Event-ID` replay and `retry: 2000` via the shared
+  `mcpkit_server::streams` registry (warp previously fanned a per-session
+  `broadcast` channel out to every connected stream with no event ids), and
+  the session peer: `ctx.elicit()`/`ctx.list_roots()`/sampling work over
+  warp, response POSTs correlate, notification hooks dispatch, and DELETE
+  fails pending requests immediately. 202s now carry no body per spec
+  (previously `{}`). **Breaking (warp):** the broadcast plumbing is removed —
+  `McpState.sse_sessions` and `SessionStore::get_receiver` are gone, and
+  `SessionStore`'s inherent `create_session` (which returned the id plus a
+  broadcast receiver) is replaced by the id-only `create`/`create_for_user`
+  ([#153](https://github.com/praxiomlabs/mcpkit/issues/153)).
+
 - **The actix adapter reaches the axum baseline** (#153 PR 5, first of the
   three ports): unified session registry (SSE binding enforced against the
   registry holding the user binding — 400 missing id / 404 unknown-and-never-

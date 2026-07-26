@@ -1,0 +1,423 @@
+//! #153 PR 5 (warp port): SSE binding rules + server-initiated requests
+//! end-to-end — the same matrix as the axum `sse_binding`/`peer_e2e` suites.
+
+use mcpkit_core::auth::VerifiedUser;
+use mcpkit_core::capability::ServerInfo;
+use mcpkit_core::error::McpError;
+use mcpkit_core::types::{
+    ElicitRequest, ElicitationSchema, GetPromptResult, Prompt, Resource, ResourceContents, Root,
+    Tool, ToolOutput,
+};
+use mcpkit_server::{Context, PromptHandler, ResourceHandler, ServerHandler, ToolHandler};
+use mcpkit_warp::{McpRouter, McpState};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+#[derive(Clone, Default)]
+struct Observed {
+    initialized: Arc<AtomicBool>,
+    roots: Arc<Mutex<Option<Result<Vec<Root>, String>>>>,
+}
+
+#[derive(Clone)]
+struct H(Observed);
+
+impl ServerHandler for H {
+    fn server_info(&self) -> ServerInfo {
+        ServerInfo::new("t", "1.0.0")
+    }
+    async fn on_initialized(&self, _ctx: &Context<'_>) {
+        self.0.initialized.store(true, Ordering::SeqCst);
+    }
+    async fn on_roots_list_changed(&self, ctx: &Context<'_>) {
+        let result = ctx.list_roots().await.map_err(|e| e.to_string());
+        *self.0.roots.lock().unwrap() = Some(result);
+    }
+}
+impl ToolHandler for H {
+    async fn list_tools(&self, _ctx: &Context<'_>) -> Result<Vec<Tool>, McpError> {
+        Ok(vec![Tool::new("ask")])
+    }
+    async fn call_tool(
+        &self,
+        name: &str,
+        _args: serde_json::Map<String, serde_json::Value>,
+        ctx: &Context<'_>,
+    ) -> Result<ToolOutput, McpError> {
+        match name {
+            "ask" => {
+                let schema = serde_json::from_value::<ElicitationSchema>(
+                    serde_json::json!({ "type": "object", "properties": {} }),
+                )
+                .expect("schema");
+                match ctx.elicit(ElicitRequest::new("pick a color", schema)).await {
+                    Ok(result) => Ok(ToolOutput::text(format!(
+                        "elicited: {}",
+                        serde_json::to_value(&result)
+                            .unwrap_or_default()
+                            .get("content")
+                            .and_then(|c| c.get("answer"))
+                            .and_then(|a| a.as_str())
+                            .unwrap_or("<none>")
+                    ))),
+                    Err(e) => Ok(ToolOutput::text(format!("elicit failed: {e}"))),
+                }
+            }
+            other => Err(McpError::method_not_found(other)),
+        }
+    }
+}
+impl ResourceHandler for H {
+    async fn list_resources(&self, _ctx: &Context<'_>) -> Result<Vec<Resource>, McpError> {
+        Ok(vec![])
+    }
+    async fn read_resource(
+        &self,
+        _uri: &str,
+        _ctx: &Context<'_>,
+    ) -> Result<Vec<ResourceContents>, McpError> {
+        Ok(vec![])
+    }
+}
+impl PromptHandler for H {
+    async fn list_prompts(&self, _ctx: &Context<'_>) -> Result<Vec<Prompt>, McpError> {
+        Ok(vec![])
+    }
+    async fn get_prompt(
+        &self,
+        name: &str,
+        _args: Option<serde_json::Map<String, serde_json::Value>>,
+        _ctx: &Context<'_>,
+    ) -> Result<GetPromptResult, McpError> {
+        Err(McpError::method_not_found(name))
+    }
+}
+
+fn test_state() -> (Arc<McpState<H>>, Observed) {
+    let observed = Observed::default();
+    let state = McpRouter::new(H(observed.clone()))
+        .with_reconnect_grace(Duration::from_millis(100))
+        .state();
+    (state, observed)
+}
+
+async fn post(
+    state: &Arc<McpState<H>>,
+    session: Option<&str>,
+    body: serde_json::Value,
+) -> (u16, serde_json::Value) {
+    let resp = mcpkit_warp::handle_mcp_post(
+        Arc::clone(state),
+        None,
+        session.map(String::from),
+        None,
+        None,
+        body.to_string(),
+    )
+    .await
+    .expect("infallible");
+    let status = resp.status().as_u16();
+    let bytes = warp::hyper::body::to_bytes(resp.into_body())
+        .await
+        .expect("body");
+    let json = if bytes.is_empty() {
+        serde_json::Value::Null
+    } else {
+        serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null)
+    };
+    (status, json)
+}
+
+async fn init(state: &Arc<McpState<H>>) -> String {
+    let resp = mcpkit_warp::handle_mcp_post(
+        Arc::clone(state),
+        None,
+        None,
+        None,
+        None,
+        serde_json::json!({
+            "jsonrpc": "2.0", "id": 0, "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-11-25",
+                "capabilities": { "roots": {}, "elicitation": {} }
+            }
+        })
+        .to_string(),
+    )
+    .await
+    .expect("infallible");
+    resp.headers()
+        .get("mcp-session-id")
+        .and_then(|v| v.to_str().ok())
+        .map(String::from)
+        .expect("session id")
+}
+
+fn sse_status(state: &Arc<McpState<H>>, session: Option<&str>, user: Option<VerifiedUser>) -> u16 {
+    mcpkit_warp::handle_sse(
+        Arc::clone(state),
+        session.map(String::from),
+        None,
+        user,
+        None,
+    )
+    .status()
+    .as_u16()
+}
+
+async fn next_stream_request(
+    handle: &mut mcpkit_server::streams::StreamHandle,
+) -> serde_json::Value {
+    loop {
+        let event = tokio::time::timeout(Duration::from_secs(5), handle.recv())
+            .await
+            .expect("stream event within 5s")
+            .expect("stream open");
+        if event.event_type == "message" {
+            return serde_json::from_str(&event.data).expect("json-rpc message");
+        }
+    }
+}
+
+// ---- SSE binding rules (#172/#173 for warp) --------------------------------
+
+#[tokio::test]
+async fn sse_without_session_id_is_400() {
+    let (state, _) = test_state();
+    assert_eq!(sse_status(&state, None, None), 400);
+}
+
+#[tokio::test]
+async fn sse_with_unknown_session_id_is_404_and_never_adopts_it() {
+    let (state, _) = test_state();
+    assert_eq!(sse_status(&state, Some("attacker-chosen-id"), None), 404);
+    assert!(!state.sessions.exists("attacker-chosen-id"));
+}
+
+#[tokio::test]
+async fn sse_with_other_users_session_is_403() {
+    let (state, _) = test_state();
+    let alice = VerifiedUser::new("alice").issuer("https://idp");
+    let bob = VerifiedUser::new("bob").issuer("https://idp");
+    let sid = state.sessions.create_for_user(Some(alice));
+
+    assert_eq!(sse_status(&state, Some(&sid), Some(bob)), 403);
+    assert_eq!(sse_status(&state, Some(&sid), None), 403);
+}
+
+#[tokio::test]
+async fn sse_with_own_session_streams() {
+    let (state, _) = test_state();
+    let sid = state.sessions.create();
+    assert_eq!(sse_status(&state, Some(&sid), None), 200);
+}
+
+#[tokio::test]
+async fn get_on_mcp_endpoint_serves_sse() {
+    use warp::Reply;
+    let router = McpRouter::new(H(Observed::default()));
+    let state = router.state();
+    let filter = router.into_filter();
+
+    let sid = init(&state).await;
+    // `.filter()` rather than `.reply()`: reply() drains the full response
+    // body, and an SSE stream never ends.
+    let reply = warp::test::request()
+        .method("GET")
+        .path("/mcp")
+        .header("mcp-session-id", sid.as_str())
+        .filter(&filter)
+        .await
+        .expect("GET /mcp must match a route");
+    let resp = reply.into_response();
+    assert_eq!(resp.status(), 200);
+    assert!(
+        resp.headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok())
+            .is_some_and(|ct| ct.starts_with("text/event-stream")),
+        "GET on the MCP endpoint must open an SSE stream"
+    );
+}
+
+// ---- server-initiated requests (the #153 feature) --------------------------
+
+#[tokio::test]
+async fn tool_elicitation_round_trips_over_the_stream() {
+    let (state, _) = test_state();
+    let sid = init(&state).await;
+    let registry = state.sessions.streams(&sid).expect("session");
+    let (mut stream, _prime) = registry.open("connected", sid.clone());
+
+    let call = {
+        let state = Arc::clone(&state);
+        let sid = sid.clone();
+        tokio::spawn(async move {
+            post(
+                &state,
+                Some(&sid),
+                serde_json::json!({
+                    "jsonrpc": "2.0", "id": 7, "method": "tools/call",
+                    "params": { "name": "ask", "arguments": {} }
+                }),
+            )
+            .await
+            .1
+        })
+    };
+
+    let request = next_stream_request(&mut stream).await;
+    assert_eq!(request["method"], "elicitation/create");
+    let request_id = request["id"].clone();
+
+    let (status, _) = post(
+        &state,
+        Some(&sid),
+        serde_json::json!({
+            "jsonrpc": "2.0", "id": request_id,
+            "result": { "action": "accept", "content": { "answer": "blue" } }
+        }),
+    )
+    .await;
+    assert_eq!(status, 202);
+
+    let result = call.await.expect("join");
+    let text = result["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap_or_default();
+    assert_eq!(text, "elicited: blue", "tool result: {result}");
+}
+
+#[tokio::test]
+async fn roots_hook_round_trips_over_the_stream() {
+    let (state, observed) = test_state();
+    let sid = init(&state).await;
+    let registry = state.sessions.streams(&sid).expect("session");
+    let (mut stream, _prime) = registry.open("connected", sid.clone());
+
+    let _ = post(
+        &state,
+        Some(&sid),
+        serde_json::json!({ "jsonrpc": "2.0", "method": "notifications/roots/list_changed" }),
+    )
+    .await;
+
+    let request = next_stream_request(&mut stream).await;
+    assert_eq!(request["method"], "roots/list");
+    let request_id = request["id"].clone();
+
+    let _ = post(
+        &state,
+        Some(&sid),
+        serde_json::json!({
+            "jsonrpc": "2.0", "id": request_id,
+            "result": { "roots": [{ "uri": "file:///w", "name": "w" }] }
+        }),
+    )
+    .await;
+
+    for _ in 0..100 {
+        if observed.roots.lock().unwrap().is_some() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    let roots = observed
+        .roots
+        .lock()
+        .unwrap()
+        .clone()
+        .expect("hook ran")
+        .expect("list_roots succeeded");
+    assert_eq!(roots.len(), 1);
+    assert_eq!(roots[0].uri, "file:///w");
+}
+
+#[tokio::test]
+async fn on_initialized_hook_fires() {
+    let (state, observed) = test_state();
+    let sid = init(&state).await;
+    let _ = post(
+        &state,
+        Some(&sid),
+        serde_json::json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }),
+    )
+    .await;
+    for _ in 0..100 {
+        if observed.initialized.load(Ordering::SeqCst) {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    panic!("on_initialized hook never fired");
+}
+
+#[tokio::test]
+async fn elicit_without_stream_fails_fast() {
+    let (state, _) = test_state(); // 100ms grace
+    let sid = init(&state).await;
+
+    let started = std::time::Instant::now();
+    let (_, resp) = post(
+        &state,
+        Some(&sid),
+        serde_json::json!({
+            "jsonrpc": "2.0", "id": 7, "method": "tools/call",
+            "params": { "name": "ask", "arguments": {} }
+        }),
+    )
+    .await;
+    let text = resp["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap_or_default();
+    assert!(text.starts_with("elicit failed:"), "got: {resp}");
+    assert!(started.elapsed() < Duration::from_secs(30));
+}
+
+#[tokio::test]
+async fn delete_fails_pending_and_forgets_the_session() {
+    let (state, _) = test_state();
+    let sid = init(&state).await;
+    let registry = state.sessions.streams(&sid).expect("session");
+    let (mut stream, _prime) = registry.open("connected", sid.clone());
+
+    let call = {
+        let state = Arc::clone(&state);
+        let sid = sid.clone();
+        tokio::spawn(async move {
+            post(
+                &state,
+                Some(&sid),
+                serde_json::json!({
+                    "jsonrpc": "2.0", "id": 7, "method": "tools/call",
+                    "params": { "name": "ask", "arguments": {} }
+                }),
+            )
+            .await
+            .1
+        })
+    };
+    let request = next_stream_request(&mut stream).await;
+    assert_eq!(request["method"], "elicitation/create");
+
+    let resp = mcpkit_warp::handle_mcp_delete(Arc::clone(&state), Some(sid.clone()), None, None);
+    assert_eq!(resp.status(), 204);
+
+    let result = tokio::time::timeout(Duration::from_secs(5), call)
+        .await
+        .expect("pending request must fail on DELETE, not run out its timeout")
+        .expect("join");
+    let text = result["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap_or_default();
+    assert!(text.starts_with("elicit failed:"), "got: {result}");
+
+    let (status, _) = post(
+        &state,
+        Some(&sid),
+        serde_json::json!({ "jsonrpc": "2.0", "id": 9, "method": "ping" }),
+    )
+    .await;
+    assert_eq!(status, 404);
+}
