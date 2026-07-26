@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Misc 2025-11-25 field/type gaps closed (#114):
+  - `ServerInfo`/`ClientInfo` gain the spec `Implementation` fields
+    `description` and `websiteUrl`, with matching builder methods.
+  - A single spec `Annotations` type (`audience: Vec<Role>`, `priority`,
+    and the previously missing `lastModified`) replaces the two divergent
+    structs. **Breaking:** `ContentAnnotations` is renamed to `Annotations`,
+    and `ResourceAnnotations` is removed — `Resource`/`ResourceTemplate`
+    annotations now use `Annotations`, so their `audience` becomes
+    `Vec<Role>` (was `Vec<String>`; the wire format for valid values —
+    `"user"`/`"assistant"` — is unchanged).
+  - `ResourceLinkContent` gains the `title`, `size`, and `icons` fields it
+    inherits from `Resource` in the spec.
+  - `ToolListChangedNotification` (`notifications/tools/list_changed`) is
+    added, matching the existing resource/prompt list-changed types.
+  - `ListResourceTemplatesRequest` is added, typing the request side of
+    `resources/templates/list`
+  ([#114](https://github.com/praxiomlabs/mcpkit/issues/114)).
+
 - **Task-augmented tools keep their peer** (#153 PR 6, the design's final
   slice): `begin_augmented_task` and `run_augmented_tool` now take the
   session peer and carry it into the spawned background future, so a

@@ -4,6 +4,7 @@
 //! They can be files, database entries, API responses, or any other
 //! addressable content.
 
+use super::content::Annotations;
 use super::meta::Meta;
 use super::metadata::Icon;
 use serde::{Deserialize, Serialize};
@@ -35,7 +36,7 @@ pub struct Resource {
     pub icons: Option<Vec<Icon>>,
     /// Optional annotations.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub annotations: Option<ResourceAnnotations>,
+    pub annotations: Option<Annotations>,
     /// Optional protocol metadata (`_meta`).
     #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
     pub meta: Option<Meta>,
@@ -113,17 +114,6 @@ impl Resource {
     }
 }
 
-/// Annotations for resources.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct ResourceAnnotations {
-    /// Audience for this resource.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub audience: Option<Vec<String>>,
-    /// Priority level.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub priority: Option<f64>,
-}
-
 /// A template for dynamic resource URIs.
 ///
 /// Resource templates allow servers to expose parameterized resources
@@ -149,7 +139,7 @@ pub struct ResourceTemplate {
     pub icons: Option<Vec<Icon>>,
     /// Optional annotations.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub annotations: Option<ResourceAnnotations>,
+    pub annotations: Option<Annotations>,
     /// Optional protocol metadata (`_meta`).
     #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
     pub meta: Option<Meta>,
@@ -322,6 +312,14 @@ pub struct ListResourcesResult {
     /// Optional protocol metadata (`_meta`).
     #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
     pub meta: Option<Meta>,
+}
+
+/// Request parameters for listing resource templates.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ListResourceTemplatesRequest {
+    /// Cursor for pagination.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
 }
 
 /// Response for listing resource templates.
@@ -498,5 +496,28 @@ mod tests {
         let back: UnsubscribeRequest =
             serde_json::from_value(serde_json::json!({ "uri": "file:///y" })).unwrap();
         assert_eq!(back.uri, "file:///y");
+    }
+
+    #[test]
+    fn list_resource_templates_request_cursor() -> Result<(), Box<dyn std::error::Error>> {
+        let req: ListResourceTemplatesRequest =
+            serde_json::from_value(serde_json::json!({"cursor": "c1"}))?;
+        assert_eq!(req.cursor.as_deref(), Some("c1"));
+        // Omitted cursor deserializes and serializes to an empty object.
+        let empty: ListResourceTemplatesRequest = serde_json::from_value(serde_json::json!({}))?;
+        assert_eq!(serde_json::to_value(&empty)?, serde_json::json!({}));
+        Ok(())
+    }
+
+    #[test]
+    fn resource_annotations_use_spec_type() -> Result<(), Box<dyn std::error::Error>> {
+        let r: Resource = serde_json::from_value(serde_json::json!({
+            "uri": "u", "name": "n",
+            "annotations": {"audience": ["user"], "priority": 0.5, "lastModified": "2025-01-01T00:00:00Z"}
+        }))?;
+        let a = r.annotations.as_ref().expect("annotations");
+        assert_eq!(a.audience.as_ref().map(Vec::len), Some(1));
+        assert_eq!(a.last_modified.as_deref(), Some("2025-01-01T00:00:00Z"));
+        Ok(())
     }
 }

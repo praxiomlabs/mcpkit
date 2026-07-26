@@ -39,7 +39,7 @@ impl Content {
 
     /// Create text content with annotations.
     #[must_use]
-    pub fn text_with_annotations(text: impl Into<String>, annotations: ContentAnnotations) -> Self {
+    pub fn text_with_annotations(text: impl Into<String>, annotations: Annotations) -> Self {
         Self::Text(TextContent {
             text: text.into(),
             annotations: Some(annotations),
@@ -115,8 +115,11 @@ impl Content {
         Self::ResourceLink(ResourceLinkContent {
             uri: uri.into(),
             name: name.into(),
+            title: None,
             description: None,
             mime_type: None,
+            size: None,
+            icons: None,
             annotations: None,
             meta: None,
         })
@@ -145,7 +148,7 @@ pub struct TextContent {
     pub text: String,
     /// Optional annotations.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub annotations: Option<ContentAnnotations>,
+    pub annotations: Option<Annotations>,
     /// Optional protocol metadata (`_meta`).
     #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
     pub meta: Option<super::meta::Meta>,
@@ -161,7 +164,7 @@ pub struct ImageContent {
     pub mime_type: String,
     /// Optional annotations.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub annotations: Option<ContentAnnotations>,
+    pub annotations: Option<Annotations>,
     /// Optional protocol metadata (`_meta`).
     #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
     pub meta: Option<super::meta::Meta>,
@@ -177,7 +180,7 @@ pub struct AudioContent {
     pub mime_type: String,
     /// Optional annotations.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub annotations: Option<ContentAnnotations>,
+    pub annotations: Option<Annotations>,
     /// Optional protocol metadata (`_meta`).
     #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
     pub meta: Option<super::meta::Meta>,
@@ -193,7 +196,7 @@ pub struct ResourceContent {
     pub resource: ResourceContents,
     /// Optional annotations.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub annotations: Option<ContentAnnotations>,
+    pub annotations: Option<Annotations>,
     /// Optional protocol metadata (`_meta`).
     #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
     pub meta: Option<super::meta::Meta>,
@@ -206,15 +209,24 @@ pub struct ResourceLinkContent {
     pub uri: String,
     /// Name of the resource.
     pub name: String,
+    /// Optional human-readable display title.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
     /// Description of the resource.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     /// MIME type of the resource.
     #[serde(rename = "mimeType", skip_serializing_if = "Option::is_none")]
     pub mime_type: Option<String>,
+    /// Size of the resource in bytes, if known.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub size: Option<u64>,
+    /// Optional icons the client can display for this resource.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icons: Option<Vec<super::metadata::Icon>>,
     /// Optional annotations.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub annotations: Option<ContentAnnotations>,
+    pub annotations: Option<Annotations>,
     /// Optional protocol metadata (`_meta`).
     #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
     pub meta: Option<super::meta::Meta>,
@@ -259,24 +271,28 @@ pub struct ToolResultContent {
     pub meta: Option<super::meta::Meta>,
 }
 
-/// Annotations that can be attached to content.
+/// Annotations that can be attached to content, resources, and resource
+/// links (the spec's single `Annotations` type).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct ContentAnnotations {
-    /// Audience for this content (e.g., "user", "assistant").
+pub struct Annotations {
+    /// Intended audience (e.g., "user", "assistant").
     #[serde(skip_serializing_if = "Option::is_none")]
     pub audience: Option<Vec<Role>>,
     /// Priority level (0.0 to 1.0).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub priority: Option<f64>,
+    /// ISO 8601 timestamp of when the annotated object was last modified.
+    #[serde(rename = "lastModified", skip_serializing_if = "Option::is_none")]
+    pub last_modified: Option<String>,
 }
 
-impl ContentAnnotations {
+impl Annotations {
     /// Create annotations for user-facing content.
     #[must_use]
     pub fn for_user() -> Self {
         Self {
             audience: Some(vec![Role::User]),
-            priority: None,
+            ..Self::default()
         }
     }
 
@@ -285,7 +301,7 @@ impl ContentAnnotations {
     pub fn for_assistant() -> Self {
         Self {
             audience: Some(vec![Role::Assistant]),
-            priority: None,
+            ..Self::default()
         }
     }
 
@@ -293,6 +309,13 @@ impl ContentAnnotations {
     #[must_use]
     pub fn with_priority(mut self, priority: f64) -> Self {
         self.priority = Some(priority.clamp(0.0, 1.0));
+        self
+    }
+
+    /// Set the last-modified timestamp (ISO 8601).
+    #[must_use]
+    pub fn with_last_modified(mut self, last_modified: impl Into<String>) -> Self {
+        self.last_modified = Some(last_modified.into());
         self
     }
 }
@@ -394,7 +417,7 @@ mod tests {
 
     #[test]
     fn test_annotations() -> Result<(), Box<dyn std::error::Error>> {
-        let annotations = ContentAnnotations::for_user().with_priority(0.8);
+        let annotations = Annotations::for_user().with_priority(0.8);
         assert_eq!(annotations.priority, Some(0.8));
         assert!(
             annotations
@@ -433,6 +456,35 @@ mod tests {
         assert!(json.contains("\"type\":\"resource_link\""));
         assert!(json.contains("\"uri\":\"https://example.com/file.pdf\""));
         assert!(json.contains("\"name\":\"My File\""));
+        Ok(())
+    }
+
+    #[test]
+    fn annotations_last_modified_round_trip() -> Result<(), Box<dyn std::error::Error>> {
+        let a = Annotations::for_user().with_last_modified("2025-11-25T00:00:00Z");
+        let json = serde_json::to_value(&a)?;
+        assert_eq!(json["lastModified"], "2025-11-25T00:00:00Z");
+        assert_eq!(json["audience"][0], "user");
+        let back: Annotations = serde_json::from_value(json)?;
+        assert_eq!(back.last_modified.as_deref(), Some("2025-11-25T00:00:00Z"));
+        Ok(())
+    }
+
+    #[test]
+    fn resource_link_full_fields_round_trip() -> Result<(), Box<dyn std::error::Error>> {
+        let link: ResourceLinkContent = serde_json::from_value(serde_json::json!({
+            "uri": "file:///a.txt",
+            "name": "a",
+            "title": "A file",
+            "size": 42,
+            "icons": [{"src": "https://example.com/i.png"}]
+        }))?;
+        assert_eq!(link.title.as_deref(), Some("A file"));
+        assert_eq!(link.size, Some(42));
+        assert_eq!(link.icons.as_ref().map(Vec::len), Some(1));
+        let json = serde_json::to_value(&link)?;
+        assert_eq!(json["title"], "A file");
+        assert_eq!(json["size"], 42);
         Ok(())
     }
 }

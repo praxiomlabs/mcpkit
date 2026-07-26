@@ -331,6 +331,8 @@ mod tests {
                 title: None,
                 version: "1.0.0".to_string(),
                 protocol_version: None,
+                description: None,
+                website_url: None,
                 icons: None,
             }
         }

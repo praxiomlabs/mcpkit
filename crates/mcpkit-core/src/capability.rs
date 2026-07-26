@@ -602,6 +602,12 @@ pub struct ServerInfo {
     /// Protocol version supported.
     #[serde(rename = "protocolVersion", skip_serializing_if = "Option::is_none")]
     pub protocol_version: Option<String>,
+    /// Optional human-readable description of what this server does.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// Optional URL of the server's website.
+    #[serde(rename = "websiteUrl", skip_serializing_if = "Option::is_none")]
+    pub website_url: Option<String>,
     /// Optional icons the client can display for this server.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub icons: Option<Vec<Icon>>,
@@ -616,8 +622,24 @@ impl ServerInfo {
             title: None,
             version: version.into(),
             protocol_version: Some(PROTOCOL_VERSION.to_string()),
+            description: None,
+            website_url: None,
             icons: None,
         }
+    }
+
+    /// Set the server's description.
+    #[must_use]
+    pub fn description(mut self, description: impl Into<String>) -> Self {
+        self.description = Some(description.into());
+        self
+    }
+
+    /// Set the server's website URL.
+    #[must_use]
+    pub fn website_url(mut self, website_url: impl Into<String>) -> Self {
+        self.website_url = Some(website_url.into());
+        self
     }
 
     /// Set the server's display title.
@@ -652,6 +674,12 @@ pub struct ClientInfo {
     pub title: Option<String>,
     /// Client version.
     pub version: String,
+    /// Optional human-readable description of this client.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// Optional URL of the client's website.
+    #[serde(rename = "websiteUrl", skip_serializing_if = "Option::is_none")]
+    pub website_url: Option<String>,
     /// Optional icons the server can display for this client.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub icons: Option<Vec<Icon>>,
@@ -665,8 +693,24 @@ impl ClientInfo {
             name: name.into(),
             title: None,
             version: version.into(),
+            description: None,
+            website_url: None,
             icons: None,
         }
+    }
+
+    /// Set the client's description.
+    #[must_use]
+    pub fn description(mut self, description: impl Into<String>) -> Self {
+        self.description = Some(description.into());
+        self
+    }
+
+    /// Set the client's website URL.
+    #[must_use]
+    pub fn website_url(mut self, website_url: impl Into<String>) -> Self {
+        self.website_url = Some(website_url.into());
+        self
     }
 
     /// Set the client's display title.
@@ -1051,6 +1095,25 @@ mod tests {
         let json = serde_json::to_string(&caps)?;
         assert!(json.contains("\"tools\""));
         assert!(json.contains("\"listChanged\":true"));
+        Ok(())
+    }
+
+    #[test]
+    fn implementation_description_and_website_url_round_trip()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let s = ServerInfo::new("s", "1.0")
+            .description("does things")
+            .website_url("https://example.com");
+        let json = serde_json::to_value(&s)?;
+        assert_eq!(json["description"], "does things");
+        assert_eq!(json["websiteUrl"], "https://example.com");
+
+        let c: ClientInfo = serde_json::from_value(serde_json::json!({
+            "name": "c", "version": "2.0",
+            "description": "a client", "websiteUrl": "https://client.example"
+        }))?;
+        assert_eq!(c.description.as_deref(), Some("a client"));
+        assert_eq!(c.website_url.as_deref(), Some("https://client.example"));
         Ok(())
     }
 }
