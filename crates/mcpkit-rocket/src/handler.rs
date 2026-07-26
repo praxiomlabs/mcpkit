@@ -21,6 +21,55 @@ use std::io::Cursor;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 
+/// Build the request-capable peer for a session (#153).
+fn session_peer<H>(
+    state: &McpState<H>,
+    streams: Arc<mcpkit_server::streams::StreamRegistry>,
+    outbound: Arc<mcpkit_server::adapter_peer::SessionOutbound>,
+) -> mcpkit_server::adapter_peer::SessionPeer
+where
+    H: HasServerInfo + Send + Sync + 'static,
+{
+    mcpkit_server::adapter_peer::SessionPeer::new(
+        Arc::new(mcpkit_server::adapter_peer::StreamRegistrySink::new(
+            streams,
+        )),
+        outbound,
+        state.peer_timeouts,
+    )
+    .with_reconnect_grace(state.reconnect_grace)
+}
+
+/// Handle MCP DELETE requests: explicit session termination.
+///
+/// Per spec (§Session Management item 5). Removing the session drops its
+/// `OutboundOwner`, so every pending server-initiated request fails
+/// immediately; subsequent requests with the id get 404.
+pub fn handle_mcp_delete<H>(
+    state: &McpState<H>,
+    session_id: Option<String>,
+    origin: Option<&str>,
+    user: Option<VerifiedUser>,
+) -> Status
+where
+    H: HasServerInfo + Send + Sync + 'static,
+{
+    if !state.origin_validator.is_allowed(origin) {
+        return Status::Forbidden;
+    }
+    let Some(id) = session_id else {
+        return Status::BadRequest;
+    };
+    match state.sessions.touch_verified(&id, user.as_ref()) {
+        Ok(true) => {}
+        Ok(false) => return Status::NotFound,
+        Err(_) => return Status::Forbidden,
+    }
+    let _ = state.sessions.remove(&id);
+    info!(session_id = %id, "Session terminated by client DELETE");
+    Status::NoContent
+}
+
 /// Whether this message is an `initialize` request — the only message allowed
 /// to omit `mcp-session-id` (the server assigns the id in its response).
 fn is_initialize(msg: &Message) -> bool {
@@ -307,12 +356,26 @@ where
             // This session's task store (per-session isolation for `tasks/*`).
             let task_store = state.sessions.tasks(&session_id);
 
+            // Route with a request-capable peer (#153): handlers can call
+            // ctx.elicit()/ctx.list_roots()/sampling; the request rides the
+            // session's SSE stream and the client answers via a response POST
+            // correlated below. The store hands out plain Arcs (never the
+            // OutboundOwner), so holding these across the await cannot keep
+            // DELETE/reap from failing pending requests.
+            let peer: Box<dyn mcpkit_server::Peer> = match (
+                state.sessions.streams(&session_id),
+                state.sessions.outbound(&session_id),
+            ) {
+                (Some(streams), Some(outbound)) => Box::new(session_peer(state, streams, outbound)),
+                _ => Box::new(NoOpPeer),
+            };
             let response = create_response_for_request(
                 state,
                 &request,
                 protocol_version,
                 &client_caps,
                 task_store.as_ref(),
+                peer.as_ref(),
             )
             .await;
 
@@ -330,21 +393,64 @@ where
                 session_id = %session_id,
                 "Received notification"
             );
+            // Dispatch to the ServerHandler hooks off the request path
+            // (#153): a hook may call ctx.list_roots(), whose response
+            // arrives via a separate POST — the 202 must not wait for that
+            // round-trip.
+            if let Some(hooks) = state.sessions.hooks(&session_id) {
+                let state2 = state.clone();
+                let sid = session_id.clone();
+                let method = notification.method.to_string();
+                if let Ok(mut hooks) = hooks.lock() {
+                    hooks.spawn(async move {
+                        let (Some(streams), Some(outbound)) = (
+                            state2.sessions.streams(&sid),
+                            state2.sessions.outbound(&sid),
+                        ) else {
+                            return;
+                        };
+                        let peer = session_peer(&state2, streams, outbound);
+                        let (protocol_version, client_caps) =
+                            state2.sessions.negotiated(&sid).map_or_else(
+                                || (ProtocolVersion::LATEST, ClientCapabilities::default()),
+                                |(v, c)| (v, c.unwrap_or_default()),
+                            );
+                        let server_caps = state2.effective_capabilities();
+                        let ctx = Context::for_notification(
+                            &client_caps,
+                            &server_caps,
+                            protocol_version,
+                            &peer,
+                        );
+                        mcpkit_server::dispatch_notification_hooks(
+                            state2.handler.as_ref(),
+                            &method,
+                            &ctx,
+                        )
+                        .await;
+                        debug!(method = %method, "notification hook completed");
+                    });
+                }
+            }
             McpResponse::accepted(session_id)
         }
         // Spec (Streamable HTTP): a client delivers responses to
         // server-initiated requests by POSTing them; "if the server accepts
         // the input, the server MUST return HTTP status code 202 Accepted
-        // with no body". Correlation with a pending server-initiated request
-        // arrives with the session peer (#153); until then this is
-        // log-and-drop, matching the runtime's `route_response` for ids that
-        // match no pending request.
+        // with no body". Correlated against the session's pending
+        // server-initiated requests (#153); an unmatched id is logged and
+        // dropped (runtime parity).
         Message::Response(response) => {
-            debug!(
-                id = %response.id,
-                session_id = %session_id,
-                "Received client response (no pending server-initiated request; dropped)"
-            );
+            let resolved = state
+                .sessions
+                .outbound(&session_id)
+                .is_some_and(|outbound| outbound.resolve(response));
+            if !resolved {
+                debug!(
+                    session_id = %session_id,
+                    "client response matched no pending server-initiated request; dropped"
+                );
+            }
             McpResponse::accepted(session_id)
         }
     }
@@ -378,6 +484,7 @@ async fn create_response_for_request<H>(
     protocol_version: ProtocolVersion,
     client_caps: &ClientCapabilities,
     task_store: Option<&Arc<TaskManager>>,
+    peer: &dyn mcpkit_server::Peer,
 ) -> mcpkit_core::protocol::Response
 where
     H: ServerHandler + ToolHandler + ResourceHandler + PromptHandler + Send + Sync + 'static,
@@ -391,14 +498,13 @@ where
     // Create a context for the request
     let req_id = request.id.clone();
     let server_caps = state.effective_capabilities();
-    let peer = NoOpPeer;
     let ctx = Context::new(
         &req_id,
         None,
         client_caps,
         &server_caps,
         protocol_version,
-        &peer,
+        peer,
     );
 
     match method {
@@ -520,49 +626,86 @@ where
     }
 }
 
-/// Handle SSE connections for server-to-client streaming.
+/// Handle SSE connections for server-to-client streaming (GET on the MCP
+/// endpoint, #153).
 ///
-/// This returns an `EventStream` for pushing notifications to clients.
-pub fn handle_sse<H>(state: &McpState<H>, session_id: Option<String>) -> EventStream![]
+/// Streams attach to the POST-created session: 400 without a session id;
+/// 404 for unknown ids (never adopt a client-presented id); 403 for a
+/// disallowed origin or mismatched user — enforced against the same
+/// registry that holds the binding. `Last-Event-ID` resumes the stream with
+/// same-stream replay; an unknown or expired cursor opens a fresh stream.
+pub fn handle_sse<H>(
+    state: &McpState<H>,
+    session_id: Option<String>,
+    origin: Option<&str>,
+    user: Option<VerifiedUser>,
+    last_event_id: Option<String>,
+) -> Result<EventStream![], Status>
 where
     H: HasServerInfo + Send + Sync + 'static,
 {
-    let (session_id, mut rx) = if let Some(id) = session_id {
-        if let Some(rx) = state.sse_sessions.get_receiver(&id) {
-            info!(session_id = %id, "Reconnected to SSE session");
-            (id, rx)
-        } else {
-            let (new_id, rx) = state.sse_sessions.create_session();
-            info!(session_id = %new_id, "Created new SSE session (requested not found)");
-            (new_id, rx)
-        }
-    } else {
-        let (id, rx) = state.sse_sessions.create_session();
-        info!(session_id = %id, "Created new SSE session");
-        (id, rx)
+    // Reject disallowed Origins (DNS-rebinding protection) before streaming.
+    if !state.origin_validator.is_allowed(origin) {
+        warn!(
+            origin = origin.unwrap_or("none"),
+            "Rejected SSE: origin not allowed"
+        );
+        return Err(Status::Forbidden);
+    }
+    let Some(id) = session_id else {
+        warn!("Rejected SSE: missing mcp-session-id");
+        return Err(Status::BadRequest);
     };
-
-    EventStream! {
-        // Send connected event with session ID
-        yield Event::data(session_id.clone()).event("connected").id("evt-connected");
-
-        // Stream new messages
-        loop {
-            match rx.recv().await {
-                Ok(msg) => {
-                    let event_id = format!("evt-{}", uuid::Uuid::new_v4());
-                    yield Event::data(msg).event("message").id(event_id);
-                }
-                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                    warn!(skipped = n, "SSE client lagged, skipped messages");
-                }
-                Err(tokio::sync::broadcast::error::RecvError::Closed) => {
-                    debug!("SSE channel closed");
-                    break;
-                }
-            }
+    match state.sessions.touch_verified(&id, user.as_ref()) {
+        Ok(true) => {}
+        Ok(false) => {
+            warn!(session_id = %id, "Rejected SSE: unknown session id");
+            return Err(Status::NotFound);
+        }
+        Err(e) => {
+            warn!(session_id = %id, error = %e, "Rejected SSE: session binding violation");
+            return Err(Status::Forbidden);
         }
     }
+
+    let registry = state.sessions.streams(&id).expect("session verified above");
+    let (handle, replay_events) = if let Some(last_id) = &last_event_id {
+        info!(session_id = %id, last_event_id = %last_id, "Reconnecting with Last-Event-ID");
+        if let Some((handle, replay)) = registry.resume(last_id) {
+            (handle, replay)
+        } else {
+            // Unknown or expired cursor: open a fresh stream rather than
+            // replaying another stream's events (spec MUST NOT).
+            let (handle, prime) = registry.open("connected", id);
+            (handle, vec![prime])
+        }
+    } else {
+        let (handle, prime) = registry.open("connected", id);
+        (handle, vec![prime])
+    };
+
+    // Replayed/prime events first, then live delivery; the first event
+    // carries the retry hint (spec: clients MUST respect `retry`).
+    Ok(EventStream! {
+        let mut handle = handle;
+        let mut first = true;
+        for stored in replay_events {
+            let mut event = Event::data(stored.data).event(stored.event_type).id(stored.id);
+            if first {
+                event = event.with_retry(std::time::Duration::from_secs(2));
+                first = false;
+            }
+            yield event;
+        }
+        while let Some(stored) = handle.recv().await {
+            let mut event = Event::data(stored.data).event(stored.event_type).id(stored.id);
+            if first {
+                event = event.with_retry(std::time::Duration::from_secs(2));
+                first = false;
+            }
+            yield event;
+        }
+    })
 }
 
 #[cfg(test)]
