@@ -60,13 +60,46 @@ async fn response_post_is_accepted_with_202() {
     let router = McpRouter::new(TestHandler);
     let app = test::init_service(App::new().configure(router.configure_app())).await;
 
+    // Initialize first (#153 PR 0b: only initialize may omit mcp-session-id).
     let req = test::TestRequest::post()
         .uri("/mcp")
         .insert_header(("content-type", "application/json"))
         .insert_header(("mcp-protocol-version", "2025-11-25"))
+        .set_payload(r#"{"jsonrpc":"2.0","method":"initialize","params":{},"id":0}"#)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    let sid = resp
+        .headers()
+        .get("mcp-session-id")
+        .and_then(|v| v.to_str().ok())
+        .map(String::from)
+        .expect("initialize must assign a session id");
+
+    let req = test::TestRequest::post()
+        .uri("/mcp")
+        .insert_header(("content-type", "application/json"))
+        .insert_header(("mcp-protocol-version", "2025-11-25"))
+        .insert_header(("mcp-session-id", sid.as_str()))
         .set_payload(r#"{"jsonrpc":"2.0","id":42,"result":{"roots":[]}}"#)
         .to_request();
     let resp = test::call_service(&app, req).await;
 
     assert_eq!(resp.status(), actix_web::http::StatusCode::ACCEPTED);
+}
+
+/// #153 PR 0b: a non-initialize message without `mcp-session-id` is 400.
+#[actix_rt::test]
+async fn missing_session_id_on_non_initialize_is_400() {
+    let router = McpRouter::new(TestHandler);
+    let app = test::init_service(App::new().configure(router.configure_app())).await;
+
+    let req = test::TestRequest::post()
+        .uri("/mcp")
+        .insert_header(("content-type", "application/json"))
+        .insert_header(("mcp-protocol-version", "2025-11-25"))
+        .set_payload(r#"{"jsonrpc":"2.0","method":"ping","id":1}"#)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), actix_web::http::StatusCode::BAD_REQUEST);
 }

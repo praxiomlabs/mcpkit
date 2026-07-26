@@ -19,8 +19,27 @@ use std::sync::Arc;
 use tokio_stream::wrappers::BroadcastStream;
 use tracing::{debug, info, warn};
 use warp::Filter;
+use warp::Reply as _;
 use warp::http::StatusCode;
 use warp::sse::Event;
+
+/// Whether this message is an `initialize` request — the only message allowed
+/// to omit `mcp-session-id` (the server assigns the id in its response).
+fn is_initialize(msg: &Message) -> bool {
+    matches!(msg, Message::Request(r) if r.method.as_ref() == "initialize")
+}
+
+/// Attach the session id header to a reply (spec: the server communicates the
+/// assigned session id via `mcp-session-id`; warp previously never returned
+/// it on POST responses, leaving clients unable to satisfy the session-id
+/// requirement).
+fn reply_with_session(reply: impl warp::Reply, session_id: &str) -> warp::reply::Response {
+    let mut resp = reply.into_response();
+    if let Ok(v) = warp::http::HeaderValue::from_str(session_id) {
+        resp.headers_mut().insert("mcp-session-id", v);
+    }
+    resp
+}
 
 /// Handle MCP POST requests.
 ///
@@ -32,7 +51,7 @@ pub async fn handle_mcp_post<H>(
     origin: Option<String>,
     user: Option<VerifiedUser>,
     body: String,
-) -> Result<impl warp::Reply, Infallible>
+) -> Result<warp::reply::Response, Infallible>
 where
     H: ServerHandler
         + ToolHandler
@@ -52,10 +71,10 @@ where
         let error_body = serde_json::json!({
             "error": { "code": -32600, "message": "origin not allowed" }
         });
-        return Ok(warp::reply::with_status(
-            warp::reply::json(&error_body),
-            StatusCode::FORBIDDEN,
-        ));
+        return Ok(
+            warp::reply::with_status(warp::reply::json(&error_body), StatusCode::FORBIDDEN)
+                .into_response(),
+        );
     }
 
     // Validate protocol version
@@ -75,40 +94,13 @@ where
         return Ok(warp::reply::with_status(
             warp::reply::json(&error_body),
             StatusCode::BAD_REQUEST,
-        ));
+        )
+        .into_response());
     }
 
     // Get or create session (binding it to the verified user, if any).
-    let session_id = match session_id {
-        Some(id) => match state.sessions.touch_verified(&id, user.as_ref()) {
-            Ok(true) => id,
-            Ok(false) => {
-                warn!(session_id = %id, "Rejected: unknown session id");
-                let error_body = serde_json::json!({
-                    "error": { "code": -32600, "message": "unknown session id" }
-                });
-                return Ok(warp::reply::with_status(
-                    warp::reply::json(&error_body),
-                    StatusCode::NOT_FOUND,
-                ));
-            }
-            Err(e) => {
-                warn!(session_id = %id, error = %e, "Rejected: session binding violation");
-                let error_body = serde_json::json!({
-                    "error": { "code": -32600, "message": e.to_string() }
-                });
-                return Ok(warp::reply::with_status(
-                    warp::reply::json(&error_body),
-                    StatusCode::FORBIDDEN,
-                ));
-            }
-        },
-        None => state.sessions.create_for_user(user),
-    };
-
-    debug!(session_id = %session_id, "Processing MCP request");
-
-    // Parse message
+    // Parse the message first: whether a missing session id is acceptable
+    // depends on whether this is an `initialize` request.
     let msg: Message = match serde_json::from_str(&body) {
         Ok(m) => m,
         Err(e) => {
@@ -122,9 +114,57 @@ where
             return Ok(warp::reply::with_status(
                 warp::reply::json(&error_body),
                 StatusCode::BAD_REQUEST,
-            ));
+            )
+            .into_response());
         }
     };
+
+    let session_id = match session_id {
+        Some(id) => match state.sessions.touch_verified(&id, user.as_ref()) {
+            Ok(true) => id,
+            Ok(false) => {
+                warn!(session_id = %id, "Rejected: unknown session id");
+                let error_body = serde_json::json!({
+                    "error": { "code": -32600, "message": "unknown session id" }
+                });
+                return Ok(warp::reply::with_status(
+                    warp::reply::json(&error_body),
+                    StatusCode::NOT_FOUND,
+                )
+                .into_response());
+            }
+            Err(e) => {
+                warn!(session_id = %id, error = %e, "Rejected: session binding violation");
+                let error_body = serde_json::json!({
+                    "error": { "code": -32600, "message": e.to_string() }
+                });
+                return Ok(warp::reply::with_status(
+                    warp::reply::json(&error_body),
+                    StatusCode::FORBIDDEN,
+                )
+                .into_response());
+            }
+        },
+        // Spec: a server assigning session ids does so at initialization;
+        // other requests without `mcp-session-id` are 400 Bad Request.
+        None if is_initialize(&msg) => state.sessions.create_for_user(user),
+        None => {
+            warn!("Rejected: missing mcp-session-id on non-initialize message");
+            let error_body = serde_json::json!({
+                "error": {
+                    "code": -32600,
+                    "message": "missing mcp-session-id (required for all messages after initialize)"
+                }
+            });
+            return Ok(warp::reply::with_status(
+                warp::reply::json(&error_body),
+                StatusCode::BAD_REQUEST,
+            )
+            .into_response());
+        }
+    };
+
+    debug!(session_id = %session_id, "Processing MCP request");
 
     // Process message
     match msg {
@@ -164,9 +204,9 @@ where
             .await;
 
             match serde_json::to_value(Message::Response(response)) {
-                Ok(body) => Ok(warp::reply::with_status(
-                    warp::reply::json(&body),
-                    StatusCode::OK,
+                Ok(body) => Ok(reply_with_session(
+                    warp::reply::with_status(warp::reply::json(&body), StatusCode::OK),
+                    &session_id,
                 )),
                 Err(e) => {
                     let error_body = serde_json::json!({
@@ -175,9 +215,12 @@ where
                             "message": format!("Internal error: {e}")
                         }
                     });
-                    Ok(warp::reply::with_status(
-                        warp::reply::json(&error_body),
-                        StatusCode::INTERNAL_SERVER_ERROR,
+                    Ok(reply_with_session(
+                        warp::reply::with_status(
+                            warp::reply::json(&error_body),
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                        ),
+                        &session_id,
                     ))
                 }
             }
@@ -188,9 +231,12 @@ where
                 session_id = %session_id,
                 "Received notification"
             );
-            Ok(warp::reply::with_status(
-                warp::reply::json(&serde_json::json!({})),
-                StatusCode::ACCEPTED,
+            Ok(reply_with_session(
+                warp::reply::with_status(
+                    warp::reply::json(&serde_json::json!({})),
+                    StatusCode::ACCEPTED,
+                ),
+                &session_id,
             ))
         }
         // Spec (Streamable HTTP): a client delivers responses to
@@ -206,9 +252,12 @@ where
                 session_id = %session_id,
                 "Received client response (no pending server-initiated request; dropped)"
             );
-            Ok(warp::reply::with_status(
-                warp::reply::json(&serde_json::json!({})),
-                StatusCode::ACCEPTED,
+            Ok(reply_with_session(
+                warp::reply::with_status(
+                    warp::reply::json(&serde_json::json!({})),
+                    StatusCode::ACCEPTED,
+                ),
+                &session_id,
             ))
         }
     }

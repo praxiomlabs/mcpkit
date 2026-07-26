@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking (behavior):** the HTTP adapters now require `mcp-session-id` on
+  every message except `initialize` — a non-initialize request, notification,
+  or response without it gets `400 Bad Request` (spec: servers assigning
+  session ids do so at initialization; previously any session-id-less POST
+  silently minted a throwaway session and proceeded, leaking one
+  uninitialized session per stray message). Clients that echo the
+  `mcp-session-id` response header (spec MUST once assigned) are unaffected.
+  The warp adapter previously **never returned** `mcp-session-id` on POST
+  responses at all — making the requirement unsatisfiable — and now sets it
+  like the other three adapters
+  ([#153](https://github.com/praxiomlabs/mcpkit/issues/153), PR 0b).
+
 ### Fixed
 
 - The HTTP adapters (axum/actix/warp/rocket) now accept a POSTed JSON-RPC
