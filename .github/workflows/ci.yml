@@ -97,6 +97,38 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo check --all-features --all-targets
 
+  # Three checks that existed only as Justfile recipes and so never ran on any
+  # PR. That gap is how two dependencies stayed declared behind cargo-machete
+  # justifications that were false, and how spelling regressions reached main:
+  # the checks were written, nothing enforced them.
+  hygiene:
+    name: Hygiene (spelling, unused deps, shell)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Spell check
+        uses: crate-ci/typos@master
+        with:
+          files: ./crates ./docs ./README.md ./CHANGELOG.md ./RELEASING.md
+      - name: Install cargo-machete
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-machete
+      # Fails on an unused dependency *and* on an `ignored` entry whose
+      # dependency is actually used — a stale suppression is the thing that hid
+      # the unused deps in the first place.
+      - name: Unused dependencies
+        run: cargo machete
+      # shellcheck ships on ubuntu-latest. -S warning is the bar the repo's
+      # scripts already meet; info/style findings (e.g. SC2016 for jq programs
+      # quoted on purpose) are not failures.
+      - name: Shell check
+        run: |
+          set -euo pipefail
+          mapfile -t scripts < <(git ls-files '*.sh')
+          printf 'checking %d script(s)\n' "${#scripts[@]}"
+          shellcheck -S warning "${scripts[@]}"
+
   version-sync:
     name: Version Sync
     runs-on: ubuntu-latest
@@ -416,6 +448,7 @@ jobs:
         version-sync,
         link-check,
         schema-check,
+        hygiene,
         test,
         deny,
         docs,

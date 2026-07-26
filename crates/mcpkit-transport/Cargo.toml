@@ -32,8 +32,6 @@ event-listener = "5"
 
 # HTTP transport
 reqwest = { workspace = true, optional = true }
-axum = { workspace = true, optional = true }
-hyper = { workspace = true, optional = true }
 
 # WebSocket transport
 tokio-tungstenite = { workspace = true, optional = true }
@@ -44,7 +42,6 @@ prost = { version = "0.13", optional = true }
 tokio-stream = { version = "0.1", optional = true }
 
 # Utilities
-uuid = { workspace = true }
 url = { workspace = true }
 rand = { workspace = true }
 
@@ -72,7 +69,7 @@ protobuf-src = { version = "2", optional = true }
 default = ["tokio-runtime"]
 tokio-runtime = ["tokio"]
 smol-runtime = ["smol", "async-io"]
-http = ["reqwest", "axum", "hyper", "tokio-runtime"]
+http = ["reqwest", "tokio-runtime"]
 websocket = ["tokio-tungstenite", "tokio-runtime"]
 # gRPC transport - uses pre-generated protobuf code for cross-platform builds
 grpc = ["tonic", "prost", "tokio-stream", "tokio-runtime"]
@@ -97,7 +94,5 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [package.metadata.cargo-machete]
 # async-io: used conditionally in smol runtime
-# hyper: used internally by axum for HTTP transport
 # pin-project-lite: used for pin projection in async code
-# prost: used by generated protobuf code (tonic-build)
-ignored = ["async-io", "hyper", "pin-project-lite", "prost"]
+ignored = ["async-io", "pin-project-lite"]

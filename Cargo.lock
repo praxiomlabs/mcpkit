@@ -2782,15 +2782,12 @@ dependencies = [
 name = "mcpkit-server"
 version = "0.7.0"
 dependencies = [
- "chrono",
- "event-listener",
  "futures",
  "jsonschema",
  "mcpkit-core",
  "mcpkit-transport",
  "serde",
  "serde_json",
- "thiserror 2.0.17",
  "tokio",
  "tracing",
 ]
@@ -2815,11 +2812,9 @@ dependencies = [
  "async-io",
  "async-lock",
  "async-trait",
- "axum 0.8.8",
  "bytes",
  "event-listener",
  "futures",
- "hyper 1.8.1",
  "mcpkit-core",
  "opentelemetry",
  "opentelemetry-otlp",
@@ -2844,7 +2839,6 @@ dependencies = [
  "tracing-opentelemetry",
  "tracing-subscriber",
  "url",
- "uuid",
  "wiremock",
 ]
 

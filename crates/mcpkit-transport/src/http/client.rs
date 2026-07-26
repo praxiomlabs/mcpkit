@@ -527,7 +527,7 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn unparseable_non_2xx_body_is_transport_error() {
+        async fn unparsable_non_2xx_body_is_transport_error() {
             let server = MockServer::start().await;
             Mock::given(method("POST"))
                 .respond_with(ResponseTemplate::new(500).set_body_string("boom"))
@@ -540,7 +540,7 @@ mod tests {
                 .await;
             assert!(
                 res.is_err(),
-                "an unparseable non-2xx body should be a transport error"
+                "an unparsable non-2xx body should be a transport error"
             );
         }
     }
