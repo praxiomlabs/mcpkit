@@ -363,3 +363,31 @@ fn missing_session_id_on_non_initialize_is_400() {
 
     assert_eq!(response.status(), Status::BadRequest);
 }
+
+/// An id the session's task store does not own is *invalid params* (-32602),
+/// not *method not found* (-32601). The adapters have no custom task handler,
+/// so a store that declines an id has declined it for good.
+#[test]
+fn unknown_task_id_is_invalid_params_not_method_not_found() {
+    let client = create_test_client();
+    let sid = init_session(&client);
+
+    for method in ["tasks/get", "tasks/result", "tasks/cancel"] {
+        let response = client
+            .post("/mcp")
+            .header(ContentType::JSON)
+            .header(Header::new("mcp-protocol-version", "2025-11-25"))
+            .header(Header::new("mcp-session-id", sid.clone()))
+            .body(format!(
+                r#"{{"jsonrpc":"2.0","method":"{method}","params":{{"taskId":"no-such-task-id"}},"id":1}}"#
+            ))
+            .dispatch();
+
+        let body = response.into_string().expect("body");
+        let json: serde_json::Value = serde_json::from_str(&body).expect("json");
+        assert_eq!(
+            json["error"]["code"], -32602,
+            "{method} with an unknown id must be -32602: {json}"
+        );
+    }
+}

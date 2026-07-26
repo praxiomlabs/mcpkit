@@ -668,6 +668,91 @@ pub async fn route_task_store(
     store: &TaskManager,
     method: &str,
     params: Option<&Value>,
+) -> TaskRoute {
+    TaskRoute::from_parts(
+        route_task_store_inner(store, method, params).await,
+        method,
+        params,
+    )
+}
+
+/// What a task store decided about a request.
+///
+/// This exists because an `Option` cannot say the one thing that matters here.
+/// A store declines a request for two unrelated reasons — *this is not a task
+/// method* and *this is a task method whose id I do not own* — and collapsing
+/// them into `None` led four of six call sites to answer an unknown `taskId`
+/// with **method not found**, telling the peer the server has no `tasks/get`
+/// when it plainly does. Per spec an unknown id is *invalid params*.
+///
+/// Callers with no custom task handler should use
+/// [`or_unknown_task`](Self::or_unknown_task), which folds the unowned case
+/// into the correct error. Callers that do have one should match explicitly and
+/// offer the request there first.
+#[derive(Debug)]
+pub enum TaskRoute {
+    /// Not a `tasks/*` method at all. Try the next router.
+    NotTaskMethod,
+    /// A `tasks/*` method whose id this store does not own.
+    UnownedTask {
+        /// The task method that was asked for.
+        method: String,
+        /// The id the store does not have.
+        task_id: String,
+    },
+    /// Served by this store.
+    Handled(Result<Value, McpError>),
+}
+
+impl TaskRoute {
+    fn from_parts(
+        inner: Option<Result<Value, McpError>>,
+        method: &str,
+        params: Option<&Value>,
+    ) -> Self {
+        match inner {
+            Some(result) => Self::Handled(result),
+            None if is_task_method(method) => Self::UnownedTask {
+                method: method.to_string(),
+                task_id: params
+                    .and_then(|p| p.get("taskId"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("<missing>")
+                    .to_string(),
+            },
+            None => Self::NotTaskMethod,
+        }
+    }
+
+    /// Collapse to a plain routing outcome for a caller that has no custom task
+    /// handler to try: an unowned id becomes *invalid params* naming the id.
+    ///
+    /// `None` here means only "not a task method", so it is safe to fall
+    /// through to the next router.
+    #[must_use]
+    pub fn or_unknown_task(self) -> Option<Result<Value, McpError>> {
+        match self {
+            Self::NotTaskMethod => None,
+            Self::UnownedTask { method, task_id } => Some(Err(McpError::invalid_params(
+                method,
+                format!("Unknown task: {task_id}"),
+            ))),
+            Self::Handled(result) => Some(result),
+        }
+    }
+}
+
+/// The `tasks/*` methods a store can be asked to serve by id.
+///
+/// `tasks/list` is excluded: it takes no id, so it can never be "unowned".
+fn is_task_method(method: &str) -> bool {
+    matches!(method, "tasks/get" | "tasks/result" | "tasks/cancel")
+}
+
+async fn route_task_store_inner(
+    store: &TaskManager,
+    method: &str,
+    params: Option<&Value>,
 ) -> Option<Result<Value, McpError>> {
     // Sweep expired terminal tasks on access, so a session that stops creating
     // but keeps polling/listing still bounds its store.
@@ -1011,6 +1096,7 @@ mod tests {
         let params = result_params(&id);
         let result = route_task_store(&manager, "tasks/result", Some(&params))
             .await
+            .or_unknown_task()
             .expect("owned task")
             .expect("success");
         assert_eq!(result["answer"], 42);
@@ -1038,10 +1124,11 @@ mod tests {
 
         let params = result_params(handle.id());
         let started = std::time::Instant::now();
-        let result = tokio::time::timeout(
-            std::time::Duration::from_secs(5),
-            route_task_store(&manager, "tasks/result", Some(&params)),
-        )
+        let result = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            route_task_store(&manager, "tasks/result", Some(&params))
+                .await
+                .or_unknown_task()
+        })
         .await
         .expect("must not hang")
         .expect("owned task")
@@ -1069,6 +1156,7 @@ mod tests {
         let params = result_params(&id);
         let err = route_task_store(&manager, "tasks/result", Some(&params))
             .await
+            .or_unknown_task()
             .expect("owned task")
             .expect_err("stored error");
         let wire: JsonRpcError = (&err).into();
@@ -1097,6 +1185,7 @@ mod tests {
         let params = result_params(&id);
         let result = route_task_store(&manager, "tasks/result", Some(&params))
             .await
+            .or_unknown_task()
             .expect("owned task")
             .expect("success");
         assert_eq!(result["_meta"]["keep"], 1);
@@ -1124,6 +1213,7 @@ mod tests {
         let params = result_params(&id);
         let result = route_task_store(&manager, "tasks/result", Some(&params))
             .await
+            .or_unknown_task()
             .expect("owned task")
             .expect("isError result is still a successful JSON-RPC response");
         assert_eq!(result["isError"], true);
@@ -1143,6 +1233,7 @@ mod tests {
         let params = result_params(&id);
         let err = route_task_store(&manager, "tasks/result", Some(&params))
             .await
+            .or_unknown_task()
             .expect("owned task")
             .expect_err("cancelled task has no result");
         assert_eq!(err.code(), -32602);
@@ -1164,10 +1255,11 @@ mod tests {
         };
 
         let params = result_params(&id);
-        let outcome = tokio::time::timeout(
-            std::time::Duration::from_secs(5),
-            route_task_store(&manager, "tasks/result", Some(&params)),
-        )
+        let outcome = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            route_task_store(&manager, "tasks/result", Some(&params))
+                .await
+                .or_unknown_task()
+        })
         .await
         .expect("cancel must unblock the waiter")
         .expect("owned task");
@@ -1208,6 +1300,7 @@ mod tests {
         let params = result_params(&id);
         let err = route_task_store(&manager, "tasks/cancel", Some(&params))
             .await
+            .or_unknown_task()
             .expect("owned task")
             .expect_err("terminal cancel rejected");
         assert_eq!(err.code(), -32602);

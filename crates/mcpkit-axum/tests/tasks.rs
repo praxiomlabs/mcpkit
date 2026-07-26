@@ -315,3 +315,49 @@ async fn missing_session_id_on_non_initialize_is_400() {
     .into_response();
     assert_eq!(response.status(), axum::http::StatusCode::BAD_REQUEST);
 }
+
+/// An id the session's task store does not own is *invalid params* (-32602),
+/// not *method not found* (-32601).
+///
+/// The adapters have no custom task handler, so a store that declines an id has
+/// declined it for good. Answering -32601 would tell the peer this server has
+/// no `tasks/get` at all, moments after it served `tasks/*` for a real id.
+#[tokio::test]
+async fn unknown_task_id_is_invalid_params_not_method_not_found() {
+    let (state, _) = state();
+    let sid = init_session(&state).await;
+
+    for method in ["tasks/get", "tasks/result", "tasks/cancel"] {
+        let (resp, _) = post(
+            &state,
+            Some(&sid),
+            task_method(1, method, "no-such-task-id"),
+        )
+        .await;
+        assert_eq!(
+            resp["error"]["code"], -32602,
+            "{method} with an unknown id must be -32602: {resp}"
+        );
+    }
+}
+
+/// The guard above must not swallow a genuinely unknown method.
+#[tokio::test]
+async fn unknown_method_is_still_method_not_found() {
+    let (state, _) = state();
+    let sid = init_session(&state).await;
+
+    let (resp, _) = post(
+        &state,
+        Some(&sid),
+        serde_json::json!({
+            "jsonrpc": "2.0", "id": 1, "method": "tasks/nonexistent",
+            "params": { "taskId": "x" }
+        }),
+    )
+    .await;
+    assert_eq!(
+        resp["error"]["code"], -32601,
+        "a non-spec tasks/* method must stay -32601: {resp}"
+    );
+}

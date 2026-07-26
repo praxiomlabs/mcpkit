@@ -977,14 +977,16 @@ where
         }
     }
 
-    /// Serve task queries from the built-in task store. Returns `None` for
-    /// non-task methods, and for `tasks/get`/`tasks/result`/`tasks/cancel` whose
-    /// id the store does not own (so a custom `with_tasks` handler can serve it).
+    /// Serve task queries from the built-in task store.
+    ///
+    /// Unlike the adapters, the runtime may have a custom `with_tasks` handler,
+    /// so it matches on [`TaskRoute`] rather than folding an unowned id straight
+    /// into an error: the custom handler gets its chance first.
     async fn route_runtime_tasks(
         &self,
         method: &str,
         params: Option<&serde_json::Value>,
-    ) -> Option<Result<serde_json::Value, McpError>> {
+    ) -> crate::capability::tasks::TaskRoute {
         crate::capability::tasks::route_task_store(&self.task_store, method, params).await
     }
 
@@ -1058,11 +1060,14 @@ where
         let method = request.method.as_ref();
         let params = request.params.as_ref();
 
-        // Serve task queries from the built-in store first (falling through to a
-        // custom `with_tasks` handler for ids the store does not own).
-        if let Some(result) = self.route_runtime_tasks(method, params).await {
-            return result;
-        }
+        // Serve task queries from the built-in store first. An id the store does
+        // not own falls through to a custom `with_tasks` handler; hold the
+        // spec-correct error in case no such handler owns it either.
+        let unowned_task: Option<McpError> = match self.route_runtime_tasks(method, params).await {
+            crate::capability::tasks::TaskRoute::Handled(result) => return result,
+            crate::capability::tasks::TaskRoute::NotTaskMethod => None,
+            unowned => unowned.or_unknown_task().and_then(Result::err),
+        };
 
         // Extract progress token from params._meta.progressToken if present
         let progress_token = extract_progress_token(params);
@@ -1102,24 +1107,15 @@ where
         let result = self.server.route(method, params, &ctx).await;
         self.state.remove_cancellation(&cancel_key);
 
-        // The built-in store returns `None` for a taskId it does not own so a
-        // custom `with_tasks` handler gets a chance. When no such handler is
-        // registered the generic router reports *method not found*, which tells
-        // the client this server has no `tasks/get` at all — it plainly does,
-        // since it answered `tasks/*` a moment ago. Per spec an unknown taskId
-        // is invalid params, so report the id as the defect, not the method.
-        if result.as_ref().err().map(McpError::code)
-            == Some(mcpkit_core::error::codes::METHOD_NOT_FOUND)
-            && matches!(method, "tasks/get" | "tasks/result" | "tasks/cancel")
+        // No custom handler owned the task either, so the router reported
+        // *method not found* — which tells the client this server has no
+        // `tasks/get` at all, when it answered `tasks/*` a moment ago. Report
+        // the unowned id as the defect instead.
+        if let Some(unowned) = unowned_task
+            && result.as_ref().err().map(McpError::code)
+                == Some(mcpkit_core::error::codes::METHOD_NOT_FOUND)
         {
-            let id = params
-                .and_then(|p| p.get("taskId"))
-                .and_then(|v| v.as_str())
-                .unwrap_or("<missing>");
-            return Err(McpError::invalid_params(
-                method,
-                format!("Unknown task: {id}"),
-            ));
+            return Err(unowned);
         }
         result
     }

@@ -9,7 +9,7 @@
 
 pub use mcpkit_core::tasks::{
     DEFAULT_TASK_TTL_MS, RELATED_TASK_META_KEY, TaskEvent, TaskHandle, TaskManager, TaskObserver,
-    TaskPayload, TaskState, route_task_store,
+    TaskPayload, TaskRoute, TaskState, route_task_store,
 };
 
 /// Publishes `notifications/tasks/status` when a task changes status.

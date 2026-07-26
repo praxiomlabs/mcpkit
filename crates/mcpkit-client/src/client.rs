@@ -528,14 +528,17 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
                 )),
             );
         }
-        match route_task_store(store, method, request.params.as_ref()).await {
+        // The client has no fallback task handler, so an id the store does not
+        // own is invalid params (spec) — `or_unknown_task` is that rule.
+        match route_task_store(store, method, request.params.as_ref())
+            .await
+            .or_unknown_task()
+        {
             Some(Ok(value)) => Response::success(request.id.clone(), value),
             Some(Err(e)) => Response::error(request.id.clone(), (&e).into()),
-            // The store does not own this id; the client has no fallback
-            // handler, so an unknown taskId is invalid params (spec).
             None => Response::error(
                 request.id.clone(),
-                JsonRpcError::invalid_params("Unknown task"),
+                JsonRpcError::method_not_found(format!("Method '{method}' not found")),
             ),
         }
     }
