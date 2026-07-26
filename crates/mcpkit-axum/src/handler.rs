@@ -14,7 +14,6 @@
 //! claims.
 
 use crate::error::ExtensionError;
-use crate::session::{EventStore, StoredEvent};
 use crate::state::{HasServerInfo, McpState, OAuthState};
 use crate::{SUPPORTED_VERSIONS, is_supported_version};
 use axum::extract::State;
@@ -29,6 +28,7 @@ use mcpkit_core::protocol::Message;
 use mcpkit_core::protocol_version::ProtocolVersion;
 use mcpkit_server::capability::tasks::{TaskManager, route_task_store};
 use mcpkit_server::context::{Context, NoOpPeer};
+use mcpkit_server::streams::StoredEvent;
 use mcpkit_server::{
     AugmentedTaskOutcome, PromptHandler, ResourceHandler, ServerHandler, ToolHandler,
     begin_augmented_task, route_completion, route_logging, route_prompts, route_resources,
@@ -481,89 +481,69 @@ where
         .and_then(|v| v.to_str().ok())
         .map(String::from);
 
-    let rx = state
-        .sessions
-        .subscribe(&id)
-        .expect("session verified above");
-    let replay_events = if let Some(last_id) = &last_event_id {
-        info!(session_id = %id, last_event_id = %last_id, "Reconnecting with Last-Event-ID");
-        state
-            .sessions
-            .events_for_replay(&id, last_id)
-            .await
-            .unwrap_or_default()
-    } else {
-        Vec::new()
-    };
-    let event_store = state.sessions.events(&id);
+    let registry = state.sessions.streams(&id).expect("session verified above");
 
-    let stream = create_sse_stream_with_replay(id, rx, replay_events, event_store);
+    // Resume the named stream (same identity, same-stream replay) or open a
+    // fresh one primed with a `connected` event (#153 PR 2).
+    let (handle, replay_events) = if let Some(last_id) = &last_event_id {
+        info!(session_id = %id, last_event_id = %last_id, "Reconnecting with Last-Event-ID");
+        if let Some((handle, replay)) = registry.resume(last_id) {
+            (handle, replay)
+        } else {
+            // Unknown or expired stream cursor: open a fresh stream rather
+            // than replaying another stream's events (spec MUST NOT).
+            let (handle, prime) = registry.open("connected", id);
+            (handle, vec![prime])
+        }
+    } else {
+        let (handle, prime) = registry.open("connected", id);
+        (handle, vec![prime])
+    };
+
+    let stream = create_sse_stream(handle, replay_events);
     Sse::new(stream)
         .keep_alive(KeepAlive::default())
         .into_response()
 }
 
-/// Create an SSE stream with support for event replay.
-///
-/// This function creates an SSE stream that:
-/// 1. Sends any replay events (from Last-Event-ID reconnection)
-/// 2. Sends the "connected" event with session ID
-/// 3. Streams new messages as they arrive
-///
-/// All events include an `id` field for client-side tracking and reconnection.
-fn create_sse_stream_with_replay(
-    session_id: String,
-    mut rx: tokio::sync::broadcast::Receiver<String>,
+/// Create the SSE event stream for one [`mcpkit_server::streams::StreamHandle`]:
+/// replayed events first (each with its stored id), then live events as the
+/// registry delivers them. The first event carries a `retry` hint (spec: the
+/// client MUST respect `retry`), so client reconnect cadence is dictated
+/// rather than guessed.
+fn create_sse_stream(
+    mut handle: mcpkit_server::streams::StreamHandle,
     replay_events: Vec<StoredEvent>,
-    event_store: Option<Arc<EventStore>>,
 ) -> impl Stream<Item = Result<Event, Infallible>> {
     async_stream::stream! {
-        // First, replay any missed events
+        let mut first = true;
         for stored in replay_events {
-            debug!(event_id = %stored.id, "Replaying missed event");
-            yield Ok(Event::default()
+            debug!(event_id = %stored.id, "Sending stored event");
+            let mut event = Event::default()
                 .id(&stored.id)
                 .event(&stored.event_type)
-                .data(&stored.data));
-        }
-
-        // Send connected event with session ID and an event ID
-        // Per MCP spec: servers MUST immediately send an SSE event with an id
-        // to prime the client for reconnection
-        let connected_event_id = event_store
-            .as_ref()
-            .map_or_else(|| "evt-connected".to_string(), |store| store.next_event_id());
-
-        yield Ok(Event::default()
-            .id(&connected_event_id)
-            .event("connected")
-            .data(&session_id));
-
-        // Stream new messages with event IDs
-        loop {
-            match rx.recv().await {
-                Ok(msg) => {
-                    // Generate event ID for the new message
-                    let event_id = event_store
-                        .as_ref()
-                        .map_or_else(|| format!("evt-{}", uuid::Uuid::new_v4()), |store| store.next_event_id());
-
-                    yield Ok(Event::default()
-                        .id(&event_id)
-                        .event("message")
-                        .data(msg));
-                }
-                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                    warn!(skipped = n, "SSE client lagged, skipped messages");
-                    // Note: Lagged events may be available in the event store
-                    // for replay on reconnection
-                }
-                Err(tokio::sync::broadcast::error::RecvError::Closed) => {
-                    debug!("SSE channel closed");
-                    break;
-                }
+                .data(&stored.data);
+            if first {
+                event = event.retry(std::time::Duration::from_secs(2));
+                first = false;
             }
+            yield Ok(event);
         }
+
+        // Live delivery: the registry stores each event (id allocated once)
+        // before queueing it here, so the wire id always equals the stored id.
+        while let Some(stored) = handle.recv().await {
+            let mut event = Event::default()
+                .id(&stored.id)
+                .event(&stored.event_type)
+                .data(&stored.data);
+            if first {
+                event = event.retry(std::time::Duration::from_secs(2));
+                first = false;
+            }
+            yield Ok(event);
+        }
+        debug!("SSE stream closed (stream killed or session dropped)");
     }
 }
 

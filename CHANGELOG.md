@@ -9,6 +9,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking (axum):** SSE delivery is rebuilt on a shared per-stream module,
+  `mcpkit_server::streams` (`StreamRegistry`/`StreamConfig`/`StoredEvent`),
+  fixing four spec deviations at once (#153 PR 2, axum-first; the other
+  adapters adopt it in their port PRs):
+  - **One message, one stream** (spec MUST NOT broadcast): each GET gets its
+    own bounded `mpsc` channel; every outbound event is stored on and
+    delivered to exactly one *designated* stream (the oldest live one; a
+    resumed stream keeps its identity and designation). Previously a single
+    per-session `broadcast` channel fanned every message out to all
+    connected streams.
+  - **Working resumability**: event ids are `{stream_id}-{seq}`, allocated
+    once at store time, so the wire id always equals the stored id (the old
+    axum code allocated ids twice — store and emit — making `Last-Event-ID`
+    replay return the entire buffer). Replay serves only same-stream events
+    (spec MUST NOT replay across streams); an unknown/expired cursor opens a
+    fresh stream instead.
+  - **No silent loss**: a full channel kills its stream explicitly (the old
+    `broadcast` path silently skipped lagged messages); the killed stream's
+    buffer is retained for `StreamConfig::max_age` (300s default) so the
+    client resumes and replays what it missed.
+  - **`retry: 2000` is emitted** on the first event of every stream (spec:
+    clients MUST respect `retry`), so reconnect cadence is dictated rather
+    than guessed.
+  - Removed from mcpkit-axum: `EventStore`, `EventStoreConfig`, the
+    session's `tx`/`events` fields, and `SessionStore::{subscribe, events,
+    send_with_storage, events_for_replay, with_event_store_config}` —
+    replaced by `Session.streams`, `SessionStore::{streams, send_event,
+    with_stream_config}`, and the re-exported shared types
+    ([#153](https://github.com/praxiomlabs/mcpkit/issues/153)).
+
 - **Breaking (axum):** the axum adapter's SSE side now attaches to the same
   session the POST side creates, fixing two standing spec/security defects
   (#172, #173) as #153's PR 1 (axum-first; actix/warp/rocket follow in their
