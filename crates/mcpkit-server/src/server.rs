@@ -1101,6 +1101,26 @@ where
         // Delegate to the router, then drop the cancellation registration.
         let result = self.server.route(method, params, &ctx).await;
         self.state.remove_cancellation(&cancel_key);
+
+        // The built-in store returns `None` for a taskId it does not own so a
+        // custom `with_tasks` handler gets a chance. When no such handler is
+        // registered the generic router reports *method not found*, which tells
+        // the client this server has no `tasks/get` at all — it plainly does,
+        // since it answered `tasks/*` a moment ago. Per spec an unknown taskId
+        // is invalid params, so report the id as the defect, not the method.
+        if result.as_ref().err().map(McpError::code)
+            == Some(mcpkit_core::error::codes::METHOD_NOT_FOUND)
+            && matches!(method, "tasks/get" | "tasks/result" | "tasks/cancel")
+        {
+            let id = params
+                .and_then(|p| p.get("taskId"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("<missing>");
+            return Err(McpError::invalid_params(
+                method,
+                format!("Unknown task: {id}"),
+            ));
+        }
         result
     }
 
