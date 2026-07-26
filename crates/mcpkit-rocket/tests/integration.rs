@@ -312,3 +312,19 @@ fn test_cors_headers() {
             .is_some()
     );
 }
+
+/// Spec (Streamable HTTP): a POSTed JSON-RPC *response* is accepted with
+/// 202, not rejected (#153 PR 0a).
+#[test]
+fn response_post_is_accepted_with_202() {
+    let client = create_test_client();
+
+    let response = client
+        .post("/mcp")
+        .header(ContentType::JSON)
+        .header(Header::new("mcp-protocol-version", "2025-11-25"))
+        .body(r#"{"jsonrpc":"2.0","id":42,"result":{"roots":[]}}"#)
+        .dispatch();
+
+    assert_eq!(response.status(), Status::Accepted);
+}

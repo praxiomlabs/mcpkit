@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The HTTP adapters (axum/actix/warp/rocket) now accept a POSTed JSON-RPC
+  *response* with `202 Accepted` per the Streamable HTTP spec, instead of
+  rejecting it as "Expected request or notification". This is how clients
+  deliver responses to server-initiated requests; until the adapter
+  server->client peer lands (#153), an accepted response is logged and
+  dropped — matching the stdio runtime's handling of a response that matches
+  no pending request
+  ([#153](https://github.com/praxiomlabs/mcpkit/issues/153), PR 0a of the
+  reviewed design).
+
 ### Added
 
 - The release publish logic is extracted from `release.yml` into
