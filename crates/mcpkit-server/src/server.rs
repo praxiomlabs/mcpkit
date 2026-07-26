@@ -37,7 +37,7 @@ use crate::context::{CancellationToken, Context, ContextData, Peer};
 use crate::dispatch::{PromptSlot, ResourceSlot, TaskSlot, ToolSlot};
 use crate::handler::ServerHandler;
 use crate::router::{route_prompts, route_resources, route_tasks, route_tools};
-use futures::channel::oneshot;
+use futures::channel::{mpsc, oneshot};
 use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
 use mcpkit_core::error::McpError;
 use mcpkit_core::protocol::{Message, Notification, ProgressToken, Request, RequestId, Response};
@@ -68,12 +68,18 @@ pub struct ServerState {
     /// same implementation the adapter session peer uses (#153), so a
     /// correlation bug can only exist in one place.
     outbound: crate::adapter_peer::SessionOutbound,
+    /// Publish end of the ambient-notification queue (see
+    /// [`publish_notification`](Self::publish_notification)).
+    ambient_tx: mpsc::UnboundedSender<Notification>,
+    /// Drain end, taken once by the run loop.
+    ambient_rx: std::sync::Mutex<Option<mpsc::UnboundedReceiver<Notification>>>,
 }
 
 impl ServerState {
     /// Create a new server state.
     #[must_use]
     pub fn new(server_caps: ServerCapabilities) -> Self {
+        let (ambient_tx, ambient_rx) = mpsc::unbounded();
         Self {
             client_caps: RwLock::new(ClientCapabilities::default()),
             server_caps,
@@ -81,7 +87,32 @@ impl ServerState {
             cancellations: RwLock::new(HashMap::new()),
             negotiated_version: RwLock::new(None),
             outbound: crate::adapter_peer::SessionOutbound::new(),
+            ambient_tx,
+            ambient_rx: std::sync::Mutex::new(Some(ambient_rx)),
         }
+    }
+
+    /// Queue a notification produced by an *ambient* source — a state change
+    /// that no inbound request triggered, and which therefore has no
+    /// request-scoped [`Peer`](crate::context::Peer) to send on.
+    ///
+    /// The run loop drains this queue and writes to the transport. Publishing is
+    /// synchronous and non-blocking, so it is safe to call from a lock-free
+    /// callback (such as a `TaskObserver`).
+    ///
+    /// Notifications published when no run loop is draining (for example under
+    /// an HTTP adapter, where each request is its own short-lived exchange) are
+    /// queued and discarded with the session; delivery is best-effort by design,
+    /// matching the spec's treatment of notifications.
+    pub fn publish_notification(&self, notification: Notification) {
+        // Fails only if the receiver was dropped, i.e. the session is gone.
+        let _ = self.ambient_tx.unbounded_send(notification);
+    }
+
+    /// Take the drain end of the ambient queue. Returns `None` on any call
+    /// after the first, so two concurrent run loops cannot split the stream.
+    fn take_ambient_receiver(&self) -> Option<mpsc::UnboundedReceiver<Notification>> {
+        self.ambient_rx.lock().ok()?.take()
     }
 
     /// Allocate a unique id for a server-initiated (outbound) request.
@@ -588,7 +619,29 @@ where
             // Boxed: `BackgroundExec` is large (it owns a `ContextData`), so an
             // unboxed variant makes `Step` lopsided (`clippy::large_enum_variant`).
             Progress(Option<Box<BackgroundExec>>),
+            /// A notification published by an ambient source, to be written out.
+            Ambient(Notification),
         }
+
+        /// Yield the next ambient notification, parking forever once the queue
+        /// is gone so a closed channel cannot spin the loop.
+        async fn next_ambient(
+            slot: &mut Option<mpsc::UnboundedReceiver<Notification>>,
+        ) -> Notification {
+            loop {
+                match slot {
+                    Some(rx) => match rx.next().await {
+                        Some(notification) => return notification,
+                        None => *slot = None,
+                    },
+                    None => std::future::pending::<()>().await,
+                }
+            }
+        }
+
+        // Drain end of the ambient-notification queue. `None` if another run
+        // loop already took it.
+        let mut ambient = self.state.take_ambient_receiver();
 
         let max = self.config.max_concurrent_requests.max(1);
         let mut in_flight = FuturesUnordered::new();
@@ -617,23 +670,30 @@ where
             // Always receive (so responses to our own outbound requests are
             // routed even when every slot is parked) while making progress on
             // in-flight requests and background tasks.
-            let step = if in_flight.is_empty() && background.is_empty() && notifications.is_empty()
-            {
-                match self.transport.recv().await {
-                    Ok(opt) => Step::Message(opt),
-                    Err(e) => break Err(e.into()),
+            // Ambient notifications race every other source, so a state change
+            // reaches the client even while the loop is otherwise idle.
+            let recv = std::pin::pin!(self.transport.recv());
+            let published = std::pin::pin!(next_ambient(&mut ambient));
+            let idle = in_flight.is_empty() && background.is_empty() && notifications.is_empty();
+            let step = if idle {
+                match select(recv, published).await {
+                    Either::Left((Ok(opt), _)) => Step::Message(opt),
+                    Either::Left((Err(e), _)) => break Err(e.into()),
+                    Either::Right((notification, _)) => Step::Ambient(notification),
                 }
             } else {
-                let recv = std::pin::pin!(self.transport.recv());
                 let progress = std::pin::pin!(drive_sets(
                     &mut in_flight,
                     &mut background,
                     &mut notifications
                 ));
-                match select(recv, progress).await {
-                    Either::Left((Ok(opt), _)) => Step::Message(opt),
-                    Either::Left((Err(e), _)) => break Err(e.into()),
-                    Either::Right((maybe_exec, _)) => Step::Progress(maybe_exec.map(Box::new)),
+                match select(select(recv, progress), published).await {
+                    Either::Left((Either::Left((Ok(opt), _)), _)) => Step::Message(opt),
+                    Either::Left((Either::Left((Err(e), _)), _)) => break Err(e.into()),
+                    Either::Left((Either::Right((maybe_exec, _)), _)) => {
+                        Step::Progress(maybe_exec.map(Box::new))
+                    }
+                    Either::Right((notification, _)) => Step::Ambient(notification),
                 }
             };
 
@@ -643,6 +703,19 @@ where
                     background.push(self.run_task(*exec));
                 }
                 Step::Progress(None) => {}
+                Step::Ambient(notification) => {
+                    // Written inline: a notification is a single small frame, so
+                    // this costs less than carrying another future set through
+                    // `drive_sets`. Delivery is best-effort — a failed write is
+                    // logged, never fatal to the session.
+                    if let Err(e) = self
+                        .transport
+                        .send(Message::Notification(notification))
+                        .await
+                    {
+                        tracing::warn!(error = ?e, "failed to send ambient notification");
+                    }
+                }
                 Step::Message(Some(Message::Request(request))) => {
                     if in_flight.len() < max {
                         in_flight.push(self.handle_request_isolated(request));
@@ -1520,16 +1593,24 @@ mod tests {
         Message::Request(Request::new(method, id))
     }
 
+    /// The next *response*, skipping any notifications the server publishes in
+    /// the meantime. Ambient notifications (e.g. `notifications/tasks/status`)
+    /// can legitimately interleave with responses, so a test that wants a
+    /// response must not treat one as a failure.
     async fn next_response(transport: &MemoryTransport) -> Response {
-        let msg = timeout(Duration::from_secs(2), transport.recv())
-            .await
-            .expect("no response (connection died?)")
-            .expect("recv ok")
-            .expect("some message");
-        match msg {
-            Message::Response(r) => r,
-            other => panic!("expected response, got {other:?}"),
+        for _ in 0..16 {
+            let msg = timeout(Duration::from_secs(2), transport.recv())
+                .await
+                .expect("no response (connection died?)")
+                .expect("recv ok")
+                .expect("some message");
+            match msg {
+                Message::Response(r) => return r,
+                Message::Notification(_) => continue,
+                other => panic!("expected response, got {other:?}"),
+            }
         }
+        panic!("no response after 16 messages");
     }
 
     fn notif_msg(method: &str) -> Message {
