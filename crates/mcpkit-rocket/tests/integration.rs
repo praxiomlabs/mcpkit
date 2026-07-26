@@ -117,7 +117,7 @@ fn create_test_client() -> Client {
     let state = McpRouter::new(TestHandler).into_state();
     let rocket = rocket::build()
         .manage(state)
-        .mount("/", rocket::routes![mcp_post, mcp_sse]);
+        .mount("/", rocket::routes![mcp_post, mcp_get, mcp_delete, mcp_sse]);
     Client::tracked(rocket).expect("valid rocket instance")
 }
 

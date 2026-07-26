@@ -4,9 +4,10 @@ use dashmap::DashMap;
 use mcpkit_core::auth::{SessionBindingError, VerifiedUser, check_session_binding};
 use mcpkit_core::capability::ClientCapabilities;
 use mcpkit_core::protocol_version::ProtocolVersion;
+use mcpkit_server::adapter_peer::{OutboundOwner, SessionOutbound};
+use mcpkit_server::streams::{StreamConfig, StreamRegistry};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::broadcast;
 use uuid::Uuid;
 
 /// Default idle timeout after which an inactive session is reaped.
@@ -16,16 +17,15 @@ pub const DEFAULT_SESSION_TIMEOUT: Duration = Duration::from_secs(3600);
 #[derive(Clone)]
 pub struct SessionStore {
     sessions: Arc<DashMap<String, SessionState>>,
-    sse_channels: Arc<DashMap<String, broadcast::Sender<String>>>,
     idle_timeout: Duration,
+    /// Stream configuration applied to each session's SSE stream registry.
+    stream_config: StreamConfig,
     /// Default task retention (ms) applied to each session's task store; `None`
     /// means unlimited. Configure via `McpRouter::with_task_ttl`.
     pub(crate) default_task_ttl: Option<u64>,
 }
 
 struct SessionState {
-    #[allow(dead_code)] // Reserved for future session metadata/debugging
-    created_at: Instant,
     last_seen: Instant,
     /// Protocol version negotiated during initialization.
     protocol_version: Option<ProtocolVersion>,
@@ -36,6 +36,14 @@ struct SessionState {
     /// This session's task store for task-augmented `tools/call` (per-session
     /// isolation for `tasks/*`).
     tasks: Arc<mcpkit_server::capability::tasks::TaskManager>,
+    /// This session's SSE stream registry (#153): per-stream channels,
+    /// single-stream delivery, `{stream_id}-{seq}` ids, same-stream replay.
+    streams: Arc<StreamRegistry>,
+    /// Owner of the outbound-request registry; dropped with the session so
+    /// pending server-initiated requests fail immediately on reap/DELETE.
+    outbound_owner: Arc<OutboundOwner>,
+    /// In-flight notification-hook tasks (aborted on session teardown).
+    hooks: Arc<std::sync::Mutex<tokio::task::JoinSet<()>>>,
 }
 
 impl Default for SessionStore {
@@ -50,8 +58,8 @@ impl SessionStore {
     pub fn new() -> Self {
         Self {
             sessions: Arc::new(DashMap::new()),
-            sse_channels: Arc::new(DashMap::new()),
             idle_timeout: DEFAULT_SESSION_TIMEOUT,
+            stream_config: StreamConfig::default(),
             default_task_ttl: Some(mcpkit_server::capability::tasks::DEFAULT_TASK_TTL_MS),
         }
     }
@@ -85,7 +93,6 @@ impl SessionStore {
         self.sessions.insert(
             id.clone(),
             SessionState {
-                created_at: now,
                 last_seen: now,
                 protocol_version: None,
                 client_capabilities: None,
@@ -95,9 +102,19 @@ impl SessionStore {
                         self.default_task_ttl,
                     ),
                 ),
+                streams: Arc::new(StreamRegistry::new(self.stream_config.clone())),
+                outbound_owner: Arc::new(OutboundOwner::new()),
+                hooks: Arc::new(std::sync::Mutex::new(tokio::task::JoinSet::new())),
             },
         );
         id
+    }
+
+    /// Update the last seen time for a session.
+    pub fn touch(&self, id: &str) {
+        if let Some(mut session) = self.sessions.get_mut(id) {
+            session.last_seen = Instant::now();
+        }
     }
 
     /// Touch a session, enforcing its user binding against the identity
@@ -116,13 +133,6 @@ impl SessionStore {
         check_session_binding(session.user.as_ref(), presenting)?;
         session.last_seen = Instant::now();
         Ok(true)
-    }
-
-    /// Update the last seen time for a session.
-    pub fn touch(&self, id: &str) {
-        if let Some(mut session) = self.sessions.get_mut(id) {
-            session.last_seen = Instant::now();
-        }
     }
 
     /// Record the protocol version and client capabilities negotiated during
@@ -163,31 +173,38 @@ impl SessionStore {
         self.sessions.contains_key(id)
     }
 
-    /// Get or create an SSE channel for a session.
+    /// Set the stream configuration applied to each new session.
     #[must_use]
-    pub fn create_session(&self) -> (String, broadcast::Receiver<String>) {
-        let id = self.create();
-        let (tx, rx) = broadcast::channel(100);
-        self.sse_channels.insert(id.clone(), tx);
-        (id, rx)
+    pub fn with_stream_config(mut self, config: StreamConfig) -> Self {
+        self.stream_config = config;
+        self
     }
 
-    /// Get a receiver for an existing SSE session.
+    /// The SSE stream registry for a session. `None` if unknown.
     #[must_use]
-    pub fn get_receiver(&self, id: &str) -> Option<broadcast::Receiver<String>> {
-        self.sse_channels.get(id).map(|tx| tx.subscribe())
+    pub fn streams(&self, id: &str) -> Option<Arc<StreamRegistry>> {
+        self.sessions.get(id).map(|s| Arc::clone(&s.streams))
     }
 
-    /// Send a message to an SSE session.
-    pub fn send(
-        &self,
-        id: &str,
-        msg: String,
-    ) -> Result<usize, broadcast::error::SendError<String>> {
-        self.sse_channels
+    /// The outbound-request registry for a session. `None` if unknown.
+    #[must_use]
+    pub fn outbound(&self, id: &str) -> Option<Arc<SessionOutbound>> {
+        self.sessions
             .get(id)
-            .ok_or_else(|| broadcast::error::SendError(msg.clone()))
-            .and_then(|tx| tx.send(msg))
+            .map(|s| Arc::clone(s.outbound_owner.outbound()))
+    }
+
+    /// The notification-hook task set for a session. `None` if unknown.
+    #[must_use]
+    pub fn hooks(&self, id: &str) -> Option<Arc<std::sync::Mutex<tokio::task::JoinSet<()>>>> {
+        self.sessions.get(id).map(|s| Arc::clone(&s.hooks))
+    }
+
+    /// Terminate and remove a session (DELETE). Dropping it drops the
+    /// `OutboundOwner`, failing all pending server-initiated requests.
+    #[must_use]
+    pub fn remove(&self, id: &str) -> bool {
+        self.sessions.remove(id).is_some()
     }
 
     /// Remove sessions older than the given duration.
@@ -302,44 +319,28 @@ mod tests {
         assert!(store.exists(&id));
     }
 
-    #[tokio::test]
-    async fn test_session_store_sse_channel() {
+    #[test]
+    fn test_session_store_peer_accessors() {
         let store = SessionStore::new();
-        let (id, mut rx) = store.create_session();
+        let id = store.create();
 
-        // Session should exist
-        assert!(store.exists(&id));
+        assert!(store.streams(&id).is_some());
+        assert!(store.outbound(&id).is_some());
+        assert!(store.hooks(&id).is_some());
 
-        // Send a message
-        let result = store.send(&id, "test message".to_string());
-        assert!(result.is_ok());
-
-        // Receive the message
-        let msg = rx.recv().await.unwrap();
-        assert_eq!(msg, "test message");
+        assert!(store.streams("non-existent").is_none());
+        assert!(store.outbound("non-existent").is_none());
+        assert!(store.hooks("non-existent").is_none());
     }
 
     #[test]
-    fn test_session_store_get_receiver() {
+    fn test_session_store_remove() {
         let store = SessionStore::new();
-        let (id, _rx) = store.create_session();
+        let id = store.create();
 
-        // Should be able to get another receiver
-        let rx2 = store.get_receiver(&id);
-        assert!(rx2.is_some());
-
-        // Non-existent session should return None
-        let rx3 = store.get_receiver("non-existent");
-        assert!(rx3.is_none());
-    }
-
-    #[test]
-    fn test_session_store_send_to_nonexistent() {
-        let store = SessionStore::new();
-
-        // Sending to non-existent session should fail
-        let result = store.send("non-existent", "test".to_string());
-        assert!(result.is_err());
+        assert!(store.remove(&id));
+        assert!(!store.exists(&id));
+        assert!(!store.remove(&id));
     }
 
     #[test]

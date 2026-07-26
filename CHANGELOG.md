@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The rocket adapter reaches the axum baseline** (#153 PR 5, last of the
+  three ports — every adapter now has the full session/stream/peer substrate):
+  unified session registry (SSE binding: 400 missing id / 404
+  unknown-and-never-adopted / 403 disallowed origin or mismatched user;
+  rocket previously **created a fresh session for any GET with a missing or
+  unknown id**, adopting streams for sessions that never initialized), GET
+  and DELETE served on the MCP endpoint via new `mcp_get`/`mcp_delete`
+  routes in `create_mcp_routes!` (`/mcp/sse` kept as a deprecated alias;
+  CORS allows DELETE), per-stream delivery with `{stream_id}-{seq}` event
+  ids, working `Last-Event-ID` replay and `retry: 2000` via the shared
+  `mcpkit_server::streams` registry (rocket previously broadcast every
+  message to all connected streams with random per-emit `evt-{uuid}` ids),
+  and the session peer: `ctx.elicit()`/`ctx.list_roots()`/sampling work over
+  rocket, response POSTs correlate, notification hooks dispatch, and DELETE
+  fails pending requests immediately. **Breaking (rocket):** the broadcast
+  plumbing is removed — `McpState.sse_sessions`, `SessionStore::{get_receiver,
+  send}`, and the inherent `create_session` (id + broadcast receiver) are
+  gone (sessions are created id-only via `create`/`create_for_user`), and
+  `handle_sse` now takes the session id, origin, user, and `Last-Event-ID`
+  and returns `Result<EventStream![], Status>`
+  ([#153](https://github.com/praxiomlabs/mcpkit/issues/153)).
+
 - **The warp adapter reaches the axum baseline** (#153 PR 5, second of the
   three ports): unified session registry (SSE binding enforced against the
   registry holding the user binding — 400 missing id / 404 unknown-and-never-

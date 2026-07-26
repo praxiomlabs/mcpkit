@@ -26,8 +26,6 @@ pub struct McpState<H> {
     pub server_info: ServerInfo,
     /// Session manager for tracking client sessions.
     pub sessions: SessionStore,
-    /// SSE session manager for Server-Sent Events.
-    pub sse_sessions: SessionStore,
     /// Validates request `Origin` headers (DNS-rebinding protection). Defaults
     /// to loopback-only.
     pub origin_validator: Arc<OriginValidator>,
@@ -35,6 +33,11 @@ pub struct McpState<H> {
     pub list_page_size: Option<usize>,
     /// Optional completion handler for `completion/complete`.
     pub completion: Option<Arc<dyn mcpkit_server::dispatch::DynCompletionHandler>>,
+    /// Timeouts applied to server-initiated requests (#153).
+    pub peer_timeouts: mcpkit_server::adapter_peer::PeerTimeouts,
+    /// Grace period a server-initiated send waits for a live stream; tunable
+    /// for tests via `McpRouter::with_reconnect_grace`.
+    pub(crate) reconnect_grace: std::time::Duration,
 }
 
 impl<H> McpState<H>
@@ -48,10 +51,11 @@ where
             handler: Arc::new(handler),
             server_info,
             sessions: SessionStore::new(),
-            sse_sessions: SessionStore::new(),
             origin_validator: Arc::new(OriginValidator::default()),
             list_page_size: None,
             completion: None,
+            peer_timeouts: mcpkit_server::adapter_peer::PeerTimeouts::default(),
+            reconnect_grace: mcpkit_server::adapter_peer::RECONNECT_GRACE,
         }
     }
 
@@ -71,10 +75,11 @@ impl<H> Clone for McpState<H> {
             handler: Arc::clone(&self.handler),
             server_info: self.server_info.clone(),
             sessions: self.sessions.clone(),
-            sse_sessions: self.sse_sessions.clone(),
             origin_validator: Arc::clone(&self.origin_validator),
             list_page_size: self.list_page_size,
             completion: self.completion.clone(),
+            peer_timeouts: self.peer_timeouts,
+            reconnect_grace: self.reconnect_grace,
         }
     }
 }
@@ -227,12 +232,9 @@ mod tests {
     fn test_mcp_state_sessions() {
         let state = McpState::new(TestHandler);
 
-        // Create sessions in both stores
-        let id1 = state.sessions.create();
-        let id2 = state.sse_sessions.create();
+        let id = state.sessions.create();
 
-        assert!(state.sessions.exists(&id1));
-        assert!(state.sse_sessions.exists(&id2));
+        assert!(state.sessions.exists(&id));
     }
 
     #[test]

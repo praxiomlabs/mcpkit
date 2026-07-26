@@ -139,6 +139,25 @@ where
         self.state
     }
 
+    /// Set the timeouts for server-initiated (peer) requests.
+    #[must_use]
+    pub fn with_peer_timeouts(
+        mut self,
+        timeouts: mcpkit_server::adapter_peer::PeerTimeouts,
+    ) -> Self {
+        self.state.peer_timeouts = timeouts;
+        self
+    }
+
+    /// Override the peer reconnect grace. Test hook — the grace is a fixed
+    /// constant by design.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn with_reconnect_grace(mut self, grace: std::time::Duration) -> Self {
+        self.state.reconnect_grace = grace;
+        self
+    }
+
     /// Launch the MCP server.
     ///
     /// This is a convenience method that provides a stdio-like experience.
@@ -165,7 +184,7 @@ impl Fairing for Cors {
         response.set_header(Header::new("Access-Control-Allow-Origin", "*"));
         response.set_header(Header::new(
             "Access-Control-Allow-Methods",
-            "GET, POST, OPTIONS",
+            "GET, POST, DELETE, OPTIONS",
         ));
         response.set_header(Header::new(
             "Access-Control-Allow-Headers",
@@ -201,7 +220,7 @@ impl Fairing for Cors {
 ///
 ///     rocket::build()
 ///         .manage(state)
-///         .mount("/", routes![mcp_post, mcp_sse])
+///         .mount("/", routes![mcp_post, mcp_get, mcp_delete, mcp_sse])
 ///         .launch()
 ///         .await?;
 ///
@@ -231,37 +250,63 @@ macro_rules! create_mcp_routes {
             .await
         }
 
+        // GET on the MCP endpoint serves SSE (#153); the full
+        // 400/404/403 ladder lives in `handle_sse`.
+        #[rocket::get("/mcp")]
+        fn mcp_get(
+            state: &::rocket::State<$crate::McpState<$handler_type>>,
+            session: $crate::handler::SessionIdHeader,
+            origin: $crate::handler::OriginHeader,
+            user: $crate::handler::VerifiedUserGuard,
+            last_event_id: $crate::handler::LastEventIdHeader,
+        ) -> ::std::result::Result<
+            ::rocket::response::stream::EventStream![],
+            ::rocket::http::Status,
+        > {
+            $crate::handler::handle_sse(
+                state.inner(),
+                session.0,
+                origin.0.as_deref(),
+                user.0,
+                last_event_id.0,
+            )
+        }
+
+        // DELETE on the MCP endpoint terminates the session (#153).
+        #[rocket::delete("/mcp")]
+        fn mcp_delete(
+            state: &::rocket::State<$crate::McpState<$handler_type>>,
+            session: $crate::handler::SessionIdHeader,
+            origin: $crate::handler::OriginHeader,
+            user: $crate::handler::VerifiedUserGuard,
+        ) -> ::rocket::http::Status {
+            $crate::handler::handle_mcp_delete(
+                state.inner(),
+                session.0,
+                origin.0.as_deref(),
+                user.0,
+            )
+        }
+
+        /// Deprecated alias for GET on the MCP endpoint.
         #[rocket::get("/mcp/sse")]
         fn mcp_sse(
             state: &::rocket::State<$crate::McpState<$handler_type>>,
             session: $crate::handler::SessionIdHeader,
             origin: $crate::handler::OriginHeader,
             user: $crate::handler::VerifiedUserGuard,
+            last_event_id: $crate::handler::LastEventIdHeader,
         ) -> ::std::result::Result<
             ::rocket::response::stream::EventStream![],
             ::rocket::http::Status,
         > {
-            // Reject disallowed Origins (DNS-rebinding protection) before streaming.
-            if !state
-                .inner()
-                .origin_validator
-                .is_allowed(origin.0.as_deref())
-            {
-                return ::std::result::Result::Err(::rocket::http::Status::Forbidden);
-            }
-            // Enforce the session's user binding before subscribing a
-            // reconnecting client to its event stream.
-            if let ::std::option::Option::Some(id) = &session.0 {
-                if state
-                    .inner()
-                    .sessions
-                    .touch_verified(id, user.0.as_ref())
-                    .is_err()
-                {
-                    return ::std::result::Result::Err(::rocket::http::Status::Forbidden);
-                }
-            }
-            ::std::result::Result::Ok($crate::handler::handle_sse(state.inner(), session.0))
+            $crate::handler::handle_sse(
+                state.inner(),
+                session.0,
+                origin.0.as_deref(),
+                user.0,
+                last_event_id.0,
+            )
         }
     };
 }

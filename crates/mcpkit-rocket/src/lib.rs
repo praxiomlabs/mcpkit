@@ -100,8 +100,9 @@ mod state;
 pub use error::RocketError;
 pub use handler::{
     LastEventIdHeader, McpResponse, OriginHeader, ProtocolVersionHeader, SessionIdHeader,
-    handle_mcp_post, handle_sse,
+    handle_mcp_delete, handle_mcp_post, handle_sse,
 };
+pub use mcpkit_server::streams::{StoredEvent, StreamConfig, StreamRegistry};
 pub use router::{Cors, McpRouter};
 pub use session::{DEFAULT_SESSION_TIMEOUT, SessionManager, SessionStore};
 pub use state::McpState;
@@ -115,10 +116,11 @@ pub use state::McpState;
 /// ```
 pub mod prelude {
     pub use crate::error::RocketError;
-    pub use crate::handler::{handle_mcp_post, handle_sse};
+    pub use crate::handler::{handle_mcp_delete, handle_mcp_post, handle_sse};
     pub use crate::router::McpRouter;
     pub use crate::session::{DEFAULT_SESSION_TIMEOUT, SessionManager, SessionStore};
     pub use crate::state::McpState;
+    pub use mcpkit_server::streams::{StoredEvent, StreamConfig, StreamRegistry};
 }
 
 /// Protocol versions supported by this extension.
