@@ -7,10 +7,9 @@ This document outlines the path to a stable 1.0 release of mcpkit.
 mcpkit implements every method the MCP 2025-11-25 schema defines, across stdio,
 WebSocket, Unix, in-memory and the four HTTP framework adapters.
 
-Most 1.0 criteria below are met. Two are not yet, and are tracked as blockers
-rather than marked complete: an outstanding advisory in a transitive dependency,
-and structural spec conformance that has been sampled rather than verified
-exhaustively. See the tables for which is which.
+Most 1.0 criteria below are met. The one that is not is structural spec
+conformance: method coverage is complete and CI-verified, but `_meta` is absent
+from 21 types. See the tables for what is verified and how.
 
 ## 1.0 Release Criteria
 
@@ -18,7 +17,7 @@ exhaustively. See the tables for which is which.
 
 | Requirement | Status | Notes |
 |-------------|--------|-------|
-| Full MCP 2025-11-25 compliance | ⚠️ Partly verified | All 31 schema-defined methods implemented and diffed against the vendored schema in CI. Structural (field-level) conformance is sampled, not exhaustive — 7 of 145 `$defs` checked |
+| Full MCP 2025-11-25 compliance | ⚠️ Partly verified | All 31 schema-defined methods implemented and diffed against the vendored schema in CI. Structural conformance now covers every `$def` with a same-named type — 75 of 145, the rest being envelopes, unions and aliases with no 1:1 Rust type. The only outstanding gap is `_meta` on 21 types (optional, so not peer-detectable) |
 | Protocol version negotiation | ✅ Complete | All 4 published versions; table-driven conformance tests |
 | OAuth 2.1 + PKCE support | ✅ Complete | RFC 9728, 8414, 7636 compliant |
 | Tasks (async operations) | ✅ Complete | Full task lifecycle support |
@@ -33,7 +32,7 @@ exhaustively. See the tables for which is which.
 | Warp integration | ✅ Complete | Router, SSE, CORS support |
 | Extension infrastructure | ✅ Complete | Structured extension support |
 | Comprehensive documentation | ✅ Complete | 34 doc files, 6 ADRs |
-| Test coverage | ✅ Complete | 1,437 tests incl. spec-anchored conformance suites |
+| Test coverage | ✅ Complete | 1,446 tests incl. spec-anchored and behavioural conformance suites |
 | Fuzzing | ✅ Complete | 6 fuzz targets, CI integration |
 | Zero clippy warnings | ✅ Complete | Strict lint configuration |
 
@@ -50,7 +49,7 @@ exhaustively. See the tables for which is which.
 
 | Requirement | Status | Notes |
 |-------------|--------|-------|
-| No security vulnerabilities | ❌ Blocked | RUSTSEC-2026-0185 (quinn-proto, 7.5 high) is open and unsuppressed; fix is an upgrade to >=0.11.15. RUSTSEC-2023-0071 is deliberately ignored with rationale in `deny.toml` |
+| No security vulnerabilities | ✅ Complete | `cargo deny check advisories` clean. RUSTSEC-2026-0185 (quinn-proto) resolved by upgrading to 0.11.16; RUSTSEC-2023-0071 is deliberately ignored with rationale in `deny.toml` |
 | Performance benchmarks | ✅ Complete | Criterion benchmarks vs rmcp 2.2 |
 | Memory safety | ✅ Complete | `#![deny(unsafe_code)]` |
 | Error handling consistency | ✅ Complete | Unified McpError type |

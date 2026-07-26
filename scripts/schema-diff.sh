@@ -119,7 +119,10 @@ extract_enum() {
 	# Enter the wanted enum. The rename_all pending at this point is the
 	# container convention.
 	!done && !inside && $0 ~ ("enum[ ]+" want "[ ]*(<[^>]*>)?[ ]*\\{") {
-		inside = 1; depth = 1; conv = pend_all; pend_rename = ""; next
+		o = gsub(/\{/, "{"); c = gsub(/\}/, "}")
+		depth = o - c
+		if (depth <= 0) { done = 1; next }
+		inside = 1; conv = pend_all; pend_rename = ""; next
 	}
 	inside {
 		n = gsub(/\{/, "{"); depth += n
@@ -368,7 +371,13 @@ extract_struct() {
 		next
 	}
 	!done && !inside && $0 ~ ("struct[ ]+" want "[ ]*(<[^>]*>)?[ ]*\\{") {
-		inside = 1; depth = 1; conv = pend_all
+		# Count braces on the declaration line: `pub struct X {}` opens and
+		# closes here, and treating it as open bleeds into whatever follows
+		# (test modules were being read as fields).
+		o = gsub(/\{/, "{"); c = gsub(/\}/, "}")
+		depth = o - c
+		if (depth <= 0) { done = 1; next }
+		inside = 1; conv = pend_all
 		pend_rename = ""; pend_opt = 0; pend_def = 0; pend_flat = 0; pend_skip = 0; next
 	}
 	inside {
@@ -412,16 +421,31 @@ extract_struct_flat() {
 	done
 }
 
-hr "Tier 2: structural field diff (SAMPLE of 7 types — the other ~138 \$defs are unchecked)"
+hr "Tier 2: structural field diff (every \$def with a same-named mcpkit struct)"
+unresolved=0
+diffcount=0
 
-# mcpkit-type | rust-file | jq path to the schema node
-TIER2='InitializeRequest|crates/mcpkit-core/src/capability.rs|.["$defs"].InitializeRequest.properties.params
-InitializeResult|crates/mcpkit-core/src/capability.rs|.["$defs"].InitializeResult
-ServerCapabilities|crates/mcpkit-core/src/capability.rs|.["$defs"].ServerCapabilities
-ClientCapabilities|crates/mcpkit-core/src/capability.rs|.["$defs"].ClientCapabilities
-CallToolResult|crates/mcpkit-core/src/types/tool.rs|.["$defs"].CallToolResult
-Task|crates/mcpkit-core/src/types/task.rs|.["$defs"].Task
-TaskStatusNotificationParams|crates/mcpkit-core/src/types/task.rs|.["$defs"].TaskStatusNotificationParams'
+# Every $def with a same-named `pub struct` in the workspace is diffed. Auto-
+# discovered rather than listed, so a type added to either side is picked up
+# instead of silently staying unchecked — the hardcoded 7-type list this
+# replaced left 138 defs unexamined and made the sample look like coverage.
+#
+# For a `*Request` def the schema node is the JSON-RPC envelope (id/jsonrpc/
+# method/params) while the same-named Rust struct is the params, so when a def
+# carries `properties.params` that is what gets diffed.
+TIER2="$(
+	jq -r '.["$defs"] | to_entries[]
+	       | .key + "|" + (if (.value.properties.params) then "params" else "self" end)' "$SCHEMA" |
+	while IFS='|' read -r ty kind; do
+		file="$(grep -rl "^pub struct $ty\b" "$SRC_GLOB"/*/src --include='*.rs' 2>/dev/null | awk 'NR==1')"
+		[ -n "$file" ] || continue
+		if [ "$kind" = params ]; then
+			printf '%s|%s|.["$defs"].%s.properties.params\n' "$ty" "$file" "$ty"
+		else
+			printf '%s|%s|.["$defs"].%s\n' "$ty" "$file" "$ty"
+		fi
+	done
+)"
 
 while IFS='|' read -r ty file path; do
 	[ -n "$ty" ] || continue
@@ -431,9 +455,23 @@ while IFS='|' read -r ty file path; do
 		"$SCHEMA" | sort > "$WORK/s2.txt"
 	extract_struct_flat "$file" "$ty" | sort > "$WORK/m2.txt"
 
+	# A schema node that resolves to zero properties is one this resolver cannot
+	# expand — an `anyOf` union (ElicitRequestParams) or an abstract JSON-RPC base
+	# (Request, Notification) that concrete types extend. Reporting mcpkit's
+	# fields as "extra" against an empty set is noise, and noise trains readers to
+	# ignore the check. Count them instead.
+	if [ "$(wc -l < "$WORK/s2.txt")" -eq 0 ]; then
+		printf '\n%s  (%s)  UNRESOLVED — schema node has no expandable properties\n' "$ty" "$file"
+		unresolved=$((unresolved + 1))
+		continue
+	fi
+
 	printf '\n%s  (%s)\n' "$ty" "$file"
 	printf '  schema path: %s\n' "$path"
-	cut -f1 "$WORK/s2.txt" | sort -u > "$WORK/s2n.txt"
+	# `type` is the tagged-union discriminator. mcpkit supplies it from the
+	# enum wrapper (#[serde(tag = "type")]), never as a struct field, so its
+	# absence from a variant struct is the design, not a gap.
+	cut -f1 "$WORK/s2.txt" | grep -vx 'type' | sort -u > "$WORK/s2n.txt"
 	cut -f1 "$WORK/m2.txt" | sort -u > "$WORK/m2n.txt"
 	printf '  fields  schema=%s  mcpkit=%s\n' \
 		"$(wc -l < "$WORK/s2n.txt")" "$(wc -l < "$WORK/m2n.txt")"
@@ -454,7 +492,14 @@ while IFS='|' read -r ty file path; do
 	done < "$WORK/m2.txt"
 	printf '%s\n' "${mm:- (none)}"
 	printf '  receive-lenient fields : %s\n' "${len:-(none)}"
+
+	only_in "$WORK/s2n.txt" "$WORK/m2n.txt" | sed "s|^|$ty |" | emit 'field in-schema-not-in-mcpkit'
+	only_in "$WORK/m2n.txt" "$WORK/s2n.txt" | sed "s|^|$ty |" | emit 'field in-mcpkit-not-in-schema'
+	if [ -n "$miss$extra$mm" ]; then diffcount=$((diffcount + 1)); fi
 done <<< "$TIER2"
+
+printf '\nTier 2 summary: %s types diffed, %s with differences, %s unresolved\n' \
+	"$(printf '%s\n' "$TIER2" | grep -c .)" "$diffcount" "$unresolved"
 
 printf '\ndone.\n'
 
