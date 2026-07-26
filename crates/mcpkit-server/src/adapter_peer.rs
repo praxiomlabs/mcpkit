@@ -217,6 +217,58 @@ pub trait SessionSink: Send + Sync {
     fn has_live_stream(&self) -> bool;
 }
 
+/// The standard adapter sink: delivers peer messages onto a session's
+/// [`StreamRegistry`](crate::streams::StreamRegistry). Framework-free —
+/// every HTTP adapter uses this same implementation.
+#[cfg(feature = "tokio")]
+pub struct StreamRegistrySink {
+    registry: Arc<crate::streams::StreamRegistry>,
+}
+
+#[cfg(feature = "tokio")]
+impl StreamRegistrySink {
+    /// Create a sink over a session's stream registry.
+    #[must_use]
+    pub fn new(registry: Arc<crate::streams::StreamRegistry>) -> Self {
+        Self { registry }
+    }
+}
+
+#[cfg(feature = "tokio")]
+impl SessionSink for StreamRegistrySink {
+    fn send_notification(
+        &self,
+        message: Message,
+    ) -> Pin<Box<dyn Future<Output = Result<(), SinkError>> + Send + '_>> {
+        Box::pin(async move {
+            let json = serde_json::to_string(&message)
+                .map_err(|e| SinkError::Serialization(e.to_string()))?;
+            // Best-effort: with no live stream the notification is dropped
+            // (runtime parity — a client without a stream misses it).
+            let _ = self.registry.send("message", json);
+            Ok(())
+        })
+    }
+
+    fn send_request(
+        &self,
+        message: Message,
+    ) -> Pin<Box<dyn Future<Output = Result<(), SinkError>> + Send + '_>> {
+        Box::pin(async move {
+            let json = serde_json::to_string(&message)
+                .map_err(|e| SinkError::Serialization(e.to_string()))?;
+            self.registry
+                .send("message", json)
+                .map(|_| ())
+                .ok_or(SinkError::NoClientStream)
+        })
+    }
+
+    fn has_live_stream(&self) -> bool {
+        self.registry.has_live_stream()
+    }
+}
+
 // ============================================================================
 // Peer
 // ============================================================================

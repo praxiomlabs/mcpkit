@@ -1,6 +1,6 @@
 //! Shared state for MCP Actix handlers.
 
-use crate::session::{SessionManager, SessionStore};
+use crate::session::SessionStore;
 use mcpkit_core::auth::ProtectedResourceMetadata;
 use mcpkit_core::capability::{ServerCapabilities, ServerInfo};
 use mcpkit_server::ServerHandler;
@@ -31,13 +31,16 @@ pub struct McpState<H> {
     pub handler: Arc<H>,
     /// Session store for tracking HTTP sessions.
     pub sessions: Arc<SessionStore>,
-    /// Session manager for SSE streaming connections.
-    pub sse_sessions: Arc<SessionManager>,
     /// Server info for the initialize response.
     pub server_info: ServerInfo,
     /// Validates request `Origin` headers (DNS-rebinding protection). Defaults
     /// to loopback-only.
     pub origin_validator: Arc<OriginValidator>,
+    /// Timeouts for server-initiated (peer) requests, by method class.
+    pub peer_timeouts: mcpkit_server::adapter_peer::PeerTimeouts,
+    /// Reconnect grace for peer requests. Fixed by design; overridable only
+    /// for tests via `McpRouter::with_reconnect_grace`.
+    pub(crate) reconnect_grace: std::time::Duration,
     /// Page size for `*/list` results; `None` disables pagination.
     pub list_page_size: Option<usize>,
     /// Optional completion handler for `completion/complete`.
@@ -66,23 +69,25 @@ where
         Self {
             handler: Arc::new(handler),
             sessions: Arc::new(SessionStore::with_default_timeout()),
-            sse_sessions: Arc::new(SessionManager::new()),
             server_info,
             origin_validator: Arc::new(OriginValidator::default()),
+            peer_timeouts: mcpkit_server::adapter_peer::PeerTimeouts::default(),
+            reconnect_grace: mcpkit_server::adapter_peer::RECONNECT_GRACE,
             list_page_size: None,
             completion: None,
         }
     }
 
     /// Create new MCP state with custom session configuration.
-    pub fn with_sessions(handler: H, sessions: SessionStore, sse_sessions: SessionManager) -> Self {
+    pub fn with_sessions(handler: H, sessions: SessionStore) -> Self {
         let server_info = handler.server_info();
         Self {
             handler: Arc::new(handler),
             server_info,
             sessions: Arc::new(sessions),
-            sse_sessions: Arc::new(sse_sessions),
             origin_validator: Arc::new(OriginValidator::default()),
+            peer_timeouts: mcpkit_server::adapter_peer::PeerTimeouts::default(),
+            reconnect_grace: mcpkit_server::adapter_peer::RECONNECT_GRACE,
             list_page_size: None,
             completion: None,
         }
@@ -94,9 +99,10 @@ impl<H> Clone for McpState<H> {
         Self {
             handler: Arc::clone(&self.handler),
             sessions: Arc::clone(&self.sessions),
-            sse_sessions: Arc::clone(&self.sse_sessions),
             server_info: self.server_info.clone(),
             origin_validator: Arc::clone(&self.origin_validator),
+            peer_timeouts: self.peer_timeouts,
+            reconnect_grace: self.reconnect_grace,
             list_page_size: self.list_page_size,
             completion: self.completion.clone(),
         }

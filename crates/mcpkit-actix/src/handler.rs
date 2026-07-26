@@ -21,6 +21,31 @@ use std::sync::Arc;
 use std::time::Duration;
 use tracing::{debug, info, warn};
 
+/// Build the request-capable peer for a session (#153).
+///
+/// Takes the session's parts rather than a `Session` snapshot so callers can
+/// drop the snapshot before awaiting: a snapshot holds the session's
+/// `Arc<OutboundOwner>`, and a request awaiting a peer response while holding
+/// one would keep the owner alive — preventing DELETE/reap from failing that
+/// very request.
+fn session_peer<H>(
+    state: &McpState<H>,
+    streams: Arc<mcpkit_server::streams::StreamRegistry>,
+    outbound: Arc<mcpkit_server::adapter_peer::SessionOutbound>,
+) -> mcpkit_server::adapter_peer::SessionPeer
+where
+    H: HasServerInfo + Send + Sync + 'static,
+{
+    mcpkit_server::adapter_peer::SessionPeer::new(
+        Arc::new(mcpkit_server::adapter_peer::StreamRegistrySink::new(
+            streams,
+        )),
+        outbound,
+        state.peer_timeouts,
+    )
+    .with_reconnect_grace(state.reconnect_grace)
+}
+
 /// Whether this message is an `initialize` request — the only message allowed
 /// to omit `mcp-session-id` (the server assigns the id in its response).
 fn is_initialize(msg: &Message) -> bool {
@@ -148,16 +173,33 @@ where
             // This session's task store (per-session isolation for `tasks/*`).
             let task_store = session.as_ref().map(|s| s.tasks.clone());
             let client_caps = session
-                .and_then(|s| s.client_capabilities)
+                .as_ref()
+                .and_then(|s| s.client_capabilities.clone())
                 .unwrap_or_default();
 
-            // Create a basic response using the handler's capabilities
+            // Route with a request-capable peer (#153): handlers can call
+            // ctx.elicit()/ctx.list_roots()/sampling; the request rides the
+            // session's SSE stream and the client answers via a response POST
+            // correlated below.
+            let peer: Box<dyn mcpkit_server::Peer> = match &session {
+                Some(s) => Box::new(session_peer(
+                    &state,
+                    Arc::clone(&s.streams),
+                    Arc::clone(s.outbound_owner.outbound()),
+                )),
+                None => Box::new(NoOpPeer),
+            };
+            // Release the snapshot before awaiting: it holds the session's
+            // OutboundOwner, and a request blocked in ctx.elicit() must not
+            // keep DELETE/reap from failing its own pending request.
+            drop(session);
             let response = create_response_for_request(
                 &state,
                 &request,
                 protocol_version,
                 &client_caps,
                 task_store.as_ref(),
+                peer.as_ref(),
             )
             .await;
 
@@ -175,23 +217,62 @@ where
                 session_id = %session_id,
                 "Received notification"
             );
+            // Dispatch to the ServerHandler hooks off the request path
+            // (#153): a hook may call ctx.list_roots(), whose response
+            // arrives via a separate POST — the 202 must not wait for that
+            // round-trip.
+            if let Some(session) = state.sessions.get(&session_id) {
+                let state2 = McpState::clone(&state);
+                let sid = session_id.clone();
+                let method = notification.method.to_string();
+                if let Ok(mut hooks) = session.hooks.lock() {
+                    hooks.spawn(async move {
+                        let Some(session) = state2.sessions.get(&sid) else {
+                            return;
+                        };
+                        let peer = session_peer(
+                            &state2,
+                            Arc::clone(&session.streams),
+                            Arc::clone(session.outbound_owner.outbound()),
+                        );
+                        let client_caps = session.client_capabilities.clone().unwrap_or_default();
+                        let server_caps = state2.effective_capabilities();
+                        let version = session.protocol_version.unwrap_or(ProtocolVersion::LATEST);
+                        // Release the snapshot: a hook blocked in
+                        // ctx.list_roots() must not hold the OutboundOwner.
+                        drop(session);
+                        let ctx =
+                            Context::for_notification(&client_caps, &server_caps, version, &peer);
+                        mcpkit_server::dispatch_notification_hooks(
+                            state2.handler.as_ref(),
+                            &method,
+                            &ctx,
+                        )
+                        .await;
+                        debug!(method = %method, "notification hook completed");
+                    });
+                }
+            }
             Ok(HttpResponse::Accepted()
                 .insert_header(("mcp-session-id", session_id))
                 .finish())
         }
         // Spec (Streamable HTTP): a client delivers responses to
-        // server-initiated requests by POSTing them; "if the server accepts
-        // the input, the server MUST return HTTP status code 202 Accepted
-        // with no body". Correlation with a pending server-initiated request
-        // arrives with the session peer (#153); until then this is
-        // log-and-drop, matching the runtime's `route_response` for ids that
-        // match no pending request.
+        // server-initiated requests by POSTing them; the server MUST return
+        // 202 Accepted with no body. Correlated against the session's
+        // pending server-initiated requests (#153); an unmatched id is
+        // logged and dropped (runtime parity).
         Message::Response(response) => {
-            debug!(
-                id = %response.id,
-                session_id = %session_id,
-                "Received client response (no pending server-initiated request; dropped)"
-            );
+            let resolved = state
+                .sessions
+                .outbound(&session_id)
+                .is_some_and(|outbound| outbound.resolve(response));
+            if !resolved {
+                debug!(
+                    session_id = %session_id,
+                    "client response matched no pending server-initiated request; dropped"
+                );
+            }
             Ok(HttpResponse::Accepted()
                 .insert_header(("mcp-session-id", session_id))
                 .finish())
@@ -229,6 +310,7 @@ async fn create_response_for_request<H>(
     protocol_version: ProtocolVersion,
     client_caps: &ClientCapabilities,
     task_store: Option<&Arc<TaskManager>>,
+    peer: &dyn mcpkit_server::Peer,
 ) -> mcpkit_core::protocol::Response
 where
     H: ServerHandler + ToolHandler + ResourceHandler + PromptHandler + Send + Sync + 'static,
@@ -242,14 +324,13 @@ where
     // Create a context for the request
     let req_id = request.id.clone();
     let server_caps = state.effective_capabilities();
-    let peer = NoOpPeer;
     let ctx = Context::new(
         &req_id,
         None,
         client_caps,
         &server_caps,
         protocol_version,
-        &peer,
+        peer,
     );
 
     match method {
@@ -371,6 +452,38 @@ where
     }
 }
 
+/// Handle MCP DELETE requests: explicit session termination.
+///
+/// Per spec (§Session Management item 5). Removing the session drops its
+/// `OutboundOwner`, so every pending server-initiated request fails
+/// immediately; subsequent requests with the id get 404.
+pub async fn handle_mcp_delete<H>(req: HttpRequest, state: web::Data<McpState<H>>) -> HttpResponse
+where
+    H: HasServerInfo + Send + Sync + 'static,
+{
+    let origin = req.headers().get("origin").and_then(|v| v.to_str().ok());
+    if !state.origin_validator.is_allowed(origin) {
+        return HttpResponse::Forbidden().body("origin not allowed");
+    }
+    let user = req.extensions().get::<VerifiedUser>().cloned();
+    let Some(id) = req
+        .headers()
+        .get("mcp-session-id")
+        .and_then(|v| v.to_str().ok())
+        .map(String::from)
+    else {
+        return HttpResponse::BadRequest().body("missing mcp-session-id");
+    };
+    match state.sessions.get_verified(&id, user.as_ref()) {
+        Ok(Some(_)) => {}
+        Ok(None) => return HttpResponse::NotFound().body("unknown session id"),
+        Err(e) => return HttpResponse::Forbidden().body(e.to_string()),
+    }
+    let _ = state.sessions.remove(&id);
+    info!(session_id = %id, "Session terminated by client DELETE");
+    HttpResponse::NoContent().finish()
+}
+
 /// Handle SSE connections for server-to-client streaming.
 ///
 /// This handler establishes a Server-Sent Events connection that can be used
@@ -405,33 +518,50 @@ where
         .and_then(|v| v.to_str().ok())
         .map(String::from);
 
-    // Enforce the session's user binding before replaying buffered events.
-    if let Some(id) = &session_id {
-        if let Err(e) = state.sessions.get_verified(id, user.as_ref()) {
+    // #153: streams attach to the POST-created session. A GET without a
+    // session id is 400 (sessions are assigned at initialize); an unknown id
+    // is 404 per spec (never adopt a client-presented id); a mismatched user
+    // is 403 — enforced against the same registry that holds the binding.
+    let Some(id) = session_id else {
+        warn!("Rejected SSE: missing mcp-session-id");
+        return HttpResponse::BadRequest()
+            .body("missing mcp-session-id (obtain one via initialize)");
+    };
+    match state.sessions.get_verified(&id, user.as_ref()) {
+        Ok(Some(_)) => {}
+        Ok(None) => {
+            warn!(session_id = %id, "Rejected SSE: unknown session id");
+            return HttpResponse::NotFound().body("unknown session id");
+        }
+        Err(e) => {
             warn!(session_id = %id, error = %e, "Rejected SSE: session binding violation");
             return HttpResponse::Forbidden().body(e.to_string());
         }
     }
 
-    let (id, rx) = if let Some(id) = session_id {
-        // Try to reconnect to existing session
-        if let Some(rx) = state.sse_sessions.get_receiver(&id) {
-            info!(session_id = %id, "Reconnected to SSE session");
-            (id, rx)
+    let last_event_id = req
+        .headers()
+        .get("last-event-id")
+        .and_then(|v| v.to_str().ok())
+        .map(String::from);
+
+    let registry = state.sessions.streams(&id).expect("session verified above");
+    let (handle, replay_events) = if let Some(last_id) = &last_event_id {
+        info!(session_id = %id, last_event_id = %last_id, "Reconnecting with Last-Event-ID");
+        if let Some((handle, replay)) = registry.resume(last_id) {
+            (handle, replay)
         } else {
-            // Session not found, create new
-            let (new_id, rx) = state.sse_sessions.create_session();
-            info!(session_id = %new_id, "Created new SSE session (requested not found)");
-            (new_id, rx)
+            // Unknown or expired stream cursor: open a fresh stream rather
+            // than replaying another stream's events (spec MUST NOT).
+            let (handle, prime) = registry.open("connected", id);
+            (handle, vec![prime])
         }
     } else {
-        let (id, rx) = state.sse_sessions.create_session();
-        info!(session_id = %id, "Created new SSE session");
-        (id, rx)
+        let (handle, prime) = registry.open("connected", id);
+        (handle, vec![prime])
     };
 
-    // Create the SSE stream
-    let stream = create_sse_stream(id, rx);
+    let stream = create_sse_stream(handle, replay_events);
 
     HttpResponse::Ok()
         .content_type("text/event-stream")
@@ -440,40 +570,41 @@ where
         .streaming(stream)
 }
 
+fn sse_frame(stored: &mcpkit_server::streams::StoredEvent, first: bool) -> web::Bytes {
+    // The first event of every stream carries a `retry` hint (spec: the
+    // client MUST respect `retry`), so reconnect cadence is dictated.
+    let retry = if first { "retry: 2000\n" } else { "" };
+    web::Bytes::from(format!(
+        "{retry}id: {}\nevent: {}\ndata: {}\n\n",
+        stored.id, stored.event_type, stored.data
+    ))
+}
+
 fn create_sse_stream(
-    session_id: String,
-    rx: tokio::sync::broadcast::Receiver<String>,
+    handle: mcpkit_server::streams::StreamHandle,
+    replay_events: Vec<mcpkit_server::streams::StoredEvent>,
 ) -> impl futures::Stream<Item = Result<web::Bytes, actix_web::error::Error>> {
-    // First, send the connected event
-    let connected_event = format!("event: connected\ndata: {session_id}\n\n");
+    // Replayed/prime events first (each with its stored id — allocated once,
+    // so the wire id always equals the buffered id).
+    let mut first = true;
+    let replay_frames: Vec<Result<web::Bytes, actix_web::error::Error>> = replay_events
+        .iter()
+        .map(|stored| {
+            let frame = sse_frame(stored, first);
+            first = false;
+            Ok(frame)
+        })
+        .collect();
+    let replay = stream::iter(replay_frames);
 
-    // Create a stream that first yields the connected event, then messages
-    let connected = stream::once(async move { Ok(web::Bytes::from(connected_event)) });
-
-    // Create message stream
-    let messages = stream::unfold(rx, |mut rx| async move {
-        loop {
-            match rx.recv().await {
-                Ok(msg) => {
-                    let event = format!("event: message\ndata: {msg}\n\n");
-                    return Some((
-                        Ok::<_, actix_web::error::Error>(web::Bytes::from(event)),
-                        rx,
-                    ));
-                }
-                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                    warn!(skipped = n, "SSE client lagged, skipped messages");
-                    // Loop continues naturally
-                }
-                Err(tokio::sync::broadcast::error::RecvError::Closed) => {
-                    debug!("SSE channel closed");
-                    return None;
-                }
-            }
-        }
+    // Live delivery off the session's per-stream channel.
+    let messages = stream::unfold((handle, first), |(mut handle, first)| async move {
+        let stored = handle.recv().await?;
+        let frame = sse_frame(&stored, first);
+        Some((Ok::<_, actix_web::error::Error>(frame), (handle, false)))
     });
 
-    // Add periodic keep-alive comments
+    // Periodic keep-alive comments.
     let keepalive = stream::unfold((), |()| async {
         tokio::time::sleep(Duration::from_secs(15)).await;
         Some((
@@ -482,8 +613,7 @@ fn create_sse_stream(
         ))
     });
 
-    // Merge the streams (connected first, then interleave messages and keepalive)
-    connected.chain(stream::select(messages, keepalive))
+    replay.chain(stream::select(messages, keepalive))
 }
 
 /// Handle `.well-known/oauth-protected-resource` requests.
