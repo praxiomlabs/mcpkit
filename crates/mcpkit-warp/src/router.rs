@@ -129,6 +129,38 @@ where
         self
     }
 
+    /// Set the timeouts for server-initiated (peer) requests.
+    #[must_use]
+    pub fn with_peer_timeouts(
+        mut self,
+        timeouts: mcpkit_server::adapter_peer::PeerTimeouts,
+    ) -> Self {
+        // The builder owns the only reference to the state at this point.
+        if let Some(state) = Arc::get_mut(&mut self.state) {
+            state.peer_timeouts = timeouts;
+        }
+        self
+    }
+
+    /// Override the peer reconnect grace. Test hook — the grace is a fixed
+    /// constant by design.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn with_reconnect_grace(mut self, grace: std::time::Duration) -> Self {
+        // The builder owns the only reference to the state at this point.
+        if let Some(state) = Arc::get_mut(&mut self.state) {
+            state.reconnect_grace = grace;
+        }
+        self
+    }
+
+    /// The router's shared state. Test hook.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn state(&self) -> Arc<McpState<H>> {
+        Arc::clone(&self.state)
+    }
+
     fn set_origin_validator(&mut self, validator: OriginValidator) {
         // The builder owns the only reference to the state at this point, so
         // `get_mut` succeeds.
@@ -170,7 +202,40 @@ where
                 },
             );
 
-        // GET /mcp/sse - Server-Sent Events
+        // GET /mcp - the MCP endpoint serves SSE (#172); /mcp/sse stays as
+        // a deprecated alias.
+        let get_state = state.clone();
+        let mcp_get = warp::path("mcp")
+            .and(warp::path::end())
+            .and(warp::get())
+            .and(with_state(get_state))
+            .and(with_session_id())
+            .and(with_origin())
+            .and(warp::header::optional::<String>("last-event-id"))
+            .map(
+                |state: Arc<McpState<H>>,
+                 session_id: Option<String>,
+                 origin: Option<String>,
+                 last_event_id: Option<String>| {
+                    handle_sse(state, session_id, origin, None, last_event_id)
+                },
+            );
+
+        // DELETE /mcp - explicit session termination (#153).
+        let delete_state = state.clone();
+        let mcp_delete = warp::path("mcp")
+            .and(warp::path::end())
+            .and(warp::delete())
+            .and(with_state(delete_state))
+            .and(with_session_id())
+            .and(with_origin())
+            .map(
+                |state: Arc<McpState<H>>, session_id: Option<String>, origin: Option<String>| {
+                    crate::handler::handle_mcp_delete(state, session_id, origin, None)
+                },
+            );
+
+        // GET /mcp/sse - deprecated alias.
         let sse_state = state;
         let mcp_sse = warp::path("mcp")
             .and(warp::path("sse"))
@@ -178,17 +243,21 @@ where
             .and(with_state(sse_state))
             .and(with_session_id())
             .and(with_origin())
+            .and(warp::header::optional::<String>("last-event-id"))
             .map(
-                |state: Arc<McpState<H>>, session_id: Option<String>, origin: Option<String>| {
-                    handle_sse(state, session_id, origin, None)
+                |state: Arc<McpState<H>>,
+                 session_id: Option<String>,
+                 origin: Option<String>,
+                 last_event_id: Option<String>| {
+                    handle_sse(state, session_id, origin, None, last_event_id)
                 },
             );
 
         // Combine routes with CORS
-        mcp_post.or(mcp_sse).with(
+        mcp_post.or(mcp_get).or(mcp_delete).or(mcp_sse).with(
             warp::cors()
                 .allow_any_origin()
-                .allow_methods(vec!["GET", "POST", "OPTIONS"])
+                .allow_methods(vec!["GET", "POST", "DELETE", "OPTIONS"])
                 .allow_headers(vec![
                     "content-type",
                     "mcp-protocol-version",
@@ -229,7 +298,39 @@ where
                 },
             );
 
-        // GET /mcp/sse - Server-Sent Events
+        // GET /mcp - the MCP endpoint serves SSE (#172); /mcp/sse alias.
+        let get_state = state.clone();
+        let mcp_get = warp::path("mcp")
+            .and(warp::path::end())
+            .and(warp::get())
+            .and(with_state(get_state))
+            .and(with_session_id())
+            .and(with_origin())
+            .and(warp::header::optional::<String>("last-event-id"))
+            .map(
+                |state: Arc<McpState<H>>,
+                 session_id: Option<String>,
+                 origin: Option<String>,
+                 last_event_id: Option<String>| {
+                    handle_sse(state, session_id, origin, None, last_event_id)
+                },
+            );
+
+        // DELETE /mcp - explicit session termination (#153).
+        let delete_state = state.clone();
+        let mcp_delete = warp::path("mcp")
+            .and(warp::path::end())
+            .and(warp::delete())
+            .and(with_state(delete_state))
+            .and(with_session_id())
+            .and(with_origin())
+            .map(
+                |state: Arc<McpState<H>>, session_id: Option<String>, origin: Option<String>| {
+                    crate::handler::handle_mcp_delete(state, session_id, origin, None)
+                },
+            );
+
+        // GET /mcp/sse - deprecated alias.
         let sse_state = state;
         let mcp_sse = warp::path("mcp")
             .and(warp::path("sse"))
@@ -237,13 +338,17 @@ where
             .and(with_state(sse_state))
             .and(with_session_id())
             .and(with_origin())
+            .and(warp::header::optional::<String>("last-event-id"))
             .map(
-                |state: Arc<McpState<H>>, session_id: Option<String>, origin: Option<String>| {
-                    handle_sse(state, session_id, origin, None)
+                |state: Arc<McpState<H>>,
+                 session_id: Option<String>,
+                 origin: Option<String>,
+                 last_event_id: Option<String>| {
+                    handle_sse(state, session_id, origin, None, last_event_id)
                 },
             );
 
-        mcp_post.or(mcp_sse)
+        mcp_post.or(mcp_get).or(mcp_delete).or(mcp_sse)
     }
 
     /// Serve the MCP server on the given address.
