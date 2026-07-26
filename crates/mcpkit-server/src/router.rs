@@ -654,6 +654,28 @@ pub async fn tool_task_support(
         .unwrap_or(TaskSupport::Forbidden)
 }
 
+/// Dispatch an inbound client notification to the server's lifecycle hooks.
+///
+/// Covers `on_initialized` and `on_roots_list_changed`; unknown methods are
+/// a no-op. Shared by the stdio runtime's `RequestRouter::route_notification`
+/// and the HTTP adapters (#153), so the hook surface is wired identically
+/// everywhere.
+pub async fn dispatch_notification_hooks<H: crate::handler::ServerHandler>(
+    handler: &H,
+    method: &str,
+    ctx: &Context<'_>,
+) {
+    match method {
+        "notifications/initialized" => handler.on_initialized(ctx).await,
+        // Only meaningful from a client that advertised the `roots`
+        // capability; ignore it otherwise.
+        "notifications/roots/list_changed" if ctx.client_caps.has_roots() => {
+            handler.on_roots_list_changed(ctx).await;
+        }
+        _ => {}
+    }
+}
+
 /// Run a tool and return its `CallToolResult` as JSON (the `tasks/result`
 /// payload shape). Shared by the stdio runtime and the HTTP adapters.
 pub async fn call_tool_json(

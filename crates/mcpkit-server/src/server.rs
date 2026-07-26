@@ -1216,15 +1216,7 @@ where
         _params: Option<&serde_json::Value>,
         ctx: &Context<'_>,
     ) {
-        match method {
-            "notifications/initialized" => self.handler().on_initialized(ctx).await,
-            // Only meaningful from a client that advertised the `roots`
-            // capability; ignore it otherwise.
-            "notifications/roots/list_changed" if ctx.client_caps.has_roots() => {
-                self.handler().on_roots_list_changed(ctx).await;
-            }
-            _ => {}
-        }
+        crate::router::dispatch_notification_hooks(self.handler(), method, ctx).await;
     }
 
     async fn route(

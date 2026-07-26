@@ -1,6 +1,8 @@
 //! Router builder for MCP endpoints.
 
-use crate::handler::{handle_mcp_post, handle_oauth_protected_resource, handle_sse};
+use crate::handler::{
+    handle_mcp_delete, handle_mcp_post, handle_oauth_protected_resource, handle_sse,
+};
 use crate::state::{HasServerInfo, McpState, OAuthState};
 use axum::Router;
 use axum::routing::{get, post};
@@ -189,6 +191,35 @@ where
         self
     }
 
+    /// Set the timeouts for server-initiated (peer) requests.
+    #[must_use]
+    pub fn with_peer_timeouts(
+        mut self,
+        timeouts: mcpkit_server::adapter_peer::PeerTimeouts,
+    ) -> Self {
+        self.state.peer_timeouts = timeouts;
+        self
+    }
+
+    /// Override the peer reconnect grace. Test hook — the grace is a fixed
+    /// constant by design.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn with_reconnect_grace(mut self, grace: std::time::Duration) -> Self {
+        self.state.reconnect_grace = grace;
+        self
+    }
+
+    /// The router's shared state. Test hook.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn state(&self) -> McpState<H>
+    where
+        McpState<H>: Clone,
+    {
+        self.state.clone()
+    }
+
     /// Build the router.
     pub fn into_router(self) -> Router {
         // Spec: a single MCP endpoint serves both POST and GET (#172). The
@@ -196,7 +227,9 @@ where
         let mut router = Router::new()
             .route(
                 &self.post_path,
-                post(handle_mcp_post::<H>).get(handle_sse::<H>),
+                post(handle_mcp_post::<H>)
+                    .get(handle_sse::<H>)
+                    .delete(handle_mcp_delete::<H>),
             )
             .route(&self.sse_path, get(handle_sse::<H>))
             .with_state(self.state);

@@ -4,6 +4,7 @@ use dashmap::DashMap;
 use mcpkit_core::auth::{SessionBindingError, VerifiedUser, check_session_binding};
 use mcpkit_core::capability::ClientCapabilities;
 use mcpkit_core::protocol_version::ProtocolVersion;
+use mcpkit_server::adapter_peer::{OutboundOwner, SessionOutbound};
 use mcpkit_server::streams::{StreamConfig, StreamRegistry};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -35,6 +36,15 @@ pub struct Session {
     /// same-stream `Last-Event-ID` replay — shared adapter logic from
     /// `mcpkit_server::streams`.
     pub streams: Arc<StreamRegistry>,
+    /// Owner of this session's outbound-request registry (#153 PR 4). When
+    /// the session is removed (reap or DELETE) the owner drops and every
+    /// pending server-initiated request fails immediately, so waiting hooks
+    /// and tools resolve instead of running out their timeout.
+    pub outbound_owner: Arc<OutboundOwner>,
+    /// In-flight notification-hook tasks for this session. Dropped (and
+    /// thereby ABORTED — deliberate) on session teardown: the session and
+    /// its peer are gone, so a hook mid-request has nothing valid to await.
+    pub hooks: Arc<std::sync::Mutex<tokio::task::JoinSet<()>>>,
 }
 
 impl Session {
@@ -58,6 +68,8 @@ impl Session {
             user,
             tasks: Arc::new(mcpkit_server::capability::tasks::TaskManager::new()),
             streams: Arc::new(StreamRegistry::new(StreamConfig::default())),
+            outbound_owner: Arc::new(OutboundOwner::new()),
+            hooks: Arc::new(std::sync::Mutex::new(tokio::task::JoinSet::new())),
         }
     }
 
@@ -168,6 +180,15 @@ impl SessionStore {
     #[must_use]
     pub fn send_event(&self, id: &str, event_type: &str, message: String) -> Option<String> {
         self.sessions.get(id)?.streams.send(event_type, message)
+    }
+
+    /// The outbound-request registry for a session (server-initiated request
+    /// correlation). `None` if the session is unknown.
+    #[must_use]
+    pub fn outbound(&self, id: &str) -> Option<Arc<SessionOutbound>> {
+        self.sessions
+            .get(id)
+            .map(|s| Arc::clone(s.outbound_owner.outbound()))
     }
 
     /// Create a new session and return its ID.

@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Server-initiated requests work over the axum adapter** (#153 PR 4) — the
+  design's headline defect closed: `Context` in the request path now carries
+  a real `SessionPeer` instead of `NoOpPeer`, so a plain tool handler can
+  `ctx.elicit()` / `ctx.list_roots()` (and sampling) over HTTP. The JSON-RPC
+  request rides the session's SSE stream; the client answers with a response
+  POST, which is now correlated against the session's pending
+  server-initiated requests (previously logged and dropped). Inbound client
+  notifications dispatch to the `ServerHandler` hooks (`on_initialized`,
+  `on_roots_list_changed`) off the request path via a per-session task set —
+  the shared `dispatch_notification_hooks` helper now backs the stdio
+  runtime's routing too, so the hook surface is wired identically
+  everywhere. New: a DELETE handler terminates the session per spec (204;
+  pending server-initiated requests fail immediately via the session's
+  `OutboundOwner`; subsequent requests 404), and
+  `McpRouter::with_peer_timeouts` configures the per-method-class request
+  timeouts. Mid-`tools/call` elicitation on the GET stream is a documented
+  SHOULD-deviation until a POST-SSE upgrade exists
+  ([#153](https://github.com/praxiomlabs/mcpkit/issues/153)).
+
+### Added
+
 - `mcpkit_server::adapter_peer` — the server->client request/response peer
   primitive for the HTTP adapters (#153 PR 3): `SessionOutbound` (per-session
   outbound-id allocation + oneshot response correlation; the stdio runtime's
