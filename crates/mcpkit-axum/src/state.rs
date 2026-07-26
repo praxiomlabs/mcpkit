@@ -1,6 +1,6 @@
 //! Shared state for MCP Axum handlers.
 
-use crate::session::{SessionManager, SessionStore};
+use crate::session::SessionStore;
 use mcpkit_core::auth::ProtectedResourceMetadata;
 use mcpkit_core::capability::{ServerCapabilities, ServerInfo};
 use mcpkit_transport::http::OriginValidator;
@@ -22,7 +22,6 @@ pub struct McpState<H> {
     /// Session store for HTTP request tracking.
     pub sessions: Arc<SessionStore>,
     /// Session manager for SSE streaming.
-    pub sse_sessions: Arc<SessionManager>,
     /// Validates request `Origin` headers (DNS-rebinding protection). Defaults
     /// to loopback-only.
     pub origin_validator: Arc<OriginValidator>,
@@ -39,7 +38,6 @@ impl<H> Clone for McpState<H> {
             handler: Arc::clone(&self.handler),
             server_info: self.server_info.clone(),
             sessions: Arc::clone(&self.sessions),
-            sse_sessions: Arc::clone(&self.sse_sessions),
             origin_validator: Arc::clone(&self.origin_validator),
             list_page_size: self.list_page_size,
             completion: self.completion.clone(),
@@ -54,7 +52,6 @@ impl<H> fmt::Debug for McpState<H> {
             .field("handler", &format_args!("Arc<H>"))
             .field("server_info", &self.server_info)
             .field("sessions", &self.sessions)
-            .field("sse_sessions", &format_args!("Arc<SessionManager>"))
             .field("origin_validator", &self.origin_validator)
             .field("list_page_size", &self.list_page_size)
             .field(
@@ -76,7 +73,6 @@ impl<H> McpState<H> {
             handler: Arc::new(handler),
             server_info,
             sessions: Arc::new(SessionStore::with_default_timeout()),
-            sse_sessions: Arc::new(SessionManager::new()),
             origin_validator: Arc::new(OriginValidator::default()),
             list_page_size: None,
             completion: None,
@@ -84,7 +80,7 @@ impl<H> McpState<H> {
     }
 
     /// Create new MCP state with custom session configuration.
-    pub fn with_sessions(handler: H, sessions: SessionStore, sse_sessions: SessionManager) -> Self
+    pub fn with_sessions(handler: H, sessions: SessionStore) -> Self
     where
         H: HasServerInfo,
     {
@@ -93,7 +89,6 @@ impl<H> McpState<H> {
             handler: Arc::new(handler),
             server_info,
             sessions: Arc::new(sessions),
-            sse_sessions: Arc::new(sse_sessions),
             origin_validator: Arc::new(OriginValidator::default()),
             list_page_size: None,
             completion: None,

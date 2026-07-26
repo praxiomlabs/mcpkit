@@ -451,10 +451,26 @@ where
         .and_then(|v| v.to_str().ok())
         .map(String::from);
 
-    // Enforce the session's user binding before replaying any buffered events to
-    // a reconnecting client (a different user must not receive them).
-    if let Some(id) = &session_id {
-        if let Err(e) = state.sessions.get_verified(id, user.as_ref()) {
+    // #153 PR 1: streams attach to the POST-created session. A GET without a
+    // session id is 400 (sessions are assigned at initialize); an unknown id
+    // is 404 per spec (never adopt a client-presented id); a mismatched user
+    // is 403 — enforced against the SAME registry that holds the binding, so
+    // the check can no longer pass vacuously (#173).
+    let Some(id) = session_id else {
+        warn!("Rejected SSE: missing mcp-session-id");
+        return (
+            StatusCode::BAD_REQUEST,
+            "missing mcp-session-id (obtain one via initialize)",
+        )
+            .into_response();
+    };
+    match state.sessions.get_verified(&id, user.as_ref()) {
+        Ok(Some(_)) => {}
+        Ok(None) => {
+            warn!(session_id = %id, "Rejected SSE: unknown session id");
+            return (StatusCode::NOT_FOUND, "unknown session id").into_response();
+        }
+        Err(e) => {
             warn!(session_id = %id, error = %e, "Rejected SSE: session binding violation");
             return (StatusCode::FORBIDDEN, e.to_string()).into_response();
         }
@@ -465,40 +481,22 @@ where
         .and_then(|v| v.to_str().ok())
         .map(String::from);
 
-    let (id, rx, replay_events) = if let Some(id) = session_id {
-        // Try to reconnect to existing session
-        if let Some(rx) = state.sse_sessions.get_receiver(&id) {
-            // Check if we need to replay events
-            let replay = if let Some(last_id) = &last_event_id {
-                info!(session_id = %id, last_event_id = %last_id, "Reconnecting with Last-Event-ID");
-                state
-                    .sse_sessions
-                    .get_events_for_replay(&id, last_id)
-                    .await
-                    .unwrap_or_default()
-            } else {
-                Vec::new()
-            };
-
-            info!(
-                session_id = %id,
-                replay_count = replay.len(),
-                "Reconnected to SSE session"
-            );
-            (id, rx, replay)
-        } else {
-            // Session not found, create new
-            let (new_id, rx) = state.sse_sessions.create_session();
-            info!(session_id = %new_id, "Created new SSE session (requested not found)");
-            (new_id, rx, Vec::new())
-        }
+    let rx = state
+        .sessions
+        .subscribe(&id)
+        .expect("session verified above");
+    let replay_events = if let Some(last_id) = &last_event_id {
+        info!(session_id = %id, last_event_id = %last_id, "Reconnecting with Last-Event-ID");
+        state
+            .sessions
+            .events_for_replay(&id, last_id)
+            .await
+            .unwrap_or_default()
     } else {
-        let (id, rx) = state.sse_sessions.create_session();
-        info!(session_id = %id, "Created new SSE session");
-        (id, rx, Vec::new())
+        Vec::new()
     };
+    let event_store = state.sessions.events(&id);
 
-    let event_store = state.sse_sessions.get_event_store(&id);
     let stream = create_sse_stream_with_replay(id, rx, replay_events, event_store);
     Sse::new(stream)
         .keep_alive(KeepAlive::default())

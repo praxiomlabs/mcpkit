@@ -191,8 +191,13 @@ where
 
     /// Build the router.
     pub fn into_router(self) -> Router {
+        // Spec: a single MCP endpoint serves both POST and GET (#172). The
+        // separate SSE path is kept as a deprecated, undiscoverable alias.
         let mut router = Router::new()
-            .route(&self.post_path, post(handle_mcp_post::<H>))
+            .route(
+                &self.post_path,
+                post(handle_mcp_post::<H>).get(handle_sse::<H>),
+            )
             .route(&self.sse_path, get(handle_sse::<H>))
             .with_state(self.state);
 
