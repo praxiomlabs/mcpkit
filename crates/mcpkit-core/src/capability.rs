@@ -746,6 +746,9 @@ pub struct InitializeRequest {
     /// Client information.
     #[serde(rename = "clientInfo")]
     pub client_info: ClientInfo,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 impl InitializeRequest {
@@ -756,6 +759,7 @@ impl InitializeRequest {
             protocol_version: PROTOCOL_VERSION.to_string(),
             capabilities,
             client_info,
+            meta: None,
         }
     }
 }
