@@ -105,13 +105,13 @@ pub mod prelude {
     pub use crate::schema::{Schema, SchemaBuilder, SchemaType};
     pub use crate::state::{Closing, Connected, Connection, Disconnected, Initializing, Ready};
     pub use crate::types::{
+        Annotations,
         // Tool types
         CallToolResult,
         // Task types
         CancelTaskRequest,
         // Content types
         Content,
-        ContentAnnotations,
         // Sampling types
         CreateMessageRequest,
         CreateMessageResult,

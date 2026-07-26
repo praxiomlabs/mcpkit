@@ -412,12 +412,7 @@ impl ClientPoolBuilder {
 
     /// Set the client info.
     pub fn client_info(mut self, name: impl Into<String>, version: impl Into<String>) -> Self {
-        self.client_info = Some(ClientInfo {
-            name: name.into(),
-            title: None,
-            version: version.into(),
-            icons: None,
-        });
+        self.client_info = Some(ClientInfo::new(name, version));
         self
     }
 

@@ -17,12 +17,7 @@ fn test_protocol_version() {
 
 #[test]
 fn test_client_info() {
-    let info = ClientInfo {
-        name: "test-client".to_string(),
-        title: None,
-        version: "1.0.0".to_string(),
-        icons: None,
-    };
+    let info = ClientInfo::new("test-client", "1.0.0");
 
     let json = serde_json::to_value(&info).unwrap();
     assert_eq!(json["name"], "test-client");
@@ -43,12 +38,7 @@ fn test_server_info() {
 
 #[test]
 fn test_initialize_request() {
-    let client_info = ClientInfo {
-        name: "my-client".to_string(),
-        title: None,
-        version: "1.0.0".to_string(),
-        icons: None,
-    };
+    let client_info = ClientInfo::new("my-client", "1.0.0");
 
     let request = InitializeRequest {
         protocol_version: PROTOCOL_VERSION.to_string(),

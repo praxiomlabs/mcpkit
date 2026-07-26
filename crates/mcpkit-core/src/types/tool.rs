@@ -626,6 +626,11 @@ pub struct CallToolRequest {
     pub task: Option<super::task::TaskMetadata>,
 }
 
+/// Notification that the tool list has changed
+/// (`notifications/tools/list_changed`).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ToolListChangedNotification {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -826,6 +831,14 @@ mod tests {
         let json = serde_json::to_string(&tool)?;
         assert!(json.contains("\"name\":\"test\""));
         assert!(json.contains("\"inputSchema\""));
+        Ok(())
+    }
+
+    #[test]
+    fn tool_list_changed_notification_is_empty_object() -> Result<(), Box<dyn std::error::Error>> {
+        let n = ToolListChangedNotification::default();
+        assert_eq!(serde_json::to_value(&n)?, serde_json::json!({}));
+        let _: ToolListChangedNotification = serde_json::from_value(serde_json::json!({}))?;
         Ok(())
     }
 }
