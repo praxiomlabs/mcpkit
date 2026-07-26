@@ -10,7 +10,7 @@ use mcpkit_core::capability::ServerInfo;
 use mcpkit_core::error::McpError;
 use mcpkit_core::types::{
     ElicitRequest, ElicitationSchema, GetPromptResult, Prompt, Resource, ResourceContents, Root,
-    Tool, ToolOutput,
+    TaskSupport, Tool, ToolOutput,
 };
 use mcpkit_server::{Context, PromptHandler, ResourceHandler, ServerHandler, ToolHandler};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -40,7 +40,7 @@ impl ServerHandler for H {
 }
 impl ToolHandler for H {
     async fn list_tools(&self, _ctx: &Context<'_>) -> Result<Vec<Tool>, McpError> {
-        Ok(vec![Tool::new("ask")])
+        Ok(vec![Tool::new("ask").task_support(TaskSupport::Optional)])
     }
     async fn call_tool(
         &self,
@@ -427,4 +427,64 @@ async fn delete_fails_pending_and_forgets_the_session() {
     )
     .await;
     assert_eq!(status, actix_web::http::StatusCode::NOT_FOUND);
+}
+
+#[actix_rt::test]
+async fn task_augmented_tool_elicits_over_the_stream() {
+    let (state, _) = test_state();
+    let sid = init(&state).await;
+    let registry = state.sessions.streams(&sid).expect("session");
+    let (mut stream, _prime) = registry.open("connected", sid.clone());
+
+    // A task-augmented call replies immediately with CreateTaskResult...
+    let created = post(
+        &state,
+        Some(&sid),
+        serde_json::json!({
+            "jsonrpc": "2.0", "id": 7, "method": "tools/call",
+            "params": { "name": "ask", "arguments": {}, "task": {} }
+        }),
+    )
+    .await
+    .1;
+    let task_id = created["result"]["task"]["taskId"]
+        .as_str()
+        .expect("taskId")
+        .to_string();
+
+    // ...while the background tool elicits over the session stream (#153
+    // PR 6: the peer survives into the spawned task).
+    let request = next_stream_request(&mut stream).await;
+    assert_eq!(request["method"], "elicitation/create");
+    let request_id = request["id"].clone();
+    let _ = post(
+        &state,
+        Some(&sid),
+        serde_json::json!({
+            "jsonrpc": "2.0", "id": request_id,
+            "result": { "action": "accept", "content": { "answer": "blue" } }
+        }),
+    )
+    .await;
+
+    // tasks/result yields the tool result once the elicited answer lands.
+    let mut text = String::new();
+    for _ in 0..100 {
+        let result = post(
+            &state,
+            Some(&sid),
+            serde_json::json!({
+                "jsonrpc": "2.0", "id": 9, "method": "tasks/result",
+                "params": { "taskId": task_id }
+            }),
+        )
+        .await
+        .1;
+        if let Some(t) = result["result"]["content"][0]["text"].as_str() {
+            text = t.to_string();
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    assert_eq!(text, "elicited: blue");
 }

@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Task-augmented tools keep their peer** (#153 PR 6, the design's final
+  slice): `begin_augmented_task` and `run_augmented_tool` now take the
+  session peer and carry it into the spawned background future, so a
+  task-augmented tool on any HTTP adapter can `ctx.elicit()` /
+  `ctx.list_roots()` / sample mid-task — the request rides the session's
+  SSE stream and the client's response POST correlates as usual, while
+  notifications ride the store-and-drop path and never fail the tool.
+  This closes the last `NoOpPeer` in the adapters (the #122 limitation
+  note above is amended accordingly). **Breaking:**
+  `begin_augmented_task` and `run_augmented_tool` gain a
+  `peer: Arc<dyn Peer>` parameter, and the adapters'
+  `create_response_for_request` peer parameter is now
+  `Arc<dyn Peer>` (was `&dyn Peer`)
+  ([#153](https://github.com/praxiomlabs/mcpkit/issues/153)).
+
 - **The rocket adapter reaches the axum baseline** (#153 PR 5, last of the
   three ports — every adapter now has the full session/stream/peer substrate):
   unified session registry (SSE binding: 400 missing id / 404
@@ -358,11 +373,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Per-session isolation:** each MCP session owns its task store (mirroring the
     stdio runtime's per-connection store), so one session cannot read or cancel
     another's tasks.
-  - **Limitations (documented):** an adapter background task runs with a
-    `NoOpPeer`, so it cannot make server-to-client requests (elicitation/sampling)
-    and its notifications/logging/progress are dropped; cancellation via
-    `tasks/cancel` still trips the tool's `ctx.cancelled()`. Background tasks are
-    fire-and-forget (no graceful shutdown drain)
+  - **Limitations (documented):** background tasks are fire-and-forget (no
+    graceful shutdown drain). (An earlier limitation — adapter background
+    tasks ran with a `NoOpPeer` and could not make server-to-client
+    requests — was lifted by #153: the session peer is carried into the
+    spawned task.) Cancellation via `tasks/cancel` trips the tool's
+    `ctx.cancelled()`
     ([#122](https://github.com/praxiomlabs/mcpkit/issues/122)).
 - Inbound client-notification dispatch to `ServerHandler` hooks (#141). The stdio
   `ServerRuntime` previously logged `notifications/initialized` and never invoked
