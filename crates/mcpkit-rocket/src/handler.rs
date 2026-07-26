@@ -362,12 +362,14 @@ where
             // correlated below. The store hands out plain Arcs (never the
             // OutboundOwner), so holding these across the await cannot keep
             // DELETE/reap from failing pending requests.
-            let peer: Box<dyn mcpkit_server::Peer> = match (
+            let peer: std::sync::Arc<dyn mcpkit_server::Peer> = match (
                 state.sessions.streams(&session_id),
                 state.sessions.outbound(&session_id),
             ) {
-                (Some(streams), Some(outbound)) => Box::new(session_peer(state, streams, outbound)),
-                _ => Box::new(NoOpPeer),
+                (Some(streams), Some(outbound)) => {
+                    std::sync::Arc::new(session_peer(state, streams, outbound))
+                }
+                _ => std::sync::Arc::new(NoOpPeer),
             };
             let response = create_response_for_request(
                 state,
@@ -375,7 +377,7 @@ where
                 protocol_version,
                 &client_caps,
                 task_store.as_ref(),
-                peer.as_ref(),
+                peer,
             )
             .await;
 
@@ -484,7 +486,7 @@ async fn create_response_for_request<H>(
     protocol_version: ProtocolVersion,
     client_caps: &ClientCapabilities,
     task_store: Option<&Arc<TaskManager>>,
-    peer: &dyn mcpkit_server::Peer,
+    peer: std::sync::Arc<dyn mcpkit_server::Peer>,
 ) -> mcpkit_core::protocol::Response
 where
     H: ServerHandler + ToolHandler + ResourceHandler + PromptHandler + Send + Sync + 'static,
@@ -504,7 +506,7 @@ where
         client_caps,
         &server_caps,
         protocol_version,
-        peer,
+        peer.as_ref(),
     );
 
     match method {
@@ -529,6 +531,7 @@ where
                         client_caps.clone(),
                         server_caps.clone(),
                         protocol_version,
+                        std::sync::Arc::clone(&peer),
                     )
                     .await
                     {

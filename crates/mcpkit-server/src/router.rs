@@ -693,12 +693,14 @@ pub async fn call_tool_json(
 /// through the task-store `handle`.
 ///
 /// Built for HTTP adapters, which spawn this onto their own executor after
-/// replying with the initial `CreateTaskResult`. The background context uses a
-/// [`NoOpPeer`](crate::context::NoOpPeer): a task-augmented tool on an adapter
-/// cannot make server-to-client requests (elicitation/sampling) and its
-/// notifications/logging/progress are dropped. Cancellation still works — the
-/// handle's cancellation token is wired into the context, so a cooperative tool
-/// awaiting `ctx.cancelled()` observes `tasks/cancel`.
+/// replying with the initial `CreateTaskResult`. The background context carries
+/// the session `peer` (#153), so a task-augmented tool can make
+/// server-to-client requests (elicitation/sampling/roots) and its notifications
+/// ride the session's SSE stream like any other outbound message (store-and-drop
+/// without a live stream — they never fail the tool). Cancellation works too —
+/// the handle's cancellation token is wired into the context, so a cooperative
+/// tool awaiting `ctx.cancelled()` observes `tasks/cancel`.
+#[allow(clippy::too_many_arguments)]
 pub async fn run_augmented_tool(
     handler: std::sync::Arc<dyn DynToolHandler>,
     handle: crate::capability::tasks::TaskHandle,
@@ -707,9 +709,9 @@ pub async fn run_augmented_tool(
     client_caps: mcpkit_core::capability::ClientCapabilities,
     server_caps: mcpkit_core::capability::ServerCapabilities,
     protocol_version: mcpkit_core::protocol_version::ProtocolVersion,
+    peer: std::sync::Arc<dyn crate::context::Peer>,
 ) {
-    use crate::context::{Context, NoOpPeer};
-    let peer = NoOpPeer;
+    use crate::context::Context;
     let request_id = mcpkit_core::protocol::RequestId::String(handle.id().as_str().to_string());
     let ctx = match handle.cancel_token() {
         Some(token) => Context::with_cancellation(
@@ -718,7 +720,7 @@ pub async fn run_augmented_tool(
             &client_caps,
             &server_caps,
             protocol_version,
-            &peer,
+            peer.as_ref(),
             token,
         ),
         None => Context::new(
@@ -727,7 +729,7 @@ pub async fn run_augmented_tool(
             &client_caps,
             &server_caps,
             protocol_version,
-            &peer,
+            peer.as_ref(),
         ),
     };
     match call_tool_json(handler.as_ref(), &name, args, &ctx).await {
@@ -772,8 +774,9 @@ pub enum AugmentedTaskOutcome {
 /// Mirrors the stdio runtime's `try_begin_task`: detect the `task` field, gate on
 /// the tool's declared `taskSupport`, create the task, and return the initial
 /// `CreateTaskResult` plus a background future the caller spawns. Only call this
-/// for the `tools/call` method. See [`run_augmented_tool`] for the background
-/// context's limitations (no server-to-client from the tool).
+/// for the `tools/call` method. The `peer` is carried into the background
+/// context (#153), so the tool keeps its server-to-client request capability
+/// after the initial `CreateTaskResult` reply.
 pub async fn begin_augmented_task(
     handler: std::sync::Arc<dyn DynToolHandler>,
     store: &std::sync::Arc<crate::capability::tasks::TaskManager>,
@@ -781,6 +784,7 @@ pub async fn begin_augmented_task(
     client_caps: mcpkit_core::capability::ClientCapabilities,
     server_caps: mcpkit_core::capability::ServerCapabilities,
     protocol_version: mcpkit_core::protocol_version::ProtocolVersion,
+    peer: std::sync::Arc<dyn crate::context::Peer>,
 ) -> AugmentedTaskOutcome {
     use mcpkit_core::types::TaskSupport;
 
@@ -847,6 +851,7 @@ pub async fn begin_augmented_task(
         client_caps,
         server_caps,
         protocol_version,
+        peer,
     );
     AugmentedTaskOutcome::Started(create_result, Box::pin(fut))
 }

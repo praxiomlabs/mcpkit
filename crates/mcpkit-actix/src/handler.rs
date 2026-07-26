@@ -181,13 +181,13 @@ where
             // ctx.elicit()/ctx.list_roots()/sampling; the request rides the
             // session's SSE stream and the client answers via a response POST
             // correlated below.
-            let peer: Box<dyn mcpkit_server::Peer> = match &session {
-                Some(s) => Box::new(session_peer(
+            let peer: std::sync::Arc<dyn mcpkit_server::Peer> = match &session {
+                Some(s) => std::sync::Arc::new(session_peer(
                     &state,
                     Arc::clone(&s.streams),
                     Arc::clone(s.outbound_owner.outbound()),
                 )),
-                None => Box::new(NoOpPeer),
+                None => std::sync::Arc::new(NoOpPeer),
             };
             // Release the snapshot before awaiting: it holds the session's
             // OutboundOwner, and a request blocked in ctx.elicit() must not
@@ -199,7 +199,7 @@ where
                 protocol_version,
                 &client_caps,
                 task_store.as_ref(),
-                peer.as_ref(),
+                peer,
             )
             .await;
 
@@ -310,7 +310,7 @@ async fn create_response_for_request<H>(
     protocol_version: ProtocolVersion,
     client_caps: &ClientCapabilities,
     task_store: Option<&Arc<TaskManager>>,
-    peer: &dyn mcpkit_server::Peer,
+    peer: std::sync::Arc<dyn mcpkit_server::Peer>,
 ) -> mcpkit_core::protocol::Response
 where
     H: ServerHandler + ToolHandler + ResourceHandler + PromptHandler + Send + Sync + 'static,
@@ -330,7 +330,7 @@ where
         client_caps,
         &server_caps,
         protocol_version,
-        peer,
+        peer.as_ref(),
     );
 
     match method {
@@ -355,6 +355,7 @@ where
                         client_caps.clone(),
                         server_caps.clone(),
                         protocol_version,
+                        std::sync::Arc::clone(&peer),
                     )
                     .await
                     {
