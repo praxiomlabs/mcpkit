@@ -147,7 +147,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - name: Check markdown links
+      # Covers Rust sources as well as markdown: rustdoc comments carry real
+      # reference links, and nothing was checking them — a 404 in
+      # extension/mod.rs survived because this job only ever globbed ./docs.
+      # The example.com/fixture-host exclusions below exist because doc examples
+      # and security tests embed deliberately-unreachable URLs.
+      - name: Check links in docs and rustdoc comments
         uses: lycheeverse/lychee-action@v2
         with:
           args: >
@@ -161,9 +166,18 @@ jobs:
             --exclude "^https://www.reddit.com"
             --exclude "^https://cliffle.com"
             --exclude "^https://img.shields.io"
+            --exclude "^https?://$"
+            --exclude "^https?://([^/]*\.)?example\.(com|org|net)([/:]|$)"
+            --exclude "^https?://([^/]*\.)?example([/:]|$)"
+            --exclude "^https?://[^./:]+([/:]|$)"
+            --exclude "^https?://[^/]*(trusted|malicious|evil)"
+            --exclude "^https?://(anything|app[0-9])\.com([/:]|$)"
             './docs/**/*.md'
             './README.md'
             './CONTRIBUTING.md'
+            './spec/**/*.md'
+            './crates/**/src/**/*.rs'
+            './mcpkit/src/**/*.rs'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
