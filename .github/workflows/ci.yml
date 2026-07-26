@@ -33,6 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       code: ${{ steps.filter.outputs.code }}
+      release-tooling: ${{ steps.filter.outputs.release-tooling }}
     steps:
       - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v3
@@ -47,6 +48,9 @@ jobs:
               - 'crates/mcpkit-transport/proto/**'
               - 'deny.toml'
               - '.github/workflows/ci.yml'
+            release-tooling:
+              - 'scripts/publish-crates*.sh'
+              - '.github/workflows/release.yml'
 
   # ==========================================================================
   # Fast checks - run first, fail fast
@@ -338,6 +342,16 @@ jobs:
   # never deadlocks a required check.
   # ==========================================================================
 
+  publish-script:
+    name: Publish Script Harness
+    needs: changes
+    if: ${{ needs.changes.outputs.release-tooling == 'true' || github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run publish-script harness (stub cargo, three paths)
+        run: bash scripts/publish-crates-test.sh
+
   ci-success:
     name: CI Success
     if: ${{ always() }}
@@ -355,6 +369,7 @@ jobs:
         msrv,
         test-matrix,
         semver,
+        publish-script,
       ]
     runs-on: ubuntu-latest
     steps:
