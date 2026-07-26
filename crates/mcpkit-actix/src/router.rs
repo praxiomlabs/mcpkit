@@ -1,6 +1,8 @@
 //! Router builder for MCP endpoints.
 
-use crate::handler::{handle_mcp_post, handle_oauth_protected_resource, handle_sse};
+use crate::handler::{
+    handle_mcp_delete, handle_mcp_post, handle_oauth_protected_resource, handle_sse,
+};
 use crate::state::{HasServerInfo, McpState, OAuthState};
 use actix_cors::Cors;
 use actix_web::middleware::Logger;
@@ -190,6 +192,32 @@ where
         self
     }
 
+    /// Set the timeouts for server-initiated (peer) requests.
+    #[must_use]
+    pub fn with_peer_timeouts(
+        mut self,
+        timeouts: mcpkit_server::adapter_peer::PeerTimeouts,
+    ) -> Self {
+        self.state.peer_timeouts = timeouts;
+        self
+    }
+
+    /// Override the peer reconnect grace. Test hook — the grace is a fixed
+    /// constant by design.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn with_reconnect_grace(mut self, grace: std::time::Duration) -> Self {
+        self.state.reconnect_grace = grace;
+        self
+    }
+
+    /// The router's shared state. Test hook.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn state(&self) -> McpState<H> {
+        self.state.clone()
+    }
+
     /// Configure an Actix App with MCP routes.
     ///
     /// This is useful when you need to integrate MCP routes with an existing Actix application.
@@ -200,8 +228,12 @@ where
         let oauth_metadata = self.oauth_metadata.clone();
 
         move |cfg: &mut web::ServiceConfig| {
+            // Spec: a single MCP endpoint serves POST, GET, and DELETE
+            // (#172). The separate SSE path is kept as a deprecated alias.
             cfg.app_data(web::Data::new(state.clone()))
                 .route(&post_path, web::post().to(handle_mcp_post::<H>))
+                .route(&post_path, web::get().to(handle_sse::<H>))
+                .route(&post_path, web::delete().to(handle_mcp_delete::<H>))
                 .route(&sse_path, web::get().to(handle_sse::<H>));
 
             // Add OAuth discovery endpoint if configured

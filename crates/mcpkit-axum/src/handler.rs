@@ -38,59 +38,6 @@ use std::convert::Infallible;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 
-/// Delivers peer messages onto the session's SSE stream registry.
-struct SessionStreamSink {
-    registry: Arc<mcpkit_server::streams::StreamRegistry>,
-}
-
-impl mcpkit_server::adapter_peer::SessionSink for SessionStreamSink {
-    fn send_notification(
-        &self,
-        message: Message,
-    ) -> std::pin::Pin<
-        Box<
-            dyn std::future::Future<Output = Result<(), mcpkit_server::adapter_peer::SinkError>>
-                + Send
-                + '_,
-        >,
-    > {
-        Box::pin(async move {
-            let json = serde_json::to_string(&message).map_err(|e| {
-                mcpkit_server::adapter_peer::SinkError::Serialization(e.to_string())
-            })?;
-            // Best-effort: with no live stream the notification is dropped
-            // (runtime parity — a client without a stream misses it).
-            let _ = self.registry.send("message", json);
-            Ok(())
-        })
-    }
-
-    fn send_request(
-        &self,
-        message: Message,
-    ) -> std::pin::Pin<
-        Box<
-            dyn std::future::Future<Output = Result<(), mcpkit_server::adapter_peer::SinkError>>
-                + Send
-                + '_,
-        >,
-    > {
-        Box::pin(async move {
-            let json = serde_json::to_string(&message).map_err(|e| {
-                mcpkit_server::adapter_peer::SinkError::Serialization(e.to_string())
-            })?;
-            self.registry
-                .send("message", json)
-                .map(|_| ())
-                .ok_or(mcpkit_server::adapter_peer::SinkError::NoClientStream)
-        })
-    }
-
-    fn has_live_stream(&self) -> bool {
-        self.registry.has_live_stream()
-    }
-}
-
 /// Build the request-capable peer for a session (#153 PR 4).
 ///
 /// Takes the session's parts rather than a `Session` snapshot so callers can
@@ -107,7 +54,9 @@ where
     H: HasServerInfo + Send + Sync + 'static,
 {
     mcpkit_server::adapter_peer::SessionPeer::new(
-        Arc::new(SessionStreamSink { registry: streams }),
+        Arc::new(mcpkit_server::adapter_peer::StreamRegistrySink::new(
+            streams,
+        )),
         outbound,
         state.peer_timeouts,
     )
