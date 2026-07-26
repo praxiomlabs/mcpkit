@@ -334,6 +334,10 @@ pub struct TaskManager {
     default_ttl_ms: Option<u64>,
     /// Optional observer of status transitions. Set at most once.
     observer: std::sync::OnceLock<Arc<dyn TaskObserver>>,
+    /// Suggested polling interval (milliseconds) stamped on created tasks.
+    /// `None` leaves `pollInterval` absent, which is legal — the field is a
+    /// hint, not a requirement.
+    default_poll_interval_ms: Option<u64>,
 }
 
 impl Default for TaskManager {
@@ -359,7 +363,21 @@ impl TaskManager {
             tasks: RwLock::new(HashMap::new()),
             default_ttl_ms,
             observer: std::sync::OnceLock::new(),
+            default_poll_interval_ms: None,
         }
+    }
+
+    /// Suggest a polling interval (milliseconds) on every task this manager
+    /// creates.
+    ///
+    /// `pollInterval` is optional in the spec — a requestor that receives none
+    /// simply picks its own rate. Setting one lets a server say how often it
+    /// expects to be polled, which is the difference between a client polling
+    /// sensibly and polling as fast as it can.
+    #[must_use]
+    pub const fn with_poll_interval(mut self, poll_interval_ms: Option<u64>) -> Self {
+        self.default_poll_interval_ms = poll_interval_ms;
+        self
     }
 
     /// Register the observer notified of every status transition.
@@ -393,6 +411,7 @@ impl TaskManager {
 
         let mut task = Task::create();
         task.ttl = ttl.or(self.default_ttl_ms);
+        task.poll_interval = self.default_poll_interval_ms;
         let task_id = task.task_id.clone();
 
         if let Ok(mut tasks) = self.tasks.write() {
@@ -840,6 +859,27 @@ async fn route_task_store_inner(
 
 #[cfg(test)]
 mod tests {
+
+    /// `pollInterval` is a hint the server may offer. It must be absent by
+    /// default (legal, and the pre-existing behaviour) and present once a
+    /// manager is configured to suggest one — the builder on `Task` was
+    /// previously unreachable from the store, so no task ever carried it.
+    #[test]
+    fn poll_interval_is_absent_by_default_and_set_when_configured() {
+        let plain = Arc::new(TaskManager::new());
+        let a = plain.create(None);
+        assert_eq!(a.task().expect("task").poll_interval, None);
+
+        let suggesting = Arc::new(TaskManager::new().with_poll_interval(Some(250)));
+        let b = suggesting.create(None);
+        let task = b.task().expect("task");
+        assert_eq!(task.poll_interval, Some(250));
+
+        // And it reaches the wire under the spec's camelCase name.
+        let wire = serde_json::to_value(&task).expect("serialize");
+        assert_eq!(wire["pollInterval"], 250);
+    }
+
     use super::*;
 
     /// Collects every event the manager emits.

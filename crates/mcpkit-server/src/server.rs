@@ -487,6 +487,11 @@ pub struct RuntimeConfig {
     /// Retention (milliseconds) applied to a task whose `tools/call` omits a
     /// `ttl`. `None` means unlimited (such tasks are never TTL-evicted).
     pub default_task_ttl_ms: Option<u64>,
+    /// Suggested polling interval (milliseconds) stamped on tasks the runtime
+    /// creates, surfaced to the client as `pollInterval`. `None` (the default)
+    /// leaves it absent, which is legal — the field is a hint, so a requestor
+    /// that receives none picks its own rate.
+    pub default_task_poll_interval_ms: Option<u64>,
     /// Whether to publish `notifications/tasks/status` when a task changes
     /// status. Optional per spec ("Receivers MAY send"), so this can be turned
     /// off for a chattier-than-wanted session without affecting conformance;
@@ -501,6 +506,7 @@ impl Default for RuntimeConfig {
             max_concurrent_requests: 100,
             outbound_request_timeout: Duration::from_secs(60),
             default_task_ttl_ms: Some(crate::capability::tasks::DEFAULT_TASK_TTL_MS),
+            default_task_poll_interval_ms: None,
             task_status_notifications: true,
         }
     }
@@ -539,6 +545,13 @@ impl RuntimeConfig {
     #[must_use]
     pub const fn default_task_ttl_ms(mut self, ttl_ms: Option<u64>) -> Self {
         self.default_task_ttl_ms = ttl_ms;
+        self
+    }
+
+    /// Suggested polling interval (milliseconds) for tasks the runtime creates.
+    #[must_use]
+    pub const fn default_task_poll_interval_ms(mut self, poll_interval_ms: Option<u64>) -> Self {
+        self.default_task_poll_interval_ms = poll_interval_ms;
         self
     }
 
@@ -1255,9 +1268,10 @@ where
         config: RuntimeConfig,
     ) -> Self {
         let caps = server.capabilities().clone();
-        let task_store = Arc::new(crate::capability::tasks::TaskManager::with_default_ttl(
-            config.default_task_ttl_ms,
-        ));
+        let task_store = Arc::new(
+            crate::capability::tasks::TaskManager::with_default_ttl(config.default_task_ttl_ms)
+                .with_poll_interval(config.default_task_poll_interval_ms),
+        );
         let state = Arc::new(ServerState::new(caps));
         if config.task_status_notifications {
             // Transitions have no request-scoped peer, so they publish onto the
