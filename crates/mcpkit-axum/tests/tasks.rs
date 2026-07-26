@@ -258,3 +258,21 @@ async fn tasks_are_isolated_per_session() {
     let (ga, _) = post(&state, Some(&sid_a), task_method(4, "tasks/get", &task_id)).await;
     assert!(ga["error"].is_null(), "session A lost its own task: {ga}");
 }
+
+/// Spec (Streamable HTTP): a POSTed JSON-RPC *response* is accepted with
+/// 202, not rejected — clients deliver responses to server-initiated
+/// requests this way (#153 PR 0a; correlation lands with the session peer).
+#[tokio::test]
+async fn response_post_is_accepted_with_202() {
+    use axum::response::IntoResponse;
+    let (state, _) = state();
+    let response = mcpkit_axum::handle_mcp_post(
+        State(state),
+        HeaderMap::new(),
+        None,
+        r#"{"jsonrpc":"2.0","id":42,"result":{"roots":[]}}"#.to_string(),
+    )
+    .await
+    .into_response();
+    assert_eq!(response.status(), axum::http::StatusCode::ACCEPTED);
+}

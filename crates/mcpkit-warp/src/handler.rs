@@ -193,17 +193,22 @@ where
                 StatusCode::ACCEPTED,
             ))
         }
-        _ => {
-            warn!("Unexpected message type received");
-            let error_body = serde_json::json!({
-                "error": {
-                    "code": -32600,
-                    "message": "Expected request or notification"
-                }
-            });
+        // Spec (Streamable HTTP): a client delivers responses to
+        // server-initiated requests by POSTing them; "if the server accepts
+        // the input, the server MUST return HTTP status code 202 Accepted
+        // with no body". Correlation with a pending server-initiated request
+        // arrives with the session peer (#153); until then this is
+        // log-and-drop, matching the runtime's `route_response` for ids that
+        // match no pending request.
+        Message::Response(response) => {
+            debug!(
+                id = %response.id,
+                session_id = %session_id,
+                "Received client response (no pending server-initiated request; dropped)"
+            );
             Ok(warp::reply::with_status(
-                warp::reply::json(&error_body),
-                StatusCode::BAD_REQUEST,
+                warp::reply::json(&serde_json::json!({})),
+                StatusCode::ACCEPTED,
             ))
         }
     }

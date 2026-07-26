@@ -194,9 +194,23 @@ where
             )
                 .into_response()
         }
-        _ => {
-            warn!("Unexpected message type received");
-            ExtensionError::InvalidMessage("Expected request or notification".to_string())
+        // Spec (Streamable HTTP): a client delivers responses to
+        // server-initiated requests by POSTing them; "if the server accepts
+        // the input, the server MUST return HTTP status code 202 Accepted
+        // with no body". Correlation with a pending server-initiated request
+        // arrives with the session peer (#153); until then this is
+        // log-and-drop, matching the runtime's `route_response` for ids that
+        // match no pending request.
+        Message::Response(response) => {
+            debug!(
+                id = %response.id,
+                session_id = %session_id,
+                "Received client response (no pending server-initiated request; dropped)"
+            );
+            (
+                StatusCode::ACCEPTED,
+                [("mcp-session-id", session_id.as_str())],
+            )
                 .into_response()
         }
     }

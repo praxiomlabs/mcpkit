@@ -318,3 +318,21 @@ async fn test_without_cors() {
             .is_none()
     );
 }
+
+/// Spec (Streamable HTTP): a POSTed JSON-RPC *response* is accepted with
+/// 202, not rejected (#153 PR 0a).
+#[tokio::test]
+async fn response_post_is_accepted_with_202() {
+    let filter = McpRouter::new(TestHandler).into_filter();
+
+    let response = warp::test::request()
+        .method("POST")
+        .path("/mcp")
+        .header("content-type", "application/json")
+        .header("mcp-protocol-version", "2025-11-25")
+        .body(r#"{"jsonrpc":"2.0","id":42,"result":{"roots":[]}}"#)
+        .reply(&filter)
+        .await;
+
+    assert_eq!(response.status(), 202);
+}
