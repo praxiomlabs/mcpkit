@@ -361,3 +361,52 @@ async fn unknown_method_is_still_method_not_found() {
         "a non-spec tasks/* method must stay -32601: {resp}"
     );
 }
+
+/// A task transition must reach the client over the session's SSE stream.
+///
+/// The adapters have no run loop, so they cannot use the runtime's ambient
+/// pump; their task store publishes onto the session's stream registry
+/// instead. Without that wiring `notifications/tasks/status` was implemented
+/// but never emitted on any HTTP transport.
+#[tokio::test]
+async fn task_transition_publishes_status_notification_on_the_session_stream() {
+    let (state, _) = state();
+    let sid = init_session(&state).await;
+
+    // Open the stream *before* the transition: delivery is store-and-forward
+    // for a live stream only.
+    let session = state.sessions.get(&sid).expect("session exists");
+    let (mut stream, _prime) = session.streams.open("message", "{}".to_string());
+
+    let (resp, _) = post(&state, Some(&sid), call_task(1, "echo")).await;
+    assert!(resp["error"].is_null(), "augmented call errored: {resp}");
+
+    let mut other_events = Vec::new();
+    let notification = loop {
+        let event = tokio::time::timeout(Duration::from_secs(5), stream.recv())
+            .await
+            .expect("timed out waiting for a task status notification")
+            .expect("stream closed before the notification arrived");
+        match serde_json::from_str::<serde_json::Value>(&event.data) {
+            Ok(json) if json["method"] == "notifications/tasks/status" => break json,
+            Ok(json) => other_events.push(json),
+            Err(_) => {}
+        }
+        assert!(
+            other_events.len() < 16,
+            "no task status notification among {other_events:?}"
+        );
+    };
+
+    assert_eq!(notification["params"]["status"], "completed");
+    assert!(
+        notification["params"]["taskId"].is_string(),
+        "status notification must carry the taskId: {notification}"
+    );
+    // Per spec the status notification must not be tagged with
+    // `io.modelcontextprotocol/related-task`; the taskId is already in params.
+    assert!(
+        notification["params"]["_meta"].is_null(),
+        "status notification must not carry _meta: {notification}"
+    );
+}

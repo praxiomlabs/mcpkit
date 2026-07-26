@@ -143,3 +143,30 @@ async fn unknown_task_id_is_invalid_params_not_method_not_found() {
         );
     }
 }
+
+use mcpkit_actix::SessionStore;
+
+/// Every session this adapter creates must build its task store *wired to its
+/// own stream registry*, or `notifications/tasks/status` is implemented and
+/// never emitted on this transport.
+#[actix_rt::test]
+async fn session_task_store_is_wired_to_the_session_stream() {
+    let store = SessionStore::new(std::time::Duration::from_secs(60));
+    let id = store.create();
+    let session = store.get(&id).expect("session exists");
+    let (tasks, streams) = (session.tasks, session.streams);
+
+    let (mut stream, _prime) = streams.open("message", "{}".to_string());
+    let task = tasks.create(None);
+    task.complete(serde_json::json!({"ok": true}))
+        .expect("complete");
+
+    let event = tokio::time::timeout(std::time::Duration::from_secs(5), stream.recv())
+        .await
+        .expect("no notification reached the session stream")
+        .expect("stream closed");
+    let json: serde_json::Value = serde_json::from_str(&event.data).expect("json");
+    assert_eq!(json["method"], "notifications/tasks/status");
+    assert_eq!(json["params"]["taskId"], task.id().as_str());
+    assert_eq!(json["params"]["status"], "completed");
+}

@@ -66,6 +66,9 @@ impl Session {
     #[must_use]
     pub fn with_user(id: String, user: Option<VerifiedUser>) -> Self {
         let now = Instant::now();
+        // The store is built from the stream registry so task transitions
+        // publish `notifications/tasks/status` onto this session's SSE stream.
+        let streams = Arc::new(StreamRegistry::new(StreamConfig::default()));
         Self {
             id,
             created_at: now,
@@ -74,8 +77,11 @@ impl Session {
             client_capabilities: None,
             protocol_version: None,
             user,
-            tasks: Arc::new(mcpkit_server::capability::tasks::TaskManager::new()),
-            streams: Arc::new(StreamRegistry::new(StreamConfig::default())),
+            tasks: mcpkit_server::capability::tasks::session_task_store(
+                &streams,
+                Some(mcpkit_server::capability::tasks::DEFAULT_TASK_TTL_MS),
+            ),
+            streams,
             outbound_owner: Arc::new(OutboundOwner::new()),
             hooks: Arc::new(std::sync::Mutex::new(tokio::task::JoinSet::new())),
         }
@@ -217,10 +223,14 @@ impl SessionStore {
         self.cleanup_expired();
         let id = uuid::Uuid::new_v4().to_string();
         let mut session = Session::with_user(id.clone(), user);
-        session.tasks = Arc::new(
-            mcpkit_server::capability::tasks::TaskManager::with_default_ttl(self.default_task_ttl),
-        );
+        // Streams first: the task store observes them (see `session_task_store`),
+        // so replacing the registry afterwards would leave the store publishing
+        // onto a discarded one.
         session.streams = Arc::new(StreamRegistry::new(self.stream_config.clone()));
+        session.tasks = mcpkit_server::capability::tasks::session_task_store(
+            &session.streams,
+            self.default_task_ttl,
+        );
         self.sessions.insert(id.clone(), session);
         id
     }
