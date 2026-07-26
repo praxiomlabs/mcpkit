@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking (axum):** the axum adapter's SSE side now attaches to the same
+  session the POST side creates, fixing two standing spec/security defects
+  (#172, #173) as #153's PR 1 (axum-first; actix/warp/rocket follow in their
+  port PRs):
+  - The MCP endpoint now serves **GET** (spec MUST: one endpoint for POST and
+    GET). Previously SSE lived only at the separate, protocol-undiscoverable
+    `/mcp/sse` path, so a compliant client GETting the MCP endpoint got 405
+    and correctly concluded no stream existed. The old path remains as a
+    deprecated alias.
+  - `Session` now owns its SSE broadcast channel and event store; the
+    separate `SessionManager` registry (with its own id space) is **removed**
+    (`McpState.sse_sessions`, `SessionManager`, and
+    `McpState::with_sessions`' second parameter are gone). The SSE binding
+    check is now enforced against the same registry that holds the user
+    binding, so it can no longer pass vacuously: a GET without
+    `mcp-session-id` is 400, an unknown id is **404** (previously the adapter
+    silently minted a new SSE session under a different id — a
+    client-presented id is never adopted), and a mismatched user is 403
+    ([#172](https://github.com/praxiomlabs/mcpkit/issues/172),
+    [#173](https://github.com/praxiomlabs/mcpkit/issues/173)).
+
 - **Breaking (behavior):** the HTTP adapters now require `mcp-session-id` on
   every message except `initialize` — a non-initialize request, notification,
   or response without it gets `400 Bad Request` (spec: servers assigning

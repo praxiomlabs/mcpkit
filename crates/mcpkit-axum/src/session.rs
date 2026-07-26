@@ -33,6 +33,12 @@ pub struct Session {
     /// session so one session cannot read or cancel another's tasks (matching
     /// the stdio runtime's per-connection store).
     pub tasks: Arc<mcpkit_server::capability::tasks::TaskManager>,
+    /// Sender for this session's SSE stream(s). Owned by the session (#153
+    /// PR 1): streams attach to the POST-created session rather than a
+    /// separate SSE registry with its own id space.
+    pub tx: broadcast::Sender<String>,
+    /// Stored events for SSE resumability (`Last-Event-ID` replay).
+    pub events: Arc<EventStore>,
 }
 
 impl Session {
@@ -46,6 +52,7 @@ impl Session {
     #[must_use]
     pub fn with_user(id: String, user: Option<VerifiedUser>) -> Self {
         let now = Instant::now();
+        let (tx, _rx) = broadcast::channel(100);
         Self {
             id,
             created_at: now,
@@ -55,6 +62,8 @@ impl Session {
             protocol_version: None,
             user,
             tasks: Arc::new(mcpkit_server::capability::tasks::TaskManager::new()),
+            tx,
+            events: Arc::new(EventStore::new(EventStoreConfig::default())),
         }
     }
 
@@ -335,178 +344,6 @@ impl EventStore {
     }
 }
 
-/// Session manager for SSE connections.
-///
-/// Manages broadcast channels for pushing messages to SSE clients,
-/// with optional event storage for message resumability.
-#[derive(Debug)]
-pub struct SessionManager {
-    sessions: DashMap<String, broadcast::Sender<String>>,
-    /// Event stores for each session (for SSE resumability).
-    event_stores: DashMap<String, Arc<EventStore>>,
-    /// Configuration for event stores.
-    event_store_config: EventStoreConfig,
-}
-
-impl Default for SessionManager {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl SessionManager {
-    /// Create a new session manager.
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            sessions: DashMap::new(),
-            event_stores: DashMap::new(),
-            event_store_config: EventStoreConfig::default(),
-        }
-    }
-
-    /// Create a new session manager with custom event store configuration.
-    #[must_use]
-    pub fn with_event_store_config(config: EventStoreConfig) -> Self {
-        Self {
-            sessions: DashMap::new(),
-            event_stores: DashMap::new(),
-            event_store_config: config,
-        }
-    }
-
-    /// Create a new session and return its ID and receiver.
-    #[must_use]
-    pub fn create_session(&self) -> (String, broadcast::Receiver<String>) {
-        let id = uuid::Uuid::new_v4().to_string();
-        let (tx, rx) = broadcast::channel(100);
-        self.sessions.insert(id.clone(), tx);
-
-        // Create an event store for this session
-        let event_store = Arc::new(EventStore::new(self.event_store_config.clone()));
-        self.event_stores.insert(id.clone(), event_store);
-
-        (id, rx)
-    }
-
-    /// Get a receiver for an existing session.
-    #[must_use]
-    pub fn get_receiver(&self, id: &str) -> Option<broadcast::Receiver<String>> {
-        self.sessions.get(id).map(|tx| tx.subscribe())
-    }
-
-    /// Get the event store for a session.
-    #[must_use]
-    pub fn get_event_store(&self, id: &str) -> Option<Arc<EventStore>> {
-        self.event_stores.get(id).map(|store| Arc::clone(&store))
-    }
-
-    /// Send a message to a specific session.
-    ///
-    /// Returns `true` if the message was sent, `false` if the session doesn't exist.
-    #[must_use]
-    pub fn send_to_session(&self, id: &str, message: String) -> bool {
-        if let Some(tx) = self.sessions.get(id) {
-            // Ignore send errors (no receivers)
-            let _ = tx.send(message);
-            true
-        } else {
-            false
-        }
-    }
-
-    /// Send a message to a specific session and store it for replay.
-    ///
-    /// This method stores the event in the event store before sending,
-    /// enabling message resumability for clients that reconnect.
-    ///
-    /// Returns the event ID if the message was sent and stored, `None` if the session doesn't exist.
-    #[must_use]
-    pub fn send_to_session_with_storage(
-        &self,
-        session_id: &str,
-        event_type: impl Into<String>,
-        message: String,
-    ) -> Option<String> {
-        if let Some(tx) = self.sessions.get(session_id) {
-            // Store the event first
-            let event_id = if let Some(store) = self.event_stores.get(session_id) {
-                store.store_auto_id(event_type, message.clone())
-            } else {
-                // Create a store if it doesn't exist (shouldn't happen normally)
-                let store = Arc::new(EventStore::new(self.event_store_config.clone()));
-                let event_id = store.store_auto_id(event_type, message.clone());
-                self.event_stores.insert(session_id.to_string(), store);
-                event_id
-            };
-
-            // Send the message
-            let _ = tx.send(message);
-            Some(event_id)
-        } else {
-            None
-        }
-    }
-
-    /// Broadcast a message to all sessions.
-    pub fn broadcast(&self, message: String) {
-        for entry in &self.sessions {
-            let _ = entry.value().send(message.clone());
-        }
-    }
-
-    /// Broadcast a message to all sessions with storage.
-    ///
-    /// Stores the event in each session's event store for resumability.
-    pub fn broadcast_with_storage(&self, event_type: impl Into<String> + Clone, message: String) {
-        for entry in &self.sessions {
-            let session_id = entry.key();
-
-            // Store in event store
-            if let Some(store) = self.event_stores.get(session_id) {
-                store.store_auto_id(event_type.clone(), message.clone());
-            }
-
-            // Send
-            let _ = entry.value().send(message.clone());
-        }
-    }
-
-    /// Remove a session.
-    pub fn remove_session(&self, id: &str) {
-        self.sessions.remove(id);
-        self.event_stores.remove(id);
-    }
-
-    /// Get the number of active sessions.
-    #[must_use]
-    pub fn session_count(&self) -> usize {
-        self.sessions.len()
-    }
-
-    /// Clean up expired events across all sessions.
-    pub async fn cleanup_expired_events(&self) {
-        for entry in &self.event_stores {
-            entry.value().cleanup_expired().await;
-        }
-    }
-
-    /// Get events after the specified event ID for replay.
-    ///
-    /// Used when a client reconnects with `Last-Event-ID`.
-    pub async fn get_events_for_replay(
-        &self,
-        session_id: &str,
-        last_event_id: &str,
-    ) -> Option<Vec<StoredEvent>> {
-        if let Some(store) = self.event_stores.get(session_id) {
-            Some(store.get_events_after(last_event_id).await)
-        } else {
-            None
-        }
-    }
-}
-
 /// Default timeout after which a session created but never initialized is
 /// reaped.
 pub const DEFAULT_INIT_TIMEOUT: Duration = Duration::from_secs(30);
@@ -522,6 +359,8 @@ pub struct SessionStore {
     /// Default task retention (ms) applied to each session's task store; `None`
     /// means unlimited. Configure via `McpRouter::with_task_ttl`.
     pub(crate) default_task_ttl: Option<u64>,
+    /// Event-store configuration applied to each session's SSE event buffer.
+    event_store_config: EventStoreConfig,
 }
 
 impl SessionStore {
@@ -536,6 +375,7 @@ impl SessionStore {
             timeout,
             init_timeout: DEFAULT_INIT_TIMEOUT,
             default_task_ttl: Some(mcpkit_server::capability::tasks::DEFAULT_TASK_TTL_MS),
+            event_store_config: EventStoreConfig::default(),
         }
     }
 
@@ -551,6 +391,55 @@ impl SessionStore {
     pub const fn with_init_timeout(mut self, init_timeout: Duration) -> Self {
         self.init_timeout = init_timeout;
         self
+    }
+
+    /// Set the event-store configuration applied to each new session's SSE
+    /// event buffer.
+    #[must_use]
+    pub fn with_event_store_config(mut self, config: EventStoreConfig) -> Self {
+        self.event_store_config = config;
+        self
+    }
+
+    /// Subscribe to a session's SSE stream. `None` if the session is unknown.
+    #[must_use]
+    pub fn subscribe(&self, id: &str) -> Option<broadcast::Receiver<String>> {
+        self.sessions.get(id).map(|s| s.tx.subscribe())
+    }
+
+    /// The event store backing a session's SSE resumability. `None` if the
+    /// session is unknown.
+    #[must_use]
+    pub fn events(&self, id: &str) -> Option<Arc<EventStore>> {
+        self.sessions.get(id).map(|s| Arc::clone(&s.events))
+    }
+
+    /// Store `message` for resumability and send it on the session's SSE
+    /// stream, returning the stored event id. `None` if the session is
+    /// unknown.
+    #[must_use]
+    pub fn send_with_storage(
+        &self,
+        id: &str,
+        event_type: impl Into<String>,
+        message: String,
+    ) -> Option<String> {
+        let session = self.sessions.get(id)?;
+        let event_id = session.events.store_auto_id(event_type, message.clone());
+        // Ignore send errors (no receivers): the event is stored for replay.
+        let _ = session.tx.send(message);
+        Some(event_id)
+    }
+
+    /// Get events after `last_event_id` for `Last-Event-ID` replay. `None` if
+    /// the session is unknown.
+    pub async fn events_for_replay(
+        &self,
+        id: &str,
+        last_event_id: &str,
+    ) -> Option<Vec<StoredEvent>> {
+        let store = self.events(id)?;
+        Some(store.get_events_after(last_event_id).await)
     }
 
     /// Create a new session and return its ID.
@@ -574,6 +463,7 @@ impl SessionStore {
         session.tasks = Arc::new(
             mcpkit_server::capability::tasks::TaskManager::with_default_ttl(self.default_task_ttl),
         );
+        session.events = Arc::new(EventStore::new(self.event_store_config.clone()));
         self.sessions.insert(id.clone(), session);
         id
     }
@@ -790,20 +680,28 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_session_manager() -> Result<(), Box<dyn std::error::Error>> {
-        let manager = SessionManager::new();
-        let (id, mut rx) = manager.create_session();
+    async fn session_stream_send_and_receive() -> Result<(), Box<dyn std::error::Error>> {
+        let store = SessionStore::with_default_timeout();
+        let id = store.create();
+        let mut rx = store.subscribe(&id).ok_or("session missing")?;
 
-        // Send a message
-        assert!(manager.send_to_session(&id, "test message".to_string()));
+        // Send a message (stored + broadcast).
+        assert!(
+            store
+                .send_with_storage(&id, "message", "test message".to_string())
+                .is_some()
+        );
 
-        // Receive the message
         let msg = rx.recv().await?;
         assert_eq!(msg, "test message");
 
-        // Remove session
-        manager.remove_session(&id);
-        assert!(!manager.send_to_session(&id, "another".to_string()));
+        // Unknown session: no subscription, no send.
+        assert!(store.subscribe("nope").is_none());
+        assert!(
+            store
+                .send_with_storage("nope", "message", "x".to_string())
+                .is_none()
+        );
         Ok(())
     }
 
@@ -908,62 +806,50 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_session_manager_with_event_store() -> Result<(), Box<dyn std::error::Error>> {
-        let manager = SessionManager::new();
-        let (id, _rx) = manager.create_session();
+    async fn session_has_event_store() -> Result<(), Box<dyn std::error::Error>> {
+        let store = SessionStore::with_default_timeout();
+        let id = store.create();
 
-        // Event store should be created automatically
-        let store = manager.get_event_store(&id);
-        assert!(store.is_some());
-
-        let store = store.ok_or("Event store not found")?;
-        assert!(store.is_empty().await);
+        // Event store is created with the session.
+        let events = store.events(&id);
+        assert!(events.is_some());
+        assert!(events.ok_or("Event store not found")?.is_empty().await);
         Ok(())
     }
 
     #[tokio::test]
-    async fn test_session_manager_send_with_storage() -> Result<(), Box<dyn std::error::Error>> {
-        let manager = SessionManager::new();
-        let (id, mut rx) = manager.create_session();
+    async fn session_send_with_storage_stores_event() -> Result<(), Box<dyn std::error::Error>> {
+        let store = SessionStore::with_default_timeout();
+        let id = store.create();
+        let mut rx = store.subscribe(&id).ok_or("session missing")?;
 
-        // Send with storage
-        let event_id =
-            manager.send_to_session_with_storage(&id, "message", "test data".to_string());
+        let event_id = store.send_with_storage(&id, "message", "test data".to_string());
         assert!(event_id.is_some());
 
-        // Verify message was received
         let msg = rx.recv().await?;
         assert_eq!(msg, "test data");
 
-        // Verify event was stored
-        let store = manager
-            .get_event_store(&id)
-            .ok_or("Event store not found")?;
-        assert_eq!(store.len().await, 1);
-
-        let events = store.get_all_events().await;
-        assert_eq!(events[0].data, "test data");
-        assert_eq!(events[0].event_type, "message");
+        let events = store.events(&id).ok_or("Event store not found")?;
+        assert_eq!(events.len().await, 1);
         Ok(())
     }
 
     #[tokio::test]
-    async fn test_session_manager_replay() -> Result<(), Box<dyn std::error::Error>> {
-        let manager = SessionManager::new();
-        let (id, _rx) = manager.create_session();
+    async fn session_replay_returns_events_after_last_id() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let store = SessionStore::with_default_timeout();
+        let id = store.create();
 
-        // Send multiple messages with storage
-        let _ = manager.send_to_session_with_storage(&id, "message", "msg1".to_string());
-        let evt2 = manager.send_to_session_with_storage(&id, "message", "msg2".to_string());
-        let _ = manager.send_to_session_with_storage(&id, "message", "msg3".to_string());
+        let _ = store.send_with_storage(&id, "message", "msg1".to_string());
+        let evt2 = store.send_with_storage(&id, "message", "msg2".to_string());
+        let _ = store.send_with_storage(&id, "message", "msg3".to_string());
 
-        // Simulate reconnection - get events after evt2
-        let events = manager
-            .get_events_for_replay(&id, &evt2.ok_or("Failed to get event ID")?)
+        // Simulate reconnection: get events after evt2.
+        let events = store
+            .events_for_replay(&id, &evt2.ok_or("Failed to get event ID")?)
             .await
             .ok_or("Failed to get events for replay")?;
 
-        // Should only get msg3
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].data, "msg3");
         Ok(())
