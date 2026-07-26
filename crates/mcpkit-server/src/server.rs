@@ -472,6 +472,11 @@ pub struct RuntimeConfig {
     /// Retention (milliseconds) applied to a task whose `tools/call` omits a
     /// `ttl`. `None` means unlimited (such tasks are never TTL-evicted).
     pub default_task_ttl_ms: Option<u64>,
+    /// Whether to publish `notifications/tasks/status` when a task changes
+    /// status. Optional per spec ("Receivers MAY send"), so this can be turned
+    /// off for a chattier-than-wanted session without affecting conformance;
+    /// requestors must not rely on receiving it either way.
+    pub task_status_notifications: bool,
 }
 
 impl Default for RuntimeConfig {
@@ -481,6 +486,7 @@ impl Default for RuntimeConfig {
             max_concurrent_requests: 100,
             outbound_request_timeout: Duration::from_secs(60),
             default_task_ttl_ms: Some(crate::capability::tasks::DEFAULT_TASK_TTL_MS),
+            task_status_notifications: true,
         }
     }
 }
@@ -1177,10 +1183,18 @@ where
         let task_store = Arc::new(crate::capability::tasks::TaskManager::with_default_ttl(
             config.default_task_ttl_ms,
         ));
+        let state = Arc::new(ServerState::new(caps));
+        if config.task_status_notifications {
+            // Transitions have no request-scoped peer, so they publish onto the
+            // ambient queue the run loop drains.
+            let _ = task_store.set_observer(Arc::new(
+                crate::capability::tasks::TaskStatusNotifier::new(state.clone()),
+            ));
+        }
         Self {
             server,
             transport: Arc::new(transport),
-            state: Arc::new(ServerState::new(caps)),
+            state,
             task_store,
             config,
         }
@@ -1755,6 +1769,89 @@ mod tests {
             0,
             "on_roots_list_changed must not fire without the roots capability"
         );
+
+        drop(client);
+        let _ = timeout(Duration::from_secs(2), handle).await;
+    }
+
+    #[tokio::test]
+    async fn task_transition_publishes_status_notification() {
+        let (client, server) = MemoryTransport::pair();
+        let state = Arc::new(ServerState::new(ServerCapabilities::default()));
+        state.set_initialized();
+        let task_store = Arc::new(crate::capability::tasks::TaskManager::new());
+        task_store
+            .set_observer(Arc::new(crate::capability::tasks::TaskStatusNotifier::new(
+                state.clone(),
+            )))
+            .expect("install observer");
+        let runtime = ServerRuntime {
+            server: PingRouter,
+            transport: Arc::new(server),
+            state,
+            task_store: Arc::clone(&task_store),
+            config: RuntimeConfig::default(),
+        };
+        let handle = tokio::spawn(async move { runtime.run().await });
+
+        // An ambient transition: no inbound request triggered it, so there is no
+        // request-scoped peer. It must still reach the wire.
+        let task = task_store.create(None);
+        task.complete(serde_json::json!({"ok": true}))
+            .expect("complete");
+
+        let msg = timeout(Duration::from_secs(2), client.recv())
+            .await
+            .expect("no notification (loop never drained the queue?)")
+            .expect("recv ok")
+            .expect("some message");
+        let Message::Notification(notification) = msg else {
+            panic!("expected notification, got {msg:?}");
+        };
+        assert_eq!(notification.method, "notifications/tasks/status");
+
+        let params = notification.params.expect("params");
+        assert_eq!(params["taskId"], task.id().as_str());
+        assert_eq!(params["status"], "completed");
+        // Per spec the status notification must not be tagged with
+        // `io.modelcontextprotocol/related-task`; the taskId is already here.
+        assert!(
+            params.get("_meta").is_none(),
+            "status notification must not carry _meta: {params}"
+        );
+
+        drop(client);
+        let _ = timeout(Duration::from_secs(2), handle).await;
+    }
+
+    #[tokio::test]
+    async fn task_status_notifications_can_be_disabled() {
+        let (client, server) = MemoryTransport::pair();
+        let state = Arc::new(ServerState::new(ServerCapabilities::default()));
+        state.set_initialized();
+        let config = RuntimeConfig {
+            task_status_notifications: false,
+            ..RuntimeConfig::default()
+        };
+        // Mirrors `with_config`: the observer is simply not installed.
+        let task_store = Arc::new(crate::capability::tasks::TaskManager::new());
+        let runtime = ServerRuntime {
+            server: PingRouter,
+            transport: Arc::new(server),
+            state,
+            task_store: Arc::clone(&task_store),
+            config,
+        };
+        let handle = tokio::spawn(async move { runtime.run().await });
+
+        let task = task_store.create(None);
+        task.complete(serde_json::json!({})).expect("complete");
+
+        // Nothing ambient should appear; a ping still answers, proving the loop
+        // is alive rather than merely slow.
+        client.send(req("ping", 1)).await.expect("send");
+        let resp = next_response(&client).await;
+        assert_eq!(resp.id, RequestId::Number(1));
 
         drop(client);
         let _ = timeout(Duration::from_secs(2), handle).await;

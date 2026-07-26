@@ -8,14 +8,63 @@
 //! module re-exports it and adds the server-only [`TaskService`].
 
 pub use mcpkit_core::tasks::{
-    DEFAULT_TASK_TTL_MS, RELATED_TASK_META_KEY, TaskHandle, TaskManager, TaskPayload, TaskState,
-    route_task_store,
+    DEFAULT_TASK_TTL_MS, RELATED_TASK_META_KEY, TaskEvent, TaskHandle, TaskManager, TaskObserver,
+    TaskPayload, TaskState, route_task_store,
 };
+
+/// Publishes `notifications/tasks/status` when a task changes status.
+///
+/// The store emits domain events ([`TaskEvent`]); this adapter is the only place
+/// that decides a transition is worth telling the client about. It queues onto
+/// the server's ambient-notification path rather than sending directly, because
+/// a transition has no request-scoped peer to send on.
+///
+/// Per spec the notification carries the task state in `params` and must **not**
+/// be tagged with `io.modelcontextprotocol/related-task` — the `taskId` is
+/// already there. [`TaskStatusNotificationParams`] carries no `_meta` when built
+/// from a [`Task`](mcpkit_core::types::task::Task), which is what keeps that true.
+pub struct TaskStatusNotifier {
+    state: Arc<crate::server::ServerState>,
+}
+
+impl std::fmt::Debug for TaskStatusNotifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // `ServerState` is not `Debug` (it holds locks and a capability set);
+        // the observer's identity is all a reader needs here.
+        f.debug_struct("TaskStatusNotifier").finish_non_exhaustive()
+    }
+}
+
+impl TaskStatusNotifier {
+    /// Publish status transitions onto `state`'s ambient notification queue.
+    #[must_use]
+    pub const fn new(state: Arc<crate::server::ServerState>) -> Self {
+        Self { state }
+    }
+}
+
+impl TaskObserver for TaskStatusNotifier {
+    fn on_task_event(&self, event: &TaskEvent) {
+        let params = TaskStatusNotificationParams::from(event.task.clone());
+        match serde_json::to_value(params) {
+            Ok(params) => self.state.publish_notification(Notification::with_params(
+                crate::router::notifications::TASK_STATUS,
+                params,
+            )),
+            Err(e) => {
+                tracing::warn!(error = ?e, "failed to serialize task status notification");
+            }
+        }
+    }
+}
 
 use crate::context::Context;
 use crate::handler::TaskHandler;
 use mcpkit_core::error::McpError;
-use mcpkit_core::types::task::{CancelTaskResult, GetTaskResult, ListTasksResult, TaskId};
+use mcpkit_core::protocol::Notification;
+use mcpkit_core::types::task::{
+    CancelTaskResult, GetTaskResult, ListTasksResult, TaskId, TaskStatusNotificationParams,
+};
 use std::sync::Arc;
 
 /// Task service implementing the [`TaskHandler`] trait over a [`TaskManager`].

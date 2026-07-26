@@ -84,8 +84,13 @@ pub mod notifications {
     pub const TOOLS_LIST_CHANGED: &str = "notifications/tools/list_changed";
     /// Sent when the list of available prompts has changed.
     pub const PROMPTS_LIST_CHANGED: &str = "notifications/prompts/list_changed";
+    /// Sent by the client when its list of roots has changed.
+    pub const ROOTS_LIST_CHANGED: &str = "notifications/roots/list_changed";
     /// Sent when a URL-mode elicitation's out-of-band interaction has completed.
     pub const ELICITATION_COMPLETE: &str = "notifications/elicitation/complete";
+    /// Sent by a task receiver when a task changes status. Optional per spec:
+    /// requestors must not rely on receiving it.
+    pub const TASK_STATUS: &str = "notifications/tasks/status";
 }
 
 /// Represents a parsed MCP request with typed parameters.
@@ -1741,6 +1746,15 @@ mod tests {
             notifications::PROMPTS_LIST_CHANGED,
             "notifications/prompts/list_changed"
         );
+        assert_eq!(
+            notifications::ROOTS_LIST_CHANGED,
+            "notifications/roots/list_changed"
+        );
+        assert_eq!(
+            notifications::ELICITATION_COMPLETE,
+            "notifications/elicitation/complete"
+        );
+        assert_eq!(notifications::TASK_STATUS, "notifications/tasks/status");
     }
 
     #[tokio::test]
