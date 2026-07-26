@@ -7,6 +7,123 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Spec-conformance audit
+
+An audit against the official MCP schema, vendored and pinned at
+`spec/2025-11-25/schema.json`. The workspace's "compliance" suites asserted
+mcpkit's types against mcpkit's own constants; this introduces an external
+artifact and diffs against it in CI.
+
+**Breaking changes** — all pre-1.0, and each of the kind that becomes impossible
+to make after 1.0. Migration for each is below.
+
+1. **`route_task_store` returns `TaskRoute`**, not
+   `Option<Result<Value, McpError>>`. `None` conflated "not a task method" with
+   "a task method whose id I do not own", and four of six callers read the
+   second as the first — answering an unknown `taskId` with *method not found*
+   instead of *invalid params*.
+   *Migration:* append `.or_unknown_task()` to restore an `Option` with
+   spec-correct behaviour. Callers that have their own task handler should match
+   on `TaskRoute` and offer the id there first.
+
+2. **`RuntimeConfig` and 13 other public `*Config` structs are
+   `#[non_exhaustive]`**, so later settings can be added without a breaking
+   release.
+   *Migration:* replace struct-literal construction (including
+   `..Default::default()`) with `new()`/`default()` plus the setters, e.g.
+   `RuntimeConfig::new().max_concurrent_requests(32)`.
+
+3. **22 wire types gain a `meta` field** (`InitializeRequest` plus the 21 the
+   schema declares `_meta` on). Serialized output is unchanged when unset.
+   *Migration:* struct-literal construction must add `meta: None`; the types'
+   constructors and builders are unaffected.
+
+4. **`extension::namespaces::{MCP, MCP_APPS}` use the real identifiers**:
+   `io.mcp` -> `io.modelcontextprotocol` and `io.mcp.apps` ->
+   `io.modelcontextprotocol/ui`. The old values were invented; SEP-1865
+   publishes the latter.
+   *Migration:* update any comparison against the old literals.
+
+5. **`extension::apps::MIME_TYPE_HTML_MCP` is `text/html;profile=mcp-app`**,
+   was `text/html+mcp`. The old value appears nowhere upstream. This also
+   changes `AppsConfig`'s default allowed MIME types.
+
+6. **`router::{methods, notifications}` are re-exports of
+   `mcpkit_core::methods`.** Paths are unchanged; only code expecting them to be
+   *defined* in `mcpkit-server` needs adjusting.
+
+### Added
+
+- Spec method and notification names in `mcpkit_core::methods`, so every crate
+  can use constants instead of literals. Completed while moving: `roots/list`
+  and `tasks/result` were implemented but had no constant. A test asserts the
+  set matches the vendored schema exactly.
+- `notifications/tasks/status` in both directions, on every transport — the one
+  spec method mcpkit did not implement. Servers publish task transitions;
+  `ClientHandler::on_task_status` receives them. Gated by
+  `RuntimeConfig::task_status_notifications` (on by default), since the spec
+  makes sending optional.
+- `TaskEvent`/`TaskObserver` on `TaskManager`, and a `NotificationSink` seam so
+  a transition maps to a notification once for every transport. Recorded in
+  [ADR 0006](docs/adr/0006-ambient-notification-seam.md), which also names the
+  run-loop normalization this deliberately stops short of.
+- `types::meta::validate_key` for the spec's `_meta` key grammar, including the
+  reserved-prefix rule (any prefix whose *second* label is `modelcontextprotocol`
+  or `mcp`). Offered, not enforced — `Meta::insert` stays permissive.
+- `TaskManager::with_poll_interval` and
+  `RuntimeConfig::default_task_poll_interval_ms`, so a server can suggest a
+  polling rate. Defaults to absent, which is legal.
+- `_meta` on `InitializeRequest` and 21 further types.
+
+### Fixed
+
+- **The debug validator rejected conforming sessions.** It registered a bare
+  `"initialized"` — not a spec method — and gated initialization on that same
+  string, so a peer sending `notifications/initialized` never flipped the flag
+  and every later request was flagged pre-initialization. In strict mode a fully
+  conforming session came back `valid: false`. Eight missing spec methods
+  registered alongside.
+- **An unknown `taskId` answered `-32601` instead of `-32602`** on all four HTTP
+  adapters — telling the peer the server had no `tasks/get` moments after it
+  served `tasks/*`.
+- **`notifications/tasks/status` was emitted only on the runtime transport.**
+  The four HTTP adapters have no run loop and were silently sending nothing.
+- The mock client and scenario harness sent the non-spec `"initialized"`, so the
+  test harness did not emulate a conforming client. Three examples matched on
+  the same name, making their "Client initialized" branch dead code.
+- `RUSTSEC-2026-0185` (quinn-proto, 7.5 high) resolved by upgrading to 0.11.16.
+- A 404 in shipped rustdoc, and the `Meta` doc comment, which stated the
+  reserved-`_meta`-prefix rule backwards.
+
+### Changed
+
+- `mcpkit/src/lib.rs` claims "complete method coverage", not "full protocol
+  coverage" — method coverage is now CI-verified; the broader claim was not.
+- `docs/comparison.md` and `docs/migration-from-rmcp.md` retargeted to rmcp
+  2.2.0 (both had documented 1.7.0). The migration guide's API paths are now
+  compile-checked on both sides.
+- `ROADMAP.md` corrected: version, counts, and a security criterion left marked
+  blocked on an advisory that had been resolved.
+
+### Removed
+
+- Unused dependencies from `mcpkit-core` (`schemars`, `futures`),
+  `mcpkit-transport` (`axum`, `uuid`, `hyper`) and `mcpkit-server` (`chrono`,
+  `event-listener`, `thiserror`). Six of the eight were suppressed from
+  `cargo-machete` behind justifications that were false.
+
+### CI
+
+- `schema-check` diffs mcpkit's wire vocabulary and 75 structural types against
+  the vendored schema, gated on a documented baseline, and verifies the vendored
+  file still matches its pinned upstream commit.
+- `hygiene` runs `typos`, `cargo-machete` and `shellcheck`, which existed only as
+  Justfile recipes and so had never run on a PR.
+- `ci-success` no longer passes runs where required work was skipped. It
+  re-evaluates each job's own gating condition and tolerates a skip only where
+  that condition was genuinely false.
+- lychee checks rustdoc comments and `spec/`, not just `docs/`.
+
 ### Added
 
 - Misc 2025-11-25 field/type gaps closed (#114):
