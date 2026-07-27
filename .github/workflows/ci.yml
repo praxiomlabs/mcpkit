@@ -247,12 +247,24 @@ jobs:
       - name: Report
         if: always()
         run: cat /tmp/schema-report.txt
+      # Fails only when the vendored file genuinely differs from its pin. A fetch
+      # that cannot complete — GitHub outage, rate limit — warns and passes:
+      # turning someone else's downtime into a red build on an unrelated PR
+      # teaches people to ignore this job, which is the opposite of the point.
+      # Tampering is still caught pre-merge on any run where the network works.
       - name: Verify the vendored schema still matches its pinned upstream commit
         run: |
-          set -euo pipefail
-          sha="$(grep -oE '\b[0-9a-f]{40}\b' spec/PROVENANCE.md | head -1)"
-          curl -fsSL -o /tmp/upstream-schema.json \
-            "https://raw.githubusercontent.com/modelcontextprotocol/modelcontextprotocol/$sha/schema/2025-11-25/schema.json"
+          set -uo pipefail
+          sha="$(grep -oE '\b[0-9a-f]{40}\b' spec/PROVENANCE.md | awk 'NR==1')"
+          if [ -z "$sha" ]; then
+            echo "::error::no commit SHA found in spec/PROVENANCE.md"
+            exit 1
+          fi
+          if ! curl -fsSL --retry 3 --retry-delay 2 --max-time 30 -o /tmp/upstream-schema.json \
+            "https://raw.githubusercontent.com/modelcontextprotocol/modelcontextprotocol/$sha/schema/2025-11-25/schema.json"; then
+            echo "::warning::could not fetch upstream schema at $sha — integrity check skipped, not failed"
+            exit 0
+          fi
           if ! diff -q /tmp/upstream-schema.json spec/2025-11-25/schema.json; then
             echo "::error::spec/2025-11-25/schema.json differs from upstream commit $sha"
             exit 1

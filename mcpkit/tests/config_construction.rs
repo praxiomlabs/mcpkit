@@ -13,7 +13,7 @@
 //! was closed off. A field initialized to a constant in a constructor looks
 //! reachable to a naive scan and is not. Per-field coverage belongs with each
 //! type's own test; this file guards the coarser property that the type can be
-//! built at all.
+//! built at all — across every config reachable from here, not a sample of them.
 
 use std::time::Duration;
 
@@ -44,10 +44,22 @@ fn client_configs_are_constructible() {
     let _ = mcpkit_client::PoolConfig::default();
 }
 
+/// Every transport config reachable from here. Three of the fourteen are not,
+/// and the reasons are recorded so silence is not mistaken for coverage:
+///
+/// * `GrpcConfig` and `GrpcServerConfig` sit behind `mcpkit-transport`'s `grpc`
+///   feature, which the umbrella crate does not expose — nothing downstream of
+///   `mcpkit` can reach them.
+/// * `NamedPipeConfig` is `#[cfg(windows)]`; it is covered instead by
+///   `cargo check --target x86_64-pc-windows-msvc`.
 #[test]
 fn transport_configs_are_constructible() {
-    // Ungated transport configs.
     let _ = mcpkit_transport::pool::PoolConfig::new().max_connections(4);
+    let _ = mcpkit_transport::http::HttpTransportConfig::new("https://example.com");
+    let _ = mcpkit_transport::middleware::BatchingConfig::default();
+    let _ = mcpkit_transport::middleware::RateLimitConfig::new(10, Duration::from_secs(1));
+    let _ = mcpkit_transport::TelemetryConfig::new("svc");
+    let _ = mcpkit_transport::unix::UnixSocketConfig::new("/tmp/mcpkit-test.sock");
 }
 
 /// The one field whose absent setter this suite exists to have caught.

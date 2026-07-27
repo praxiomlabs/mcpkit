@@ -12,8 +12,10 @@
 //! behind it would pass. Actual emission is proved per-transport by the
 //! `tasks/status` tests in the server and adapter crates.
 //!
-//! Each test here drives a real server over a transport. The emission test is
-//! anchored to the vendored schema rather than to mcpkit's own constants.
+//! The behavioural tests drive a real server over a transport. The two
+//! schema-reading tests — classification, and the method-constant check — read
+//! no transport at all; they are anchored to the vendored schema rather than to
+//! mcpkit's own constants, which is the point of them.
 
 use mcpkit_core::error::codes;
 use mcpkit_core::protocol::{Message, Notification, Request, RequestId, Response};
