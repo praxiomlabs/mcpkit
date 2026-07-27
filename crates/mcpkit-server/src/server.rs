@@ -747,6 +747,8 @@ where
         // handler parked on its own server-initiated request (which needs an
         // inbound response to complete) cannot deadlock the loop.
         let mut queued: std::collections::VecDeque<Request> = std::collections::VecDeque::new();
+        // Advanced every iteration; see the select below.
+        let mut rotation: usize = 0;
 
         let outcome = loop {
             // Dispatch queued requests while concurrency slots are free.
@@ -759,32 +761,72 @@ where
 
             // Always receive (so responses to our own outbound requests are
             // routed even when every slot is parked) while making progress on
-            // in-flight requests and background tasks.
-            // Ambient notifications race every other source, so a state change
-            // reaches the client even while the loop is otherwise idle.
-            let recv = std::pin::pin!(self.transport.recv());
-            let published = std::pin::pin!(next_ambient(&mut ambient));
-            let idle = in_flight.is_empty() && background.is_empty() && notifications.is_empty();
-            let step = if idle {
-                match select(recv, published).await {
-                    Either::Left((Ok(opt), _)) => Step::Message(opt),
-                    Either::Left((Err(e), _)) => break Err(e.into()),
-                    Either::Right((notification, _)) => Step::Ambient(notification),
-                }
-            } else {
-                let progress = std::pin::pin!(drive_sets(
-                    &mut in_flight,
-                    &mut background,
-                    &mut notifications
-                ));
-                match select(select(recv, progress), published).await {
-                    Either::Left((Either::Left((Ok(opt), _)), _)) => Step::Message(opt),
-                    Either::Left((Either::Left((Err(e), _)), _)) => break Err(e.into()),
-                    Either::Left((Either::Right((maybe_exec, _)), _)) => {
-                        Step::Progress(maybe_exec.map(Box::new))
+            // in-flight requests and background tasks, and while draining
+            // ambient notifications so a state change reaches the client even
+            // when the loop is otherwise busy.
+            //
+            // `select` polls its left argument first and returns the moment it
+            // is ready, so a source pinned to the right only runs when
+            // everything to its left is pending. All three sources here can be
+            // continuously ready, so a fixed order starves the tail:
+            //
+            // - ambient sat rightmost, so a notification published before the
+            //   loop even started came out behind 200 queued responses;
+            // - `progress` sat right of `recv`, so during an inbound burst
+            //   requests were accepted but none completed until the burst
+            //   drained — every response landed after every request.
+            //
+            // Rotate which source gets first refusal instead. Each is polled
+            // first every third iteration, so none can be starved by the
+            // others.
+            let turn = rotation % 3;
+            rotation = rotation.wrapping_add(1);
+
+            // Scoped so the borrows on the future sets end before the match
+            // below pushes new work into them.
+            let outcome = {
+                let recv_step = std::pin::pin!(async {
+                    match self.transport.recv().await {
+                        Ok(opt) => Ok(Step::Message(opt)),
+                        Err(e) => Err(e.into()),
                     }
-                    Either::Right((notification, _)) => Step::Ambient(notification),
+                });
+                // `drive_sets` parks on every set that is empty, so this is
+                // simply pending when there is no work — no idle special case.
+                let progress_step = std::pin::pin!(async {
+                    let exec =
+                        drive_sets(&mut in_flight, &mut background, &mut notifications).await;
+                    Ok(Step::Progress(exec.map(Box::new)))
+                });
+                let ambient_step =
+                    std::pin::pin!(async { Ok(Step::Ambient(next_ambient(&mut ambient).await)) });
+
+                // Every arm yields the same type, so the nested `Either`
+                // collapses and the three orderings differ only in poll order.
+                match turn {
+                    0 => match select(recv_step, select(progress_step, ambient_step)).await {
+                        Either::Left((step, _))
+                        | Either::Right((Either::Left((step, _)) | Either::Right((step, _)), _)) => {
+                            step
+                        }
+                    },
+                    1 => match select(progress_step, select(ambient_step, recv_step)).await {
+                        Either::Left((step, _))
+                        | Either::Right((Either::Left((step, _)) | Either::Right((step, _)), _)) => {
+                            step
+                        }
+                    },
+                    _ => match select(ambient_step, select(recv_step, progress_step)).await {
+                        Either::Left((step, _))
+                        | Either::Right((Either::Left((step, _)) | Either::Right((step, _)), _)) => {
+                            step
+                        }
+                    },
                 }
+            };
+            let step = match outcome {
+                Ok(step) => step,
+                Err(e) => break Err(e),
             };
 
             // Borrows on the future sets are released here, so we may push work.
