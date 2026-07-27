@@ -36,7 +36,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 #[cfg(feature = "tokio-runtime")]
 use tokio::{
-    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
+    io::{AsyncWriteExt, BufWriter},
     net::{UnixListener as TokioUnixListener, UnixStream},
 };
 
@@ -101,8 +101,16 @@ impl UnixSocketConfig {
 }
 
 /// Split Unix stream for reading.
+///
+/// The crate's own `BufReader` rather than tokio's: it keeps a partially read
+/// line in a field, so dropping a `recv` future mid-message does not truncate
+/// the frame. tokio's `read_line` moves the caller's `String` into the future
+/// (`mem::take`), so a cancelled read loses the prefix and desynchronizes the
+/// stream — and no bookkeeping outside the call can recover it.
 #[cfg(feature = "tokio-runtime")]
-type UnixReader = BufReader<tokio::net::unix::OwnedReadHalf>;
+type UnixReader = crate::runtime::BufReader<
+    crate::runtime::TokioAsyncReadWrapper<tokio::net::unix::OwnedReadHalf>,
+>;
 
 /// Split Unix stream for writing.
 #[cfg(feature = "tokio-runtime")]
@@ -120,8 +128,6 @@ struct UnixReadState {
     /// Reader half of the Unix stream.
     #[cfg(feature = "tokio-runtime")]
     reader: Option<UnixReader>,
-    /// Line buffer for reading complete messages.
-    line_buffer: String,
 }
 
 /// Write side of the Unix socket transport. See [`UnixReadState`].
@@ -149,13 +155,16 @@ impl UnixTransport {
     #[cfg(feature = "tokio-runtime")]
     fn from_stream(config: UnixSocketConfig, stream: UnixStream, is_server_side: bool) -> Self {
         let (read_half, write_half) = stream.into_split();
-        let reader = BufReader::new(read_half);
+        let reader = crate::runtime::BufReader::with_capacity(
+            config.read_buffer_size,
+            crate::runtime::TokioAsyncReadWrapper(read_half),
+        )
+        .with_max_message_size(config.max_message_size);
         let writer = BufWriter::new(write_half);
 
         Self {
             read_state: AsyncMutex::new(UnixReadState {
                 reader: Some(reader),
-                line_buffer: String::with_capacity(4096),
             }),
             write_state: AsyncMutex::new(UnixWriteState {
                 writer: Some(writer),
@@ -172,9 +181,7 @@ impl UnixTransport {
     #[cfg(not(feature = "tokio-runtime"))]
     fn new_disconnected(config: UnixSocketConfig, is_server_side: bool) -> Self {
         Self {
-            read_state: AsyncMutex::new(UnixReadState {
-                line_buffer: String::with_capacity(4096),
-            }),
+            read_state: AsyncMutex::new(UnixReadState {}),
             write_state: AsyncMutex::new(UnixWriteState {}),
             config,
             connected: AtomicBool::new(false),
@@ -312,68 +319,54 @@ impl Transport for UnixTransport {
             return Ok(None);
         }
 
+        // The reader stays in place across the await: a dropped `recv` future —
+        // which the server run loop produces on nearly every iteration — must
+        // leave the transport usable and must not swallow a partial line. The
+        // reader enforces `max_message_size` during accumulation, so an
+        // oversized line fails before it can grow without bound.
         let mut guard = self.read_state.lock().await;
-        // Borrow the two fields disjointly through one guard. The reader used to
-        // be `take`n out and only restored after the await below; if the future
-        // was dropped while parked there — which the server run loop does on
-        // nearly every iteration — the reader went with it, and every later
-        // `recv` returned `Ok(None)` while `is_connected()` still said true. The
-        // run loop reads that as a clean close and ends the session.
-        let state = &mut *guard;
-
-        let Some(reader) = state.reader.as_mut() else {
+        let Some(reader) = guard.reader.as_mut() else {
             return Ok(None);
         };
 
-        // Clear the buffer and read a line
-        state.line_buffer.clear();
-
-        // Bound the read to one byte past the limit so a peer that never sends a
-        // newline cannot grow `line_buffer` without bound; the size check below
-        // then rejects it. Without this, `read_line` would buffer unboundedly
-        // before the post-read check could fire.
-        let max = self.config.max_message_size;
-        let result = {
-            let mut limited = (&mut *reader).take(max as u64 + 1);
-            limited.read_line(&mut state.line_buffer).await
-        };
-
-        match result {
-            Ok(0) => {
-                // EOF - connection closed
-                self.connected.store(false, Ordering::Release);
-                Ok(None)
-            }
-            Ok(_) => {
-                // Parse the message (trim the newline)
-                let line = state.line_buffer.trim_end();
-                if line.is_empty() {
-                    return Ok(None);
-                }
-
-                // Check message size limit
-                if line.len() > self.config.max_message_size {
-                    return Err(TransportError::MessageTooLarge {
-                        size: line.len(),
-                        max: self.config.max_message_size,
-                    });
-                }
-
-                let msg: Message =
-                    serde_json::from_str(line).map_err(|e| TransportError::Deserialization {
-                        message: format!("Failed to deserialize message: {e}"),
-                    })?;
-
-                self.messages_received.fetch_add(1, Ordering::Relaxed);
-                Ok(Some(msg))
+        let bytes = match reader.read_line_bytes().await {
+            Ok(bytes) => bytes,
+            Err(e) if e.kind() == std::io::ErrorKind::InvalidData => {
+                return Err(TransportError::MessageTooLarge {
+                    size: self.config.max_message_size + 1,
+                    max: self.config.max_message_size,
+                });
             }
             Err(e) => {
                 self.connected.store(false, Ordering::Release);
-                Err(TransportError::Io {
+                return Err(TransportError::Io {
                     message: format!("Failed to read from Unix socket: {e}"),
-                })
+                });
             }
+        };
+
+        if bytes.is_empty() {
+            // EOF - connection closed
+            self.connected.store(false, Ordering::Release);
+            return Ok(None);
         }
+
+        let line = std::str::from_utf8(&bytes)
+            .map_err(|e| TransportError::Deserialization {
+                message: format!("Invalid UTF-8 in message: {e}"),
+            })?
+            .trim_end();
+        if line.is_empty() {
+            return Ok(None);
+        }
+
+        let msg: Message =
+            serde_json::from_str(line).map_err(|e| TransportError::Deserialization {
+                message: format!("Failed to deserialize message: {e}"),
+            })?;
+
+        self.messages_received.fetch_add(1, Ordering::Relaxed);
+        Ok(Some(msg))
     }
 
     #[cfg(not(feature = "tokio-runtime"))]
