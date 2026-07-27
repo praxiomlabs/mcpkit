@@ -591,14 +591,6 @@ semver:
     {{cargo}} semver-checks check-release
     printf '{{green}}[OK]{{reset}}   Semver check passed\n'
 
-[group('security')]
-[doc("Supply chain security audit via cargo-vet")]
-vet:
-    #!/usr/bin/env bash
-    printf '{{cyan}}[INFO]{{reset}} Running supply chain audit...\n'
-    {{cargo}} vet
-    printf '{{green}}[OK]{{reset}}   Supply chain audit passed\n'
-
 [group('lint')]
 [doc("Run all lints (fmt + clippy)")]
 lint: fmt-check clippy
