@@ -100,6 +100,25 @@ impl TransportMetadata {
 /// safely. The send and receive operations should be independent and
 /// can be called from different tasks.
 ///
+/// Two requirements follow from how the server run loop drives a transport,
+/// and both were violated by transports in this crate before they were
+/// written down:
+///
+/// 1. **`send` must not wait on `recv`.** The loop is parked in `recv`
+///    awaiting the client's next message at the moment it needs to write a
+///    response. An implementation that guards both directions with one lock,
+///    held across the read, can never write that response — every session
+///    deadlocks on its first request. Guard each direction separately, or use
+///    a split that takes a shared lock per poll rather than across an await.
+///
+/// 2. **`recv` must be cancel-safe.** The loop races `recv` against other
+///    work and drops the future whenever another arm wins, which is most
+///    iterations. A dropped `recv` must lose neither buffered bytes nor the
+///    reader itself: anything moved out of `self` before the await and
+///    restored after it is gone, and a partially accumulated frame left in a
+///    local is gone with it. Keep both in `self`, and treat a cancelled read
+///    as resumable.
+///
 /// # Example
 ///
 /// Use one of the built-in transports:
@@ -127,6 +146,10 @@ pub trait Transport: Send + Sync {
     ///
     /// Returns `Ok(None)` when the connection is cleanly closed.
     /// Returns `Err` on transport errors.
+    ///
+    /// Must be cancel-safe, and must not block a concurrent [`send`](Self::send).
+    /// See the trait-level "Implementing Transport" notes — the server run loop
+    /// relies on both, and neither is optional.
     ///
     /// # Errors
     ///
