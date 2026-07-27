@@ -108,16 +108,27 @@ type UnixReader = BufReader<tokio::net::unix::OwnedReadHalf>;
 #[cfg(feature = "tokio-runtime")]
 type UnixWriter = BufWriter<tokio::net::unix::OwnedWriteHalf>;
 
-/// Internal state for Unix socket transport.
-struct UnixTransportState {
+/// Read side of the Unix socket transport.
+///
+/// Separate from the write side so that `recv`, which holds this lock for as
+/// long as it takes the peer to send a line, cannot block a concurrent `send`.
+/// The two halves are independent (`into_split`), so a single mutex over both
+/// bought nothing and deadlocked any server that answers a request: the run
+/// loop parks in `recv` awaiting the next message while holding the lock the
+/// response write needs.
+struct UnixReadState {
     /// Reader half of the Unix stream.
     #[cfg(feature = "tokio-runtime")]
     reader: Option<UnixReader>,
+    /// Line buffer for reading complete messages.
+    line_buffer: String,
+}
+
+/// Write side of the Unix socket transport. See [`UnixReadState`].
+struct UnixWriteState {
     /// Writer half of the Unix stream.
     #[cfg(feature = "tokio-runtime")]
     writer: Option<UnixWriter>,
-    /// Line buffer for reading complete messages.
-    line_buffer: String,
 }
 
 /// Unix domain socket transport.
@@ -125,7 +136,8 @@ struct UnixTransportState {
 /// Provides low-latency local IPC using Unix domain sockets.
 pub struct UnixTransport {
     config: UnixSocketConfig,
-    state: AsyncMutex<UnixTransportState>,
+    read_state: AsyncMutex<UnixReadState>,
+    write_state: AsyncMutex<UnixWriteState>,
     connected: AtomicBool,
     messages_sent: AtomicU64,
     messages_received: AtomicU64,
@@ -141,10 +153,12 @@ impl UnixTransport {
         let writer = BufWriter::new(write_half);
 
         Self {
-            state: AsyncMutex::new(UnixTransportState {
+            read_state: AsyncMutex::new(UnixReadState {
                 reader: Some(reader),
-                writer: Some(writer),
                 line_buffer: String::with_capacity(4096),
+            }),
+            write_state: AsyncMutex::new(UnixWriteState {
+                writer: Some(writer),
             }),
             config,
             connected: AtomicBool::new(true),
@@ -158,9 +172,10 @@ impl UnixTransport {
     #[cfg(not(feature = "tokio-runtime"))]
     fn new_disconnected(config: UnixSocketConfig, is_server_side: bool) -> Self {
         Self {
-            state: AsyncMutex::new(UnixTransportState {
+            read_state: AsyncMutex::new(UnixReadState {
                 line_buffer: String::with_capacity(4096),
             }),
+            write_state: AsyncMutex::new(UnixWriteState {}),
             config,
             connected: AtomicBool::new(false),
             messages_sent: AtomicU64::new(0),
@@ -263,7 +278,7 @@ impl Transport for UnixTransport {
         data.push(b'\n');
 
         // Write to the socket
-        let mut state = self.state.lock().await;
+        let mut state = self.write_state.lock().await;
         if let Some(writer) = state.writer.as_mut() {
             writer
                 .write_all(&data)
@@ -297,33 +312,31 @@ impl Transport for UnixTransport {
             return Ok(None);
         }
 
-        let mut state = self.state.lock().await;
+        let mut guard = self.read_state.lock().await;
+        // Borrow the two fields disjointly through one guard. The reader used to
+        // be `take`n out and only restored after the await below; if the future
+        // was dropped while parked there — which the server run loop does on
+        // nearly every iteration — the reader went with it, and every later
+        // `recv` returned `Ok(None)` while `is_connected()` still said true. The
+        // run loop reads that as a clean close and ends the session.
+        let state = &mut *guard;
 
-        // Take the reader temporarily to avoid borrowing issues
-        let Some(reader) = state.reader.take() else {
+        let Some(reader) = state.reader.as_mut() else {
             return Ok(None);
         };
 
         // Clear the buffer and read a line
         state.line_buffer.clear();
 
-        // We need to read into a separate buffer to avoid borrow issues.
         // Bound the read to one byte past the limit so a peer that never sends a
         // newline cannot grow `line_buffer` without bound; the size check below
         // then rejects it. Without this, `read_line` would buffer unboundedly
         // before the post-read check could fire.
         let max = self.config.max_message_size;
-        let (result, reader) = {
-            let mut reader = reader;
-            let result = {
-                let mut limited = (&mut reader).take(max as u64 + 1);
-                limited.read_line(&mut state.line_buffer).await
-            };
-            (result, reader)
+        let result = {
+            let mut limited = (&mut *reader).take(max as u64 + 1);
+            limited.read_line(&mut state.line_buffer).await
         };
-
-        // Put the reader back
-        state.reader = Some(reader);
 
         match result {
             Ok(0) => {
@@ -373,9 +386,8 @@ impl Transport for UnixTransport {
         self.connected.store(false, Ordering::Release);
 
         // Drop the stream parts
-        let mut state = self.state.lock().await;
-        state.reader = None;
-        state.writer = None;
+        self.read_state.lock().await.reader = None;
+        self.write_state.lock().await.writer = None;
 
         // Cleanup socket file if this is server-side and cleanup is enabled
         if self.is_server_side && self.config.cleanup_on_close && self.config.path.exists() {
