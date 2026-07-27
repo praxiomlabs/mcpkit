@@ -301,11 +301,11 @@ impl StreamRegistry {
     }
 
     fn mark_dead(&self, stream_id: u64) {
-        if let Ok(mut inner) = self.inner.lock() {
-            if let Some(slot) = inner.streams.iter_mut().find(|s| s.id == stream_id) {
-                slot.sender = None;
-                slot.died = Some(Instant::now());
-            }
+        if let Ok(mut inner) = self.inner.lock()
+            && let Some(slot) = inner.streams.iter_mut().find(|s| s.id == stream_id)
+        {
+            slot.sender = None;
+            slot.died = Some(Instant::now());
         }
     }
 

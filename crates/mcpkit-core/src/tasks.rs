@@ -671,16 +671,15 @@ impl TaskManager {
 /// it in `_meta`.
 #[must_use]
 pub fn inject_related_task(mut payload: Value, id: &TaskId) -> Value {
-    if let Value::Object(map) = &mut payload {
-        if let Value::Object(meta) = map
+    if let Value::Object(map) = &mut payload
+        && let Value::Object(meta) = map
             .entry("_meta")
             .or_insert_with(|| Value::Object(serde_json::Map::new()))
-        {
-            meta.insert(
-                RELATED_TASK_META_KEY.to_string(),
-                serde_json::json!({ "taskId": id.as_str() }),
-            );
-        }
+    {
+        meta.insert(
+            RELATED_TASK_META_KEY.to_string(),
+            serde_json::json!({ "taskId": id.as_str() }),
+        );
     }
     payload
 }

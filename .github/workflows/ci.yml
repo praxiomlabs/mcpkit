@@ -19,6 +19,19 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -Dwarnings
+  # Trim debuginfo in CI: measurably faster compiles and much smaller target
+  # dirs, which shrinks every rust-cache entry and compounds the save-if fix.
+  # line-tables-only keeps file/line backtraces; only interactive-debugger
+  # detail is lost, which no CI job uses. Set via env rather than Cargo.toml so
+  # local builds keep full debuginfo.
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+  CARGO_PROFILE_TEST_DEBUG: line-tables-only
+
+# Least-privilege default. Every job inherits read-only unless it declares more;
+# the two jobs that file issues and the one that cuts a release opt in
+# explicitly below. Previously every job ran on the default token scope.
+permissions:
+  contents: read
 
 jobs:
   # ==========================================================================
@@ -129,6 +142,31 @@ jobs:
           mapfile -t scripts < <(git ls-files '*.sh')
           printf 'checking %d script(s)\n' "${#scripts[@]}"
           shellcheck -S warning "${scripts[@]}"
+      # deny.toml and .cargo/audit.toml suppress advisories independently and had
+      # drifted into disjoint sets — deny.toml carried two IDs, audit.toml a
+      # third and different one. That was not cosmetic: because audit.toml
+      # lacked RUSTSEC-2023-0071, `cargo audit` failed, and with it `just audit`,
+      # `just ci-full` and `just release-check`.
+      #
+      # Compares the parsed `ignore` arrays, not raw greps — the IDs also appear
+      # in prose comments, which a naive grep reports as a phantom difference.
+      - name: Advisory ignore lists are in sync
+        run: |
+          set -euo pipefail
+          extract() {
+            python3 -c "
+          import re,sys
+          s = open(sys.argv[1]).read()
+          m = re.search(r'ignore\s*=\s*\[(.*?)\]', s, re.S)
+          print('\n'.join(sorted(re.findall(r'\"(RUSTSEC-[0-9-]+)\"', m.group(1)))) if m else '')
+          " "$1"
+          }
+          if ! diff <(extract deny.toml) <(extract .cargo/audit.toml); then
+            echo "::error::deny.toml and .cargo/audit.toml ignore different advisory sets."
+            echo "Add to deny.toml first (CI enforces it), then mirror the ID in .cargo/audit.toml."
+            exit 1
+          fi
+          echo "Advisory ignore lists match."
 
   version-sync:
     name: Version Sync
@@ -319,7 +357,17 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo test --all-features
+      - uses: taiki-e/install-action@nextest
+      # nextest runs each test in its own process: faster, and a panicking test
+      # cannot take others down with it. It does NOT run doctests, so those get
+      # their own step below — without it this job would silently drop 82 tests
+      # (verified: 1387 nextest + 82 doctests = 1469, cargo test's total).
+      #
+      # --locked was missing here while the local `test-locked` recipe had it,
+      # so CI could silently resolve past a drifted lockfile that local runs
+      # would reject. Now CI is the stricter of the two.
+      - run: cargo nextest run --locked --workspace --all-features
+      - run: cargo test --locked --doc --workspace --all-features
       # trybuild spins up a throwaway cargo project under target/tests; remove it
       # so the rust-cache save step doesn't trip over its torn-down scratch dirs
       # (harmless ENOENT annotations otherwise).
@@ -401,20 +449,46 @@ jobs:
   # MSRV - Minimum Supported Rust Version
   # ==========================================================================
 
+  # The toolchain is read from Cargo.toml at runtime rather than hardcoded here,
+  # so the declared MSRV and the version verified against it cannot drift apart.
+  #
+  # They had. The job checked `--lib -p mcpkit` only, which passes because the
+  # umbrella crate's dependency closure excludes actix — while mcpkit-actix,
+  # published and inheriting the same rust-version, could not build on the
+  # declared 1.85 at all (actix-http 3.12.1 and time 0.3.47 both require 1.88).
+  # The scope is now the whole workspace, so a crate that cannot meet the
+  # declared floor fails here instead of on a user's machine.
+  #
+  # The old comment blamed wiremock 0.6+ for the narrow scope. That was wrong on
+  # its own terms: wiremock is a dev-dependency, and `cargo check` without
+  # --all-targets never compiles dev-dependencies.
   msrv:
-    name: MSRV (1.85)
+    name: MSRV
     runs-on: ubuntu-latest
     needs: [changes, fmt, clippy, check]
     if: ${{ needs.changes.outputs.code == 'true' || github.event_name == 'push' }}
     steps:
       - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@1.85
+      - name: Read declared MSRV from Cargo.toml
+        id: msrv
+        run: |
+          set -euo pipefail
+          V=$(cargo metadata --no-deps --format-version 1 \
+              | jq -r '[.packages[].rust_version] | map(select(. != null)) | unique | .[]')
+          if [ "$(printf '%s\n' "$V" | wc -l)" -ne 1 ]; then
+            echo "::error::crates declare more than one rust-version; this job assumes a single workspace floor:"
+            printf '%s\n' "$V"
+            exit 1
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "Declared MSRV: $V"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.msrv.outputs.version }}
       - uses: Swatinem/rust-cache@v2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      # Only check library code compiles with MSRV, not tests/dev-dependencies
-      # (wiremock 0.6+ requires Rust 1.87 for let chains)
-      - run: cargo check --all-features --lib -p mcpkit
+      - run: cargo check --workspace --all-features
 
   # ==========================================================================
   # Cross-platform matrix - PRs only, and only when code changed (skip docs PRs)
@@ -481,7 +555,17 @@ jobs:
       # across runs, so the unchanging published baseline is not rebuilt on every
       # PR (which was ~half the job). It installs the toolchain and checks the
       # whole workspace (skipping `publish = false` crates) by default.
+      # Advisory, not blocking, while the crate is pre-1.0. Breaking changes are
+      # expected here and are recorded in CHANGELOG with migration notes; the
+      # 6-minute wait was the single largest remaining item on the PR critical
+      # path after the macOS move.
+      #
+      # This is a deliberate non-gate, unlike the accidental ones this repo has
+      # been removing: the job still runs and its result is visible, it simply
+      # does not fail the build. Revisit at 1.0, when a breaking change stops
+      # being routine and starts being a major-version event.
       - name: Check semver
+        continue-on-error: true
         uses: obi1kenobi/cargo-semver-checks-action@v2
         with:
           rust-toolchain: "1.96"

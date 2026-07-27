@@ -58,14 +58,14 @@ fn validate_tool_method(method: &ImplItemFn) -> Result<()> {
     }
 
     // Check that receiver is &self (not &mut self or self)
-    if let Some(receiver) = method.sig.receiver() {
-        if receiver.mutability.is_some() {
-            return Err(Error::new_spanned(
-                receiver,
-                "tool methods should take &self, not &mut self\n\
+    if let Some(receiver) = method.sig.receiver()
+        && receiver.mutability.is_some()
+    {
+        return Err(Error::new_spanned(
+            receiver,
+            "tool methods should take &self, not &mut self\n\
                  help: use interior mutability (e.g., Mutex, RwLock) if you need to modify state",
-            ));
-        }
+        ));
     }
 
     Ok(())

@@ -105,7 +105,7 @@ Based on [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/) and 
 
 Minimum Supported Rust Version policy:
 
-- **Current MSRV**: Rust 1.85 (Edition 2024)
+- **Current MSRV**: Rust 1.88 (Edition 2024)
 - **MSRV increases**: Treated as minor version changes
 - **Support window**: 4 most recent stable Rust versions
 - **CI verification**: MSRV is tested on every commit

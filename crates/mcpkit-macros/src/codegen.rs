@@ -262,10 +262,10 @@ fn type_to_json_schema(ty: &Type) -> TokenStream {
 /// Return the first generic type argument of a path segment (e.g. `T` in
 /// `Option<T>` or `Vec<T>`), if present.
 fn first_type_arg(segment: &syn::PathSegment) -> Option<&Type> {
-    if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-        if let Some(syn::GenericArgument::Type(inner)) = args.args.first() {
-            return Some(inner);
-        }
+    if let syn::PathArguments::AngleBracketed(args) = &segment.arguments
+        && let Some(syn::GenericArgument::Type(inner)) = args.args.first()
+    {
+        return Some(inner);
     }
     None
 }
@@ -288,14 +288,12 @@ pub fn extract_param(arg: &mut FnArg) -> syn::Result<Option<ToolParam>> {
             let doc = attrs
                 .iter()
                 .filter_map(|attr| {
-                    if attr.path().is_ident("doc") {
-                        if let syn::Meta::NameValue(nv) = &attr.meta {
-                            if let syn::Expr::Lit(lit) = &nv.value {
-                                if let syn::Lit::Str(s) = &lit.lit {
-                                    return Some(s.value().trim().to_string());
-                                }
-                            }
-                        }
+                    if attr.path().is_ident("doc")
+                        && let syn::Meta::NameValue(nv) = &attr.meta
+                        && let syn::Expr::Lit(lit) = &nv.value
+                        && let syn::Lit::Str(s) = &lit.lit
+                    {
+                        return Some(s.value().trim().to_string());
                     }
                     None
                 })
@@ -336,10 +334,10 @@ pub fn extract_param(arg: &mut FnArg) -> syn::Result<Option<ToolParam>> {
 
 /// Check if a type is Option<T>.
 fn is_option_type(ty: &Type) -> bool {
-    if let Type::Path(path) = ty {
-        if let Some(segment) = path.path.segments.last() {
-            return segment.ident == "Option";
-        }
+    if let Type::Path(path) = ty
+        && let Some(segment) = path.path.segments.last()
+    {
+        return segment.ident == "Option";
     }
     false
 }
@@ -348,10 +346,10 @@ fn is_option_type(ty: &Type) -> bool {
 pub fn is_result_type(ret: &ReturnType) -> bool {
     match ret {
         ReturnType::Type(_, ty) => {
-            if let Type::Path(path) = ty.as_ref() {
-                if let Some(segment) = path.path.segments.last() {
-                    return segment.ident == "Result";
-                }
+            if let Type::Path(path) = ty.as_ref()
+                && let Some(segment) = path.path.segments.last()
+            {
+                return segment.ident == "Result";
             }
             false
         }

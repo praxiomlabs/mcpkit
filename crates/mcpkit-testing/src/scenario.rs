@@ -207,11 +207,11 @@ fn get_json_path<'a>(value: &'a serde_json::Value, path: &str) -> Option<&'a ser
             continue;
         }
         // Handle array index
-        if let Some(index_str) = part.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
-            if let Ok(index) = index_str.parse::<usize>() {
-                current = current.get(index)?;
-                continue;
-            }
+        if let Some(index_str) = part.strip_prefix('[').and_then(|s| s.strip_suffix(']'))
+            && let Ok(index) = index_str.parse::<usize>()
+        {
+            current = current.get(index)?;
+            continue;
         }
         current = current.get(part)?;
     }
@@ -269,13 +269,13 @@ impl NotificationMatcher {
 
     /// Validate a notification against this matcher.
     pub fn validate(&self, notification: &Notification) -> Result<(), String> {
-        if let Some(expected_method) = &self.method {
-            if notification.method.as_ref() != expected_method {
-                return Err(format!(
-                    "Expected notification method '{}', got '{}'",
-                    expected_method, notification.method
-                ));
-            }
+        if let Some(expected_method) = &self.method
+            && notification.method.as_ref() != expected_method
+        {
+            return Err(format!(
+                "Expected notification method '{}', got '{}'",
+                expected_method, notification.method
+            ));
         }
 
         if let Some(custom) = &self.custom {

@@ -27,7 +27,7 @@ fn rocket() -> _ {
 
 ## Requirements
 
-- Rust 1.85+
+- Rust 1.88+
 - Rocket 0.5+
 
 ## License

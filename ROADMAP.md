@@ -41,7 +41,7 @@ vendored spec — see the tables for what is checked and how.
 | Requirement | Status | Notes |
 |-------------|--------|-------|
 | API stability commitment | ✅ Complete | [docs/api-stability.md](docs/api-stability.md) |
-| MSRV policy | ✅ Complete | Rust 1.85+ (Edition 2024) |
+| MSRV policy | ✅ Complete | Rust 1.88+ (Edition 2024) |
 | Semver compliance | ✅ Complete | Following cargo guidelines |
 | Migration guide from 0.x | ✅ Complete | [docs/migration-to-1.0.md](docs/migration-to-1.0.md) |
 

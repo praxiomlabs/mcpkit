@@ -39,7 +39,7 @@ struct MyServer;
 
 **Problem**: Compilation fails with errors about unstable features.
 
-**Solution**: Update to Rust 1.85 or later. Check your version:
+**Solution**: Update to Rust 1.88 or later. Check your version:
 
 ```bash
 rustc --version

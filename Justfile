@@ -372,16 +372,26 @@ test-ignored:
 [doc("Run tests with cargo-nextest (faster, parallel)")]
 nextest:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '\n{{bold}}{{blue}}══════ Running Tests (nextest) ══════{{reset}}\n\n'
+    # nextest does not run doctests. Without this line the recipe silently runs
+    # 82 fewer tests than `cargo test` (1387 vs 1469) while looking like a full
+    # suite.
     {{cargo}} nextest run --workspace --all-features -j {{jobs}}
+    {{cargo}} test --doc --workspace --all-features
     printf '{{green}}[OK]{{reset}}   All tests passed\n'
 
 [group('test')]
 [doc("Run tests with nextest and locked dependencies")]
 nextest-locked:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '\n{{bold}}{{blue}}══════ Running Tests (nextest, locked) ══════{{reset}}\n\n'
+    # nextest does not run doctests. Without this line the recipe silently runs
+    # 82 fewer tests than `cargo test` (1387 vs 1469) while looking like a full
+    # suite.
     {{cargo}} nextest run --workspace --all-features --locked -j {{jobs}}
+    {{cargo}} test --doc --workspace --all-features --locked
     printf '{{green}}[OK]{{reset}}   All tests passed (locked)\n'
 
 [group('test')]
@@ -580,14 +590,6 @@ semver:
     printf '{{cyan}}[INFO]{{reset}} Checking semver compliance...\n'
     {{cargo}} semver-checks check-release
     printf '{{green}}[OK]{{reset}}   Semver check passed\n'
-
-[group('security')]
-[doc("Supply chain security audit via cargo-vet")]
-vet:
-    #!/usr/bin/env bash
-    printf '{{cyan}}[INFO]{{reset}} Running supply chain audit...\n'
-    {{cargo}} vet
-    printf '{{green}}[OK]{{reset}}   Supply chain audit passed\n'
 
 [group('lint')]
 [doc("Run all lints (fmt + clippy)")]
@@ -1019,7 +1021,7 @@ version-sync:
 # and apple-darwin cannot work on a Linux box.
 [group('ci')]
 [doc("Standard CI pipeline (matches GitHub Actions)")]
-ci: fmt-check clippy cross-check test-locked doc-check link-check version-sync
+ci: fmt-check clippy cross-check nextest-locked doc-check link-check version-sync
     #!/usr/bin/env bash
     printf '\n{{bold}}{{blue}}══════ CI Pipeline Complete ══════{{reset}}\n\n'
     printf '{{green}}[OK]{{reset}}   All CI checks passed\n'

@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **MSRV raised to 1.88** (was 1.85). The previous declaration was not accurate:
+  `mcpkit-actix` is published inheriting the workspace `rust-version`, and its
+  dependency closure (`actix-http` 3.12.1, `time` 0.3.47) has required 1.88
+  since before 0.7.0 shipped — so a user on 1.85 got a resolver error, not a
+  build. CI did not catch it because the MSRV job checked only
+  `--lib -p mcpkit`, whose closure excludes actix.
+
+  The job now reads `rust-version` out of `Cargo.toml` at runtime instead of
+  hardcoding a toolchain, and checks the whole workspace, so the declared floor
+  and the verified floor cannot drift apart again.
+
+  If you are on 1.85–1.87 and using `mcpkit`, `mcpkit-core`, `mcpkit-server`,
+  `mcpkit-client`, `mcpkit-transport`, `mcpkit-macros`, `mcpkit-testing`,
+  `mcpkit-axum`, `mcpkit-rocket` or `mcpkit-warp`, those did build on 1.85 and
+  now declare 1.88. Pin `mcpkit = "=0.7.0"` if you need to stay below 1.88.
+
 ## [0.7.0] - 2026-07-27
 
 ### Spec-conformance audit

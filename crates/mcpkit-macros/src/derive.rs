@@ -137,14 +137,12 @@ fn extract_doc_comment(attrs: &[syn::Attribute]) -> Option<String> {
     let docs: Vec<String> = attrs
         .iter()
         .filter_map(|attr| {
-            if attr.path().is_ident("doc") {
-                if let syn::Meta::NameValue(nv) = &attr.meta {
-                    if let syn::Expr::Lit(lit) = &nv.value {
-                        if let syn::Lit::Str(s) = &lit.lit {
-                            return Some(s.value().trim().to_string());
-                        }
-                    }
-                }
+            if attr.path().is_ident("doc")
+                && let syn::Meta::NameValue(nv) = &attr.meta
+                && let syn::Expr::Lit(lit) = &nv.value
+                && let syn::Lit::Str(s) = &lit.lit
+            {
+                return Some(s.value().trim().to_string());
             }
             None
         })
@@ -159,26 +157,23 @@ fn extract_doc_comment(attrs: &[syn::Attribute]) -> Option<String> {
 
 /// Check if a type is Option<T>.
 fn is_option_type(ty: &Type) -> bool {
-    if let Type::Path(path) = ty {
-        if let Some(segment) = path.path.segments.last() {
-            return segment.ident == "Option";
-        }
+    if let Type::Path(path) = ty
+        && let Some(segment) = path.path.segments.last()
+    {
+        return segment.ident == "Option";
     }
     false
 }
 
 /// Get the inner type of Option<T>.
 fn get_option_inner_type(ty: &Type) -> Option<&Type> {
-    if let Type::Path(path) = ty {
-        if let Some(segment) = path.path.segments.last() {
-            if segment.ident == "Option" {
-                if let PathArguments::AngleBracketed(args) = &segment.arguments {
-                    if let Some(GenericArgument::Type(inner)) = args.args.first() {
-                        return Some(inner);
-                    }
-                }
-            }
-        }
+    if let Type::Path(path) = ty
+        && let Some(segment) = path.path.segments.last()
+        && segment.ident == "Option"
+        && let PathArguments::AngleBracketed(args) = &segment.arguments
+        && let Some(GenericArgument::Type(inner)) = args.args.first()
+    {
+        return Some(inner);
     }
     None
 }
@@ -212,18 +207,17 @@ fn type_to_json_schema(ty: &Type) -> TokenStream {
             }
             _ if path_str.starts_with("Vec<") => {
                 // Handle Vec<T>
-                if let Some(segment) = path.path.segments.last() {
-                    if let PathArguments::AngleBracketed(args) = &segment.arguments {
-                        if let Some(GenericArgument::Type(inner)) = args.args.first() {
-                            let inner_schema = type_to_json_schema(inner);
-                            return quote! {
-                                serde_json::json!({
-                                    "type": "array",
-                                    "items": #inner_schema
-                                })
-                            };
-                        }
-                    }
+                if let Some(segment) = path.path.segments.last()
+                    && let PathArguments::AngleBracketed(args) = &segment.arguments
+                    && let Some(GenericArgument::Type(inner)) = args.args.first()
+                {
+                    let inner_schema = type_to_json_schema(inner);
+                    return quote! {
+                        serde_json::json!({
+                            "type": "array",
+                            "items": #inner_schema
+                        })
+                    };
                 }
                 quote!(serde_json::json!({"type": "array"}))
             }

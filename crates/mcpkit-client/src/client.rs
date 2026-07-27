@@ -609,10 +609,10 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
         match notification.method.as_ref() {
             "notifications/cancelled" => {
                 // Handle cancellation notifications
-                if let Some(params) = &notification.params {
-                    if let Some(request_id) = params.get("requestId") {
-                        debug!(?request_id, "Server cancelled request");
-                    }
+                if let Some(params) = &notification.params
+                    && let Some(request_id) = params.get("requestId")
+                {
+                    debug!(?request_id, "Server cancelled request");
                 }
             }
             "notifications/progress" => {
@@ -631,11 +631,11 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
                 }
             }
             "notifications/resources/updated" => {
-                if let Some(params) = notification.params {
-                    if let Some(uri) = params.get("uri").and_then(|v| v.as_str()) {
-                        debug!(uri = %uri, "Resource updated");
-                        handler.on_resource_updated(uri.to_string()).await;
-                    }
+                if let Some(params) = notification.params
+                    && let Some(uri) = params.get("uri").and_then(|v| v.as_str())
+                {
+                    debug!(uri = %uri, "Resource updated");
+                    handler.on_resource_updated(uri.to_string()).await;
                 }
             }
             "notifications/resources/list_changed" => {

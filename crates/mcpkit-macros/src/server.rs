@@ -216,16 +216,16 @@ fn extract_tool_info(method: &mut ImplItemFn, attrs: ToolAttrs) -> Result<ToolMe
 
     // Validate task_support up front so a typo is a clear compile error rather
     // than a silently dropped attribute.
-    if let Some(ts) = &attrs.task_support {
-        if !matches!(ts.as_str(), "forbidden" | "optional" | "required") {
-            return Err(Error::new_spanned(
-                &method.sig.ident,
-                format!(
-                    "invalid task_support value {ts:?}\n\
+    if let Some(ts) = &attrs.task_support
+        && !matches!(ts.as_str(), "forbidden" | "optional" | "required")
+    {
+        return Err(Error::new_spanned(
+            &method.sig.ident,
+            format!(
+                "invalid task_support value {ts:?}\n\
                      help: expected \"forbidden\", \"optional\", or \"required\""
-                ),
-            ));
-        }
+            ),
+        ));
     }
 
     // Extract parameters (skip &self). `extract_param` also strips the
@@ -420,14 +420,12 @@ fn extract_prompt_param(arg: &FnArg) -> Option<PromptParam> {
             let doc = attrs
                 .iter()
                 .filter_map(|attr| {
-                    if attr.path().is_ident("doc") {
-                        if let syn::Meta::NameValue(nv) = &attr.meta {
-                            if let syn::Expr::Lit(lit) = &nv.value {
-                                if let syn::Lit::Str(s) = &lit.lit {
-                                    return Some(s.value().trim().to_string());
-                                }
-                            }
-                        }
+                    if attr.path().is_ident("doc")
+                        && let syn::Meta::NameValue(nv) = &attr.meta
+                        && let syn::Expr::Lit(lit) = &nv.value
+                        && let syn::Lit::Str(s) = &lit.lit
+                    {
+                        return Some(s.value().trim().to_string());
                     }
                     None
                 })
@@ -452,10 +450,10 @@ fn extract_prompt_param(arg: &FnArg) -> Option<PromptParam> {
 
 /// Check if a type is Option<T>.
 fn is_option_type(ty: &syn::Type) -> bool {
-    if let syn::Type::Path(path) = ty {
-        if let Some(segment) = path.path.segments.last() {
-            return segment.ident == "Option";
-        }
+    if let syn::Type::Path(path) = ty
+        && let Some(segment) = path.path.segments.last()
+    {
+        return segment.ident == "Option";
     }
     false
 }
@@ -463,16 +461,13 @@ fn is_option_type(ty: &syn::Type) -> bool {
 /// Extract the inner type from Option<T>.
 /// Returns the inner type T, or the original type if not an Option.
 fn extract_option_inner_type(ty: &syn::Type) -> syn::Type {
-    if let syn::Type::Path(path) = ty {
-        if let Some(segment) = path.path.segments.last() {
-            if segment.ident == "Option" {
-                if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                    if let Some(syn::GenericArgument::Type(inner)) = args.args.first() {
-                        return inner.clone();
-                    }
-                }
-            }
-        }
+    if let syn::Type::Path(path) = ty
+        && let Some(segment) = path.path.segments.last()
+        && segment.ident == "Option"
+        && let syn::PathArguments::AngleBracketed(args) = &segment.arguments
+        && let Some(syn::GenericArgument::Type(inner)) = args.args.first()
+    {
+        return inner.clone();
     }
     // Fallback: return the original type (shouldn't happen if is_option_type returned true)
     ty.clone()

@@ -204,21 +204,20 @@ impl MessageInspector {
         let record = MessageRecord::new(direction, message.clone());
 
         // Track pending requests for response time calculation
-        if let Message::Request(ref req) = message {
-            if let Ok(mut pending) = self.pending_requests.write() {
-                pending.insert(req.id.clone(), (Instant::now(), req.method.to_string()));
-            }
+        if let Message::Request(ref req) = message
+            && let Ok(mut pending) = self.pending_requests.write()
+        {
+            pending.insert(req.id.clone(), (Instant::now(), req.method.to_string()));
         }
 
         // Calculate response time for completed requests
-        if let Message::Response(ref res) = message {
-            if let Ok(mut pending) = self.pending_requests.write() {
-                if let Some((start, method)) = pending.remove(&res.id) {
-                    let duration = start.elapsed();
-                    if let Ok(mut times) = self.response_times.write() {
-                        times.entry(method).or_default().push(duration);
-                    }
-                }
+        if let Message::Response(ref res) = message
+            && let Ok(mut pending) = self.pending_requests.write()
+            && let Some((start, method)) = pending.remove(&res.id)
+        {
+            let duration = start.elapsed();
+            if let Ok(mut times) = self.response_times.write() {
+                times.entry(method).or_default().push(duration);
             }
         }
 

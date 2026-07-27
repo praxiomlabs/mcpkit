@@ -5,7 +5,7 @@ Performance benchmarks captured using Criterion on 2025-12-18.
 ## Environment
 
 - **OS**: Linux (WSL2)
-- **Rust**: 1.85+
+- **Rust**: 1.88+
 - **Profile**: Release (`--release`)
 
 ## Request Processing
