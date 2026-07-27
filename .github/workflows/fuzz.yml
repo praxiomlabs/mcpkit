@@ -76,7 +76,13 @@ jobs:
           cargo +nightly fuzz run ${{ matrix.target }} -- \
             -max_total_time=${DURATION} \
             -print_final_stats=1
-        continue-on-error: true
+        # NO continue-on-error here. It was the reason this entire pipeline was
+        # dead: a failed step under continue-on-error leaves the JOB green, so
+        # `if: failure()` on the crash-artifact upload below, and on the
+        # notify-on-crash job, never became true. A crash produced a green run,
+        # no artifacts and no issue — the fuzzer ran nightly and its findings
+        # were discarded. `fail-fast: false` on the matrix means one target
+        # crashing still lets the other five finish.
 
       - name: Save fuzz corpus
         uses: actions/cache/save@v5
@@ -114,11 +120,52 @@ jobs:
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz
 
-      - name: Restore all corpus caches
-        run: |
-          for target in fuzz_jsonrpc_message fuzz_jsonrpc_request fuzz_jsonrpc_response fuzz_progress_token fuzz_jsonrpc_structured fuzz_protocol_version; do
-            echo "Restoring corpus for $target"
-          done
+      # These were previously a single step running a loop that only echoed
+      # "Restoring corpus for $target" — no cache was ever restored. Since
+      # fuzz/corpus/ is gitignored and was in no cache path here, the summary
+      # below then reported "No corpus" for all six targets on every run.
+      - name: Restore corpus (fuzz_jsonrpc_message)
+        uses: actions/cache/restore@v5
+        with:
+          path: fuzz/corpus/fuzz_jsonrpc_message
+          key: fuzz-corpus-fuzz_jsonrpc_message-${{ github.sha }}
+          restore-keys: |
+            fuzz-corpus-fuzz_jsonrpc_message-
+      - name: Restore corpus (fuzz_jsonrpc_request)
+        uses: actions/cache/restore@v5
+        with:
+          path: fuzz/corpus/fuzz_jsonrpc_request
+          key: fuzz-corpus-fuzz_jsonrpc_request-${{ github.sha }}
+          restore-keys: |
+            fuzz-corpus-fuzz_jsonrpc_request-
+      - name: Restore corpus (fuzz_jsonrpc_response)
+        uses: actions/cache/restore@v5
+        with:
+          path: fuzz/corpus/fuzz_jsonrpc_response
+          key: fuzz-corpus-fuzz_jsonrpc_response-${{ github.sha }}
+          restore-keys: |
+            fuzz-corpus-fuzz_jsonrpc_response-
+      - name: Restore corpus (fuzz_progress_token)
+        uses: actions/cache/restore@v5
+        with:
+          path: fuzz/corpus/fuzz_progress_token
+          key: fuzz-corpus-fuzz_progress_token-${{ github.sha }}
+          restore-keys: |
+            fuzz-corpus-fuzz_progress_token-
+      - name: Restore corpus (fuzz_jsonrpc_structured)
+        uses: actions/cache/restore@v5
+        with:
+          path: fuzz/corpus/fuzz_jsonrpc_structured
+          key: fuzz-corpus-fuzz_jsonrpc_structured-${{ github.sha }}
+          restore-keys: |
+            fuzz-corpus-fuzz_jsonrpc_structured-
+      - name: Restore corpus (fuzz_protocol_version)
+        uses: actions/cache/restore@v5
+        with:
+          path: fuzz/corpus/fuzz_protocol_version
+          key: fuzz-corpus-fuzz_protocol_version-${{ github.sha }}
+          restore-keys: |
+            fuzz-corpus-fuzz_protocol_version-
 
       - name: Generate coverage report
         working-directory: fuzz
