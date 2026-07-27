@@ -79,6 +79,7 @@ pub struct ToolChoice {
 
 /// A message in a sampling conversation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct SamplingMessage {
     /// The role of the message sender.
     pub role: Role,

@@ -47,6 +47,7 @@ impl ProgressNotificationParams {
 /// `request_id` is optional on the wire; per the spec it MUST be provided when
 /// cancelling non-task requests (and MUST NOT be used to cancel tasks).
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct CancelledNotificationParams {
     /// The id of the request being cancelled.
     #[serde(rename = "requestId", default, skip_serializing_if = "Option::is_none")]

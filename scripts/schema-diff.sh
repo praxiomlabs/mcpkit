@@ -432,7 +432,36 @@ extract_struct_flat() {
 	done
 }
 
-hr "Tier 2: structural field diff (every \$def with a same-named mcpkit struct)"
+# ---------------------------------------------------------------------------
+# Alias map: $def name -> mcpkit type name, for types that ARE 1:1 but are
+# spelled differently.
+#
+# Name-based auto-discovery silently skips these, and "no same-named type" was
+# being reported as "no 1:1 Rust type" — which was wrong, and hid a real
+# conformance failure (elicitation params carry no `_meta`, a spec MUST for
+# task-related messages). Anything added here gets diffed like any other type.
+#
+# Deliberately NOT aliased:
+#   TextResourceContents / BlobResourceContents -> ResourceContents
+#     mcpkit flattens both siblings into one struct which is already diffed
+#     against the `ResourceContents` def; aliasing would double-report it.
+#   PromptReference / ResourceTemplateReference -> CompletionRef::{Prompt,Resource}
+#     enum variants, not structs — extract_struct cannot read them. Their
+#     discriminators are covered by Row 4.
+#   StringSchema / NumberSchema / BooleanSchema / *EnumSchema -> PropertySchema
+#     one open-typed struct models all seven; a deliberate modelling choice
+#     already recorded in the baseline.
+alias_for() {
+	case "$1" in
+	ElicitRequestFormParams) echo ElicitRequest ;;
+	ElicitRequestURLParams)  echo UrlElicitRequest ;;
+	EmbeddedResource)        echo ResourceContent ;;
+	ResourceLink)            echo ResourceLinkContent ;;
+	*)                       echo "" ;;
+	esac
+}
+
+hr "Tier 2: structural field diff (every \$def with a same-named or aliased mcpkit struct)"
 unresolved=0
 diffcount=0
 
@@ -440,6 +469,7 @@ diffcount=0
 # discovered rather than listed, so a type added to either side is picked up
 # instead of silently staying unchecked — the hardcoded 7-type list this
 # replaced left 138 defs unexamined and made the sample look like coverage.
+# Defs whose Rust counterpart has a different name are resolved via alias_for().
 #
 # For a `*Request` def the schema node is the JSON-RPC envelope (id/jsonrpc/
 # method/params) while the same-named Rust struct is the params, so when a def
@@ -448,23 +478,29 @@ TIER2="$(
 	jq -r '.["$defs"] | to_entries[]
 	       | .key + "|" + (if (.value.properties.params) then "params" else "self" end)' "$SCHEMA" |
 	while IFS='|' read -r ty kind; do
+		rust="$ty"
 		file="$(grep -rl "^pub struct $ty\b" "$SRC_GLOB"/*/src --include='*.rs' 2>/dev/null | awk 'NR==1')"
-		[ -n "$file" ] || continue
+		if [ -z "$file" ]; then
+			rust="$(alias_for "$ty")"
+			[ -n "$rust" ] || continue
+			file="$(grep -rl "^pub struct $rust\b" "$SRC_GLOB"/*/src --include='*.rs' 2>/dev/null | awk 'NR==1')"
+			[ -n "$file" ] || { echo "warn: alias $ty -> $rust not found in sources" >&2; continue; }
+		fi
 		if [ "$kind" = params ]; then
-			printf '%s|%s|.["$defs"].%s.properties.params\n' "$ty" "$file" "$ty"
+			printf '%s|%s|.["$defs"].%s.properties.params|%s\n' "$ty" "$file" "$ty" "$rust"
 		else
-			printf '%s|%s|.["$defs"].%s\n' "$ty" "$file" "$ty"
+			printf '%s|%s|.["$defs"].%s|%s\n' "$ty" "$file" "$ty" "$rust"
 		fi
 	done
 )"
 
-while IFS='|' read -r ty file path; do
+while IFS='|' read -r ty file path rust; do
 	[ -n "$ty" ] || continue
 	jq -r "$RESOLVE_JQ . as \$root | $path | resolve(\$root)
 	       | (.required) as \$r | .properties | keys[] as \$k
 	       | \$k + \"\t\" + (if (\$r | index(\$k)) then \"req\" else \"opt\" end)" \
 		"$SCHEMA" | sort > "$WORK/s2.txt"
-	extract_struct_flat "$file" "$ty" | sort > "$WORK/m2.txt"
+	extract_struct_flat "$file" "$rust" | sort > "$WORK/m2.txt"
 
 	# A schema node that resolves to zero properties is one this resolver cannot
 	# expand — an `anyOf` union (ElicitRequestParams) or an abstract JSON-RPC base
@@ -477,7 +513,11 @@ while IFS='|' read -r ty file path; do
 		continue
 	fi
 
-	printf '\n%s  (%s)\n' "$ty" "$file"
+	if [ "$rust" != "$ty" ]; then
+		printf '\n%s -> %s  (%s)  [alias]\n' "$ty" "$rust" "$file"
+	else
+		printf '\n%s  (%s)\n' "$ty" "$file"
+	fi
 	printf '  schema path: %s\n' "$path"
 	# `type` is the tagged-union discriminator. mcpkit supplies it from the
 	# enum wrapper (#[serde(tag = "type")]), never as a struct field, so its
