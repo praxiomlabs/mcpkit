@@ -401,20 +401,46 @@ jobs:
   # MSRV - Minimum Supported Rust Version
   # ==========================================================================
 
+  # The toolchain is read from Cargo.toml at runtime rather than hardcoded here,
+  # so the declared MSRV and the version verified against it cannot drift apart.
+  #
+  # They had. The job checked `--lib -p mcpkit` only, which passes because the
+  # umbrella crate's dependency closure excludes actix — while mcpkit-actix,
+  # published and inheriting the same rust-version, could not build on the
+  # declared 1.85 at all (actix-http 3.12.1 and time 0.3.47 both require 1.88).
+  # The scope is now the whole workspace, so a crate that cannot meet the
+  # declared floor fails here instead of on a user's machine.
+  #
+  # The old comment blamed wiremock 0.6+ for the narrow scope. That was wrong on
+  # its own terms: wiremock is a dev-dependency, and `cargo check` without
+  # --all-targets never compiles dev-dependencies.
   msrv:
-    name: MSRV (1.85)
+    name: MSRV
     runs-on: ubuntu-latest
     needs: [changes, fmt, clippy, check]
     if: ${{ needs.changes.outputs.code == 'true' || github.event_name == 'push' }}
     steps:
       - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@1.85
+      - name: Read declared MSRV from Cargo.toml
+        id: msrv
+        run: |
+          set -euo pipefail
+          V=$(cargo metadata --no-deps --format-version 1 \
+              | jq -r '[.packages[].rust_version] | map(select(. != null)) | unique | .[]')
+          if [ "$(printf '%s\n' "$V" | wc -l)" -ne 1 ]; then
+            echo "::error::crates declare more than one rust-version; this job assumes a single workspace floor:"
+            printf '%s\n' "$V"
+            exit 1
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "Declared MSRV: $V"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.msrv.outputs.version }}
       - uses: Swatinem/rust-cache@v2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      # Only check library code compiles with MSRV, not tests/dev-dependencies
-      # (wiremock 0.6+ requires Rust 1.87 for let chains)
-      - run: cargo check --all-features --lib -p mcpkit
+      - run: cargo check --workspace --all-features
 
   # ==========================================================================
   # Cross-platform matrix - PRs only, and only when code changed (skip docs PRs)

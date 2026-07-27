@@ -28,7 +28,7 @@ async fn main() {
 
 ## Requirements
 
-- Rust 1.85+
+- Rust 1.88+
 - Warp 0.3+
 
 ## License

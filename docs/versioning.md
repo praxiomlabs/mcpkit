@@ -152,7 +152,7 @@ Note: We follow a "release when ready" philosophy. The 1.0 release will occur wh
 
 ### Minimum Supported Rust Version (MSRV)
 
-The current MSRV is **Rust 1.85**.
+The current MSRV is **Rust 1.88**.
 
 MSRV policy:
 - MSRV increases are treated as minor version bumps

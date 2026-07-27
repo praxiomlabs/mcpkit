@@ -4,7 +4,7 @@ This guide walks you through building MCP clients using the Rust MCP SDK. MCP cl
 
 ## Prerequisites
 
-- Rust 1.85 or later
+- Rust 1.88 or later
 - Basic familiarity with async Rust (Tokio)
 - An MCP server to connect to (or use the examples in this repository)
 

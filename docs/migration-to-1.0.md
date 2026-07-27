@@ -137,10 +137,10 @@ mcpkit = "1"
 
 #### Step 2: Update MSRV
 
-mcpkit 1.0 requires Rust 1.85+. Update your `rust-version` in `Cargo.toml`:
+mcpkit 1.0 requires Rust 1.88+. Update your `rust-version` in `Cargo.toml`:
 
 ```toml
-rust-version = "1.85"
+rust-version = "1.88"
 ```
 
 #### Step 3: Update ServerCapabilities Pattern
@@ -360,7 +360,7 @@ If you encounter issues during migration:
 
 | mcpkit | MCP Protocol | Rust | Status |
 |--------|--------------|------|--------|
-| 1.0.x  | 2024-11-05 → 2025-11-25 | 1.85+ | Stable |
+| 1.0.x  | 2024-11-05 → 2025-11-25 | 1.88+ | Stable |
 | 0.7.x  | 2024-11-05 → 2025-11-25 | 1.85+ | Current RC |
 | 0.6.x  | 2024-11-05 → 2025-11-25 | 1.85+ | Maintenance |
 | 0.4.x  | 2024-11-05 → 2025-11-25 | 1.85+ | Maintenance |
