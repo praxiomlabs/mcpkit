@@ -483,7 +483,8 @@ impl WebSocketListener {
     /// connections remain active until explicitly closed.
     pub async fn stop(&self) {
         self.running.store(false, Ordering::Release);
-        if let Some(tx) = self.shutdown_tx.lock().await.take() {
+        let shutdown_tx = self.shutdown_tx.lock().await.take();
+        if let Some(tx) = shutdown_tx {
             drop(tx.send(()));
         }
         tracing::info!(

@@ -3,6 +3,15 @@
 //! Tests verifying correct behavior when multiple middleware layers
 //! are composed together.
 
+// Integration-test code. These are readability lints on test scaffolding —
+// similar binding names in fixtures, loop shapes, and small numeric casts in
+// assertions — none of which ships.
+#![allow(clippy::similar_names)]
+#![allow(clippy::while_let_loop)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::match_same_arms)]
+
 use mcpkit_core::protocol::{Message, Notification};
 use mcpkit_transport::memory::MemoryTransport;
 use mcpkit_transport::middleware::{

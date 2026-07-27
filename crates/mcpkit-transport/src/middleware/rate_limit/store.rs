@@ -380,11 +380,14 @@ impl RateLimitStore for InMemoryStore {
     }
 
     async fn get_stats(&self, key: &str) -> Result<StoreStats, RateLimitStoreError> {
-        let buckets = self.buckets.lock().await;
-        // A key with no live bucket behaves as a full bucket.
-        let current_tokens = buckets
-            .get(key)
-            .map_or(self.burst_size, |b| b.tokens / 1000);
+        let current_tokens = {
+            let buckets = self.buckets.lock().await;
+            // A key with no live bucket behaves as a full bucket.
+            buckets
+                .get(key)
+                .map_or(self.burst_size, |b| b.tokens / 1000)
+        };
+        // Guard released above: the counters below are atomics and do not need it.
         Ok(StoreStats {
             current_tokens,
             total_requests: self.total_requests.load(Ordering::Relaxed),
