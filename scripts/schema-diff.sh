@@ -35,6 +35,13 @@
 
 set -euo pipefail
 
+# Byte-order collation, always. Every row here is a `sort`/`comm` set operation,
+# and `comm` requires its inputs sorted consistently — under a different
+# LC_COLLATE it can report wrong differences, not merely a different order. The
+# committed baseline is generated under this setting, so leaving it to the
+# caller's locale makes CI disagree with a developer's machine.
+export LC_ALL=C
+
 MODE="${1:-report}"
 
 SCHEMA="spec/2025-11-25/schema.json"

@@ -52,11 +52,11 @@
 # ---------------------------------------------------------------------------
 content-type in-mcpkit-not-in-schema: Custom
 content-type in-mcpkit-not-in-schema: Error
-content-type in-mcpkit-not-in-schema: http
 content-type in-mcpkit-not-in-schema: MessageReceived
 content-type in-mcpkit-not-in-schema: MessageSent
 content-type in-mcpkit-not-in-schema: SessionEnded
 content-type in-mcpkit-not-in-schema: SessionStarted
+content-type in-mcpkit-not-in-schema: http
 content-type in-mcpkit-not-in-schema: stdio
 content-type in-mcpkit-not-in-schema: websocket
 content-type in-schema-not-in-mcpkit: array

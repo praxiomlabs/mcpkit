@@ -204,6 +204,9 @@ jobs:
             --exclude "^https?://[^./:]+([/:]|$)"
             --exclude "^https?://[^/]*(trusted|malicious|evil)"
             --exclude "^https?://(anything|app[0-9])\.com([/:]|$)"
+            --exclude-loopback
+            --exclude "^https?://[^/]*\.(test|invalid|localhost)([/:]|$)"
+            --exclude "YOUR_USERNAME"
             './docs/**/*.md'
             './README.md'
             './CONTRIBUTING.md'
