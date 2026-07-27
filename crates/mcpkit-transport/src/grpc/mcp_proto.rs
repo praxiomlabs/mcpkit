@@ -149,7 +149,7 @@ pub mod mcp_service_client {
         }
         /// Bidirectional streaming RPC for MCP communication.
         ///
-        /// Both client and server can send `McpMessage` instances at any time.
+        /// Both client and server can send McpMessage instances at any time.
         /// The streams operate independently, allowing for flexible communication
         /// patterns including request/response, notifications, and progress updates.
         pub async fn stream(
@@ -181,7 +181,7 @@ pub mod mcp_service_server {
         clippy::let_unit_value
     )]
     use tonic::codegen::*;
-    /// Generated trait containing gRPC methods that should be implemented for use with `McpServiceServer`.
+    /// Generated trait containing gRPC methods that should be implemented for use with McpServiceServer.
     #[async_trait]
     pub trait McpService: std::marker::Send + std::marker::Sync + 'static {
         /// Server streaming response type for the Stream method.
@@ -191,7 +191,7 @@ pub mod mcp_service_server {
             + 'static;
         /// Bidirectional streaming RPC for MCP communication.
         ///
-        /// Both client and server can send `McpMessage` instances at any time.
+        /// Both client and server can send McpMessage instances at any time.
         /// The streams operate independently, allowing for flexible communication
         /// patterns including request/response, notifications, and progress updates.
         async fn stream(
@@ -249,7 +249,7 @@ pub mod mcp_service_server {
         ///
         /// Default: `4MB`
         #[must_use]
-        pub const fn max_decoding_message_size(mut self, limit: usize) -> Self {
+        pub fn max_decoding_message_size(mut self, limit: usize) -> Self {
             self.max_decoding_message_size = Some(limit);
             self
         }
@@ -257,7 +257,7 @@ pub mod mcp_service_server {
         ///
         /// Default: `usize::MAX`
         #[must_use]
-        pub const fn max_encoding_message_size(mut self, limit: usize) -> Self {
+        pub fn max_encoding_message_size(mut self, limit: usize) -> Self {
             self.max_encoding_message_size = Some(limit);
             self
         }
