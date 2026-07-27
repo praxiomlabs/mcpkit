@@ -561,6 +561,22 @@ clippy-fix:
     printf '{{green}}[OK]{{reset}}   Clippy fixes applied\n'
 
 [group('security')]
+[doc("Diff the wire vocabulary against the vendored MCP schema")]
+schema-diff:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    scripts/schema-diff.sh
+
+[group('security')]
+[doc("Prove the schema gate still rejects planted defects")]
+schema-diff-test:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    printf '{{cyan}}[INFO]{{reset}} Checking that schema-diff.sh can fail...\n'
+    scripts/schema-diff-test.sh
+    printf '{{green}}[OK]{{reset}}   Schema gate rejected every planted defect\n'
+
+[group('security')]
 [doc("Security vulnerability audit via cargo-audit")]
 audit:
     #!/usr/bin/env bash

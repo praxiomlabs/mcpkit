@@ -300,6 +300,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      # Runs before the gate it guards. This asserts schema-diff.sh still
+      # *rejects* planted defects — rows 1 and 2 once could not fail at all, and
+      # a conformance gate that always passes is worse than no gate, because it
+      # converts "unchecked" into "checked and fine".
+      - name: Prove the schema gate can fail
+        run: scripts/schema-diff-test.sh
       - name: Diff against the vendored 2025-11-25 schema
         run: |
           set -euo pipefail
