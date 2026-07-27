@@ -39,7 +39,7 @@ fn demonstrate_client_config() {
     // Full configuration with all options
     let full_config = GrpcConfig::new("https://mcp.example.com:50051")
         .connect_timeout(Duration::from_secs(5))
-        .timeout(Duration::from_secs(60))
+        .timeout(Duration::from_mins(1))
         .with_tls()
         .with_metadata("authorization", "Bearer token123")
         .with_metadata("x-request-id", "req-001");
@@ -66,7 +66,7 @@ fn demonstrate_server_config() {
     let full_config = GrpcServerConfig::new("0.0.0.0:50051")
         .with_tls()
         .max_concurrent_streams(200)
-        .tcp_keepalive(Duration::from_secs(60))
+        .tcp_keepalive(Duration::from_mins(1))
         .http2_keepalive_interval(Duration::from_secs(30));
 
     info!(
@@ -78,8 +78,8 @@ fn demonstrate_server_config() {
     let server = GrpcServerBuilder::new("0.0.0.0:50051")
         .with_tls()
         .max_concurrent_streams(100)
-        .tcp_keepalive(Duration::from_secs(120))
-        .http2_keepalive_interval(Duration::from_secs(60))
+        .tcp_keepalive(Duration::from_mins(2))
+        .http2_keepalive_interval(Duration::from_mins(1))
         .build();
 
     info!(

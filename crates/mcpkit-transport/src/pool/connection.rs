@@ -117,7 +117,7 @@ where
     ///
     /// Panics if `take()` was previously called on this guard.
     #[must_use]
-    pub fn transport(&self) -> &T {
+    pub const fn transport(&self) -> &T {
         &self
             .conn
             .as_ref()

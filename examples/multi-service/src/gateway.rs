@@ -166,13 +166,14 @@ async fn handle_request(state: &AppState, request: &Request) -> JsonRpcResponse 
         ),
 
         // Aggregate tools from tools service
-        "tools/list" => match state.tools_client.forward(request).await {
-            Some(resp) => resp,
-            None => {
+        "tools/list" => {
+            if let Some(resp) = state.tools_client.forward(request).await {
+                resp
+            } else {
                 warn!("Tools service unavailable");
                 JsonRpcResponse::success(request.id.clone(), json!({ "tools": [] }))
             }
-        },
+        }
 
         // Forward tool calls to tools service
         "tools/call" => match state.tools_client.forward(request).await {
@@ -188,13 +189,14 @@ async fn handle_request(state: &AppState, request: &Request) -> JsonRpcResponse 
         },
 
         // Aggregate resources from resources service
-        "resources/list" => match state.resources_client.forward(request).await {
-            Some(resp) => resp,
-            None => {
+        "resources/list" => {
+            if let Some(resp) = state.resources_client.forward(request).await {
+                resp
+            } else {
                 warn!("Resources service unavailable");
                 JsonRpcResponse::success(request.id.clone(), json!({ "resources": [] }))
             }
-        },
+        }
 
         // Forward resource reads to resources service
         "resources/read" => match state.resources_client.forward(request).await {

@@ -34,7 +34,7 @@
 //! [`RateLimitStore`] trait:
 //!
 //! - [`InMemoryStore`]: Default in-memory store (single-process deployments)
-//! - Custom stores: Implement [`RateLimitStore`] for Redis, DynamoDB, etc.
+//! - Custom stores: Implement [`RateLimitStore`] for Redis, `DynamoDB`, etc.
 //!
 //! # Example
 //!
@@ -231,7 +231,7 @@ impl RateLimiter {
 
     /// Create a rate limiter with a custom store backend.
     ///
-    /// Use this for distributed rate limiting with Redis, DynamoDB, etc.
+    /// Use this for distributed rate limiting with Redis, `DynamoDB`, etc.
     ///
     /// # Arguments
     ///

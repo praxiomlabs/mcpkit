@@ -3,6 +3,12 @@
 //! This module uses darling to parse macro attributes into structured types.
 
 #![allow(dead_code)]
+// `clippy::option_if_let_else` (nursery) fires 17 times in this file, once per
+// `#[darling(default)]` field, on code the `FromMeta` derive generates rather
+// than anything written here. Its suggested fix is not valid Rust — it proposes
+// `pub instructions.map_or_else(default, |__val| default))]` in place of the
+// attribute — so there is nothing to act on at source.
+#![allow(clippy::option_if_let_else)]
 
 use darling::{FromMeta, ast::NestedMeta};
 use proc_macro2::Span;

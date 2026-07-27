@@ -731,7 +731,7 @@ pub mod otel {
 
         /// Set the trace sample ratio (0.0 to 1.0).
         #[must_use]
-        pub fn with_sample_ratio(mut self, ratio: f64) -> Self {
+        pub const fn with_sample_ratio(mut self, ratio: f64) -> Self {
             self.sample_ratio = ratio.clamp(0.0, 1.0);
             self
         }

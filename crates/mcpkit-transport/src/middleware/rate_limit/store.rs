@@ -118,7 +118,7 @@ pub enum RateLimitStoreError {
 /// Trait for rate limit state storage backends.
 ///
 /// This trait abstracts the storage of rate limiting state, allowing
-/// implementations for different backends (in-memory, Redis, DynamoDB, etc.).
+/// implementations for different backends (in-memory, Redis, `DynamoDB`, etc.).
 ///
 /// All methods are async to support distributed backends that require
 /// network I/O.
@@ -136,7 +136,7 @@ pub trait RateLimitStore: Send + Sync {
     ///
     /// This should be an atomic check-and-decrement operation:
     /// - If allowed: consume one unit of quota and return `Allowed`
-    /// - If denied: return `Denied` with retry_after hint
+    /// - If denied: return `Denied` with `retry_after` hint
     ///
     /// # Arguments
     ///
@@ -186,7 +186,7 @@ struct Bucket {
 }
 
 impl Bucket {
-    fn new(config: &RateLimitConfig, now: Instant) -> Self {
+    const fn new(config: &RateLimitConfig, now: Instant) -> Self {
         Self {
             // Start with a full bucket (scaled by 1000 for sub-token precision).
             tokens: config.burst_size * 1000,

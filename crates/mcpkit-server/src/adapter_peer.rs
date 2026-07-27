@@ -140,7 +140,7 @@ impl OutboundOwner {
 
     /// The shared registry, for cloning into peers and response routing.
     #[must_use]
-    pub fn outbound(&self) -> &Arc<SessionOutbound> {
+    pub const fn outbound(&self) -> &Arc<SessionOutbound> {
         &self.0
     }
 }
@@ -229,7 +229,7 @@ pub struct StreamRegistrySink {
 impl StreamRegistrySink {
     /// Create a sink over a session's stream registry.
     #[must_use]
-    pub fn new(registry: Arc<crate::streams::StreamRegistry>) -> Self {
+    pub const fn new(registry: Arc<crate::streams::StreamRegistry>) -> Self {
         Self { registry }
     }
 }
@@ -335,7 +335,7 @@ impl SessionPeer {
     /// constant by design.
     #[doc(hidden)]
     #[must_use]
-    pub fn with_reconnect_grace(mut self, grace: Duration) -> Self {
+    pub const fn with_reconnect_grace(mut self, grace: Duration) -> Self {
         self.grace = grace;
         self
     }

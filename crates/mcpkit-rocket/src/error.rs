@@ -32,11 +32,11 @@ pub enum RocketError {
 impl<'r> Responder<'r, 'static> for RocketError {
     fn respond_to(self, _: &'r Request<'_>) -> response::Result<'static> {
         let status = match &self {
-            RocketError::InvalidMessage(_) => Status::BadRequest,
-            RocketError::UnsupportedVersion(_) => Status::BadRequest,
-            RocketError::SessionNotFound(_) => Status::NotFound,
-            RocketError::Serialization(_) => Status::InternalServerError,
-            RocketError::Internal(_) => Status::InternalServerError,
+            Self::InvalidMessage(_) => Status::BadRequest,
+            Self::UnsupportedVersion(_) => Status::BadRequest,
+            Self::SessionNotFound(_) => Status::NotFound,
+            Self::Serialization(_) => Status::InternalServerError,
+            Self::Internal(_) => Status::InternalServerError,
         };
 
         Err(status)
@@ -46,13 +46,13 @@ impl<'r> Responder<'r, 'static> for RocketError {
 impl RocketError {
     /// Get the HTTP status code for this error.
     #[must_use]
-    pub fn status(&self) -> Status {
+    pub const fn status(&self) -> Status {
         match self {
-            RocketError::InvalidMessage(_) => Status::BadRequest,
-            RocketError::UnsupportedVersion(_) => Status::BadRequest,
-            RocketError::SessionNotFound(_) => Status::NotFound,
-            RocketError::Serialization(_) => Status::InternalServerError,
-            RocketError::Internal(_) => Status::InternalServerError,
+            Self::InvalidMessage(_) => Status::BadRequest,
+            Self::UnsupportedVersion(_) => Status::BadRequest,
+            Self::SessionNotFound(_) => Status::NotFound,
+            Self::Serialization(_) => Status::InternalServerError,
+            Self::Internal(_) => Status::InternalServerError,
         }
     }
 }

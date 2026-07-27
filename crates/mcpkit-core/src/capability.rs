@@ -192,6 +192,12 @@ impl ServerCapabilities {
     /// assert!(caps.has_extension("com.example.myext"));
     /// ```
     #[must_use]
+    // `clippy::needless_pass_by_value`: the registry is only read here, so a
+    // reference would do. Taking it by value is kept because this is a public
+    // builder on a published crate and narrowing the signature to
+    // `&ExtensionRegistry` is a breaking change — not worth making for a style
+    // lint. Revisit at the next major.
+    #[allow(clippy::needless_pass_by_value)]
     pub fn with_extensions(mut self, registry: ExtensionRegistry) -> Self {
         if !registry.is_empty() {
             self.experimental = Some(registry.to_experimental());
@@ -425,6 +431,12 @@ impl ClientCapabilities {
     ///
     /// This populates the `experimental` field with extension declarations.
     #[must_use]
+    // `clippy::needless_pass_by_value`: the registry is only read here, so a
+    // reference would do. Taking it by value is kept because this is a public
+    // builder on a published crate and narrowing the signature to
+    // `&ExtensionRegistry` is a breaking change — not worth making for a style
+    // lint. Revisit at the next major.
+    #[allow(clippy::needless_pass_by_value)]
     pub fn with_extensions(mut self, registry: ExtensionRegistry) -> Self {
         if !registry.is_empty() {
             self.experimental = Some(registry.to_experimental());

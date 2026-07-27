@@ -169,6 +169,10 @@ impl ProtectedResourceMetadata {
     }
 
     /// Validate that the metadata meets MCP requirements.
+    ///
+    /// # Errors
+    ///
+    /// Returns a human-readable message naming the first requirement not met.
     pub fn validate(&self) -> Result<(), String> {
         if self.resource.is_empty() {
             return Err("Resource identifier is required".to_string());
@@ -661,12 +665,10 @@ impl TokenResponse {
     /// Check if the token is expired.
     #[must_use]
     pub fn is_expired(&self, issued_at: SystemTime) -> bool {
-        if let Some(expires_in) = self.expires_in {
-            let expiry = issued_at + Duration::from_secs(expires_in);
-            SystemTime::now() >= expiry
-        } else {
-            false // No expiration means never expires
-        }
+        // No expiration means never expires.
+        self.expires_in.is_some_and(|expires_in| {
+            SystemTime::now() >= issued_at + Duration::from_secs(expires_in)
+        })
     }
 }
 
@@ -701,12 +703,9 @@ impl StoredToken {
     /// Check if the token will expire within the given duration.
     #[must_use]
     pub fn expires_within(&self, duration: Duration) -> bool {
-        if let Some(expires_in) = self.token.expires_in {
-            let expiry = self.issued_at + Duration::from_secs(expires_in);
-            SystemTime::now() + duration >= expiry
-        } else {
-            false
-        }
+        self.token.expires_in.is_some_and(|expires_in| {
+            SystemTime::now() + duration >= self.issued_at + Duration::from_secs(expires_in)
+        })
     }
 
     /// Get the Authorization header value.

@@ -80,13 +80,13 @@ impl MockClient {
 
     /// Get the client info.
     #[must_use]
-    pub fn info(&self) -> &ClientInfo {
+    pub const fn info(&self) -> &ClientInfo {
         &self.info
     }
 
     /// Get the client capabilities.
     #[must_use]
-    pub fn capabilities(&self) -> &ClientCapabilities {
+    pub const fn capabilities(&self) -> &ClientCapabilities {
         &self.capabilities
     }
 

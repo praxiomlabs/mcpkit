@@ -256,7 +256,7 @@ impl<T: Transport> TransportPeer<T> {
 
     /// Create a request-capable transport peer that correlates responses through
     /// the given server state.
-    pub(crate) fn with_outbound(
+    pub(crate) const fn with_outbound(
         transport: Arc<T>,
         state: Arc<ServerState>,
         timeout: Duration,

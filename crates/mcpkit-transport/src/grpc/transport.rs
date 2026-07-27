@@ -269,7 +269,7 @@ impl GrpcTransport {
     /// Returns `None` for server-side transports that were created from
     /// incoming connections.
     #[must_use]
-    pub fn channel(&self) -> Option<&Channel> {
+    pub const fn channel(&self) -> Option<&Channel> {
         self.channel.as_ref()
     }
 }
@@ -454,7 +454,7 @@ impl GrpcServer {
 
     /// Get the server configuration.
     #[must_use]
-    pub fn config(&self) -> &GrpcServerConfig {
+    pub const fn config(&self) -> &GrpcServerConfig {
         &self.config
     }
 

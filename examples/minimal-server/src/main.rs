@@ -30,7 +30,7 @@ struct Calculator {
 }
 
 impl Calculator {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self {
             operation_count: AtomicU64::new(0),
         }
@@ -59,7 +59,7 @@ impl Calculator {
     #[tool(description = "Get operation count", read_only = true)]
     async fn get_stats(&self) -> ToolOutput {
         let count = self.operation_count.load(Ordering::Relaxed);
-        ToolOutput::text(format!("Operations performed: {}", count))
+        ToolOutput::text(format!("Operations performed: {count}"))
     }
 }
 
@@ -163,7 +163,7 @@ fn print_result(result: &ToolOutput) {
             }
         }
         ToolOutput::RecoverableError { message, .. } => {
-            println!("Error: {}", message);
+            println!("Error: {message}");
         }
     }
 }

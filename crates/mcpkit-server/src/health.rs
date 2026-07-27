@@ -44,25 +44,25 @@ pub enum HealthStatus {
 impl HealthStatus {
     /// Check if the status is healthy.
     #[must_use]
-    pub fn is_healthy(&self) -> bool {
+    pub const fn is_healthy(&self) -> bool {
         matches!(self, Self::Healthy)
     }
 
     /// Check if the status is degraded.
     #[must_use]
-    pub fn is_degraded(&self) -> bool {
+    pub const fn is_degraded(&self) -> bool {
         matches!(self, Self::Degraded)
     }
 
     /// Check if the status is unhealthy.
     #[must_use]
-    pub fn is_unhealthy(&self) -> bool {
+    pub const fn is_unhealthy(&self) -> bool {
         matches!(self, Self::Unhealthy)
     }
 
     /// Get the status as an HTTP status code.
     #[must_use]
-    pub fn http_status_code(&self) -> u16 {
+    pub const fn http_status_code(&self) -> u16 {
         match self {
             Self::Healthy => 200,
             Self::Degraded => 200, // Still operational
@@ -72,7 +72,7 @@ impl HealthStatus {
 
     /// Get the status as a string.
     #[must_use]
-    pub fn as_str(&self) -> &'static str {
+    pub const fn as_str(&self) -> &'static str {
         match self {
             Self::Healthy => "healthy",
             Self::Degraded => "degraded",
@@ -150,7 +150,7 @@ impl ComponentHealth {
 
     /// Set the check duration.
     #[must_use]
-    pub fn with_duration(mut self, duration: Duration) -> Self {
+    pub const fn with_duration(mut self, duration: Duration) -> Self {
         self.check_duration = duration;
         self
     }
@@ -185,7 +185,7 @@ pub struct HealthReport {
 impl HealthReport {
     /// Check if the service is healthy.
     #[must_use]
-    pub fn is_healthy(&self) -> bool {
+    pub const fn is_healthy(&self) -> bool {
         self.status.is_healthy()
     }
 
@@ -334,7 +334,7 @@ impl HealthChecker {
 
     /// Run a quick liveness check (just verifies the service is running).
     #[must_use]
-    pub fn liveness(&self) -> bool {
+    pub const fn liveness(&self) -> bool {
         true
     }
 

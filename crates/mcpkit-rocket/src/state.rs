@@ -111,7 +111,7 @@ impl<H> McpState<H> {
     /// `None` for unlimited retention. Defaults to
     /// [`DEFAULT_TASK_TTL_MS`](mcpkit_server::capability::tasks::DEFAULT_TASK_TTL_MS).
     #[must_use]
-    pub fn with_task_ttl(mut self, default_task_ttl: Option<u64>) -> Self {
+    pub const fn with_task_ttl(mut self, default_task_ttl: Option<u64>) -> Self {
         self.sessions.default_task_ttl = default_task_ttl;
         self
     }

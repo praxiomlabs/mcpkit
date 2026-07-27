@@ -85,14 +85,14 @@ pub mod healthcare {
 
         /// Enable SMART on FHIR support.
         #[must_use]
-        pub fn with_smart_on_fhir(mut self, enabled: bool) -> Self {
+        pub const fn with_smart_on_fhir(mut self, enabled: bool) -> Self {
             self.smart_on_fhir = enabled;
             self
         }
 
         /// Configure audit logging.
         #[must_use]
-        pub fn with_audit_logging(mut self, enabled: bool) -> Self {
+        pub const fn with_audit_logging(mut self, enabled: bool) -> Self {
             self.audit_logging = enabled;
             self
         }
@@ -193,7 +193,7 @@ pub mod finance {
 
         /// Enable real-time data streaming.
         #[must_use]
-        pub fn with_real_time(mut self, enabled: bool) -> Self {
+        pub const fn with_real_time(mut self, enabled: bool) -> Self {
             self.real_time = enabled;
             self
         }
@@ -207,7 +207,7 @@ pub mod finance {
 
         /// Configure encryption requirement.
         #[must_use]
-        pub fn with_encryption_required(mut self, required: bool) -> Self {
+        pub const fn with_encryption_required(mut self, required: bool) -> Self {
             self.encryption_required = required;
             self
         }
@@ -325,14 +325,14 @@ pub mod iot {
 
         /// Set telemetry interval in milliseconds.
         #[must_use]
-        pub fn with_telemetry_interval(mut self, interval_ms: u32) -> Self {
+        pub const fn with_telemetry_interval(mut self, interval_ms: u32) -> Self {
             self.telemetry_interval_ms = interval_ms;
             self
         }
 
         /// Enable message buffering.
         #[must_use]
-        pub fn with_buffered_messages(mut self, enabled: bool) -> Self {
+        pub const fn with_buffered_messages(mut self, enabled: bool) -> Self {
             self.buffered_messages = enabled;
             self
         }

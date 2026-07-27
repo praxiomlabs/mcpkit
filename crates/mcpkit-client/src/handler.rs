@@ -31,7 +31,7 @@ pub struct RequestContext {
 impl RequestContext {
     /// A context with a cancellation token (e.g. a task's token).
     #[must_use]
-    pub fn with_cancellation(cancel: CancellationToken) -> Self {
+    pub const fn with_cancellation(cancel: CancellationToken) -> Self {
         Self { cancel }
     }
 

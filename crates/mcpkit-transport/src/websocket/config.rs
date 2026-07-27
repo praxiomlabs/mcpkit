@@ -140,7 +140,7 @@ impl WebSocketConfig {
     /// setter existed the only way to change it was a struct literal, which
     /// `#[non_exhaustive]` now forbids downstream.
     #[must_use]
-    pub fn with_reconnect_backoff(mut self, backoff: ExponentialBackoff) -> Self {
+    pub const fn with_reconnect_backoff(mut self, backoff: ExponentialBackoff) -> Self {
         self.reconnect_backoff = backoff;
         self
     }

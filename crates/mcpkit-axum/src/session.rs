@@ -168,7 +168,7 @@ impl SessionStore {
     /// Set the stream configuration applied to each new session's SSE
     /// stream registry.
     #[must_use]
-    pub fn with_stream_config(mut self, config: StreamConfig) -> Self {
+    pub const fn with_stream_config(mut self, config: StreamConfig) -> Self {
         self.stream_config = config;
         self
     }

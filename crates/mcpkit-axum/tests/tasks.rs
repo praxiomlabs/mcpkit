@@ -276,7 +276,7 @@ async fn tasks_are_isolated_per_session() {
     assert!(ga["error"].is_null(), "session A lost its own task: {ga}");
 }
 
-/// Spec (Streamable HTTP): a POSTed JSON-RPC *response* is accepted with
+/// Spec (Streamable HTTP): a `POSTed` JSON-RPC *response* is accepted with
 /// 202, not rejected — clients deliver responses to server-initiated
 /// requests this way (#153 PR 0a; correlation lands with the session peer).
 #[tokio::test]

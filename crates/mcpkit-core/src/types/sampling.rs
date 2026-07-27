@@ -291,7 +291,7 @@ impl CreateMessageRequest {
 
     /// Set the temperature.
     #[must_use]
-    pub fn temperature(mut self, temp: f64) -> Self {
+    pub const fn temperature(mut self, temp: f64) -> Self {
         self.temperature = Some(temp.clamp(0.0, 2.0));
         self
     }

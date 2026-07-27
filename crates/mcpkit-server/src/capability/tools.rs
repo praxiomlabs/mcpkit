@@ -200,7 +200,7 @@ impl ToolBuilder {
     /// Destructive tools modify data or state in ways that cannot be easily undone.
     /// When set to true, clients should warn users before executing.
     #[must_use]
-    pub fn destructive(mut self, value: bool) -> Self {
+    pub const fn destructive(mut self, value: bool) -> Self {
         self.destructive = Some(value);
         self
     }
@@ -210,7 +210,7 @@ impl ToolBuilder {
     /// Idempotent tools produce the same result when called multiple times
     /// with the same arguments.
     #[must_use]
-    pub fn idempotent(mut self, value: bool) -> Self {
+    pub const fn idempotent(mut self, value: bool) -> Self {
         self.idempotent = Some(value);
         self
     }
@@ -219,7 +219,7 @@ impl ToolBuilder {
     ///
     /// Read-only tools do not modify any data or state.
     #[must_use]
-    pub fn read_only(mut self, value: bool) -> Self {
+    pub const fn read_only(mut self, value: bool) -> Self {
         self.read_only = Some(value);
         self
     }

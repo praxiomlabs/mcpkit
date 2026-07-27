@@ -95,7 +95,7 @@ fn read_resource(uri: &str) -> Result<ResourceContents, String> {
         )),
         "docs://readme" => Ok(ResourceContents::text(
             uri,
-            r#"# Multi-Service MCP Example
+            r"# Multi-Service MCP Example
 
 This example demonstrates a microservices architecture with MCP.
 
@@ -113,7 +113,7 @@ Client → Gateway → Tools Service
 ```
 
 The gateway proxies requests to appropriate backend services.
-"#
+"
             .to_string(),
         )),
         "metrics://system" => {

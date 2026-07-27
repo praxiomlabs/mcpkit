@@ -114,8 +114,14 @@ impl ToolHandler for WarpHandler {
                     .get("operation")
                     .and_then(|v| v.as_str())
                     .unwrap_or("add");
-                let a = args.get("a").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                let b = args.get("b").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let a = args
+                    .get("a")
+                    .and_then(serde_json::Value::as_f64)
+                    .unwrap_or(0.0);
+                let b = args
+                    .get("b")
+                    .and_then(serde_json::Value::as_f64)
+                    .unwrap_or(0.0);
 
                 let result = match op {
                     "add" => a + b,

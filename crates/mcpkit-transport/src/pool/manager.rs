@@ -67,7 +67,7 @@ where
 {
     /// Create a new connection pool.
     #[must_use]
-    pub fn new(config: PoolConfig, factory: F) -> Self {
+    pub const fn new(config: PoolConfig, factory: F) -> Self {
         Self {
             config,
             factory,

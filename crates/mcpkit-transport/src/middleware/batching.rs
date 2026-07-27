@@ -150,7 +150,7 @@ struct BatchBuffer {
 }
 
 impl BatchBuffer {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self {
             messages: VecDeque::new(),
             total_bytes: 0,
@@ -206,7 +206,7 @@ pub struct BatchingTransport<T: Transport> {
 
 impl<T: Transport> BatchingTransport<T> {
     /// Create a new batching transport.
-    pub fn new(inner: T, config: BatchingConfig) -> Self {
+    pub const fn new(inner: T, config: BatchingConfig) -> Self {
         Self {
             inner,
             config,
@@ -253,7 +253,7 @@ impl<T: Transport> BatchingTransport<T> {
     }
 
     /// Check if a message is high-priority (a request).
-    fn is_high_priority(msg: &Message) -> bool {
+    const fn is_high_priority(msg: &Message) -> bool {
         matches!(msg, Message::Request(_))
     }
 

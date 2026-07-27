@@ -93,7 +93,7 @@ impl<T: Transport + 'static> PooledClient<T> {
     ///
     /// Panics if the client was already dropped or taken. This should never
     /// happen in normal use - the panic indicates a bug in the pool implementation.
-    pub fn client(&self) -> &Client<T> {
+    pub const fn client(&self) -> &Client<T> {
         self.client.as_ref().expect("Client already dropped")
     }
 
@@ -103,7 +103,7 @@ impl<T: Transport + 'static> PooledClient<T> {
     ///
     /// Panics if the client was already dropped or taken. This should never
     /// happen in normal use - the panic indicates a bug in the pool implementation.
-    pub fn client_mut(&mut self) -> &mut Client<T> {
+    pub const fn client_mut(&mut self) -> &mut Client<T> {
         self.client.as_mut().expect("Client already dropped")
     }
 }

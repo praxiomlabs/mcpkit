@@ -8,10 +8,10 @@
 //!
 //! The following middleware layers are demonstrated:
 //!
-//! - **LoggingLayer**: Logs all messages sent and received
-//! - **TimeoutLayer**: Adds configurable timeouts to send/receive operations
-//! - **RetryLayer**: Automatic retry with exponential backoff for transient failures
-//! - **MetricsLayer**: Collects performance metrics (message counts, latencies)
+//! - **`LoggingLayer`**: Logs all messages sent and received
+//! - **`TimeoutLayer`**: Adds configurable timeouts to send/receive operations
+//! - **`RetryLayer`**: Automatic retry with exponential backoff for transient failures
+//! - **`MetricsLayer`**: Collects performance metrics (message counts, latencies)
 //!
 //! # Running
 //!
@@ -77,7 +77,7 @@ fn call_tool(name: &str, args: &Value) -> Result<ToolOutput, String> {
                 .as_nanos()
                 % 100;
 
-            if random < fail_prob as u128 {
+            if random < u128::from(fail_prob) {
                 Err("Random failure occurred".to_string())
             } else {
                 Ok(ToolOutput::text("Operation succeeded"))
@@ -198,7 +198,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Configure timeout layer
     let _timeout = TimeoutLayer::default()
         .send_timeout(Duration::from_secs(30))
-        .recv_timeout(Duration::from_secs(60));
+        .recv_timeout(Duration::from_mins(1));
 
     // Configure retry layer with exponential backoff
     let _retry = RetryLayer::new(3).backoff(
@@ -302,8 +302,8 @@ fn middleware_configuration_examples() {
 
     // Example 3: Custom timeouts
     let _timeout = TimeoutLayer::with_timeouts(
-        Duration::from_secs(10),  // send timeout
-        Duration::from_secs(120), // receive timeout
+        Duration::from_secs(10), // send timeout
+        Duration::from_mins(2),  // receive timeout
     );
 
     // Example 4: Timeout for send only, no receive timeout
@@ -351,20 +351,20 @@ mod custom_policy {
     }
 
     impl SelectiveRetryPolicy {
-        pub fn new() -> Self {
+        pub const fn new() -> Self {
             Self {
                 retry_timeouts: true,
                 retry_connections: true,
             }
         }
 
-        pub fn timeouts_only(mut self) -> Self {
+        pub const fn timeouts_only(mut self) -> Self {
             self.retry_timeouts = true;
             self.retry_connections = false;
             self
         }
 
-        pub fn connections_only(mut self) -> Self {
+        pub const fn connections_only(mut self) -> Self {
             self.retry_timeouts = false;
             self.retry_connections = true;
             self

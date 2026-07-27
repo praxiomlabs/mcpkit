@@ -370,18 +370,19 @@ impl ProtocolVersion {
     #[must_use]
     pub fn negotiate(requested: &str, supported: &[Self]) -> Option<Self> {
         // Try to parse the requested version
-        if let Ok(requested_version) = Self::from_str(requested) {
+        Self::from_str(requested).map_or_else(
+            // Unknown version string - return latest supported. This handles
+            // future versions gracefully.
+            |_| supported.iter().max().copied(),
             // Find the highest supported version <= requested
-            supported
-                .iter()
-                .filter(|v| **v <= requested_version)
-                .max()
-                .copied()
-        } else {
-            // Unknown version string - return latest supported
-            // This handles future versions gracefully
-            supported.iter().max().copied()
-        }
+            |requested_version| {
+                supported
+                    .iter()
+                    .filter(|v| **v <= requested_version)
+                    .max()
+                    .copied()
+            },
+        )
     }
 
     /// Check if this version can communicate with another version.

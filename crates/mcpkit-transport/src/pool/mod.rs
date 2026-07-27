@@ -107,7 +107,7 @@ mod stress_tests {
     }
 
     impl SlowMockTransport {
-        fn new(id: u64, delay: Duration) -> Self {
+        const fn new(id: u64, delay: Duration) -> Self {
             Self {
                 inner: MockTransport::new(id),
                 delay,

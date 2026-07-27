@@ -57,11 +57,11 @@ impl FilesystemServer {
         // Canonicalize to resolve .. and symlinks
         let canonical = target
             .canonicalize()
-            .map_err(|e| format!("Failed to resolve path '{}': {}", path, e))?;
+            .map_err(|e| format!("Failed to resolve path '{path}': {e}"))?;
 
         // Ensure the canonical path is within our sandbox
         if !canonical.starts_with(&self.allowed_root) {
-            return Err(format!("Path '{}' is outside the allowed directory", path));
+            return Err(format!("Path '{path}' is outside the allowed directory"));
         }
 
         Ok(canonical)
@@ -122,7 +122,7 @@ impl FilesystemServer {
 
         // Final safety check
         if !final_path.starts_with(&self.allowed_root) {
-            return Err(format!("Path '{}' is outside the allowed directory", path));
+            return Err(format!("Path '{path}' is outside the allowed directory"));
         }
 
         Ok(final_path)
@@ -144,7 +144,7 @@ impl FilesystemServer {
 
         match tokio::fs::read_to_string(&resolved).await {
             Ok(contents) => ToolOutput::text(contents),
-            Err(e) => ToolOutput::error(format!("Failed to read file '{}': {}", path, e)),
+            Err(e) => ToolOutput::error(format!("Failed to read file '{path}': {e}")),
         }
     }
 
@@ -165,7 +165,7 @@ impl FilesystemServer {
                 content.len(),
                 path
             )),
-            Err(e) => ToolOutput::error(format!("Failed to write file '{}': {}", path, e)),
+            Err(e) => ToolOutput::error(format!("Failed to write file '{path}': {e}")),
         }
     }
 
@@ -188,7 +188,7 @@ impl FilesystemServer {
             .await
         {
             Ok(f) => f,
-            Err(e) => return ToolOutput::error(format!("Failed to open file '{}': {}", path, e)),
+            Err(e) => return ToolOutput::error(format!("Failed to open file '{path}': {e}")),
         };
 
         match file.write_all(content.as_bytes()).await {
@@ -197,7 +197,7 @@ impl FilesystemServer {
                 content.len(),
                 path
             )),
-            Err(e) => ToolOutput::error(format!("Failed to append to file '{}': {}", path, e)),
+            Err(e) => ToolOutput::error(format!("Failed to append to file '{path}': {e}")),
         }
     }
 
@@ -216,10 +216,7 @@ impl FilesystemServer {
         let mut read_dir = match tokio::fs::read_dir(&resolved).await {
             Ok(rd) => rd,
             Err(e) => {
-                return ToolOutput::error(format!(
-                    "Failed to read directory '{}': {}",
-                    dir_path, e
-                ));
+                return ToolOutput::error(format!("Failed to read directory '{dir_path}': {e}"));
             }
         };
 
@@ -240,7 +237,7 @@ impl FilesystemServer {
                 Err(_) => "unknown",
             };
 
-            let size = entry.metadata().await.map(|m| m.len()).unwrap_or(0);
+            let size = entry.metadata().await.map_or(0, |m| m.len());
 
             entries.push(serde_json::json!({
                 "name": name,
@@ -276,7 +273,7 @@ impl FilesystemServer {
         let metadata = match tokio::fs::metadata(&resolved).await {
             Ok(m) => m,
             Err(e) => {
-                return ToolOutput::error(format!("Failed to get metadata for '{}': {}", path, e));
+                return ToolOutput::error(format!("Failed to get metadata for '{path}': {e}"));
             }
         };
 
@@ -392,8 +389,8 @@ impl FilesystemServer {
         };
 
         match tokio::fs::create_dir_all(&resolved).await {
-            Ok(()) => ToolOutput::text(format!("Created directory '{}'", path)),
-            Err(e) => ToolOutput::error(format!("Failed to create directory '{}': {}", path, e)),
+            Ok(()) => ToolOutput::text(format!("Created directory '{path}'")),
+            Err(e) => ToolOutput::error(format!("Failed to create directory '{path}': {e}")),
         }
     }
 
@@ -408,14 +405,13 @@ impl FilesystemServer {
         // Safety check: don't allow deleting directories with this tool
         if resolved.is_dir() {
             return ToolOutput::error(format!(
-                "'{}' is a directory. Use delete_directory instead.",
-                path
+                "'{path}' is a directory. Use delete_directory instead."
             ));
         }
 
         match tokio::fs::remove_file(&resolved).await {
-            Ok(()) => ToolOutput::text(format!("Deleted file '{}'", path)),
-            Err(e) => ToolOutput::error(format!("Failed to delete file '{}': {}", path, e)),
+            Ok(()) => ToolOutput::text(format!("Deleted file '{path}'")),
+            Err(e) => ToolOutput::error(format!("Failed to delete file '{path}': {e}")),
         }
     }
 
@@ -428,14 +424,13 @@ impl FilesystemServer {
         };
 
         if !resolved.is_dir() {
-            return ToolOutput::error(format!("'{}' is not a directory", path));
+            return ToolOutput::error(format!("'{path}' is not a directory"));
         }
 
         match tokio::fs::remove_dir(&resolved).await {
-            Ok(()) => ToolOutput::text(format!("Deleted directory '{}'", path)),
+            Ok(()) => ToolOutput::text(format!("Deleted directory '{path}'")),
             Err(e) => ToolOutput::error(format!(
-                "Failed to delete directory '{}' (must be empty): {}",
-                path, e
+                "Failed to delete directory '{path}' (must be empty): {e}"
             )),
         }
     }
@@ -487,10 +482,10 @@ async fn main() -> Result<(), McpError> {
         .init();
 
     // Get the allowed directory from command line args
-    let allowed_root = std::env::args()
-        .nth(1)
-        .map(PathBuf::from)
-        .unwrap_or_else(|| std::env::current_dir().expect("Failed to get current directory"));
+    let allowed_root = std::env::args().nth(1).map_or_else(
+        || std::env::current_dir().expect("Failed to get current directory"),
+        PathBuf::from,
+    );
 
     // Canonicalize the root path
     let allowed_root = allowed_root
@@ -585,7 +580,7 @@ mod tests {
         match write_result {
             ToolOutput::Success(_) => {}
             ToolOutput::RecoverableError { message, .. } => {
-                panic!("Write failed: {}", message);
+                panic!("Write failed: {message}");
             }
         }
 
@@ -601,7 +596,7 @@ mod tests {
                 }
             }
             ToolOutput::RecoverableError { message, .. } => {
-                panic!("Read failed: {}", message);
+                panic!("Read failed: {message}");
             }
         }
     }

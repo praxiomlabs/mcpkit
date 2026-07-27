@@ -205,7 +205,6 @@ impl ExtensionRegistry {
     }
 
     /// Get all registered extension names.
-    #[must_use]
     pub fn names(&self) -> impl Iterator<Item = &str> {
         self.extensions.keys().map(String::as_str)
     }

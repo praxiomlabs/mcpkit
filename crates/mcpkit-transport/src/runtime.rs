@@ -307,7 +307,7 @@ impl<R> BufReader<R> {
     }
 
     /// Get a mutable reference to the underlying reader.
-    pub fn get_mut(&mut self) -> &mut R {
+    pub const fn get_mut(&mut self) -> &mut R {
         &mut self.inner
     }
 

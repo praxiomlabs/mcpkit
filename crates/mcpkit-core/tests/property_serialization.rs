@@ -21,7 +21,7 @@ use std::borrow::Cow;
 // STRATEGY DEFINITIONS
 // =============================================================================
 
-/// Strategy for generating valid RequestId values.
+/// Strategy for generating valid `RequestId` values.
 fn arb_request_id() -> impl Strategy<Value = RequestId> {
     prop_oneof![
         // Numeric IDs (most common case)
@@ -112,7 +112,7 @@ fn arb_result() -> impl Strategy<Value = serde_json::Value> {
     ]
 }
 
-/// Strategy for generating JsonRpcError values.
+/// Strategy for generating `JsonRpcError` values.
 fn arb_error() -> impl Strategy<Value = JsonRpcError> {
     let codes = prop_oneof![
         Just(-32700),         // Parse error
@@ -190,7 +190,7 @@ fn arb_message() -> impl Strategy<Value = Message> {
     ]
 }
 
-/// Strategy for generating ProgressToken values.
+/// Strategy for generating `ProgressToken` values.
 fn arb_progress_token() -> impl Strategy<Value = ProgressToken> {
     prop_oneof![
         any::<u64>().prop_map(ProgressToken::Number),
@@ -523,7 +523,7 @@ mod additional_tests {
         assert_eq!(RequestId::Number(u64::MAX), parsed.id);
     }
 
-    /// Test response into_result for success case.
+    /// Test response `into_result` for success case.
     #[test]
     fn test_response_into_result_success() {
         let response = Response::success(1u64, serde_json::json!({"key": "value"}));
@@ -532,7 +532,7 @@ mod additional_tests {
         assert_eq!(result.unwrap(), serde_json::json!({"key": "value"}));
     }
 
-    /// Test response into_result for error case.
+    /// Test response `into_result` for error case.
     #[test]
     fn test_response_into_result_error() {
         let error = JsonRpcError {

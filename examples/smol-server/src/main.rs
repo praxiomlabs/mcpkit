@@ -33,7 +33,7 @@ struct EchoServer {
 }
 
 impl EchoServer {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self {
             message_count: AtomicU64::new(0),
         }

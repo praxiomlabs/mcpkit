@@ -133,7 +133,7 @@ pub struct Schema {
     // Array constraints
     /// Schema for array items.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub items: Option<Box<Schema>>,
+    pub items: Option<Box<Self>>,
 
     /// Minimum number of items.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -150,7 +150,7 @@ pub struct Schema {
     // Object constraints
     /// Property schemas for object type.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub properties: Option<HashMap<String, Schema>>,
+    pub properties: Option<HashMap<String, Self>>,
 
     /// Required property names.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -171,19 +171,19 @@ pub struct Schema {
     // Composition
     /// All of these schemas must match.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub all_of: Option<Vec<Schema>>,
+    pub all_of: Option<Vec<Self>>,
 
     /// Any of these schemas must match.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub any_of: Option<Vec<Schema>>,
+    pub any_of: Option<Vec<Self>>,
 
     /// Exactly one of these schemas must match.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub one_of: Option<Vec<Schema>>,
+    pub one_of: Option<Vec<Self>>,
 
     /// This schema must not match.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub not: Option<Box<Schema>>,
+    pub not: Option<Box<Self>>,
 }
 
 /// Represents the `additionalProperties` field which can be a boolean or a schema.

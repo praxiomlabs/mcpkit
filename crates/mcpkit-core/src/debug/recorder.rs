@@ -39,13 +39,13 @@ impl RecordedSession {
 
     /// Get the number of events.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.events.len()
     }
 
     /// Check if empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.events.is_empty()
     }
 
@@ -169,7 +169,7 @@ pub enum SessionEvent {
 impl SessionEvent {
     /// Get the offset from session start.
     #[must_use]
-    pub fn offset(&self) -> Duration {
+    pub const fn offset(&self) -> Duration {
         match self {
             Self::SessionStarted { offset }
             | Self::MessageSent { offset, .. }

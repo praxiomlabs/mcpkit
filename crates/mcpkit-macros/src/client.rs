@@ -2,6 +2,14 @@
 //!
 //! This macro generates the `ClientHandler` implementation for MCP clients.
 
+// `clippy::option_if_let_else` (nursery) fires on this file's codegen blocks:
+// `if let Some(m) = method { <20-30 lines of quote!> } else { quote!() }`.
+// The suggested `map_or_else(|| quote!(), |m| { ... })` is valid here, unlike
+// in attrs.rs, but wrapping a 30-line token-building block in a closure reads
+// worse than the `if let`. That readability trade-off on large bodies is why
+// the lint is nursery rather than pedantic.
+#![allow(clippy::option_if_let_else)]
+
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{Attribute, Error, ImplItem, ItemImpl, Result, parse2};

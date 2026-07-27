@@ -176,7 +176,7 @@ impl Drop for StreamHandle {
 impl StreamRegistry {
     /// Create a registry with the given configuration.
     #[must_use]
-    pub fn new(config: StreamConfig) -> Self {
+    pub const fn new(config: StreamConfig) -> Self {
         Self {
             inner: Mutex::new(Inner {
                 streams: Vec::new(),

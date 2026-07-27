@@ -307,7 +307,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .join("debug")
         .join("filesystem-server");
 
-    println!("Starting MCP server: {:?}", server_binary);
+    println!("Starting MCP server: {server_binary:?}");
     println!();
 
     // Spawn the server and connect
@@ -329,7 +329,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     for tool in &tools {
         let name = tool["name"].as_str().unwrap_or("unknown");
         let description = tool["description"].as_str().unwrap_or("no description");
-        println!("  {}: {}", name, description);
+        println!("  {name}: {description}");
     }
     println!();
 
@@ -377,7 +377,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 for resource in &resources {
                     let uri = resource["uri"].as_str().unwrap_or("unknown");
                     let name = resource["name"].as_str().unwrap_or("unknown");
-                    println!("  {}: {}", uri, name);
+                    println!("  {uri}: {name}");
                 }
             }
         }
@@ -397,7 +397,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 for prompt in &prompts {
                     let name = prompt["name"].as_str().unwrap_or("unknown");
                     let description = prompt["description"].as_str().unwrap_or("no description");
-                    println!("  {}: {}", name, description);
+                    println!("  {name}: {description}");
                 }
             }
         }

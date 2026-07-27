@@ -387,7 +387,7 @@ pub struct ScenarioResult {
 impl ScenarioResult {
     /// Create a successful result.
     #[must_use]
-    pub fn pass(step_results: Vec<StepResult>) -> Self {
+    pub const fn pass(step_results: Vec<StepResult>) -> Self {
         Self {
             success: true,
             step_results,

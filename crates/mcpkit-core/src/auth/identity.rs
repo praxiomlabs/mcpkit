@@ -122,6 +122,11 @@ impl std::error::Error for SessionBindingError {}
 /// - user-bound session + different user → [`SessionBindingError::IdentityMismatch`]
 /// - anonymous session + verified identity → [`SessionBindingError::UnexpectedIdentity`]
 ///   (no silent upgrade)
+///
+/// # Errors
+///
+/// Returns the [`SessionBindingError`] named in the matrix above for each
+/// rejected combination.
 pub fn check_session_binding(
     bound: Option<&VerifiedUser>,
     presenting: Option<&VerifiedUser>,

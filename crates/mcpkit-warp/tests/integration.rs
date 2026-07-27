@@ -355,7 +355,7 @@ async fn test_without_cors() {
     );
 }
 
-/// Spec (Streamable HTTP): a POSTed JSON-RPC *response* is accepted with
+/// Spec (Streamable HTTP): a `POSTed` JSON-RPC *response* is accepted with
 /// 202, not rejected (#153 PR 0a).
 #[tokio::test]
 async fn response_post_is_accepted_with_202() {

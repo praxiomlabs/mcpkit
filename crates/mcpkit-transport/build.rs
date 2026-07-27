@@ -6,7 +6,7 @@
 //!
 //! ## Why Pre-generated Code?
 //!
-//! The `protobuf-src` crate builds protobuf from source using CMake, which fails on
+//! The `protobuf-src` crate builds protobuf from source using `CMake`, which fails on
 //! Windows due to abseil-cpp linker issues with UCRT math functions (ceilf, ldexp, etc.).
 //! By pre-generating the code, we enable cross-platform builds without requiring protoc.
 //!

@@ -705,7 +705,7 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
     ///     // Use task-related features
     /// }
     /// ```
-    pub fn protocol_version(&self) -> ProtocolVersion {
+    pub const fn protocol_version(&self) -> ProtocolVersion {
         self.protocol_version
     }
 

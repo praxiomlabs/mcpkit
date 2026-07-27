@@ -227,8 +227,8 @@ async fn tool_elicitation_round_trips_over_the_stream() {
     assert_eq!(text, "elicited: blue", "tool result: {result}");
 }
 
-/// The #141/#153 notification consumer: roots/list_changed -> hook ->
-/// ctx.list_roots() -> stream -> response POST -> hook observes the roots.
+/// The #141/#153 notification consumer: `roots/list_changed` -> hook ->
+/// `ctx.list_roots()` -> stream -> response POST -> hook observes the roots.
 #[tokio::test]
 async fn roots_hook_round_trips_over_the_stream() {
     let (state, observed) = test_state();

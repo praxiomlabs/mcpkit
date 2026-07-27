@@ -111,7 +111,7 @@ impl Completion {
     /// Create a completion from a list of values, reporting `total` as the
     /// number of values and no further pages.
     #[must_use]
-    pub fn new(values: Vec<String>) -> Self {
+    pub const fn new(values: Vec<String>) -> Self {
         let total = values.len();
         Self {
             values,

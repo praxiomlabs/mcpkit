@@ -44,7 +44,7 @@ impl ExponentialBackoff {
 
     /// Set jitter factor (0.0 to 1.0).
     #[must_use]
-    pub fn jitter(mut self, jitter: f64) -> Self {
+    pub const fn jitter(mut self, jitter: f64) -> Self {
         self.jitter = Some(jitter.clamp(0.0, 1.0));
         self
     }

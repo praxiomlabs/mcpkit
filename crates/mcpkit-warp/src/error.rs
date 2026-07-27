@@ -36,13 +36,9 @@ impl WarpError {
     #[must_use]
     pub const fn status_code(&self) -> StatusCode {
         match self {
-            WarpError::InvalidMessage(_) | WarpError::UnsupportedVersion(_) => {
-                StatusCode::BAD_REQUEST
-            }
-            WarpError::SessionNotFound(_) => StatusCode::NOT_FOUND,
-            WarpError::Serialization(_) | WarpError::Internal(_) => {
-                StatusCode::INTERNAL_SERVER_ERROR
-            }
+            Self::InvalidMessage(_) | Self::UnsupportedVersion(_) => StatusCode::BAD_REQUEST,
+            Self::SessionNotFound(_) => StatusCode::NOT_FOUND,
+            Self::Serialization(_) | Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }

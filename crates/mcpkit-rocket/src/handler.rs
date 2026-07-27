@@ -88,7 +88,7 @@ impl<'r> FromRequest<'r> for ProtocolVersionHeader {
             .headers()
             .get_one("mcp-protocol-version")
             .map(String::from);
-        Outcome::Success(ProtocolVersionHeader(version))
+        Outcome::Success(Self(version))
     }
 }
 
@@ -104,7 +104,7 @@ impl<'r> FromRequest<'r> for SessionIdHeader {
             .headers()
             .get_one("mcp-session-id")
             .map(String::from);
-        Outcome::Success(SessionIdHeader(session_id))
+        Outcome::Success(Self(session_id))
     }
 }
 
@@ -134,7 +134,7 @@ impl<'r> FromRequest<'r> for OriginHeader {
 
     async fn from_request(request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
         let origin = request.headers().get_one("origin").map(String::from);
-        Outcome::Success(OriginHeader(origin))
+        Outcome::Success(Self(origin))
     }
 }
 
@@ -147,7 +147,7 @@ impl<'r> FromRequest<'r> for LastEventIdHeader {
 
     async fn from_request(request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
         let last_event_id = request.headers().get_one("last-event-id").map(String::from);
-        Outcome::Success(LastEventIdHeader(last_event_id))
+        Outcome::Success(Self(last_event_id))
     }
 }
 
@@ -162,7 +162,7 @@ pub struct McpResponse {
 impl McpResponse {
     /// Create a success response.
     #[must_use]
-    pub fn success(body: String, session_id: String) -> Self {
+    pub const fn success(body: String, session_id: String) -> Self {
         Self {
             status: Status::Ok,
             content_type: ContentType::JSON,
@@ -173,7 +173,7 @@ impl McpResponse {
 
     /// Create an accepted response (for notifications).
     #[must_use]
-    pub fn accepted(session_id: String) -> Self {
+    pub const fn accepted(session_id: String) -> Self {
         Self {
             status: Status::Accepted,
             content_type: ContentType::JSON,

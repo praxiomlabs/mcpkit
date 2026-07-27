@@ -196,7 +196,7 @@ pub struct ExtensionQueryResult {
 impl ExtensionQueryResult {
     /// Check if the query is satisfied (all required extensions present).
     #[must_use]
-    pub fn is_satisfied(&self) -> bool {
+    pub const fn is_satisfied(&self) -> bool {
         self.missing_required.is_empty() && self.version_mismatches.is_empty()
     }
 
@@ -213,7 +213,6 @@ impl ExtensionQueryResult {
     }
 
     /// Get the list of found extension names.
-    #[must_use]
     pub fn found_names(&self) -> impl Iterator<Item = &str> {
         self.found.keys().map(String::as_str)
     }
