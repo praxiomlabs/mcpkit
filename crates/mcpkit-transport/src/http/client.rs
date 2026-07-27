@@ -42,6 +42,11 @@ impl HttpTransport {
     ///
     /// This creates the HTTP client but does not connect to the server.
     /// Connection is established on first send.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError::Connection`] if the underlying HTTP client cannot
+    /// be built from `config` (for example an invalid timeout or TLS setup).
     #[cfg(feature = "http")]
     pub fn new(config: HttpTransportConfig) -> Result<Self, TransportError> {
         let client = Client::builder()
@@ -64,6 +69,11 @@ impl HttpTransport {
     }
 
     /// Create a new HTTP transport without the http feature (stub).
+    ///
+    /// # Errors
+    ///
+    /// Infallible in this build: the stub constructs successfully but every
+    /// send/recv then reports that the `http` feature is disabled.
     #[cfg(not(feature = "http"))]
     pub fn new(config: HttpTransportConfig) -> Result<Self, TransportError> {
         let session_id = config.session_id.clone();
@@ -81,6 +91,16 @@ impl HttpTransport {
     /// This is a convenience method that creates the transport and
     /// marks it as connected. The actual HTTP connection is made
     /// on the first send operation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError::Connection`] if the HTTP client cannot be built or
+    /// the initial connection to the configured endpoint fails.
+    // `clippy::unused_async`: this body has no await today, but the signature
+    // is public API and matches the other transports' connect entry points
+    // (WebSocket's is genuinely async). Dropping `async` would be a breaking
+    // change for every caller and would make the transports inconsistent.
+    #[allow(clippy::unused_async)]
     pub async fn connect(config: HttpTransportConfig) -> Result<Self, TransportError> {
         let transport = Self::new(config)?;
         transport.connected.store(true, Ordering::Release);
@@ -328,6 +348,10 @@ impl HttpTransport {
 
     /// Stub for `send_post` when http feature is disabled.
     #[cfg(not(feature = "http"))]
+    // Feature-disabled stub. `async`/`&self`/non-const are kept so the
+    // signature is identical whether the feature is enabled or not — callers
+    // must compile the same way either way.
+    #[allow(clippy::unused_async)]
     async fn send_post(&self, _msg: &Message) -> Result<(), TransportError> {
         Err(TransportError::Connection {
             message: "HTTP transport requires the 'http' feature".to_string(),
@@ -335,6 +359,11 @@ impl HttpTransport {
     }
 
     /// Process SSE buffer (for non-http feature builds).
+    ///
+    /// # Errors
+    ///
+    /// Infallible in this build; the signature matches the feature-enabled
+    /// implementation.
     #[cfg(not(feature = "http"))]
     pub fn process_sse_buffer_internal(
         &self,
@@ -399,6 +428,11 @@ impl Transport for HttpTransport {
 
 impl HttpTransportBuilder {
     /// Build the transport.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError::Connection`] if the accumulated configuration is
+    /// rejected when constructing the client.
     pub fn build(self) -> Result<HttpTransport, TransportError> {
         HttpTransport::new(self.config)
     }

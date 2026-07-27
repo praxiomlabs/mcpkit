@@ -8,10 +8,10 @@
 //!
 //! The following middleware layers are demonstrated:
 //!
-//! - **LoggingLayer**: Logs all messages sent and received
-//! - **TimeoutLayer**: Adds configurable timeouts to send/receive operations
-//! - **RetryLayer**: Automatic retry with exponential backoff for transient failures
-//! - **MetricsLayer**: Collects performance metrics (message counts, latencies)
+//! - **`LoggingLayer`**: Logs all messages sent and received
+//! - **`TimeoutLayer`**: Adds configurable timeouts to send/receive operations
+//! - **`RetryLayer`**: Automatic retry with exponential backoff for transient failures
+//! - **`MetricsLayer`**: Collects performance metrics (message counts, latencies)
 //!
 //! # Running
 //!
@@ -20,6 +20,42 @@
 //! ```
 //!
 //! Then send JSON-RPC messages via stdin.
+
+// Test / example code: assertion shapes, fixture naming and framework-shaped
+// signatures are written for readability at the call site, not to satisfy
+// pedantic/nursery lints. None of this ships in the library.
+#![allow(clippy::similar_names)]
+// Suggests `Duration::from_mins`, which is unstable (`duration_constructors`)
+// and so cannot be used at this workspace's MSRV. The MSRV job builds these
+// examples, so taking the lint's advice turns a clippy error into a compile
+// error. Revisit when from_mins stabilizes and the MSRV clears it.
+#![allow(clippy::duration_suboptimal_units)]
+#![allow(clippy::redundant_else)]
+#![allow(clippy::wildcard_enum_match_arm)]
+#![allow(clippy::assertions_on_constants)]
+#![allow(clippy::unused_async)]
+#![allow(clippy::significant_drop_tightening)]
+#![allow(clippy::items_after_statements)]
+#![allow(clippy::needless_pass_by_value)]
+#![allow(clippy::option_if_let_else)]
+#![allow(clippy::match_same_arms)]
+#![allow(clippy::too_many_lines)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::unreadable_literal)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::future_not_send)]
+#![allow(clippy::type_complexity)]
+#![allow(clippy::needless_continue)]
+#![allow(clippy::match_wildcard_for_single_variants)]
+#![allow(clippy::significant_drop_in_scrutinee)]
+#![allow(clippy::manual_let_else)]
+#![allow(clippy::uninlined_format_args)]
+#![allow(clippy::path_buf_push_overwrite)]
+#![allow(clippy::unnecessary_debug_formatting)]
 
 use mcpkit_core::{
     error::JsonRpcError,
@@ -77,7 +113,7 @@ fn call_tool(name: &str, args: &Value) -> Result<ToolOutput, String> {
                 .as_nanos()
                 % 100;
 
-            if random < fail_prob as u128 {
+            if random < u128::from(fail_prob) {
                 Err("Random failure occurred".to_string())
             } else {
                 Ok(ToolOutput::text("Operation succeeded"))
@@ -351,20 +387,20 @@ mod custom_policy {
     }
 
     impl SelectiveRetryPolicy {
-        pub fn new() -> Self {
+        pub const fn new() -> Self {
             Self {
                 retry_timeouts: true,
                 retry_connections: true,
             }
         }
 
-        pub fn timeouts_only(mut self) -> Self {
+        pub const fn timeouts_only(mut self) -> Self {
             self.retry_timeouts = true;
             self.retry_connections = false;
             self
         }
 
-        pub fn connections_only(mut self) -> Self {
+        pub const fn connections_only(mut self) -> Self {
             self.retry_timeouts = false;
             self.retry_connections = true;
             self

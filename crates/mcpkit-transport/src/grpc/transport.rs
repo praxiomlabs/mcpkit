@@ -4,6 +4,11 @@
 //! bidirectional streaming. It leverages tonic for the gRPC implementation
 //! and uses generated protobuf code for message serialization.
 
+// `clippy::result_large_err`: `GrpcError::Status` wraps `tonic::Status`, which is ~176 bytes. The
+// error type is dictated by tonic and boxing it would change the public
+// error surface of this transport.
+#![allow(clippy::result_large_err)]
+
 use crate::{Transport, TransportMetadata};
 use async_lock::Mutex;
 use mcpkit_core::protocol::Message;
@@ -269,7 +274,7 @@ impl GrpcTransport {
     /// Returns `None` for server-side transports that were created from
     /// incoming connections.
     #[must_use]
-    pub fn channel(&self) -> Option<&Channel> {
+    pub const fn channel(&self) -> Option<&Channel> {
         self.channel.as_ref()
     }
 }
@@ -306,13 +311,17 @@ impl Transport for GrpcTransport {
         }
 
         let mut rx = self.rx.lock().await;
-        if let Some(msg) = rx.recv().await {
-            debug!(?msg, "Received gRPC message");
-            Ok(Some(msg))
-        } else {
-            self.connected.store(false, Ordering::SeqCst);
-            Ok(None)
-        }
+        rx.recv().await.map_or_else(
+            || {
+                // Channel closed: the peer is gone, so mark this end disconnected.
+                self.connected.store(false, Ordering::SeqCst);
+                Ok(None)
+            },
+            |msg| {
+                debug!(?msg, "Received gRPC message");
+                Ok(Some(msg))
+            },
+        )
     }
 
     async fn close(&self) -> Result<(), Self::Error> {
@@ -454,7 +463,7 @@ impl GrpcServer {
 
     /// Get the server configuration.
     #[must_use]
-    pub fn config(&self) -> &GrpcServerConfig {
+    pub const fn config(&self) -> &GrpcServerConfig {
         &self.config
     }
 
@@ -693,6 +702,11 @@ impl GrpcServer {
     /// # Errors
     ///
     /// Returns an error if the server fails to bind to the configured address.
+    // `clippy::unused_async`: this body has no await today, but the signature
+    // is public API and matches the other transports' start entry points
+    // (WebSocket's is genuinely async). Dropping `async` would be a breaking
+    // change for every caller and would make the transports inconsistent.
+    #[allow(clippy::unused_async)]
     pub async fn start(self: Arc<Self>) -> Result<(), GrpcError> {
         let addr: SocketAddr = self
             .config

@@ -109,7 +109,7 @@ impl Tool {
 
     /// Set the tool's execution properties.
     #[must_use]
-    pub fn execution(mut self, execution: ToolExecution) -> Self {
+    pub const fn execution(mut self, execution: ToolExecution) -> Self {
         self.execution = Some(execution);
         self
     }
@@ -173,6 +173,12 @@ impl Tool {
     ///
     /// If `input_schema` is not an object (or its `properties` is not an
     /// object), it is coerced to a fresh object first.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `input_schema` has no `properties` key after
+    /// `ensure_properties()`, which cannot happen for a `Tool` built through
+    /// [`Tool::new`].
     #[must_use]
     pub fn with_string_param(
         mut self,
@@ -196,6 +202,12 @@ impl Tool {
     }
 
     /// Add a number parameter to the tool's input schema.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `input_schema` has no `properties` key after
+    /// `ensure_properties()`, which cannot happen for a `Tool` built through
+    /// [`Tool::new`].
     #[must_use]
     pub fn with_number_param(
         mut self,
@@ -219,6 +231,12 @@ impl Tool {
     }
 
     /// Add a boolean parameter to the tool's input schema.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `input_schema` has no `properties` key after
+    /// `ensure_properties()`, which cannot happen for a `Tool` built through
+    /// [`Tool::new`].
     #[must_use]
     pub fn with_boolean_param(
         mut self,

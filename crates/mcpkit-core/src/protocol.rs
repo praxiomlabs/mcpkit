@@ -205,7 +205,10 @@ impl Response {
 
     /// Get the result, consuming self.
     ///
-    /// Returns `Err` if this was an error response.
+    /// # Errors
+    ///
+    /// Returns the [`JsonRpcError`] this response carried, if it was an error
+    /// response rather than a result.
     pub fn into_result(self) -> Result<serde_json::Value, JsonRpcError> {
         if let Some(error) = self.error {
             Err(error)

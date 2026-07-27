@@ -5,6 +5,30 @@
 //! within the defining crate, so an in-crate test would compile a struct
 //! literal and prove nothing about what downstream code can do.
 
+// Test / example code: assertion shapes, fixture naming and framework-shaped
+// signatures are written for readability at the call site, not to satisfy
+// pedantic/nursery lints. None of this ships in the library.
+#![allow(clippy::similar_names)]
+#![allow(clippy::redundant_else)]
+#![allow(clippy::wildcard_enum_match_arm)]
+#![allow(clippy::assertions_on_constants)]
+#![allow(clippy::unused_async)]
+#![allow(clippy::significant_drop_tightening)]
+#![allow(clippy::items_after_statements)]
+#![allow(clippy::needless_pass_by_value)]
+#![allow(clippy::option_if_let_else)]
+#![allow(clippy::match_same_arms)]
+#![allow(clippy::too_many_lines)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::unreadable_literal)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::future_not_send)]
+#![allow(clippy::type_complexity)]
+
 use mcpkit_core::auth::AuthorizationConfig;
 use mcpkit_core::extension::apps::AppsConfig;
 

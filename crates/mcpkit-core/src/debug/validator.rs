@@ -205,7 +205,7 @@ impl ProtocolValidator {
 
     /// Enable strict mode (unknown methods are errors).
     #[must_use]
-    pub fn strict(mut self) -> Self {
+    pub const fn strict(mut self) -> Self {
         self.strict_mode = true;
         self
     }

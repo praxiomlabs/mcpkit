@@ -111,10 +111,7 @@ impl<H> ValidatingToolHandler<H> {
 ///
 /// Returns the collected violation messages when `instance` does not conform.
 pub fn validate_json(schema: &Value, instance: &Value) -> Result<(), Vec<String>> {
-    match collect_errors(schema, instance) {
-        None => Ok(()),
-        Some(errors) => Err(errors),
-    }
+    collect_errors(schema, instance).map_or(Ok(()), Err)
 }
 
 /// `None` = valid (or schema uncompilable → skipped); `Some` = violations.
@@ -394,7 +391,9 @@ mod tests {
         .await;
         match out {
             ToolOutput::Success(result) => assert!(result.is_error(), "expected isError: true"),
-            other => panic!("expected a Success(isError) result, got {other:?}"),
+            other @ ToolOutput::RecoverableError { .. } => {
+                panic!("expected a Success(isError) result, got {other:?}")
+            }
         }
     }
 
@@ -419,7 +418,9 @@ mod tests {
                     Some(obj(json!({ "doubled": 84 })))
                 );
             }
-            other => panic!("expected success, got {other:?}"),
+            other @ ToolOutput::RecoverableError { .. } => {
+                panic!("expected success, got {other:?}")
+            }
         }
     }
 
@@ -445,7 +446,9 @@ mod tests {
                     "invalid structuredContent must be dropped"
                 );
             }
-            other => panic!("expected success(isError), got {other:?}"),
+            other @ ToolOutput::RecoverableError { .. } => {
+                panic!("expected success(isError), got {other:?}")
+            }
         }
     }
 
@@ -465,7 +468,9 @@ mod tests {
         match out {
             // outputs are not validated in inputs-only mode: bad structured passes.
             ToolOutput::Success(result) => assert!(!result.is_error()),
-            other => panic!("expected success, got {other:?}"),
+            other @ ToolOutput::RecoverableError { .. } => {
+                panic!("expected success, got {other:?}")
+            }
         }
     }
 

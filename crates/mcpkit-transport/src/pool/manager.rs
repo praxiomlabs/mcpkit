@@ -67,7 +67,7 @@ where
 {
     /// Create a new connection pool.
     #[must_use]
-    pub fn new(config: PoolConfig, factory: F) -> Self {
+    pub const fn new(config: PoolConfig, factory: F) -> Self {
         Self {
             config,
             factory,
@@ -191,6 +191,12 @@ where
     ///
     /// This will either return an existing idle connection or create a new one
     /// if the pool has capacity.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError::Timeout`] if no connection becomes available within
+    /// the pool's `acquire_timeout`, or the underlying transport's error if a new
+    /// connection has to be created and fails.
     pub async fn acquire(&self) -> Result<PooledConnection<T>, TransportError> {
         let start = Instant::now();
 

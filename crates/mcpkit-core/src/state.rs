@@ -95,7 +95,7 @@ impl ConnectionInner {
     }
 
     /// Generate the next request ID.
-    fn next_request_id(&mut self) -> RequestId {
+    const fn next_request_id(&mut self) -> RequestId {
         self.request_counter += 1;
         RequestId::Number(self.request_counter)
     }
@@ -301,7 +301,7 @@ impl Connection<Ready> {
     /// as the typestate pattern ensures this is only callable in Ready state.
     /// Use `try_client_info()` for a fallible version.
     #[must_use]
-    pub fn client_info(&self) -> &ClientInfo {
+    pub const fn client_info(&self) -> &ClientInfo {
         self.inner
             .client_info
             .as_ref()
@@ -324,7 +324,7 @@ impl Connection<Ready> {
     /// as the typestate pattern ensures this is only callable in Ready state.
     /// Use `try_server_info()` for a fallible version.
     #[must_use]
-    pub fn server_info(&self) -> &ServerInfo {
+    pub const fn server_info(&self) -> &ServerInfo {
         self.inner
             .server_info
             .as_ref()
@@ -347,7 +347,7 @@ impl Connection<Ready> {
     /// as the typestate pattern ensures this is only callable in Ready state.
     /// Use `try_client_capabilities()` for a fallible version.
     #[must_use]
-    pub fn client_capabilities(&self) -> &ClientCapabilities {
+    pub const fn client_capabilities(&self) -> &ClientCapabilities {
         self.inner
             .client_capabilities
             .as_ref()
@@ -370,7 +370,7 @@ impl Connection<Ready> {
     /// as the typestate pattern ensures this is only callable in Ready state.
     /// Use `try_server_capabilities()` for a fallible version.
     #[must_use]
-    pub fn server_capabilities(&self) -> &ServerCapabilities {
+    pub const fn server_capabilities(&self) -> &ServerCapabilities {
         self.inner
             .server_capabilities
             .as_ref()
@@ -386,7 +386,7 @@ impl Connection<Ready> {
     }
 
     /// Generate the next request ID.
-    pub fn next_request_id(&mut self) -> RequestId {
+    pub const fn next_request_id(&mut self) -> RequestId {
         self.inner.next_request_id()
     }
 
@@ -502,6 +502,12 @@ impl InitializeResultBuilder {
 }
 
 /// Validate that a connection can transition to the ready state.
+///
+/// # Errors
+///
+/// Currently infallible; the `Result` is part of the signature so future
+/// capability-compatibility rules can reject a transition without a breaking
+/// change.
 pub const fn validate_initialization(
     _client_caps: &ClientCapabilities,
     _server_caps: &ServerCapabilities,

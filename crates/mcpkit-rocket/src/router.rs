@@ -141,7 +141,7 @@ where
 
     /// Set the timeouts for server-initiated (peer) requests.
     #[must_use]
-    pub fn with_peer_timeouts(
+    pub const fn with_peer_timeouts(
         mut self,
         timeouts: mcpkit_server::adapter_peer::PeerTimeouts,
     ) -> Self {
@@ -153,7 +153,7 @@ where
     /// constant by design.
     #[doc(hidden)]
     #[must_use]
-    pub fn with_reconnect_grace(mut self, grace: std::time::Duration) -> Self {
+    pub const fn with_reconnect_grace(mut self, grace: std::time::Duration) -> Self {
         self.state.reconnect_grace = grace;
         self
     }
@@ -162,6 +162,10 @@ where
     ///
     /// This is a convenience method that provides a stdio-like experience.
     /// Note: You'll need to mount the routes separately using macros.
+    ///
+    /// # Errors
+    ///
+    /// Returns the error produced by the underlying operation.
     pub async fn launch(self) -> Result<(), rocket::Error> {
         let _ = self.into_rocket().launch().await?;
         Ok(())

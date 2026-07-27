@@ -23,9 +23,18 @@ use super::types::McpError;
 /// ```
 pub trait McpResultExt<T> {
     /// Add context to an error.
+    ///
+    /// # Errors
+    ///
+    /// Propagates the receiver's error, wrapped with `context`.
     fn context<C: Into<String>>(self, context: C) -> Result<T, McpError>;
 
     /// Add context lazily (only evaluated on error).
+    ///
+    /// # Errors
+    ///
+    /// Propagates the receiver's error, wrapped with the context `f` produces.
+    /// `f` runs only on the error path.
     fn with_context<C, F>(self, f: F) -> Result<T, McpError>
     where
         C: Into<String>,

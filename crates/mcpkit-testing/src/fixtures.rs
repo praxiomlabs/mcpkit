@@ -2,6 +2,12 @@
 //!
 //! This module provides pre-built fixtures for common testing scenarios.
 
+// clippy: test fixtures: assertion-shaped matches and guards held across checks.
+#![allow(clippy::wildcard_enum_match_arm)]
+#![allow(clippy::match_wildcard_for_single_variants)]
+#![allow(clippy::option_if_let_else)]
+#![allow(clippy::significant_drop_tightening)]
+
 use crate::mock::{MockPrompt, MockResource, MockTool};
 use mcpkit_core::types::{Prompt, PromptArgument, Resource, Tool, ToolAnnotations, ToolOutput};
 

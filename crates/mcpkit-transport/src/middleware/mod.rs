@@ -78,6 +78,10 @@ impl<T: Transport> LayerStack<T> {
     /// Apply a layer to the stack.
     ///
     /// The layer wraps the current transport, producing a new transport type.
+    // `clippy::needless_pass_by_value`: `TransportLayer::layer` takes `&self`, so
+    // the layer is not consumed. Taking it by value is the builder convention
+    // here and narrowing to `&L` is a breaking change on public API.
+    #[allow(clippy::needless_pass_by_value)]
     pub fn with<L>(self, layer: L) -> LayerStack<L::Transport>
     where
         L: TransportLayer<T>,

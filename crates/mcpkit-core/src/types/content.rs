@@ -313,7 +313,7 @@ impl Annotations {
 
     /// Set the priority.
     #[must_use]
-    pub fn with_priority(mut self, priority: f64) -> Self {
+    pub const fn with_priority(mut self, priority: f64) -> Self {
         self.priority = Some(priority.clamp(0.0, 1.0));
         self
     }

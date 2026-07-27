@@ -150,7 +150,7 @@ pub struct TokenValidation {
 impl TokenValidation {
     /// Create a new validation configuration with defaults.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             issuer: None,
             audience: None,
@@ -602,7 +602,7 @@ impl JwtAlgorithm {
     }
 
     /// Convert to jsonwebtoken Algorithm.
-    fn to_jsonwebtoken_algorithm(self) -> jsonwebtoken::Algorithm {
+    const fn to_jsonwebtoken_algorithm(self) -> jsonwebtoken::Algorithm {
         match self {
             Self::RS256 => jsonwebtoken::Algorithm::RS256,
             Self::RS384 => jsonwebtoken::Algorithm::RS384,
@@ -626,7 +626,7 @@ impl std::fmt::Display for JwtAlgorithm {
     }
 }
 
-/// Create a jsonwebtoken DecodingKey from our Jwk type.
+/// Create a jsonwebtoken `DecodingKey` from our Jwk type.
 #[cfg(feature = "jwt")]
 fn create_decoding_key(
     jwk: &Jwk,
@@ -662,7 +662,7 @@ fn create_decoding_key(
     }
 }
 
-/// Build jsonwebtoken Validation from our TokenValidation.
+/// Build jsonwebtoken Validation from our `TokenValidation`.
 #[cfg(feature = "jwt")]
 fn build_jwt_validation(
     validation: &TokenValidation,

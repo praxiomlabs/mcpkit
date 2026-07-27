@@ -207,7 +207,7 @@ impl ToolUiMeta {
     ///
     /// * `hints` - Display hints for the host
     #[must_use]
-    pub fn with_display_hints(mut self, hints: UiDisplayHints) -> Self {
+    pub const fn with_display_hints(mut self, hints: UiDisplayHints) -> Self {
         self.display_hints = Some(hints);
         self
     }
@@ -251,7 +251,7 @@ impl UiDisplayHints {
 
     /// Set the suggested size.
     #[must_use]
-    pub fn with_size(mut self, width: u32, height: u32) -> Self {
+    pub const fn with_size(mut self, width: u32, height: u32) -> Self {
         self.width = Some(width);
         self.height = Some(height);
         self
@@ -259,14 +259,14 @@ impl UiDisplayHints {
 
     /// Set whether the UI is resizable.
     #[must_use]
-    pub fn with_resizable(mut self, resizable: bool) -> Self {
+    pub const fn with_resizable(mut self, resizable: bool) -> Self {
         self.resizable = Some(resizable);
         self
     }
 
     /// Set the display mode.
     #[must_use]
-    pub fn with_mode(mut self, mode: UiDisplayMode) -> Self {
+    pub const fn with_mode(mut self, mode: UiDisplayMode) -> Self {
         self.mode = Some(mode);
         self
     }
@@ -317,7 +317,7 @@ pub struct AppsConfig {
     pub allowed_mime_types: Vec<String>,
 }
 
-fn default_true() -> bool {
+const fn default_true() -> bool {
     true
 }
 
@@ -368,7 +368,7 @@ impl AppsConfig {
     ///
     /// * `size` - Maximum size in bytes
     #[must_use]
-    pub fn with_max_content_size(mut self, size: usize) -> Self {
+    pub const fn with_max_content_size(mut self, size: usize) -> Self {
         self.max_content_size = Some(size);
         self
     }
@@ -511,7 +511,7 @@ impl UiToolBuilder {
 
     /// Set display hints.
     #[must_use]
-    pub fn with_display_hints(mut self, hints: UiDisplayHints) -> Self {
+    pub const fn with_display_hints(mut self, hints: UiDisplayHints) -> Self {
         self.display_hints = Some(hints);
         self
     }

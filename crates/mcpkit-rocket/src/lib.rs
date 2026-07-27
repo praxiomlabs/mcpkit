@@ -89,6 +89,10 @@
 //! ```
 
 #![deny(missing_docs)]
+// rocket's request guards and handlers take owned values; the signatures are
+// dictated by the framework.
+#![allow(clippy::future_not_send)]
+#![allow(clippy::needless_pass_by_value)]
 
 mod error;
 /// Handler module for MCP request processing.

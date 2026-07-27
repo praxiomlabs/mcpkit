@@ -5,6 +5,16 @@
 //! session's SSE stream, the client answers with a response POST, and the
 //! waiting handler resumes.
 
+// Integration-test scaffolding: framework-shaped handler signatures, boxed
+// future types and guards held across assertions. None of this ships.
+#![allow(clippy::future_not_send)]
+#![allow(clippy::new_ret_no_self)]
+#![allow(clippy::match_same_arms)]
+#![allow(clippy::option_if_let_else)]
+#![allow(clippy::type_complexity)]
+#![allow(clippy::significant_drop_tightening)]
+#![allow(clippy::needless_pass_by_value)]
+
 use axum::Extension;
 use axum::extract::State;
 use axum::http::{HeaderMap, HeaderValue};
@@ -227,8 +237,8 @@ async fn tool_elicitation_round_trips_over_the_stream() {
     assert_eq!(text, "elicited: blue", "tool result: {result}");
 }
 
-/// The #141/#153 notification consumer: roots/list_changed -> hook ->
-/// ctx.list_roots() -> stream -> response POST -> hook observes the roots.
+/// The #141/#153 notification consumer: `roots/list_changed` -> hook ->
+/// `ctx.list_roots()` -> stream -> response POST -> hook observes the roots.
 #[tokio::test]
 async fn roots_hook_round_trips_over_the_stream() {
     let (state, observed) = test_state();

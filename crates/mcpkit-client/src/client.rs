@@ -77,6 +77,10 @@ use mcpkit_core::tasks::{TaskManager, route_task_store};
 /// # Ok(())
 /// # }
 /// ```
+// `clippy::struct_field_names`: the `client_` prefix is load-bearing. This
+// struct also carries `server_info` and `server_caps`, so bare `info`/`caps`
+// would be ambiguous about which peer they describe.
+#[allow(clippy::struct_field_names)]
 pub struct Client<T: Transport, H: ClientHandler = crate::handler::NoOpHandler> {
     /// The underlying transport (shared with background task).
     transport: Arc<T>,
@@ -705,7 +709,7 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
     ///     // Use task-related features
     /// }
     /// ```
-    pub fn protocol_version(&self) -> ProtocolVersion {
+    pub const fn protocol_version(&self) -> ProtocolVersion {
         self.protocol_version
     }
 
@@ -1309,11 +1313,10 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
         }
 
         let id = self.next_request_id();
-        let request = if let Some(params) = params {
-            Request::with_params(method.to_string(), id.clone(), params)
-        } else {
-            Request::new(method.to_string(), id.clone())
-        };
+        let request = params.map_or_else(
+            || Request::new(method.to_string(), id.clone()),
+            |params| Request::with_params(method.to_string(), id.clone(), params),
+        );
 
         trace!(?id, method, "Sending request");
 
@@ -1556,6 +1559,10 @@ pub(crate) async fn initialize<T: Transport>(
 
 #[cfg(test)]
 mod tests {
+    // Test module: guards are held across assertions, and fixture handlers
+    // mirror trait shapes rather than optimising for clippy.
+    #![allow(clippy::significant_drop_tightening)]
+    #![allow(clippy::option_if_let_else)]
     use super::*;
     use mcpkit_transport::TransportMetadata;
 

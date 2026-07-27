@@ -21,6 +21,37 @@
 //! DATABASE_URL=sqlite:test.db cargo run -p database-server-example
 //! ```
 
+// Test / example code: assertion shapes, fixture naming and framework-shaped
+// signatures are written for readability at the call site, not to satisfy
+// pedantic/nursery lints. None of this ships in the library.
+#![allow(clippy::similar_names)]
+#![allow(clippy::redundant_else)]
+#![allow(clippy::wildcard_enum_match_arm)]
+#![allow(clippy::assertions_on_constants)]
+#![allow(clippy::unused_async)]
+#![allow(clippy::significant_drop_tightening)]
+#![allow(clippy::items_after_statements)]
+#![allow(clippy::needless_pass_by_value)]
+#![allow(clippy::option_if_let_else)]
+#![allow(clippy::match_same_arms)]
+#![allow(clippy::too_many_lines)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::unreadable_literal)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::future_not_send)]
+#![allow(clippy::type_complexity)]
+#![allow(clippy::needless_continue)]
+#![allow(clippy::match_wildcard_for_single_variants)]
+#![allow(clippy::significant_drop_in_scrutinee)]
+#![allow(clippy::manual_let_else)]
+#![allow(clippy::uninlined_format_args)]
+#![allow(clippy::path_buf_push_overwrite)]
+#![allow(clippy::unnecessary_debug_formatting)]
+
 use mcpkit::prelude::*;
 use mcpkit_server::Context;
 use serde::{Deserialize, Serialize};
@@ -122,7 +153,7 @@ struct DatabaseServer {
 }
 
 impl DatabaseServer {
-    fn new(db: Arc<Database>) -> Self {
+    const fn new(db: Arc<Database>) -> Self {
         Self { db }
     }
 }
@@ -198,7 +229,7 @@ impl DatabaseServer {
             .ok_or_else(|| {
                 McpError::invalid_params(
                     "describe_table",
-                    format!("Table '{}' not found", table_name),
+                    format!("Table '{table_name}' not found"),
                 )
             })?;
 
@@ -228,7 +259,7 @@ impl DatabaseServer {
         {
             return Err(McpError::invalid_params(
                 "insert_record",
-                format!("Table '{}' not found", table_name),
+                format!("Table '{table_name}' not found"),
             ));
         }
         drop(tables);
@@ -345,26 +376,24 @@ impl DatabaseServer {
         let conditions_str = conditions.as_deref().unwrap_or("none");
         let where_clause = conditions
             .as_ref()
-            .map(|c| format!("\nWHERE {}", c))
+            .map(|c| format!("\nWHERE {c}"))
             .unwrap_or_default();
 
         GetPromptResult {
             meta: None,
-            description: Some(format!("SELECT query for {}", table_name)),
+            description: Some(format!("SELECT query for {table_name}")),
             messages: vec![
                 PromptMessage::user(format!(
                     "You are a SQL expert. Generate efficient, safe SQL queries. \
                      Always use parameterized queries for user input.\n\n\
-                     Generate a SELECT query for the '{}' table.\n\n\
-                     Columns: {}\n\
-                     Conditions: {}\n\n\
-                     Please provide the SQL query and explain any optimizations.",
-                    table_name, cols, conditions_str
+                     Generate a SELECT query for the '{table_name}' table.\n\n\
+                     Columns: {cols}\n\
+                     Conditions: {conditions_str}\n\n\
+                     Please provide the SQL query and explain any optimizations."
                 )),
                 PromptMessage::assistant(format!(
-                    "Here's the SQL query:\n\n```sql\nSELECT {}\nFROM {}{}\n```\n\n\
-                     Would you like me to add ordering, grouping, or joins?",
-                    cols, table_name, where_clause
+                    "Here's the SQL query:\n\n```sql\nSELECT {cols}\nFROM {table_name}{where_clause}\n```\n\n\
+                     Would you like me to add ordering, grouping, or joins?"
                 )),
             ],
         }
@@ -374,7 +403,7 @@ impl DatabaseServer {
     #[prompt(description = "Design a database schema for a given use case")]
     async fn design_schema(&self, use_case: String, entities: Option<String>) -> GetPromptResult {
         let entities_text = entities
-            .map(|e| format!("\n\nEntities to include: {}", e))
+            .map(|e| format!("\n\nEntities to include: {e}"))
             .unwrap_or_default();
 
         GetPromptResult {
@@ -385,13 +414,12 @@ impl DatabaseServer {
                  Follow best practices: use appropriate data types, add indexes, \
                  define foreign keys, and consider scalability.\n\n\
                  Please design a database schema for the following use case:\n\n\
-                 {}{}\n\n\
+                 {use_case}{entities_text}\n\n\
                  Include:\n\
                  1. Table definitions with columns and types\n\
                  2. Primary and foreign keys\n\
                  3. Suggested indexes\n\
-                 4. Any normalization recommendations",
-                use_case, entities_text
+                 4. Any normalization recommendations"
             ))],
         }
     }
@@ -404,7 +432,7 @@ impl DatabaseServer {
         execution_time: Option<String>,
     ) -> GetPromptResult {
         let time_info = execution_time
-            .map(|t| format!(" (current execution time: {})", t))
+            .map(|t| format!(" (current execution time: {t})"))
             .unwrap_or_default();
 
         GetPromptResult {
@@ -413,13 +441,12 @@ impl DatabaseServer {
             messages: vec![PromptMessage::user(format!(
                 "You are a database performance expert. Analyze queries for optimization \
                  opportunities. Consider indexes, query structure, joins, and execution plans.\n\n\
-                 Please analyze and optimize this slow query{}:\n\n```sql\n{}\n```\n\n\
+                 Please analyze and optimize this slow query{time_info}:\n\n```sql\n{slow_query}\n```\n\n\
                  Provide:\n\
                  1. Identified performance issues\n\
                  2. Optimized query version\n\
                  3. Suggested indexes\n\
-                 4. Estimated improvement",
-                time_info, slow_query
+                 4. Estimated improvement"
             ))],
         }
     }

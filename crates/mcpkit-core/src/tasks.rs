@@ -212,12 +212,22 @@ impl TaskHandle {
     }
 
     /// Mark the task as waiting for input (e.g. during elicitation/sampling).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`McpError`] if the task id is unknown to the store, or the task
+    /// is already in a terminal status.
     pub fn mark_input_required(&self) -> Result<(), McpError> {
         self.manager
             .set_status(&self.task_id, TaskStatus::InputRequired, None)
     }
 
     /// Mark the task `completed` and store its payload.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`McpError`] if the task id is unknown, or the task has already
+    /// reached a terminal status.
     pub fn complete(&self, payload: Value) -> Result<(), McpError> {
         self.manager.finish(
             &self.task_id,
@@ -233,6 +243,11 @@ impl TaskHandle {
     /// `message`. When the underlying request failed with a specific JSON-RPC
     /// error, prefer [`fail_with_error`](Self::fail_with_error) so
     /// `tasks/result` reproduces it exactly.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`McpError`] if the task id is unknown, or the task has already
+    /// reached a terminal status.
     pub fn fail(&self, message: impl Into<String>) -> Result<(), McpError> {
         let message = message.into();
         self.manager.finish(
@@ -247,6 +262,11 @@ impl TaskHandle {
 
     /// Mark the task `failed`, storing the JSON-RPC error the underlying
     /// request would have returned (reproduced verbatim by `tasks/result`).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`McpError`] if the task id is unknown, or the task has already
+    /// reached a terminal status.
     pub fn fail_with_error(&self, error: JsonRpcError) -> Result<(), McpError> {
         let message = error.message.clone();
         self.manager.finish(
@@ -261,6 +281,11 @@ impl TaskHandle {
     ///
     /// Per spec, a `tools/call` whose result has `isError: true` reaches the
     /// `failed` status, but `tasks/result` still returns that result.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`McpError`] if the task id is unknown, or the task has already
+    /// reached a terminal status.
     pub fn fail_with_result(
         &self,
         payload: Value,
@@ -457,6 +482,13 @@ impl TaskManager {
     ///
     /// The wait parks on a per-task event notified by terminal transitions;
     /// no lock is held across an await.
+    // `clippy::significant_drop_tightening` wants the read guard dropped
+    // earlier in the block below. Doing so would be a race: a terminal
+    // transition takes the write lock, so releasing the read lock before
+    // `listen()` has registered opens a window where the notification fires
+    // with no listener and the await never completes. The guard is held to the
+    // end of the block deliberately — see the comment at the `listen()` call.
+    #[allow(clippy::significant_drop_tightening)]
     pub async fn wait_terminal(&self, id: &TaskId) -> Option<TaskState> {
         loop {
             let listener = {
@@ -478,6 +510,11 @@ impl TaskManager {
     ///
     /// Cancelling a task already in a terminal status is rejected with
     /// *invalid params* (spec).
+    ///
+    /// # Errors
+    ///
+    /// Returns *invalid params* if `id` is unknown, or if the task has already
+    /// reached a terminal status.
     pub fn cancel(&self, id: &TaskId) -> Result<(), McpError> {
         // The observer must not run under the store lock, so the transition is
         // applied in this scope and the event fired after it is released.

@@ -1,5 +1,11 @@
 //! Error types for Warp MCP integration.
 
+// `clippy::match_same_arms`: the error -> HTTP status mapping below is a
+// lookup table. One line per variant is the point — merging the arms that
+// happen to share a status today makes the table harder to read and harder to
+// change when one of them needs a different status.
+#![allow(clippy::match_same_arms)]
+
 use thiserror::Error;
 use warp::http::StatusCode;
 use warp::reject::Reject;
@@ -36,13 +42,9 @@ impl WarpError {
     #[must_use]
     pub const fn status_code(&self) -> StatusCode {
         match self {
-            WarpError::InvalidMessage(_) | WarpError::UnsupportedVersion(_) => {
-                StatusCode::BAD_REQUEST
-            }
-            WarpError::SessionNotFound(_) => StatusCode::NOT_FOUND,
-            WarpError::Serialization(_) | WarpError::Internal(_) => {
-                StatusCode::INTERNAL_SERVER_ERROR
-            }
+            Self::InvalidMessage(_) | Self::UnsupportedVersion(_) => StatusCode::BAD_REQUEST,
+            Self::SessionNotFound(_) => StatusCode::NOT_FOUND,
+            Self::Serialization(_) | Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }

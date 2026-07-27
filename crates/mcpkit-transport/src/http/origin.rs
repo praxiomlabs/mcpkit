@@ -76,12 +76,9 @@ impl OriginValidator {
     pub fn is_allowed(&self, origin: Option<&str>) -> bool {
         match self.mode {
             OriginValidationMode::Disabled => true,
-            OriginValidationMode::AllowList => match origin {
-                // No Origin header: not a browser request, so not a DNS-rebinding
-                // vector.
-                None => true,
-                Some(origin) => self.is_origin_listed(origin),
-            },
+            // No Origin header: not a browser request, so not a DNS-rebinding
+            // vector.
+            OriginValidationMode::AllowList => origin.is_none_or(|o| self.is_origin_listed(o)),
         }
     }
 
@@ -98,13 +95,12 @@ fn is_loopback_origin(origin: &str) -> bool {
     };
     // An Origin is scheme://host[:port]; guard against any stray path anyway.
     let authority = rest.split(['/', '?', '#']).next().unwrap_or(rest);
-    let host = if let Some(after_bracket) = authority.strip_prefix('[') {
-        // IPv6 literal, e.g. [::1]:8080
-        after_bracket.split(']').next().unwrap_or(after_bracket)
-    } else {
+    let host = authority.strip_prefix('[').map_or_else(
         // host[:port]
-        authority.rsplit_once(':').map_or(authority, |(h, _)| h)
-    };
+        || authority.rsplit_once(':').map_or(authority, |(h, _)| h),
+        // IPv6 literal, e.g. [::1]:8080
+        |after_bracket| after_bracket.split(']').next().unwrap_or(after_bracket),
+    );
     host.eq_ignore_ascii_case("localhost") || host == "127.0.0.1" || host == "::1"
 }
 

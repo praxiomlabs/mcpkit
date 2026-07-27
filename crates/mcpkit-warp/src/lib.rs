@@ -35,6 +35,10 @@
 //! ```
 
 #![deny(missing_docs)]
+// warp filters take owned values and its futures follow the same `!Send`
+// shape as the runtime this crate wraps.
+#![allow(clippy::future_not_send)]
+#![allow(clippy::needless_pass_by_value)]
 
 mod error;
 /// Handler module for MCP request processing.

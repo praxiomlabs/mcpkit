@@ -6,6 +6,13 @@
 //! - Error counts
 //! - Connection duration
 
+// `clippy::float_cmp`: the assertions below compare rates against exact 0.0, which is the
+// value the counter is initialised to — not a computed measurement.
+#![allow(clippy::float_cmp)]
+// `clippy::cast_*`: counter/rate arithmetic for reporting: message counts divided by elapsed
+// seconds as f64. A display value, not a measurement.
+#![allow(clippy::cast_precision_loss)]
+
 use crate::middleware::TransportLayer;
 use crate::traits::{Transport, TransportMetadata};
 use mcpkit_core::protocol::Message;

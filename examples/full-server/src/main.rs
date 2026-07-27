@@ -16,6 +16,37 @@
 //! - Prompts: Code review and summarization prompts
 //! - All generated from a single `#[mcp_server]` macro
 
+// Test / example code: assertion shapes, fixture naming and framework-shaped
+// signatures are written for readability at the call site, not to satisfy
+// pedantic/nursery lints. None of this ships in the library.
+#![allow(clippy::similar_names)]
+#![allow(clippy::redundant_else)]
+#![allow(clippy::wildcard_enum_match_arm)]
+#![allow(clippy::assertions_on_constants)]
+#![allow(clippy::unused_async)]
+#![allow(clippy::significant_drop_tightening)]
+#![allow(clippy::items_after_statements)]
+#![allow(clippy::needless_pass_by_value)]
+#![allow(clippy::option_if_let_else)]
+#![allow(clippy::match_same_arms)]
+#![allow(clippy::too_many_lines)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::unreadable_literal)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::future_not_send)]
+#![allow(clippy::type_complexity)]
+#![allow(clippy::needless_continue)]
+#![allow(clippy::match_wildcard_for_single_variants)]
+#![allow(clippy::significant_drop_in_scrutinee)]
+#![allow(clippy::manual_let_else)]
+#![allow(clippy::uninlined_format_args)]
+#![allow(clippy::path_buf_push_overwrite)]
+#![allow(clippy::unnecessary_debug_formatting)]
+
 use mcpkit::prelude::*;
 use mcpkit_core::types::{GetPromptResult, PromptMessage, ResourceContents};
 use mcpkit_server::{Context, PromptHandler, ResourceHandler, ServerHandler, ToolHandler};
@@ -69,7 +100,7 @@ impl FullServer {
     async fn save_note(&self, key: String, content: String) -> ToolOutput {
         let mut notes = self.notes.write().unwrap();
         notes.insert(key.clone(), content);
-        ToolOutput::text(format!("Note '{}' saved", key))
+        ToolOutput::text(format!("Note '{key}' saved"))
     }
 
     /// Get a note by key.
@@ -78,7 +109,7 @@ impl FullServer {
         let notes = self.notes.read().unwrap();
         match notes.get(&key) {
             Some(content) => ToolOutput::text(content.clone()),
-            None => ToolOutput::error(format!("Note '{}' not found", key)),
+            None => ToolOutput::error(format!("Note '{key}' not found")),
         }
     }
 
@@ -87,7 +118,7 @@ impl FullServer {
     async fn list_notes(&self) -> ToolOutput {
         let notes = self.notes.read().unwrap();
         let keys: Vec<&String> = notes.keys().collect();
-        ToolOutput::text(format!("{:?}", keys))
+        ToolOutput::text(format!("{keys:?}"))
     }
 
     // ========== RESOURCES ==========
@@ -117,8 +148,7 @@ impl FullServer {
         let value = self
             .config
             .get(key)
-            .map(|s| s.as_str())
-            .unwrap_or("not found");
+            .map_or("not found", std::string::String::as_str);
         ResourceContents::text(uri, value)
     }
 
@@ -132,13 +162,12 @@ impl FullServer {
             meta: None,
             description: Some("Code review prompt".to_string()),
             messages: vec![PromptMessage::user(format!(
-                "Please review the following {} code for:\n\
+                "Please review the following {lang} code for:\n\
                  - Bugs and potential issues\n\
                  - Performance improvements\n\
                  - Code style and best practices\n\
                  - Security concerns\n\n\
-                 ```{}\n{}\n```",
-                lang, lang, code
+                 ```{lang}\n{code}\n```"
             ))],
         }
     }
@@ -146,16 +175,16 @@ impl FullServer {
     /// Generate a summarization prompt.
     #[prompt(description = "Generate a prompt to summarize text")]
     async fn summarize(&self, text: String, max_words: Option<u32>) -> GetPromptResult {
-        let length_instruction = max_words
-            .map(|w| format!("Keep the summary under {} words.", w))
-            .unwrap_or_else(|| "Keep the summary concise.".to_string());
+        let length_instruction = max_words.map_or_else(
+            || "Keep the summary concise.".to_string(),
+            |w| format!("Keep the summary under {w} words."),
+        );
 
         GetPromptResult {
             meta: None,
             description: Some("Summarization prompt".to_string()),
             messages: vec![PromptMessage::user(format!(
-                "Please summarize the following text. {}\n\n{}",
-                length_instruction, text
+                "Please summarize the following text. {length_instruction}\n\n{text}"
             ))],
         }
     }
@@ -244,7 +273,7 @@ async fn main() -> Result<(), McpError> {
         <FullServer as ResourceHandler>::read_resource(&server, "config://app", &ctx).await?;
     for content in &contents {
         if let Some(text) = &content.text {
-            println!("Content:\n{}", text);
+            println!("Content:\n{text}");
         }
     }
 
@@ -254,7 +283,7 @@ async fn main() -> Result<(), McpError> {
         <FullServer as ResourceHandler>::read_resource(&server, "config://app/debug", &ctx).await?;
     for content in &contents {
         if let Some(text) = &content.text {
-            println!("Content: {}", text);
+            println!("Content: {text}");
         }
     }
 
@@ -301,7 +330,7 @@ async fn main() -> Result<(), McpError> {
         };
         // Get first 80 chars of content for display
         let content_preview: String = format!("{:?}", msg.content).chars().take(80).collect();
-        println!("  [{}]: {}...", role_str, content_preview);
+        println!("  [{role_str}]: {content_preview}...");
     }
 
     // Test summarize prompt
@@ -331,7 +360,7 @@ fn print_tool_result(result: &ToolOutput) {
             }
         }
         ToolOutput::RecoverableError { message, .. } => {
-            println!("Error: {}", message);
+            println!("Error: {message}");
         }
     }
 }

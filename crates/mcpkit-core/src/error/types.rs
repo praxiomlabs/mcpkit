@@ -213,7 +213,7 @@ pub enum McpError {
         context: String,
         /// The underlying error.
         #[source]
-        source: Box<McpError>,
+        source: Box<Self>,
     },
 
     // ========================================================================
@@ -340,7 +340,9 @@ impl McpError {
     /// Signal that the client must complete the given URL-mode elicitations
     /// before this request can proceed (JSON-RPC code `-32042`).
     #[must_use]
-    pub fn url_elicitation_required(elicitations: Vec<crate::types::UrlElicitRequest>) -> Self {
+    pub const fn url_elicitation_required(
+        elicitations: Vec<crate::types::UrlElicitRequest>,
+    ) -> Self {
         Self::UrlElicitationRequired { elicitations }
     }
 
@@ -486,7 +488,7 @@ impl McpError {
             Self::InvalidRequest { .. } => codes::INVALID_REQUEST,
             Self::MethodNotFound { .. } => codes::METHOD_NOT_FOUND,
             Self::InvalidParams(_) => codes::INVALID_PARAMS,
-            Self::Internal { .. } => codes::INTERNAL_ERROR,
+            Self::Internal { .. } | Self::InternalMessage { .. } => codes::INTERNAL_ERROR,
             Self::Transport(_) => codes::SERVER_ERROR_START,
             Self::ToolExecution(_) => codes::SERVER_ERROR_START - 1,
             Self::ResourceNotFound { .. } => codes::RESOURCE_NOT_FOUND,
@@ -501,7 +503,6 @@ impl McpError {
             Self::Timeout { .. } => codes::SERVER_ERROR_START - 7,
             Self::Cancelled { .. } => codes::SERVER_ERROR_START - 8,
             Self::WithContext { source, .. } => source.code(),
-            Self::InternalMessage { .. } => codes::INTERNAL_ERROR,
             Self::UrlElicitationRequired { .. } => codes::URL_ELICITATION_REQUIRED,
             Self::JsonRpc(e) => e.code,
         }
@@ -512,11 +513,8 @@ impl McpError {
     pub fn is_recoverable(&self) -> bool {
         match self {
             Self::ToolExecution(details) => details.is_recoverable,
-            Self::InvalidParams(_) => true,
-            Self::ResourceNotFound { .. } => true,
-            Self::Timeout { .. } => true,
+            Self::InvalidParams(_) | Self::ResourceNotFound { .. } | Self::Timeout { .. } => true,
             Self::WithContext { source, .. } => source.is_recoverable(),
-            Self::InternalMessage { .. } => false,
             _ => false,
         }
     }
@@ -535,13 +533,14 @@ impl From<serde_json::Error> for McpError {
 impl From<std::io::Error> for McpError {
     fn from(err: std::io::Error) -> Self {
         let kind = match err.kind() {
-            std::io::ErrorKind::NotFound => TransportErrorKind::ConnectionFailed,
-            std::io::ErrorKind::ConnectionRefused => TransportErrorKind::ConnectionFailed,
-            std::io::ErrorKind::ConnectionReset => TransportErrorKind::ConnectionClosed,
-            std::io::ErrorKind::ConnectionAborted => TransportErrorKind::ConnectionClosed,
+            std::io::ErrorKind::NotFound | std::io::ErrorKind::ConnectionRefused => {
+                TransportErrorKind::ConnectionFailed
+            }
+            std::io::ErrorKind::ConnectionReset | std::io::ErrorKind::ConnectionAborted => {
+                TransportErrorKind::ConnectionClosed
+            }
             std::io::ErrorKind::TimedOut => TransportErrorKind::Timeout,
             std::io::ErrorKind::WriteZero => TransportErrorKind::WriteFailed,
-            std::io::ErrorKind::UnexpectedEof => TransportErrorKind::ReadFailed,
             _ => TransportErrorKind::ReadFailed,
         };
         let message = err.to_string();

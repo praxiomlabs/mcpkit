@@ -71,7 +71,7 @@ impl TestSession {
 
     /// Get the session recorder.
     #[must_use]
-    pub fn recorder(&self) -> &SessionRecorder {
+    pub const fn recorder(&self) -> &SessionRecorder {
         &self.recorder
     }
 
@@ -197,19 +197,19 @@ pub struct TestSessionResult {
 impl TestSessionResult {
     /// Check if the session is valid.
     #[must_use]
-    pub fn is_valid(&self) -> bool {
+    pub const fn is_valid(&self) -> bool {
         self.validation.valid
     }
 
     /// Get the number of messages.
     #[must_use]
-    pub fn message_count(&self) -> usize {
+    pub const fn message_count(&self) -> usize {
         self.stats.total_messages
     }
 
     /// Get the number of errors.
     #[must_use]
-    pub fn error_count(&self) -> usize {
+    pub const fn error_count(&self) -> usize {
         self.stats.errors
     }
 
@@ -299,6 +299,7 @@ impl TestSessionBuilder {
     }
 
     /// Set the session name.
+    #[must_use]
     pub fn name(mut self, name: impl Into<String>) -> Self {
         self.name = Some(name.into());
         self
@@ -306,14 +307,14 @@ impl TestSessionBuilder {
 
     /// Enable strict validation mode.
     #[must_use]
-    pub fn strict(mut self) -> Self {
+    pub const fn strict(mut self) -> Self {
         self.strict_mode = true;
         self
     }
 
     /// Set maximum records to keep.
     #[must_use]
-    pub fn max_records(mut self, max: usize) -> Self {
+    pub const fn max_records(mut self, max: usize) -> Self {
         self.max_records = Some(max);
         self
     }
@@ -347,7 +348,7 @@ impl SessionDiff {
     /// Compare two recorded sessions.
     #[must_use]
     pub fn compare(a: &RecordedSession, b: &RecordedSession) -> Self {
-        let mut diff = SessionDiff {
+        let mut diff = Self {
             only_in_a: Vec::new(),
             only_in_b: Vec::new(),
             different: Vec::new(),
@@ -374,7 +375,7 @@ impl SessionDiff {
 
     /// Check if sessions are identical.
     #[must_use]
-    pub fn is_identical(&self) -> bool {
+    pub const fn is_identical(&self) -> bool {
         self.only_in_a.is_empty() && self.only_in_b.is_empty() && self.different.is_empty()
     }
 }

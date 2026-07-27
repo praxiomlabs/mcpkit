@@ -176,6 +176,11 @@ impl SpawnedTransport {
     ///
     /// Returns the exit status. Note: call this after closing the transport
     /// to avoid blocking indefinitely.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the child process cannot be waited on, for
+    /// example because it was already reaped.
     pub async fn wait(&self) -> Result<std::process::ExitStatus, TransportError> {
         let mut child = self.child.lock().await;
         child.wait().await.map_err(TransportError::from)
@@ -184,6 +189,10 @@ impl SpawnedTransport {
     /// Kill the child process forcefully.
     ///
     /// This sends SIGKILL on Unix and `TerminateProcess` on Windows.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the signal cannot be delivered to the child.
     pub async fn kill(&self) -> Result<(), TransportError> {
         let mut child = self.child.lock().await;
         child.kill().await.map_err(TransportError::from)
@@ -386,6 +395,11 @@ impl SpawnedTransportBuilder {
     /// # Errors
     ///
     /// Returns an error if the process could not be spawned.
+    // `clippy::unused_async`: this body has no await today, but the signature
+    // is public API and matches the other transports' spawn entry points
+    // (WebSocket's is genuinely async). Dropping `async` would be a breaking
+    // change for every caller and would make the transports inconsistent.
+    #[allow(clippy::unused_async)]
     pub async fn spawn(self) -> Result<SpawnedTransport, TransportError> {
         let mut command = tokio::process::Command::new(&self.program);
 

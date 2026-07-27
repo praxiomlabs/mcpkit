@@ -1,5 +1,11 @@
 //! Error types for Rocket MCP integration.
 
+// `clippy::match_same_arms`: the error -> HTTP status mapping below is a
+// lookup table. One line per variant is the point — merging the arms that
+// happen to share a status today makes the table harder to read and harder to
+// change when one of them needs a different status.
+#![allow(clippy::match_same_arms)]
+
 use rocket::Request;
 use rocket::http::Status;
 use rocket::response::{self, Responder};
@@ -32,11 +38,11 @@ pub enum RocketError {
 impl<'r> Responder<'r, 'static> for RocketError {
     fn respond_to(self, _: &'r Request<'_>) -> response::Result<'static> {
         let status = match &self {
-            RocketError::InvalidMessage(_) => Status::BadRequest,
-            RocketError::UnsupportedVersion(_) => Status::BadRequest,
-            RocketError::SessionNotFound(_) => Status::NotFound,
-            RocketError::Serialization(_) => Status::InternalServerError,
-            RocketError::Internal(_) => Status::InternalServerError,
+            Self::InvalidMessage(_) => Status::BadRequest,
+            Self::UnsupportedVersion(_) => Status::BadRequest,
+            Self::SessionNotFound(_) => Status::NotFound,
+            Self::Serialization(_) => Status::InternalServerError,
+            Self::Internal(_) => Status::InternalServerError,
         };
 
         Err(status)
@@ -46,13 +52,13 @@ impl<'r> Responder<'r, 'static> for RocketError {
 impl RocketError {
     /// Get the HTTP status code for this error.
     #[must_use]
-    pub fn status(&self) -> Status {
+    pub const fn status(&self) -> Status {
         match self {
-            RocketError::InvalidMessage(_) => Status::BadRequest,
-            RocketError::UnsupportedVersion(_) => Status::BadRequest,
-            RocketError::SessionNotFound(_) => Status::NotFound,
-            RocketError::Serialization(_) => Status::InternalServerError,
-            RocketError::Internal(_) => Status::InternalServerError,
+            Self::InvalidMessage(_) => Status::BadRequest,
+            Self::UnsupportedVersion(_) => Status::BadRequest,
+            Self::SessionNotFound(_) => Status::NotFound,
+            Self::Serialization(_) => Status::InternalServerError,
+            Self::Internal(_) => Status::InternalServerError,
         }
     }
 }

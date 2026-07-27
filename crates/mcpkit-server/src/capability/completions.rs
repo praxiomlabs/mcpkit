@@ -176,6 +176,7 @@ impl CompleteRequestBuilder {
     }
 
     /// Set the current input value.
+    #[must_use]
     pub fn value(mut self, value: impl Into<String>) -> Self {
         self.arg_value = value.into();
         self

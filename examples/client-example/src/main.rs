@@ -13,6 +13,37 @@
 //!
 //! You can also test with any other MCP server that runs on stdio.
 
+// Test / example code: assertion shapes, fixture naming and framework-shaped
+// signatures are written for readability at the call site, not to satisfy
+// pedantic/nursery lints. None of this ships in the library.
+#![allow(clippy::similar_names)]
+#![allow(clippy::redundant_else)]
+#![allow(clippy::wildcard_enum_match_arm)]
+#![allow(clippy::assertions_on_constants)]
+#![allow(clippy::unused_async)]
+#![allow(clippy::significant_drop_tightening)]
+#![allow(clippy::items_after_statements)]
+#![allow(clippy::needless_pass_by_value)]
+#![allow(clippy::option_if_let_else)]
+#![allow(clippy::match_same_arms)]
+#![allow(clippy::too_many_lines)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::unreadable_literal)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::future_not_send)]
+#![allow(clippy::type_complexity)]
+#![allow(clippy::needless_continue)]
+#![allow(clippy::match_wildcard_for_single_variants)]
+#![allow(clippy::significant_drop_in_scrutinee)]
+#![allow(clippy::manual_let_else)]
+#![allow(clippy::uninlined_format_args)]
+#![allow(clippy::path_buf_push_overwrite)]
+#![allow(clippy::unnecessary_debug_formatting)]
+
 use mcpkit_core::protocol::{Message, Notification, Request, RequestId};
 use serde_json::{Value, json};
 use std::{
@@ -307,7 +338,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .join("debug")
         .join("filesystem-server");
 
-    println!("Starting MCP server: {:?}", server_binary);
+    println!("Starting MCP server: {server_binary:?}");
     println!();
 
     // Spawn the server and connect
@@ -329,7 +360,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     for tool in &tools {
         let name = tool["name"].as_str().unwrap_or("unknown");
         let description = tool["description"].as_str().unwrap_or("no description");
-        println!("  {}: {}", name, description);
+        println!("  {name}: {description}");
     }
     println!();
 
@@ -377,7 +408,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 for resource in &resources {
                     let uri = resource["uri"].as_str().unwrap_or("unknown");
                     let name = resource["name"].as_str().unwrap_or("unknown");
-                    println!("  {}: {}", uri, name);
+                    println!("  {uri}: {name}");
                 }
             }
         }
@@ -397,7 +428,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 for prompt in &prompts {
                     let name = prompt["name"].as_str().unwrap_or("unknown");
                     let description = prompt["description"].as_str().unwrap_or("no description");
-                    println!("  {}: {}", name, description);
+                    println!("  {name}: {description}");
                 }
             }
         }

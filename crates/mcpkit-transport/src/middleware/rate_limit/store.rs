@@ -42,6 +42,14 @@
 //! }
 //! ```
 
+// `clippy::cast_*`: counter and timestamp arithmetic for rate-limit accounting: counters are
+// divided as f64 and durations narrowed to u64. Values are bounded by the
+// configured window and quota.
+#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::cast_possible_wrap)]
+
 use super::{RateLimitAlgorithm, RateLimitConfig};
 use async_lock::Mutex;
 use async_trait::async_trait;
@@ -118,7 +126,7 @@ pub enum RateLimitStoreError {
 /// Trait for rate limit state storage backends.
 ///
 /// This trait abstracts the storage of rate limiting state, allowing
-/// implementations for different backends (in-memory, Redis, DynamoDB, etc.).
+/// implementations for different backends (in-memory, Redis, `DynamoDB`, etc.).
 ///
 /// All methods are async to support distributed backends that require
 /// network I/O.
@@ -136,7 +144,7 @@ pub trait RateLimitStore: Send + Sync {
     ///
     /// This should be an atomic check-and-decrement operation:
     /// - If allowed: consume one unit of quota and return `Allowed`
-    /// - If denied: return `Denied` with retry_after hint
+    /// - If denied: return `Denied` with `retry_after` hint
     ///
     /// # Arguments
     ///
@@ -186,7 +194,7 @@ struct Bucket {
 }
 
 impl Bucket {
-    fn new(config: &RateLimitConfig, now: Instant) -> Self {
+    const fn new(config: &RateLimitConfig, now: Instant) -> Self {
         Self {
             // Start with a full bucket (scaled by 1000 for sub-token precision).
             tokens: config.burst_size * 1000,
@@ -372,11 +380,14 @@ impl RateLimitStore for InMemoryStore {
     }
 
     async fn get_stats(&self, key: &str) -> Result<StoreStats, RateLimitStoreError> {
-        let buckets = self.buckets.lock().await;
-        // A key with no live bucket behaves as a full bucket.
-        let current_tokens = buckets
-            .get(key)
-            .map_or(self.burst_size, |b| b.tokens / 1000);
+        let current_tokens = {
+            let buckets = self.buckets.lock().await;
+            // A key with no live bucket behaves as a full bucket.
+            buckets
+                .get(key)
+                .map_or(self.burst_size, |b| b.tokens / 1000)
+        };
+        // Guard released above: the counters below are atomics and do not need it.
         Ok(StoreStats {
             current_tokens,
             total_requests: self.total_requests.load(Ordering::Relaxed),

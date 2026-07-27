@@ -1,5 +1,15 @@
 //! Adapter-level HTTP tests for the actix adapter.
 
+// Integration-test scaffolding: framework-shaped handler signatures, boxed
+// future types and guards held across assertions. None of this ships.
+#![allow(clippy::future_not_send)]
+#![allow(clippy::new_ret_no_self)]
+#![allow(clippy::match_same_arms)]
+#![allow(clippy::option_if_let_else)]
+#![allow(clippy::type_complexity)]
+#![allow(clippy::significant_drop_tightening)]
+#![allow(clippy::needless_pass_by_value)]
+
 use actix_web::{App, test};
 use mcpkit_actix::McpRouter;
 use mcpkit_core::capability::ServerInfo;
@@ -53,7 +63,7 @@ impl PromptHandler for TestHandler {
     }
 }
 
-/// Spec (Streamable HTTP): a POSTed JSON-RPC *response* is accepted with
+/// Spec (Streamable HTTP): a `POSTed` JSON-RPC *response* is accepted with
 /// 202, not rejected (#153 PR 0a).
 #[actix_rt::test]
 async fn response_post_is_accepted_with_202() {

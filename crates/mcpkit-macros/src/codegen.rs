@@ -12,6 +12,12 @@ use syn::{FnArg, Ident, Pat, PatIdent, PatType, ReturnType, Type};
 use crate::attrs::ParamAttrs;
 
 /// Information about a tool method extracted from the AST.
+//
+// `clippy::struct_excessive_bools` suggests a state enum. This is a flat
+// carrier for independently-parsed attribute flags, not a state machine —
+// each bool mirrors one `#[tool(...)]` option and they combine freely, so an
+// enum would have to enumerate the product.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug)]
 pub struct ToolMethod {
     /// The method name

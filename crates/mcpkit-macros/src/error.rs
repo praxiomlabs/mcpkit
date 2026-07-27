@@ -4,6 +4,13 @@
 //! for common mistakes.
 
 #![allow(dead_code)]
+// `clippy::option_if_let_else` (nursery) fires on this file's codegen blocks:
+// `if let Some(m) = method { <20-30 lines of quote!> } else { quote!() }`.
+// The suggested `map_or_else(|| quote!(), |m| { ... })` is valid here, unlike
+// in attrs.rs, but wrapping a 30-line token-building block in a closure reads
+// worse than the `if let`. That readability trade-off on large bodies is why
+// the lint is nursery rather than pedantic.
+#![allow(clippy::option_if_let_else)]
 
 use proc_macro2::{Span, TokenStream};
 use quote::quote_spanned;

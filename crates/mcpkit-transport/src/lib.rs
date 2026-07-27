@@ -89,6 +89,27 @@
 //! ```
 
 #![deny(missing_docs)]
+// `clippy::significant_drop_tightening` (nursery) is allowed crate-wide, after
+// reviewing all 21 sites it flagged here individually rather than batch-applying:
+//
+//   * 2 were genuine and are fixed — RateLimitStore::get_stats held the bucket
+//     lock across three atomic loads that do not need it, and
+//     WsListener::stop held a temporary guard for the whole if-let body.
+//   * 12 are the send/recv/close guards in stdio, unix, spawn and http. The
+//     lock MUST span the write/write/flush sequence: releasing between them
+//     lets another task interleave and corrupt line-delimited JSON-RPC framing.
+//     The gap the lint objects to is between the last write and `Ok(())`, which
+//     performs no work, so tightening buys nothing.
+//   * 4 are assertions inside test bodies.
+//   * 3 are ordering-sensitive: PoolManager::release notifies waiters under the
+//     lock, and WebSocket do_close sequences close-frame, clear-stream and
+//     mark-disconnected deliberately.
+//
+// The same lint proposed a race in mcpkit-core: TaskManager::wait_terminal must
+// hold its read guard until `listen()` registers, or a terminal transition
+// notifies with no listener attached and the await never completes. That site
+// carries its own targeted allow.
+#![allow(clippy::significant_drop_tightening)]
 
 pub mod error;
 pub mod http;

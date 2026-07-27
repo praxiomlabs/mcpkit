@@ -176,7 +176,7 @@ impl SessionStore {
     /// Set the stream configuration applied to each new session's SSE
     /// stream registry.
     #[must_use]
-    pub fn with_stream_config(mut self, config: StreamConfig) -> Self {
+    pub const fn with_stream_config(mut self, config: StreamConfig) -> Self {
         self.stream_config = config;
         self
     }
@@ -247,6 +247,10 @@ impl SessionStore {
     /// Returns `Ok(None)` if no such session exists, `Ok(Some(session))` if the
     /// binding holds, or `Err` if the presenting identity does not match the
     /// session's bound user.
+    ///
+    /// # Errors
+    ///
+    /// Returns the error produced by the underlying operation.
     pub fn get_verified(
         &self,
         id: &str,
@@ -270,6 +274,10 @@ impl SessionStore {
     ///
     /// Returns `Ok(true)` if the session existed and was touched, `Ok(false)` if
     /// it did not exist, or `Err` on a binding violation.
+    ///
+    /// # Errors
+    ///
+    /// Returns the error produced by the underlying operation.
     pub fn touch_verified(
         &self,
         id: &str,

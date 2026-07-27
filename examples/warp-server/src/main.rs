@@ -16,6 +16,37 @@
 //! - `POST /mcp` - JSON-RPC endpoint for MCP requests
 //! - `GET /mcp/sse` - Server-Sent Events endpoint for streaming
 
+// Test / example code: assertion shapes, fixture naming and framework-shaped
+// signatures are written for readability at the call site, not to satisfy
+// pedantic/nursery lints. None of this ships in the library.
+#![allow(clippy::similar_names)]
+#![allow(clippy::redundant_else)]
+#![allow(clippy::wildcard_enum_match_arm)]
+#![allow(clippy::assertions_on_constants)]
+#![allow(clippy::unused_async)]
+#![allow(clippy::significant_drop_tightening)]
+#![allow(clippy::items_after_statements)]
+#![allow(clippy::needless_pass_by_value)]
+#![allow(clippy::option_if_let_else)]
+#![allow(clippy::match_same_arms)]
+#![allow(clippy::too_many_lines)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::unreadable_literal)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::future_not_send)]
+#![allow(clippy::type_complexity)]
+#![allow(clippy::needless_continue)]
+#![allow(clippy::match_wildcard_for_single_variants)]
+#![allow(clippy::significant_drop_in_scrutinee)]
+#![allow(clippy::manual_let_else)]
+#![allow(clippy::uninlined_format_args)]
+#![allow(clippy::path_buf_push_overwrite)]
+#![allow(clippy::unnecessary_debug_formatting)]
+
 use mcpkit_core::capability::{ServerCapabilities, ServerInfo};
 use mcpkit_core::error::McpError;
 use mcpkit_core::types::{
@@ -114,8 +145,14 @@ impl ToolHandler for WarpHandler {
                     .get("operation")
                     .and_then(|v| v.as_str())
                     .unwrap_or("add");
-                let a = args.get("a").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                let b = args.get("b").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let a = args
+                    .get("a")
+                    .and_then(serde_json::Value::as_f64)
+                    .unwrap_or(0.0);
+                let b = args
+                    .get("b")
+                    .and_then(serde_json::Value::as_f64)
+                    .unwrap_or(0.0);
 
                 let result = match op {
                     "add" => a + b,

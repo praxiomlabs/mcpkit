@@ -2,6 +2,14 @@
 //!
 //! Run with: `cargo bench --package mcpkit-benches --bench transport`
 
+// Benchmark harness: fixture values, sample payload arithmetic and string
+// building for report output. None of this ships.
+#![allow(clippy::approx_constant)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::format_push_string)]
+#![allow(clippy::format_collect)]
+#![allow(clippy::unreadable_literal)]
+#![allow(clippy::needless_pass_by_value)]
 // Allow missing docs for criterion_group! macro generated functions
 #![allow(missing_docs)]
 

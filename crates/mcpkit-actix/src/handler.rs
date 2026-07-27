@@ -67,6 +67,10 @@ fn is_initialize(msg: &Message) -> bool {
 /// # Response
 ///
 /// Returns a JSON-RPC response for request messages, or 202 Accepted for notifications.
+///
+/// # Errors
+///
+/// Returns the error produced by the underlying operation.
 pub async fn handle_mcp_post<H>(
     req: HttpRequest,
     state: web::Data<McpState<H>>,
@@ -501,6 +505,11 @@ where
 ///
 /// - `connected`: Sent when the connection is established, includes session ID.
 /// - `message`: MCP notification messages.
+///
+/// # Panics
+///
+/// Panics if an internal lock is poisoned, i.e. another thread panicked
+/// while holding it.
 pub async fn handle_sse<H>(req: HttpRequest, state: web::Data<McpState<H>>) -> HttpResponse
 where
     H: HasServerInfo + Send + Sync + 'static,
@@ -648,6 +657,10 @@ fn create_sse_stream(
 ///
 /// - [RFC 9728: OAuth 2.0 Protected Resource Metadata](https://datatracker.ietf.org/doc/html/rfc9728)
 /// - [MCP Authorization Specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)
+///
+/// # Errors
+///
+/// Returns the error produced by the underlying operation.
 pub async fn handle_oauth_protected_resource(
     state: web::Data<OAuthState>,
 ) -> Result<HttpResponse, ExtensionError> {

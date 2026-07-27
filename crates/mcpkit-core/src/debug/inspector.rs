@@ -53,7 +53,7 @@ impl MessageRecord {
 
     /// Get the request ID if applicable.
     #[must_use]
-    pub fn request_id(&self) -> Option<&RequestId> {
+    pub const fn request_id(&self) -> Option<&RequestId> {
         match &self.message {
             Message::Request(req) => Some(&req.id),
             Message::Response(res) => Some(&res.id),
@@ -63,25 +63,25 @@ impl MessageRecord {
 
     /// Check if this is a request message.
     #[must_use]
-    pub fn is_request(&self) -> bool {
+    pub const fn is_request(&self) -> bool {
         matches!(self.message, Message::Request(_))
     }
 
     /// Check if this is a response message.
     #[must_use]
-    pub fn is_response(&self) -> bool {
+    pub const fn is_response(&self) -> bool {
         matches!(self.message, Message::Response(_))
     }
 
     /// Check if this is a notification message.
     #[must_use]
-    pub fn is_notification(&self) -> bool {
+    pub const fn is_notification(&self) -> bool {
         matches!(self.message, Message::Notification(_))
     }
 
     /// Check if the response indicates an error.
     #[must_use]
-    pub fn is_error(&self) -> bool {
+    pub const fn is_error(&self) -> bool {
         matches!(&self.message, Message::Response(r) if r.error.is_some())
     }
 }
@@ -123,7 +123,12 @@ impl MessageStats {
         if self.responses == 0 {
             0.0
         } else {
-            self.errors as f64 / self.responses as f64
+            // Counters, not measurements: an f64 mantissa covers any plausible
+            // message count, and this value is a display ratio.
+            #[allow(clippy::cast_precision_loss)]
+            {
+                self.errors as f64 / self.responses as f64
+            }
         }
     }
 }
@@ -167,7 +172,7 @@ impl MessageInspector {
 
     /// Create an inspector with a maximum record limit.
     #[must_use]
-    pub fn with_max_records(mut self, max: usize) -> Self {
+    pub const fn with_max_records(mut self, max: usize) -> Self {
         self.max_records = max;
         self
     }
@@ -186,17 +191,29 @@ impl MessageInspector {
     }
 
     /// Record an outbound message.
+    // `clippy::needless_pass_by_value`: `record` below takes `&Message`, so
+    // these wrappers no longer consume what they receive. The by-value
+    // signature is kept because both are public API, re-exported through
+    // mcpkit-testing and used in its doc examples; narrowing to `&Message`
+    // is a breaking change. Revisit at the next major.
+    #[allow(clippy::needless_pass_by_value)]
     pub fn record_outbound(&self, message: Message) {
-        self.record(MessageDirection::Outbound, message);
+        self.record(MessageDirection::Outbound, &message);
     }
 
     /// Record an inbound message.
+    // `clippy::needless_pass_by_value`: `record` below takes `&Message`, so
+    // these wrappers no longer consume what they receive. The by-value
+    // signature is kept because both are public API, re-exported through
+    // mcpkit-testing and used in its doc examples; narrowing to `&Message`
+    // is a breaking change. Revisit at the next major.
+    #[allow(clippy::needless_pass_by_value)]
     pub fn record_inbound(&self, message: Message) {
-        self.record(MessageDirection::Inbound, message);
+        self.record(MessageDirection::Inbound, &message);
     }
 
     /// Record a message.
-    fn record(&self, direction: MessageDirection, message: Message) {
+    fn record(&self, direction: MessageDirection, message: &Message) {
         if !self.is_enabled() {
             return;
         }
@@ -204,14 +221,14 @@ impl MessageInspector {
         let record = MessageRecord::new(direction, message.clone());
 
         // Track pending requests for response time calculation
-        if let Message::Request(ref req) = message
+        if let Message::Request(req) = message
             && let Ok(mut pending) = self.pending_requests.write()
         {
             pending.insert(req.id.clone(), (Instant::now(), req.method.to_string()));
         }
 
         // Calculate response time for completed requests
-        if let Message::Response(ref res) = message
+        if let Message::Response(res) = message
             && let Ok(mut pending) = self.pending_requests.write()
             && let Some((start, method)) = pending.remove(&res.id)
         {
@@ -299,7 +316,7 @@ impl MessageInspector {
             for (method, durations) in times.iter() {
                 if !durations.is_empty() {
                     let total: Duration = durations.iter().sum();
-                    let avg = total / durations.len() as u32;
+                    let avg = total / u32::try_from(durations.len()).unwrap_or(u32::MAX).max(1);
                     stats.avg_response_time.insert(method.clone(), avg);
                 }
             }

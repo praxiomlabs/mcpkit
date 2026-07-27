@@ -34,7 +34,7 @@
 //! [`RateLimitStore`] trait:
 //!
 //! - [`InMemoryStore`]: Default in-memory store (single-process deployments)
-//! - Custom stores: Implement [`RateLimitStore`] for Redis, DynamoDB, etc.
+//! - Custom stores: Implement [`RateLimitStore`] for Redis, `DynamoDB`, etc.
 //!
 //! # Example
 //!
@@ -97,6 +97,9 @@
 //! 4. **Tested behavior** under rate limiting conditions
 //! 5. **Documented limits** for clients to understand expected behavior
 //! 6. **Considered distributed stores** for multi-instance deployments
+
+// `clippy::cast_*`: counter arithmetic for reporting: rejection ratio as f64.
+#![allow(clippy::cast_precision_loss)]
 
 mod store;
 
@@ -231,7 +234,7 @@ impl RateLimiter {
 
     /// Create a rate limiter with a custom store backend.
     ///
-    /// Use this for distributed rate limiting with Redis, DynamoDB, etc.
+    /// Use this for distributed rate limiting with Redis, `DynamoDB`, etc.
     ///
     /// # Arguments
     ///
@@ -270,6 +273,11 @@ impl RateLimiter {
     /// Check if a request is allowed and consume a token if so.
     ///
     /// Returns `Ok(())` if allowed, `Err(TransportError)` if rate limited.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError::Connection`] if the rate-limit store cannot be
+    /// reached, and a rate-limit error when the request is denied by the policy.
     pub async fn check(&self) -> Result<(), TransportError> {
         let decision = self
             .store
@@ -315,21 +323,27 @@ impl RateLimiter {
     /// Get statistics about rate limiting.
     #[must_use]
     pub async fn stats(&self) -> RateLimitStats {
-        match self.store.get_stats(&self.key).await {
-            Ok(store_stats) => RateLimitStats {
-                total_requests: store_stats.total_requests,
-                total_rejected: store_stats.total_rejected,
-                current_tokens: store_stats.current_tokens,
-            },
-            Err(_) => RateLimitStats {
+        self.store.get_stats(&self.key).await.map_or(
+            // Store unreachable: report zeroes rather than failing a stats read.
+            RateLimitStats {
                 total_requests: 0,
                 total_rejected: 0,
                 current_tokens: 0,
             },
-        }
+            |store_stats| RateLimitStats {
+                total_requests: store_stats.total_requests,
+                total_rejected: store_stats.total_rejected,
+                current_tokens: store_stats.current_tokens,
+            },
+        )
     }
 
     /// Reset the rate limiter state.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError::Connection`] if the rate-limit store cannot be
+    /// reached.
     pub async fn reset(&self) -> Result<(), TransportError> {
         self.store
             .reset(&self.key)

@@ -6,6 +6,10 @@
 //! These benchmarks measure core protocol operations to track
 //! performance and enable comparison with other implementations.
 
+// Benchmark harness: small loop indices narrowed for id/param construction.
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::cast_possible_truncation)]
+
 use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
 use mcpkit_core::error::JsonRpcError;
 use mcpkit_core::protocol::{Message, Request, RequestId, Response};
