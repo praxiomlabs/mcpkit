@@ -1355,6 +1355,21 @@ where
 ///
 /// This trait is implemented by Server with different bounds depending on
 /// which handlers are registered.
+///
+/// # The returned futures are not declared `Send`
+///
+/// `async_fn_in_trait` desugars to `impl Future` with no auto-trait bounds, so
+/// nothing here promises `Send`. [`ServerRuntime::run`] is therefore `Send`
+/// only at concrete instantiations whose handler futures happen to be `Send` —
+/// which is what every `tokio::spawn(runtime.run())` call site relies on today,
+/// and why it compiles despite the bound being unprovable generically.
+///
+/// The practical consequence is that `run`'s internals cannot type-erase a
+/// future they hold across an await: erasing to `dyn Future` drops `Send`
+/// unconditionally, and adding `+ Send` to the erased type fails to compile in
+/// the generic context. Adding `+ Send` here instead would fix that, but it is
+/// a breaking change for every implementor, so it wants its own decision rather
+/// than arriving as a side effect. See ADR 0006.
 #[allow(async_fn_in_trait)]
 pub trait RequestRouter: Send + Sync {
     /// Get the server info.

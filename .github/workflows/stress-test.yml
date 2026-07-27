@@ -153,20 +153,35 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Build stress test binary
-        run: cargo build --release --example stress-test 2>/dev/null || echo "Stress test example not found, running inline tests"
+      # The "Build stress test binary" step was removed. It built
+      # `--example stress-test`, which does not exist in this workspace, under
+      # `2>/dev/null || echo "... not found, running inline tests"` — so it
+      # silently took the fallback on every run and reported success. There are
+      # no "inline tests" it was falling back to; the steps below are the job.
 
       - name: Run concurrent request stress test
         run: |
-          # Run transport stress test with multiple concurrent connections
+          # Deliberately NOT `cargo test ... | head -100` under pipefail: this
+          # command emits far more than 100 lines, so `head` closes the pipe
+          # early, the producer takes SIGPIPE, and pipefail reports 141 — a red
+          # job on a passing run. Capture, keep the real status, then truncate.
+          set -uo pipefail
+          status=0
           cargo test --release --package mcpkit-transport -- \
             --test-threads=1 \
             concurrent \
-            --nocapture 2>&1 | head -100 || true
+            --nocapture > stress.log 2>&1 || status=$?
+          if [ "$status" -eq 0 ]; then
+            head -100 stress.log
+          else
+            echo "::error::concurrent stress test failed (exit $status)"
+            tail -100 stress.log
+          fi
+          exit "$status"
 
       - name: Run high-throughput serialization stress
         run: |
-          # Run serialization benchmark with maximum samples
+          set -euo pipefail
           cargo bench --package mcpkit-benches --bench serialization -- \
             --sample-size 500 \
             --measurement-time 30 \
@@ -174,7 +189,7 @@ jobs:
 
       - name: Memory pressure test
         run: |
-          # Run memory benchmark to detect leaks under pressure
+          set -euo pipefail
           cargo bench --package mcpkit-benches --bench memory -- \
             --sample-size 200 \
             --measurement-time 20 \
