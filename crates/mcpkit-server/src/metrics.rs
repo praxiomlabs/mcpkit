@@ -19,6 +19,14 @@
 //! println!("Error rate: {:.2}%", stats.error_rate() * 100.0);
 //! ```
 
+// `clippy::cast_*`: counter arithmetic for reporting. Request/error counters are
+// divided as f64 to produce display ratios, and durations are narrowed for
+// histogram buckets. No plausible count or latency exceeds these ranges, and a
+// ratio has no lossless integer form.
+#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_sign_loss)]
+
 use std::collections::HashMap;
 use std::sync::RwLock;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -75,11 +83,11 @@ impl ServerMetrics {
         }
 
         // Update per-method counters
-        self.increment_method_counter(&self.method_counts, method);
+        Self::increment_method_counter(&self.method_counts, method);
         self.add_method_latency(method, latency_us);
 
         if !success {
-            self.increment_method_counter(&self.method_errors, method);
+            Self::increment_method_counter(&self.method_errors, method);
         }
     }
 
@@ -94,6 +102,11 @@ impl ServerMetrics {
     }
 
     /// Get a snapshot of current metrics.
+    // `clippy::significant_drop_tightening`: the three read guards below are held
+    // together on purpose. This is a *snapshot* — releasing each after its own
+    // clone would let counters advance between them and produce a view where the
+    // error count does not correspond to the request count it is reported against.
+    #[allow(clippy::significant_drop_tightening)]
     #[must_use]
     pub fn snapshot(&self) -> MetricsSnapshot {
         let method_counts = self
@@ -169,7 +182,7 @@ impl ServerMetrics {
         }
     }
 
-    fn increment_method_counter(&self, map: &RwLock<HashMap<String, AtomicU64>>, method: &str) {
+    fn increment_method_counter(map: &RwLock<HashMap<String, AtomicU64>>, method: &str) {
         // Try to increment existing counter
         if let Ok(counts) = map.read()
             && let Some(counter) = counts.get(method)

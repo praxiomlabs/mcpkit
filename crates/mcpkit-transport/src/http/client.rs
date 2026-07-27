@@ -69,6 +69,11 @@ impl HttpTransport {
     }
 
     /// Create a new HTTP transport without the http feature (stub).
+    ///
+    /// # Errors
+    ///
+    /// Infallible in this build: the stub constructs successfully but every
+    /// send/recv then reports that the `http` feature is disabled.
     #[cfg(not(feature = "http"))]
     pub fn new(config: HttpTransportConfig) -> Result<Self, TransportError> {
         let session_id = config.session_id.clone();
@@ -343,6 +348,10 @@ impl HttpTransport {
 
     /// Stub for `send_post` when http feature is disabled.
     #[cfg(not(feature = "http"))]
+    // Feature-disabled stub. `async`/`&self`/non-const are kept so the
+    // signature is identical whether the feature is enabled or not — callers
+    // must compile the same way either way.
+    #[allow(clippy::unused_async)]
     async fn send_post(&self, _msg: &Message) -> Result<(), TransportError> {
         Err(TransportError::Connection {
             message: "HTTP transport requires the 'http' feature".to_string(),
@@ -350,6 +359,11 @@ impl HttpTransport {
     }
 
     /// Process SSE buffer (for non-http feature builds).
+    ///
+    /// # Errors
+    ///
+    /// Infallible in this build; the signature matches the feature-enabled
+    /// implementation.
     #[cfg(not(feature = "http"))]
     pub fn process_sse_buffer_internal(
         &self,

@@ -20,6 +20,10 @@
 //! The example starts a gRPC server and connects a client to it, demonstrating
 //! bidirectional message exchange.
 
+// Example binary: the transport guard is held for the length of a demo
+// request/response exchange, which is the point of the example.
+#![allow(clippy::significant_drop_tightening)]
+
 use mcpkit_core::protocol::{Message, Request};
 use mcpkit_transport::Transport;
 use mcpkit_transport::grpc::{

@@ -20,6 +20,10 @@
 //!   no stream is open); requests fail fast on a missing stream after a
 //!   bounded reconnect grace, and time out per method class.
 
+// `clippy::option_if_let_else` (nursery): the flagged site guards a lock acquisition whose else branch is a
+// no-op; the if-let states that more plainly.
+#![allow(clippy::option_if_let_else)]
+
 use crate::context::Peer;
 use futures::channel::oneshot;
 use mcpkit_core::error::McpError;
@@ -76,7 +80,6 @@ impl SessionOutbound {
 
     /// Register a pending request, returning the receiver that resolves when
     /// the matching response arrives.
-    #[must_use]
     pub fn register(&self, id: RequestId) -> oneshot::Receiver<Response> {
         let (tx, rx) = oneshot::channel();
         if let Ok(mut pending) = self.pending.write() {

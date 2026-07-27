@@ -24,6 +24,13 @@
 //!   retained for [`StreamConfig::max_age`], so a reconnecting client
 //!   resumes and replays what the dead channel missed.
 
+// `clippy::significant_drop_tightening`: the registry guard is held across the
+// read-modify-write on a stream slot (reap, locate, mutate, then read its replay
+// buffer). Releasing between those steps would let a concurrent reap or resume
+// observe a half-updated slot. The gap the lint objects to is between the last
+// use and the return, which does no work.
+#![allow(clippy::significant_drop_tightening)]
+
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -190,6 +197,11 @@ impl StreamRegistry {
     /// server SHOULD immediately send an event with an id so the client can
     /// reconnect with `Last-Event-ID`). Returns the handle and the priming
     /// event.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the stream-registry mutex is poisoned, which only happens if
+    /// another thread panicked while holding it.
     pub fn open(
         self: &Arc<Self>,
         prime_event_type: &str,
@@ -228,6 +240,11 @@ impl StreamRegistry {
     ///
     /// A resumed stream keeps its id — and therefore its designation if it
     /// was the designated stream.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the stream-registry mutex is poisoned, which only happens if
+    /// another thread panicked while holding it.
     pub fn resume(
         self: &Arc<Self>,
         last_event_id: &str,
@@ -265,6 +282,11 @@ impl StreamRegistry {
     /// replays it. The event is NOT re-sent on another stream — it belongs to
     /// the stream it was stored on (spec: no cross-stream replay).
     #[must_use]
+    ///
+    /// # Panics
+    ///
+    /// Panics if the stream-registry mutex is poisoned, which only happens if
+    /// another thread panicked while holding it.
     pub fn send(&self, event_type: &str, data: String) -> Option<String> {
         let mut inner = self.inner.lock().expect("stream registry lock");
         Self::reap(&mut inner, &self.config);
@@ -291,6 +313,11 @@ impl StreamRegistry {
 
     /// Whether any stream is currently live.
     #[must_use]
+    ///
+    /// # Panics
+    ///
+    /// Panics if the stream-registry mutex is poisoned, which only happens if
+    /// another thread panicked while holding it.
     pub fn has_live_stream(&self) -> bool {
         self.inner
             .lock()

@@ -567,12 +567,18 @@ impl WebSocketListener {
     }
 
     /// Get the number of active connections (always 0 when feature disabled).
+    // Feature-disabled stub: `&self` and non-const are kept so the signature
+    // matches the feature-enabled implementation.
+    #[allow(clippy::unused_self, clippy::missing_const_for_fn)]
     #[must_use]
     pub fn active_connections(&self) -> u64 {
         0
     }
 
     /// Accept a connection (stub - always returns error).
+    // Feature-disabled stub: `async` is kept so the signature matches the
+    // feature-enabled implementation.
+    #[allow(clippy::unused_async)]
     pub async fn accept(&self) -> Result<AcceptedConnection, TransportError> {
         Err(TransportError::Connection {
             message: "WebSocket transport requires the 'websocket' feature".to_string(),
@@ -580,6 +586,9 @@ impl WebSocketListener {
     }
 
     /// Start listening (stub).
+    // Feature-disabled stub: `async` is kept so the signature matches the
+    // feature-enabled implementation.
+    #[allow(clippy::unused_async)]
     pub async fn start(&self) -> Result<(), TransportError> {
         Err(TransportError::Connection {
             message: "WebSocket transport requires the 'websocket' feature".to_string(),
@@ -587,6 +596,9 @@ impl WebSocketListener {
     }
 
     /// Stop the listener.
+    // Feature-disabled stub: `async` is kept so the signature matches the
+    // feature-enabled implementation.
+    #[allow(clippy::unused_async)]
     pub async fn stop(&self) {
         self.running.store(false, Ordering::Release);
     }

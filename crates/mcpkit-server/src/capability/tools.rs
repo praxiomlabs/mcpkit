@@ -127,6 +127,11 @@ impl ToolService {
     }
 
     /// Call a tool by name.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`McpError`] if the tool is not registered, its arguments fail
+    /// validation, or the handler returns an error.
     pub async fn call(
         &self,
         name: &str,
@@ -183,6 +188,7 @@ impl ToolBuilder {
     }
 
     /// Set the tool description.
+    #[must_use]
     pub fn description(mut self, desc: impl Into<String>) -> Self {
         self.description = Some(desc.into());
         self

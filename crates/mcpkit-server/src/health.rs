@@ -64,8 +64,8 @@ impl HealthStatus {
     #[must_use]
     pub const fn http_status_code(&self) -> u16 {
         match self {
-            Self::Healthy => 200,
-            Self::Degraded => 200, // Still operational
+            // Degraded is still operational, so it reports 200 like Healthy.
+            Self::Healthy | Self::Degraded => 200,
             Self::Unhealthy => 503,
         }
     }

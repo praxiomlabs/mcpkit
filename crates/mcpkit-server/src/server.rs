@@ -32,6 +32,11 @@
 //! assert!(!state.is_initialized());
 //! ```
 
+// `clippy::option_if_let_else` (nursery): the flagged sites are an if-let/else-if-let chain over panic payload
+// downcasts and a multi-line dispatch. A two-closure map_or_else does not
+// express a three-way chain.
+#![allow(clippy::option_if_let_else)]
+
 use crate::builder::Server;
 use crate::context::{CancellationToken, Context, ContextData, Peer};
 use crate::dispatch::{PromptSlot, ResourceSlot, TaskSlot, ToolSlot};
@@ -689,6 +694,10 @@ where
     /// panicking handler returns a JSON-RPC internal error instead of tearing
     /// down the connection. Notification hooks run concurrently too, so a hook
     /// that issues its own server-to-client request does not deadlock the loop.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`McpError`] if the transport fails while serving.
     pub async fn run(&self) -> Result<(), McpError> {
         use futures::future::{Either, select};
         use futures::stream::{FuturesUnordered, StreamExt};
@@ -1071,6 +1080,9 @@ where
     /// 1. Client sends its preferred protocol version
     /// 2. Server responds with the same version if supported, or its preferred version
     /// 3. Client must support the returned version or disconnect
+    // `clippy::unused_async`: every handle_* dispatch method is async so the
+    // router can call them uniformly; this one happens not to await today.
+    #[allow(clippy::unused_async)]
     async fn handle_initialize(&self, request: &Request) -> Result<serde_json::Value, McpError> {
         if self.state.is_initialized() {
             return Err(McpError::invalid_request("Already initialized"));
@@ -1141,7 +1153,9 @@ where
         let unowned_task: Option<McpError> = match self.route_runtime_tasks(method, params).await {
             crate::capability::tasks::TaskRoute::Handled(result) => return result,
             crate::capability::tasks::TaskRoute::NotTaskMethod => None,
-            unowned => unowned.or_unknown_task().and_then(Result::err),
+            unowned @ crate::capability::tasks::TaskRoute::UnownedTask { .. } => {
+                unowned.or_unknown_task().and_then(Result::err)
+            }
         };
 
         // Extract progress token from params._meta.progressToken if present
@@ -1358,6 +1372,15 @@ where
     Self: RequestRouter,
 {
     /// Run this server over the given transport.
+    // `clippy::future_not_send` (nursery): the returned future is deliberately
+    // not `Send`. Context is built from borrowed references and handlers may
+    // hold `!Send` types — that is the documented design of this runtime
+    // (see Context's docs). Callers needing `Send` spawn the server themselves.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`McpError`] if the transport fails while serving.
+    #[allow(clippy::future_not_send)]
     pub async fn serve<Tr>(self, transport: Tr) -> Result<(), McpError>
     where
         Tr: Transport + 'static,
@@ -1714,8 +1737,8 @@ mod tests {
                 .expect("some message");
             match msg {
                 Message::Response(r) => return r,
-                Message::Notification(_) => continue,
-                other => panic!("expected response, got {other:?}"),
+                Message::Notification(_) => {}
+                other @ Message::Request(_) => panic!("expected response, got {other:?}"),
             }
         }
         panic!("no response after 16 messages");
@@ -3004,6 +3027,8 @@ mod tests {
     }
 
     #[tokio::test]
+    // Guard held across the assertions below; this is test code.
+    #[allow(clippy::significant_drop_tightening)]
     async fn context_log_emits_message_notification() {
         use crate::context::Peer;
         use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};

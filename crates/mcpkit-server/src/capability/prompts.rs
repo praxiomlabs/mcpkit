@@ -102,6 +102,11 @@ impl PromptService {
     }
 
     /// Render a prompt by name with arguments.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`McpError`] if the prompt is not registered or its arguments
+    /// do not satisfy the declared schema.
     pub async fn render(
         &self,
         name: &str,
@@ -150,12 +155,14 @@ impl PromptBuilder {
     }
 
     /// Set the prompt description.
+    #[must_use]
     pub fn description(mut self, desc: impl Into<String>) -> Self {
         self.description = Some(desc.into());
         self
     }
 
     /// Add a required argument.
+    #[must_use]
     pub fn required_arg(mut self, name: impl Into<String>, description: impl Into<String>) -> Self {
         self.arguments.push(PromptArgument {
             name: name.into(),
@@ -167,6 +174,7 @@ impl PromptBuilder {
     }
 
     /// Add an optional argument.
+    #[must_use]
     pub fn optional_arg(mut self, name: impl Into<String>, description: impl Into<String>) -> Self {
         self.arguments.push(PromptArgument {
             name: name.into(),
@@ -225,18 +233,21 @@ impl PromptResultBuilder {
     }
 
     /// Set the result description.
+    #[must_use]
     pub fn description(mut self, desc: impl Into<String>) -> Self {
         self.description = Some(desc.into());
         self
     }
 
     /// Add a user message with text content.
+    #[must_use]
     pub fn user_text(mut self, text: impl Into<String>) -> Self {
         self.messages.push(PromptMessage::user(text.into()));
         self
     }
 
     /// Add an assistant message with text content.
+    #[must_use]
     pub fn assistant_text(mut self, text: impl Into<String>) -> Self {
         self.messages.push(PromptMessage::assistant(text.into()));
         self

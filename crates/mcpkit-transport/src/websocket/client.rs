@@ -92,6 +92,15 @@ impl WebSocketTransport {
 
     /// Connect to the WebSocket server (stub when feature disabled).
     #[cfg(not(feature = "websocket"))]
+    ///
+    /// # Errors
+    ///
+    /// Always returns [`TransportError::Connection`]: this build does not have
+    /// the feature enabled.
+    // Feature-disabled stub. `async`/`&self`/non-const are kept so the
+    // signature is identical whether the feature is enabled or not — callers
+    // must compile the same way either way.
+    #[allow(clippy::unused_async)]
     pub async fn connect(_config: WebSocketConfig) -> Result<Self, TransportError> {
         Err(TransportError::Connection {
             message: "WebSocket transport requires the 'websocket' feature".to_string(),
@@ -339,6 +348,10 @@ impl WebSocketTransport {
 
     /// Send a message (stub when feature disabled).
     #[cfg(not(feature = "websocket"))]
+    // Feature-disabled stub. `async`/`&self`/non-const are kept so the
+    // signature is identical whether the feature is enabled or not — callers
+    // must compile the same way either way.
+    #[allow(clippy::unused_async)]
     async fn send_message(&self, _msg: &Message) -> Result<(), TransportError> {
         Err(TransportError::Connection {
             message: "WebSocket transport requires the 'websocket' feature".to_string(),
@@ -347,6 +360,9 @@ impl WebSocketTransport {
 
     /// Receive a message (stub when feature disabled).
     #[cfg(not(feature = "websocket"))]
+    // Feature-disabled stub: `async` is kept so the signature matches the
+    // feature-enabled implementation.
+    #[allow(clippy::unused_async)]
     async fn recv_message(&self) -> Result<Option<Message>, TransportError> {
         Err(TransportError::Connection {
             message: "WebSocket transport requires the 'websocket' feature".to_string(),
@@ -374,6 +390,9 @@ impl WebSocketTransport {
 
     /// Close the WebSocket connection (stub when feature disabled).
     #[cfg(not(feature = "websocket"))]
+    // Feature-disabled stub: `async` is kept so the signature matches the
+    // feature-enabled implementation.
+    #[allow(clippy::unused_async)]
     async fn do_close(&self) -> Result<(), TransportError> {
         self.connected.store(false, Ordering::Release);
         self.set_connection_state(ConnectionState::Closed);

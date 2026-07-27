@@ -13,6 +13,11 @@
 //! - **Sampling**: `sampling/createMessage`
 //! - **Completions**: `completion/complete`
 
+// `clippy::option_if_let_else` (nursery): the flagged sites build a `Context` across a multi-line argument list
+// or dispatch a whole request family. Folding either into map_or_else closures
+// hides which branch is the cancellable path.
+#![allow(clippy::option_if_let_else)]
+
 use mcpkit_core::error::McpError;
 use mcpkit_core::protocol::Request;
 use mcpkit_core::types::Object;
@@ -201,6 +206,11 @@ pub struct LogLevelParams {
 }
 
 /// Parse a request into a typed representation.
+///
+/// # Errors
+///
+/// Returns [`McpError`] if the method is unknown or its params fail to
+/// parse into the shape that method requires.
 pub fn parse_request(request: &Request) -> Result<ParsedRequest, McpError> {
     let method = request.method.as_ref();
     let params = request.params.as_ref();
@@ -391,7 +401,7 @@ pub fn parse_request(request: &Request) -> Result<ParsedRequest, McpError> {
                 max_tokens: params
                     .get("maxTokens")
                     .and_then(serde_json::Value::as_u64)
-                    .map(|v| v as u32),
+                    .map(|v| u32::try_from(v).unwrap_or(u32::MAX)),
             }))
         }
 
@@ -618,6 +628,11 @@ pub async fn dispatch_notification_hooks<H: crate::handler::ServerHandler>(
 
 /// Run a tool and return its `CallToolResult` as JSON (the `tasks/result`
 /// payload shape). Shared by the stdio runtime and the HTTP adapters.
+///
+/// # Errors
+///
+/// Returns [`McpError`] if the tool is not registered, its arguments are
+/// invalid, or the handler itself fails.
 pub async fn call_tool_json(
     handler: &dyn DynToolHandler,
     name: &str,

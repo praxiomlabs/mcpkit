@@ -239,7 +239,7 @@ async fn test_cancellation_with_select() -> Result<(), Box<dyn std::error::Error
         tokio::select! {
             () = token_clone.cancelled() => {
                 // Cancelled
-                return false;
+                false
             }
             () = async {
                 // Long running work
@@ -247,7 +247,7 @@ async fn test_cancellation_with_select() -> Result<(), Box<dyn std::error::Error
                 completed_clone.fetch_add(1, Ordering::Relaxed);
             } => {
                 // Completed
-                return true;
+                true
             }
         }
     });

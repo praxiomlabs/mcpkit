@@ -120,6 +120,11 @@ impl ResourceService {
     /// Read a resource by URI.
     ///
     /// This will first try static resources, then templates.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`McpError`] if no handler matches `uri`, or the handler fails
+    /// to read it.
     pub async fn read(&self, uri: &str, ctx: &Context<'_>) -> Result<ResourceContents, McpError> {
         // Try static resources first
         if let Some(registered) = self.resources.get(uri) {
@@ -207,12 +212,14 @@ impl ResourceBuilder {
     }
 
     /// Set the resource description.
+    #[must_use]
     pub fn description(mut self, desc: impl Into<String>) -> Self {
         self.description = Some(desc.into());
         self
     }
 
     /// Set the MIME type.
+    #[must_use]
     pub fn mime_type(mut self, mime: impl Into<String>) -> Self {
         self.mime_type = Some(mime.into());
         self
@@ -255,12 +262,14 @@ impl ResourceTemplateBuilder {
     }
 
     /// Set the template description.
+    #[must_use]
     pub fn description(mut self, desc: impl Into<String>) -> Self {
         self.description = Some(desc.into());
         self
     }
 
     /// Set the MIME type.
+    #[must_use]
     pub fn mime_type(mut self, mime: impl Into<String>) -> Self {
         self.mime_type = Some(mime.into());
         self

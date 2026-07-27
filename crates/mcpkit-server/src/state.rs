@@ -51,6 +51,10 @@ pub mod markers {
 ///
 /// This module was renamed from `state` to `markers` in v0.2.6.
 /// This alias is provided for backwards compatibility with v0.2.5.
+// `clippy::module_inception`: the name is the point — this is the deprecated
+// `state::state` path kept so v0.2.5 callers still compile. Renaming it defeats
+// the alias.
+#[allow(clippy::module_inception)]
 #[doc(hidden)]
 #[deprecated(since = "0.2.6", note = "Use `markers` module instead")]
 pub mod state {
@@ -149,6 +153,14 @@ impl Connection<markers::Disconnected> {
     /// Connect to establish a transport connection.
     ///
     /// This transitions from `Disconnected` to `Connected` state.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`McpError`] if the transport cannot be established.
+    // `clippy::unused_async`: this transition performs no await today, but the
+    // typestate API is public and every transition is async so the lifecycle
+    // reads uniformly. Dropping `async` is a breaking change.
+    #[allow(clippy::unused_async)]
     pub async fn connect(self) -> Result<Connection<markers::Connected>, McpError> {
         // In a real implementation, this would establish the transport
         Ok(Connection {
@@ -162,6 +174,14 @@ impl Connection<markers::Connected> {
     /// Start the initialization handshake.
     ///
     /// This transitions from `Connected` to `Initializing` state.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`McpError`] if the handshake cannot be started.
+    // `clippy::unused_async`: this transition performs no await today, but the
+    // typestate API is public and every transition is async so the lifecycle
+    // reads uniformly. Dropping `async` is a breaking change.
+    #[allow(clippy::unused_async)]
     pub async fn initialize(
         self,
         _protocol_version: ProtocolVersion,
@@ -174,6 +194,14 @@ impl Connection<markers::Connected> {
     }
 
     /// Close the connection before initialization.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`McpError`] if the connection cannot be closed cleanly.
+    // `clippy::unused_async`: this transition performs no await today, but the
+    // typestate API is public and every transition is async so the lifecycle
+    // reads uniformly. Dropping `async` is a breaking change.
+    #[allow(clippy::unused_async)]
     pub async fn close(self) -> Result<(), McpError> {
         // Clean up resources
         Ok(())
@@ -184,6 +212,14 @@ impl Connection<markers::Initializing> {
     /// Complete the initialization handshake.
     ///
     /// This transitions from `Initializing` to `Ready` state.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`McpError`] if the peer's initialize response is rejected.
+    // `clippy::unused_async`: this transition performs no await today, but the
+    // typestate API is public and every transition is async so the lifecycle
+    // reads uniformly. Dropping `async` is a breaking change.
+    #[allow(clippy::unused_async)]
     pub async fn complete(
         self,
         client_capabilities: ClientCapabilities,
@@ -205,6 +241,14 @@ impl Connection<markers::Initializing> {
     }
 
     /// Abort initialization.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`McpError`] if the connection cannot be torn down.
+    // `clippy::unused_async`: this transition performs no await today, but the
+    // typestate API is public and every transition is async so the lifecycle
+    // reads uniformly. Dropping `async` is a breaking change.
+    #[allow(clippy::unused_async)]
     pub async fn abort(self) -> Result<Connection<markers::Disconnected>, McpError> {
         Ok(Connection {
             inner: self.inner,
@@ -274,6 +318,14 @@ impl Connection<markers::Ready> {
     /// Start graceful shutdown.
     ///
     /// This transitions from `Ready` to `Closing` state.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`McpError`] if shutdown cannot be initiated.
+    // `clippy::unused_async`: this transition performs no await today, but the
+    // typestate API is public and every transition is async so the lifecycle
+    // reads uniformly. Dropping `async` is a breaking change.
+    #[allow(clippy::unused_async)]
     pub async fn shutdown(self) -> Result<Connection<markers::Closing>, McpError> {
         Ok(Connection {
             inner: self.inner,
@@ -284,6 +336,14 @@ impl Connection<markers::Ready> {
 
 impl Connection<markers::Closing> {
     /// Complete the shutdown and disconnect.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`McpError`] if the transport cannot be closed.
+    // `clippy::unused_async`: this transition performs no await today, but the
+    // typestate API is public and every transition is async so the lifecycle
+    // reads uniformly. Dropping `async` is a breaking change.
+    #[allow(clippy::unused_async)]
     pub async fn disconnect(self) -> Result<(), McpError> {
         // Clean up resources
         Ok(())

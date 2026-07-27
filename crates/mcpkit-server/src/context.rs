@@ -276,11 +276,10 @@ impl<'a> Context<'a> {
         method: &str,
         params: Option<serde_json::Value>,
     ) -> Result<(), McpError> {
-        let notification = if let Some(p) = params {
-            Notification::with_params(method.to_string(), p)
-        } else {
-            Notification::new(method.to_string())
-        };
+        let notification = params.map_or_else(
+            || Notification::new(method.to_string()),
+            |p| Notification::with_params(method.to_string(), p),
+        );
         self.peer.notify(notification).await
     }
 
