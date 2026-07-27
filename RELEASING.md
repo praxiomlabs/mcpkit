@@ -368,7 +368,7 @@ cargo semver-checks check-release --package mcpkit
 ### Pre-publish Verification
 
 ```bash
-just publish-dry    # Dry-run publish all crates in dependency order
+just publish-dry    # cargo publish --workspace --dry-run (all 11 crates)
 ```
 
 - [ ] Run `just publish-dry` - all crates succeed

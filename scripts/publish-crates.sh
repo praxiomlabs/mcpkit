@@ -5,8 +5,29 @@
 # and by scripts/publish-crates-test.sh the same way, so the tested shell
 # semantics are the released shell semantics by construction.
 #
-# Order matters: each crate must have its dependencies published first
-# (mcpkit-macros has mcpkit-server as a dev-dependency, so server comes first).
+# Order matters: each crate must have its dependencies published first. Derived
+# from the workspace graph, normal dependencies only — a dev-dependency does not
+# gate a publish:
+#
+#   mcpkit-core      (none)
+#   mcpkit-transport  <- core
+#   mcpkit-server     <- core, transport
+#   mcpkit-macros     <- core (dev only)
+#   mcpkit-client     <- core, transport
+#   mcpkit-testing    <- core, transport, server
+#   axum/actix/rocket/warp <- core, transport, server
+#   mcpkit            <- core, transport, server, macros, client   (last)
+#
+# Several orders satisfy that; the one below is one of them. Re-derive with
+# `cargo metadata --no-deps` rather than trusting this comment.
+#
+# The note previously here claimed mcpkit-macros dev-depends on mcpkit-server,
+# so server had to precede it. That stopped being true in 3a351d5 (2025-12-23),
+# seven months before this file was written — it was transcribed stale. It was
+# also the only stated rationale for the ordering, so a later audit read it as
+# a live constraint and wrongly reported the Justfile's different-but-equally-
+# valid order as a defect.
+#
 # A real publish failure aborts the release. The only tolerated error is
 # "already uploaded/exists", so re-running after a partial publish skips the
 # crates already on crates.io instead of masking every failure (the old
