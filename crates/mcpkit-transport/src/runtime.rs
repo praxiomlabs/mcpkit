@@ -275,6 +275,13 @@ pub const DEFAULT_MAX_MESSAGE_SIZE: usize = 16 * 1024 * 1024;
 pub struct BufReader<R> {
     inner: R,
     buffer: BytesMut,
+    /// Bytes of a line seen so far, when it spans more than one read.
+    ///
+    /// This lives here rather than in a local so that dropping a
+    /// `read_line_bytes` future does not take the partial line with it. The
+    /// server run loop cancels reads routinely, and losing a prefix truncates
+    /// the frame and desynchronizes the stream from that point on.
+    partial: BytesMut,
     capacity: usize,
     max_message_size: usize,
 }
@@ -290,6 +297,7 @@ impl<R> BufReader<R> {
         Self {
             inner,
             buffer: BytesMut::with_capacity(capacity),
+            partial: BytesMut::new(),
             capacity,
             max_message_size: DEFAULT_MAX_MESSAGE_SIZE,
         }
@@ -373,15 +381,12 @@ impl<R: AsyncRead + Unpin> BufReader<R> {
     pub async fn read_line_bytes(&mut self) -> io::Result<Bytes> {
         use futures::io::AsyncReadExt;
 
-        // Accumulator for lines that span multiple buffer reads
-        let mut line_buf: Option<BytesMut> = None;
-
         loop {
             // Enforce the maximum message size *during* accumulation so a peer
             // that never sends a newline cannot exhaust memory. Each iteration
             // reads at most `capacity` bytes, so the buffer can overshoot the
             // limit by at most one chunk before this check fires.
-            let accumulated = line_buf.as_ref().map_or(0, BytesMut::len) + self.buffer.len();
+            let accumulated = self.partial.len() + self.buffer.len();
             if accumulated > self.max_message_size {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
@@ -398,26 +403,25 @@ impl<R: AsyncRead + Unpin> BufReader<R> {
                 let line_with_newline = self.buffer.split_to(newline_pos + 1);
 
                 // If we had accumulated data from previous reads, append to it
-                if let Some(mut accumulated) = line_buf.take() {
-                    accumulated.extend_from_slice(&line_with_newline);
-                    return Ok(accumulated.freeze());
+                if self.partial.is_empty() {
+                    // Otherwise return the line directly (zero-copy path)
+                    return Ok(line_with_newline.freeze());
                 }
-
-                // Otherwise return the line directly (zero-copy path)
-                return Ok(line_with_newline.freeze());
+                let mut accumulated = std::mem::take(&mut self.partial);
+                accumulated.extend_from_slice(&line_with_newline);
+                return Ok(accumulated.freeze());
             }
 
-            // No newline found - save current buffer contents and read more
+            // No newline found - move current buffer contents into the partial
+            // accumulator and read more. `partial` is a field, so a cancelled
+            // read leaves it in place and the next call resumes from it.
             if !self.buffer.is_empty() {
                 let current = self.buffer.split();
-                match &mut line_buf {
-                    Some(accumulated) => accumulated.extend_from_slice(&current),
-                    None => line_buf = Some(current),
-                }
+                self.partial.extend_from_slice(&current);
             }
 
-            // IMPORTANT: Clear buffer state BEFORE the await for cancellation safety.
-            // If cancelled during read, next call sees empty buffer and refills cleanly.
+            // Clear buffer state before the await: everything worth keeping is
+            // already in `partial`, so a cancelled read refills cleanly.
             self.buffer.clear();
             self.buffer.reserve(self.capacity);
 
@@ -431,7 +435,7 @@ impl<R: AsyncRead + Unpin> BufReader<R> {
 
             if n == 0 {
                 // EOF - return any accumulated data
-                return Ok(line_buf.map_or_else(Bytes::new, BytesMut::freeze));
+                return Ok(std::mem::take(&mut self.partial).freeze());
             }
 
             self.buffer.extend_from_slice(&temp_buf[..n]);
@@ -489,6 +493,78 @@ mod tests {
         assert_eq!(n4, 0);
         assert_eq!(eof, "");
         Ok(())
+    }
+
+    /// A line spanning several reads must survive a cancelled `read_line_bytes`.
+    ///
+    /// The test above cannot fail for the property it names — it never cancels
+    /// anything, as its own comment concedes. This one does: the accumulated
+    /// prefix used to live in a local, so dropping the future truncated the
+    /// frame and desynchronized the stream.
+    #[cfg(feature = "tokio-runtime")]
+    #[tokio::test]
+    async fn read_line_bytes_keeps_a_partial_line_across_cancellation() {
+        use futures::io::AsyncRead;
+        use std::pin::Pin;
+        use std::sync::{Arc, Mutex};
+        use std::task::{Context, Poll};
+
+        /// Hands out queued chunks, then pends — so a read can be caught parked.
+        #[derive(Clone)]
+        struct ChunkReader(Arc<Mutex<Vec<Vec<u8>>>>);
+
+        impl AsyncRead for ChunkReader {
+            fn poll_read(
+                self: Pin<&mut Self>,
+                _cx: &mut Context<'_>,
+                buf: &mut [u8],
+            ) -> Poll<io::Result<usize>> {
+                let mut queue = self.0.lock().expect("chunk queue poisoned");
+                if queue.is_empty() {
+                    return Poll::Pending;
+                }
+                let chunk = queue.remove(0);
+                let n = chunk.len().min(buf.len());
+                buf[..n].copy_from_slice(&chunk[..n]);
+                if n < chunk.len() {
+                    queue.insert(0, chunk[n..].to_vec());
+                }
+                Poll::Ready(Ok(n))
+            }
+        }
+
+        let queue = Arc::new(Mutex::new(Vec::new()));
+        // A capacity below the first chunk forces the line to span reads.
+        let mut reader = BufReader::with_capacity(8, ChunkReader(Arc::clone(&queue)));
+
+        queue
+            .lock()
+            .expect("chunk queue poisoned")
+            .push(b"AAAAAAAAAAAAAAAA".to_vec());
+
+        // Poll until the read parks mid-accumulation, then drop it.
+        {
+            let read = reader.read_line_bytes();
+            tokio::pin!(read);
+            assert!(
+                tokio::time::timeout(std::time::Duration::from_millis(100), &mut read)
+                    .await
+                    .is_err(),
+                "the read should still be parked; otherwise nothing is cancelled"
+            );
+        }
+
+        queue
+            .lock()
+            .expect("chunk queue poisoned")
+            .push(b"BBBB\n".to_vec());
+
+        let line = reader.read_line_bytes().await.expect("read after cancel");
+        assert_eq!(
+            String::from_utf8_lossy(&line).trim_end(),
+            "AAAAAAAAAAAAAAAABBBB",
+            "the prefix read before the cancellation was lost"
+        );
     }
 
     /// Test `BufReader` handles partial buffer consumption correctly.
