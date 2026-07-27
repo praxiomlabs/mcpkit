@@ -14,11 +14,17 @@
 #   3. Closed enum variants— the 3 $defs carrying an `enum` array
 #   4. Content types       — the 16 $defs carrying a `const` on properties.type
 #
-# Direction rules (see the audit brief):
-#   Rows 1 and 2 are reported IN-SCHEMA-NOT-IN-MCPKIT only. The mcpkit side is a
-#   deliberately wide literal extraction; its complement is ~562 arbitrary Rust
-#   string literals and carries no conformance signal.
-#   Rows 3 and 4 are reported in both directions.
+# All four rows are reported in BOTH directions. Rows 1 and 2 previously
+# compared the schema against a wide literal sweep of crates/*/src and so were
+# reported one way only — and, it turned out, could not fail at all: the sweep
+# is saturated by doc comments and inline tests, so renaming a routing constant
+# left the gate green. They now compare against the declared constant set in
+# mcpkit-core/src/methods.rs, which is precise in both directions.
+#
+# What this still cannot see: whether a method is ROUTED. A constant can exist
+# and be dispatched nowhere, and it can be routed on some of the five dispatch
+# paths (the server runtime plus four HTTP adapters) and not others. Routing and
+# behaviour are the job of the test suite, not of this script.
 #
 # Usage:
 #   scripts/schema-diff.sh              human-readable report
@@ -163,48 +169,63 @@ printf 'schema sha256: %s\n' "$(sha256sum "$SCHEMA" | cut -d' ' -f1)"
 printf 'defs: %s\n' "$(jq '.["$defs"] | length' "$SCHEMA")"
 
 # ===========================================================================
-# Wide mcpkit literal extraction (shared by rows 1 and 2).
+# mcpkit method-constant extraction (shared by rows 1 and 2).
 #
-# Deliberately wide: `initialize` and `ping` contain no slash, so a
-# "<ns>/<method>" filter would silently drop them — including the one the
-# whole negotiation claim rests on. Extract broadly, intersect one way.
+# The declared `pub const NAME: &str = "..."` set in mcpkit-core's methods.rs —
+# the single place the wire names live, and what every crate routes on.
+#
+# This was a WIDE literal sweep of crates/*/src, and that made rows 1 and 2
+# incapable of failing. Every spec method also appears in doc comments, inline
+# #[cfg(test)] blocks and hand-written client call sites — measured: all 31
+# occur in >=4 distinct places, none only in its constant. Renaming TOOLS_LIST
+# to "tools/lst" left the gate green, as did renaming
+# "notifications/initialized". A row that cannot regress is decoration.
+#
+# Against the constant set both rows are precise, so BOTH directions are
+# meaningful and reported: a missing member means mcpkit cannot serve a spec
+# method, an extra one means it declares a name the spec does not define.
 # ===========================================================================
-grep -rhoE '"[a-z][a-zA-Z_/]*"' "$SRC_GLOB"/*/src --include='*.rs' 2>/dev/null |
-	tr -d '"' | sort -u > "$WORK/mcpkit_literals.txt"
+METHODS_RS="crates/mcpkit-core/src/methods.rs"
+[ -f "$METHODS_RS" ] || { echo "error: $METHODS_RS not found" >&2; exit 1; }
+grep -oE 'pub const [A-Z_]+: &str = "[^"]+"' "$METHODS_RS" |
+	grep -oE '"[^"]+"' | tr -d '"' | sort -u > "$WORK/mcpkit_methods.txt"
 
 # ===========================================================================
-# Row 1 — method names
+# Row 1 — method names (both directions)
 # ===========================================================================
 jq -r '.["$defs"] | to_entries[] | select(.value.properties.method.const)
        | .value.properties.method.const' "$SCHEMA" | sort -u > "$WORK/schema_methods.txt"
 
-hr "Row 1: method names (schema-side difference only)"
-printf 'wide literals from %s/*/src : %s\n' "$SRC_GLOB" "$(wc -l < "$WORK/mcpkit_literals.txt")"
-printf 'schema methods                : %s\n' "$(wc -l < "$WORK/schema_methods.txt")"
-printf 'intersect with schema methods : %s / %s\n' \
-	"$(both_in "$WORK/schema_methods.txt" "$WORK/mcpkit_literals.txt" | wc -l)" \
-	"$(wc -l < "$WORK/schema_methods.txt")"
-printf 'in-schema-not-in-mcpkit       :\n'
-only_in "$WORK/schema_methods.txt" "$WORK/mcpkit_literals.txt" | sed 's/^/  /' || true
-only_in "$WORK/schema_methods.txt" "$WORK/mcpkit_literals.txt" | grep -q . || printf '  (none)\n'
-only_in "$WORK/schema_methods.txt" "$WORK/mcpkit_literals.txt" | emit 'method in-schema-not-in-mcpkit'
+hr "Row 1: method names (both directions)"
+printf 'mcpkit method constants : %s (%s)\n' \
+	"$(wc -l < "$WORK/mcpkit_methods.txt")" "$METHODS_RS"
+printf 'schema methods          : %s\n' "$(wc -l < "$WORK/schema_methods.txt")"
+printf 'both                    : %s\n' \
+	"$(both_in "$WORK/schema_methods.txt" "$WORK/mcpkit_methods.txt" | wc -l)"
+printf 'in-schema-not-in-mcpkit :%s\n' \
+	"$(only_in "$WORK/schema_methods.txt" "$WORK/mcpkit_methods.txt" | paste -sd, - | sed 's/^/ /;s/^ $/ (none)/')"
+printf 'in-mcpkit-not-in-schema :%s\n' \
+	"$(only_in "$WORK/mcpkit_methods.txt" "$WORK/schema_methods.txt" | paste -sd, - | sed 's/^/ /;s/^ $/ (none)/')"
+only_in "$WORK/schema_methods.txt" "$WORK/mcpkit_methods.txt" | emit 'method in-schema-not-in-mcpkit'
+only_in "$WORK/mcpkit_methods.txt" "$WORK/schema_methods.txt" | emit 'method in-mcpkit-not-in-schema'
 
 # ===========================================================================
-# Row 2 — notification methods
+# Row 2 — notification methods (both directions)
 # ===========================================================================
 { grep '^notifications/' "$WORK/schema_methods.txt" || true; } | sort -u > "$WORK/schema_notifs.txt"
-grep '^notifications/' "$WORK/mcpkit_literals.txt" | sort -u > "$WORK/mcpkit_notifs.txt" || true
+{ grep '^notifications/' "$WORK/mcpkit_methods.txt" || true; } | sort -u > "$WORK/mcpkit_notifs.txt"
 
-hr "Row 2: notification methods (schema-side difference only)"
-printf 'mcpkit notifications/* literals: %s\n' "$(wc -l < "$WORK/mcpkit_notifs.txt")"
-printf 'schema notification methods    : %s\n' "$(wc -l < "$WORK/schema_notifs.txt")"
-printf 'intersect                      : %s / %s\n' \
-	"$(both_in "$WORK/schema_notifs.txt" "$WORK/mcpkit_notifs.txt" | wc -l)" \
-	"$(wc -l < "$WORK/schema_notifs.txt")"
-printf 'in-schema-not-in-mcpkit        :\n'
-only_in "$WORK/schema_notifs.txt" "$WORK/mcpkit_notifs.txt" | sed 's/^/  /' || true
-only_in "$WORK/schema_notifs.txt" "$WORK/mcpkit_notifs.txt" | grep -q . || printf '  (none)\n'
+hr "Row 2: notification methods (both directions)"
+printf 'mcpkit notification constants: %s\n' "$(wc -l < "$WORK/mcpkit_notifs.txt")"
+printf 'schema notification methods  : %s\n' "$(wc -l < "$WORK/schema_notifs.txt")"
+printf 'both                         : %s\n' \
+	"$(both_in "$WORK/schema_notifs.txt" "$WORK/mcpkit_notifs.txt" | wc -l)"
+printf 'in-schema-not-in-mcpkit      :%s\n' \
+	"$(only_in "$WORK/schema_notifs.txt" "$WORK/mcpkit_notifs.txt" | paste -sd, - | sed 's/^/ /;s/^ $/ (none)/')"
+printf 'in-mcpkit-not-in-schema      :%s\n' \
+	"$(only_in "$WORK/mcpkit_notifs.txt" "$WORK/schema_notifs.txt" | paste -sd, - | sed 's/^/ /;s/^ $/ (none)/')"
 only_in "$WORK/schema_notifs.txt" "$WORK/mcpkit_notifs.txt" | emit 'notification in-schema-not-in-mcpkit'
+only_in "$WORK/mcpkit_notifs.txt" "$WORK/schema_notifs.txt" | emit 'notification in-mcpkit-not-in-schema'
 
 # ===========================================================================
 # Row 3 — closed enum variants (both directions, per enum)

@@ -14,6 +14,18 @@
 # appears below, which is the point — if any of them regresses, a line appears
 # here and the job fails.
 #
+# That last sentence was FALSE for the method rows until the constant-set
+# rewrite. They compared the schema against a wide literal sweep of
+# crates/*/src, which every spec method also hits via doc comments, inline
+# tests and client call sites — so renaming a routing constant left this file
+# unchanged and the job green. Both breaks are now caught, and each row is
+# reported in both directions. Re-verify rather than trust this paragraph:
+# rename a constant in mcpkit-core/src/methods.rs and confirm the job fails.
+#
+# What these rows still do NOT prove is that a method is routed, on any of the
+# five dispatch paths. That is the test suite's job — see
+# mcpkit/tests/protocol_behaviour_conformance.rs.
+#
 # Everything below is a content-type discriminator, and every entry is
 # deliberate:
 #
@@ -34,16 +46,26 @@
 #
 #
 # ---------------------------------------------------------------------------
-# Tier 2 (structural). Every $def with a same-named mcpkit struct is diffed —
-# 75 types. `type` discriminators are filtered (mcpkit supplies them from the
+# Tier 2 (structural). Every $def with a same-named mcpkit struct is diffed,
+# plus those resolved through the alias map in schema-diff.sh — 79 types.
+# `type` discriminators are filtered (mcpkit supplies them from the
 # #[serde(tag = "type")] enum wrapper, never as a struct field), and 4 defs are
 # reported UNRESOLVED rather than diffed because this resolver cannot expand an
 # `anyOf` union (ElicitRequestParams) or an abstract JSON-RPC base
 # (Request/Notification).
 #
-# The 21 missing `_meta` fields recorded here previously are closed: every type
-# the schema declares `_meta` on now carries it. What remains is one modelling
-# difference, and it is benign:
+# The alias map exists because "no same-named Rust type" was being read as "no
+# 1:1 Rust type". Four defs had one under a different name, and two of them
+# — ElicitRequestFormParams and ElicitRequestURLParams — were missing `task`
+# and `_meta` the whole time. That is not cosmetic: the spec REQUIRES
+# `io.modelcontextprotocol/related-task` in `_meta` on an elicitation raised by
+# a task-augmented tool call, so the omission made the MUST unsatisfiable.
+# Anything reported as unmatched should be checked for a differently-named
+# counterpart before being written off as un-diffable.
+#
+# `_meta` coverage is now complete for every type that has one to carry: the 21
+# recorded here previously, plus the two elicitation param types. What remains
+# is one modelling difference, and it is benign:
 #
 #   `ResourceContents blob|text` — the schema splits TextResourceContents and
 #   BlobResourceContents into sibling defs extending ResourceContents; mcpkit
