@@ -29,6 +29,12 @@ env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -Dwarnings
 
+# Least-privilege default. Every job inherits read-only unless it declares more;
+# the two jobs that file issues and the one that cuts a release opt in
+# explicitly below. Previously every job ran on the default token scope.
+permissions:
+  contents: read
+
 jobs:
   # ==========================================================================
   # Benchmark Suite - Run all criterion benchmarks
@@ -227,6 +233,8 @@ jobs:
 
   notify-on-failure:
     name: Notify on Failure
+    permissions:
+      issues: write
     runs-on: ubuntu-latest
     # stability-test included: it is schedule-only, so without it here a
     # stability failure on the weekly run filed no issue and surfaced nowhere.

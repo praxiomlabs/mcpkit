@@ -18,6 +18,12 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
 
+# Least-privilege default. Every job inherits read-only unless it declares more;
+# the two jobs that file issues and the one that cuts a release opt in
+# explicitly below. Previously every job ran on the default token scope.
+permissions:
+  contents: read
+
 jobs:
   proto-drift:
     name: Proto Drift Check
