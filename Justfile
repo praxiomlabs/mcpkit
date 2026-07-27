@@ -1013,12 +1013,12 @@ version-sync:
     fi
     printf '{{green}}[OK]{{reset}}   Version sync passed (v%s)\n' "$MAJOR_MINOR"
 
-[group('ci')]
-[doc("Standard CI pipeline (matches GitHub Actions)")]
 # cross-check runs early and cheaply (~32s cold, ~3s warm) so a Windows-only
 # compile break is caught here instead of 13 minutes into a CI run. It is the
 # only cross-platform coverage available locally — see the recipe for why msvc
 # and apple-darwin cannot work on a Linux box.
+[group('ci')]
+[doc("Standard CI pipeline (matches GitHub Actions)")]
 ci: fmt-check clippy cross-check test-locked doc-check link-check version-sync
     #!/usr/bin/env bash
     printf '\n{{bold}}{{blue}}══════ CI Pipeline Complete ══════{{reset}}\n\n'
