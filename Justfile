@@ -561,6 +561,31 @@ clippy-fix:
     printf '{{green}}[OK]{{reset}}   Clippy fixes applied\n'
 
 [group('security')]
+[doc("Prove the version gate still rejects planted defects")]
+version-sync-test:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    printf '{{cyan}}[INFO]{{reset}} Checking that version-sync.sh can fail...\n'
+    scripts/version-sync-test.sh
+    printf '{{green}}[OK]{{reset}}   Version gate behaved as intended\n'
+
+[group('security')]
+[doc("Diff the wire vocabulary against the vendored MCP schema")]
+schema-diff:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    scripts/schema-diff.sh
+
+[group('security')]
+[doc("Prove the schema gate still rejects planted defects")]
+schema-diff-test:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    printf '{{cyan}}[INFO]{{reset}} Checking that schema-diff.sh can fail...\n'
+    scripts/schema-diff-test.sh
+    printf '{{green}}[OK]{{reset}}   Schema gate rejected every planted defect\n'
+
+[group('security')]
 [doc("Security vulnerability audit via cargo-audit")]
 audit:
     #!/usr/bin/env bash
@@ -1070,27 +1095,19 @@ ci-watch:
     fi
     gh run watch
 
+# Calls the same script CI runs. This recipe used to carry its own weaker copy
+# — README.md and docs/getting-started.md only, with neither the stale-pin
+# sweep nor the RELEASING.md header check — so `just ci` passed on trees where
+# the Version Sync job would have failed. A local gate weaker than the real one
+# is worse than no local gate: it reports "checked" for things it never looked
+# at.
 [group('ci')]
 [doc("Check documentation versions match Cargo.toml")]
 version-sync:
     #!/usr/bin/env bash
     set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Checking version sync...\n'
-    VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "mcpkit") | .version')
-    MAJOR_MINOR=$(echo "$VERSION" | cut -d. -f1,2)
-
-    # Check README.md
-    if ! grep -q "mcpkit = \"$MAJOR_MINOR\"" README.md; then
-        printf '{{red}}[ERR]{{reset}}  README.md version mismatch (expected %s)\n' "$MAJOR_MINOR"
-        exit 1
-    fi
-
-    # Check docs/getting-started.md
-    if ! grep -q "mcpkit = \"$MAJOR_MINOR\"" docs/getting-started.md; then
-        printf '{{red}}[ERR]{{reset}}  docs/getting-started.md version mismatch (expected %s)\n' "$MAJOR_MINOR"
-        exit 1
-    fi
-    printf '{{green}}[OK]{{reset}}   Version sync passed (v%s)\n' "$MAJOR_MINOR"
+    scripts/version-sync.sh
 
 # cross-check runs early and cheaply (~32s cold, ~3s warm) so a Windows-only
 # compile break is caught here instead of 13 minutes into a CI run. It is the
