@@ -17,7 +17,7 @@ vendored spec — see the tables for what is checked and how.
 
 | Requirement | Status | Notes |
 |-------------|--------|-------|
-| Full MCP 2025-11-25 compliance | ✅ Complete | All 31 schema-defined methods. The CI vocabulary diff proves the names exist in the sources, not that each is routed — routing and behaviour are covered by `mcpkit/tests/protocol_behaviour_conformance.rs`. Structural conformance covers every `$def` with a same-named type — 75 of 145, the rest being envelopes, unions and aliases with no 1:1 Rust type — with no outstanding field gaps |
+| Full MCP 2025-11-25 compliance | ✅ Complete | All 31 schema-defined methods. The CI vocabulary diff compares the schema against the declared constants in `mcpkit-core/src/methods.rs`, in both directions — it proves the names match, not that each is routed. Routing is shared: all five dispatch paths reach the same `route_*` helpers. Behaviour is verified in-process by `mcpkit/tests/protocol_behaviour_conformance.rs` and per-adapter by each `tests/peer_e2e.rs` (pre-initialize/session rejection, capability gating, notifications drawing no response, related-task `_meta`). Structural conformance covers every `$def` with a same-named type plus those resolved by the alias map — 79 of 145; the remaining 66 are envelopes, unions and abstract bases with no single Rust counterpart — with no outstanding field gaps |
 | Protocol version negotiation | ✅ Complete | All 4 published versions; table-driven conformance tests |
 | OAuth 2.1 + PKCE support | ✅ Complete | RFC 9728, 8414, 7636 compliant |
 | Tasks (async operations) | ✅ Complete | Full task lifecycle support |

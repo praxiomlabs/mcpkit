@@ -107,6 +107,12 @@ to make after 1.0. Migration for each is below.
   the spec's MUST unsatisfiable through the public API. `tasks/get`,
   `tasks/result`, `tasks/cancel` and `notifications/tasks/status` are
   deliberately excluded, per the spec's SHOULD NOT.
+- Per-adapter behavioural conformance tests. `notifications_never_draw_a_response`
+  (four client-sent notifications plus an unknown one) and
+  `capabilities_are_honoured_exactly_as_advertised` now run on all four HTTP
+  adapters, not just in-process. Each adapter decides both in its own
+  `handle_mcp_post` rather than in the shared `route_*` helpers, so passing on
+  one said nothing about the other three.
 - `scripts/schema-diff.sh` resolves types whose Rust name differs from the
   `$def` name via an alias map, so Tier 2 covers 79 types rather than 75.
   `ElicitRequestFormParams`, `ElicitRequestURLParams`, `EmbeddedResource` and
