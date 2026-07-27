@@ -190,6 +190,8 @@ jobs:
           args: >
             --verbose
             --no-progress
+            --scheme http
+            --scheme https
             --max-retries 6
             --retry-wait-time 3
             --accept 200,204,206
