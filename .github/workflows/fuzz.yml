@@ -58,13 +58,14 @@ jobs:
         with:
           workspaces: fuzz -> target
 
-      # Prebuilt binary rather than `cargo install cargo-fuzz`, which compiled
-      # the tool from source at an unpinned version. rust-cache made it a no-op
-      # on a warm cache, so the cost only bit on cold or evicted caches — but
-      # the version was never pinned either way.
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-fuzz
+      # Built from source deliberately. taiki-e/install-action ships a prebuilt
+      # cargo-fuzz linked against static libc, and libFuzzer's sanitizer cannot
+      # run against a statically linked libc — the fuzz build then dies with
+      # "sanitizer is incompatible with statically linked libc" and
+      # "can't find crate for `core`". Verified: swapping to install-action took
+      # these jobs from 6m33s green to 23s red.
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz
 
       - name: Skip if specific target requested
         if: ${{ github.event.inputs.target != '' && github.event.inputs.target != matrix.target }}
@@ -128,13 +129,14 @@ jobs:
         with:
           workspaces: fuzz -> target
 
-      # Prebuilt binary rather than `cargo install cargo-fuzz`, which compiled
-      # the tool from source at an unpinned version. rust-cache made it a no-op
-      # on a warm cache, so the cost only bit on cold or evicted caches — but
-      # the version was never pinned either way.
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-fuzz
+      # Built from source deliberately. taiki-e/install-action ships a prebuilt
+      # cargo-fuzz linked against static libc, and libFuzzer's sanitizer cannot
+      # run against a statically linked libc — the fuzz build then dies with
+      # "sanitizer is incompatible with statically linked libc" and
+      # "can't find crate for `core`". Verified: swapping to install-action took
+      # these jobs from 6m33s green to 23s red.
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz
 
       # These were previously a single step running a loop that only echoed
       # "Restoring corpus for $target" — no cache was ever restored. Since
