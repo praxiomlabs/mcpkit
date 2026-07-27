@@ -85,25 +85,57 @@ Later ambient sources reuse it without touching `run()` again.
 - Server tests must tolerate notifications interleaving with responses; the
   `next_response` helper now skips them.
 
-## Where this leads: normalizing the run loop
+## Where this led: normalizing the run loop
 
-This ADR deliberately stops short of the end state. `ServerRuntime::run` is still
-a hand-rolled `select` over heterogeneous concrete future types, and the pump is
-bolted to the side of it rather than being one source among equals.
+*Resolved 2026-07-27. This section originally proposed a follow-up refactor;
+what follows is what actually happened, kept because the reasoning matters more
+than the conclusion.*
 
-The shape the loop wants is a single unified event enum — inbound message,
-outbound notification, background completion, timer — over boxed streams via
-`select_all`, replacing `drive_sets` entirely. That would pay down the loop debt
-rather than routing around it.
+The original text said the loop wanted "a single unified event enum ... over
+boxed streams via `select_all`, replacing `drive_sets` entirely", deferred
+because it rewrites the most delicate concurrency code in the crate.
 
-It was not done here because it rewrites the most delicate, most-commented
-concurrency code in the crate, and it deserves its own change with its own
-review rather than arriving as a side effect of adding one notification.
+**That design does not work.** `SelectAll` is homogeneous and its `push` adds
+*streams*, not futures into a member stream; the loop must push new futures
+into `in_flight` and `background` between iterations, and `iter_mut` hands back
+`&mut St` with no way to recover the `FuturesUnordered`.
 
-The seam above is a strict subset of that design: the pump is the first
-normalized source, so this decision does not pre-empt the refactor. When the loop
-is normalized, `publish_notification` becomes one producer among several and its
-callers do not change.
+**The refactor is also no longer needed.** It was wanted for two things:
+
+1. *Fairness.* `futures::future::select` polls its left argument first and
+   returns the moment it is ready, so a source pinned to the right runs only
+   when everything left of it is pending. The pump was added as the rightmost
+   arm, which made it the lowest-priority source in the loop: a notification
+   published before the loop even started was delivered behind 200 queued
+   responses. `progress` sat right of `recv` and starved the same way, so
+   during an inbound burst no request completed until the burst drained.
+
+   Both are fixed by rotating which source gets first refusal, and regression
+   tested in both directions. The loop is fair by construction.
+
+2. *Cheap new sources.* Already delivered by this ADR's own pump, and the claim
+   above ("the loop grows one drain, not one arm per feature") was right. Every
+   ambient source this ADR anticipated — resource-subscription updates,
+   tool-list changes, background progress, log forwarding — reaches the client
+   through `NotificationSink` -> `publish_notification` -> the existing drain.
+   None adds a select arm. The three sources the loop races (inbound transport,
+   in-flight progress, ambient drain) are structural, not feature-driven, so
+   there is no growth pressure on the arm count.
+
+What the deferral did cost was the *fairness* half of "one source among
+equals" — the pump was one source among equals structurally, but last in poll
+order behaviourally, and nothing tested it. That gap survived until the loop
+was probed directly.
+
+An attempt to collapse the three rotation arms into an array of
+`Pin<&mut dyn Future>` was abandoned: type erasure drops `Send`, so `run()`
+stops being spawnable, and `+ Send` is not provable generically because
+`RequestRouter` does not declare `Send` futures. Putting `+ Send` on a public
+trait's return types is out of proportion to tidying three match arms.
+
+If this is reopened, the trigger should be a real fourth *structural* source,
+and the design should start from a generic `Arm<A, B, C>` future — which
+preserves `Send` — not from the `select_all` sketch above.
 
 ## Alternatives considered
 
@@ -113,8 +145,9 @@ runtime-driven transitions — a tool calling `handle.mark_input_required()` wou
 emit nothing — and the next ambient source pays the same cost again. Rejected as
 booking the debt rather than paying it.
 
-**Normalize the whole loop now.** The correct end state, deferred for the reasons
-above.
+**Normalize the whole loop now.** Deferred at the time, and later closed as
+superseded — see "Where this led" above. It was not the correct end state: the
+shape proposed for it could not be built.
 
 **A channel in core.** Would have put an async dependency in a crate that has
 none, and `futures` had just been removed from `mcpkit-core` as unused. The
