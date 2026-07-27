@@ -147,13 +147,24 @@ struct NamedPipeState {
 #[cfg(all(windows, feature = "tokio-runtime"))]
 pub struct NamedPipeTransport {
     config: NamedPipeConfig,
-    pipe: AsyncMutex<Option<tokio::net::windows::named_pipe::NamedPipeClient>>,
-    server_pipe: AsyncMutex<Option<tokio::net::windows::named_pipe::NamedPipeServer>>,
+    /// Read half of the pipe.
+    ///
+    /// A named pipe is one bidirectional handle, so it cannot be split the way
+    /// a socket can; `tokio::io::split` supplies halves that take the shared
+    /// lock only for the duration of a single poll, never across a pending
+    /// read. That is the property that matters here: `recv` used to hold the
+    /// pipe mutex across the await that waits for the peer, and `send` needed
+    /// the same mutex, so a transport that answers requests deadlocked.
+    ///
+    /// Boxing erases client from server, which also removed the duplicated
+    /// client/server branch from every I/O site.
+    reader: AsyncMutex<Option<Box<dyn tokio::io::AsyncRead + Send + Unpin>>>,
+    /// Write half of the pipe. See `reader`.
+    writer: AsyncMutex<Option<Box<dyn tokio::io::AsyncWrite + Send + Unpin>>>,
     state: AsyncMutex<NamedPipeState>,
     connected: AtomicBool,
     messages_sent: AtomicU64,
     messages_received: AtomicU64,
-    is_server_side: bool,
 }
 
 #[cfg(all(windows, feature = "tokio-runtime"))]
@@ -163,10 +174,11 @@ impl NamedPipeTransport {
         config: NamedPipeConfig,
         pipe: tokio::net::windows::named_pipe::NamedPipeClient,
     ) -> Self {
+        let (read_half, write_half) = tokio::io::split(pipe);
         Self {
             config,
-            pipe: AsyncMutex::new(Some(pipe)),
-            server_pipe: AsyncMutex::new(None),
+            reader: AsyncMutex::new(Some(Box::new(read_half))),
+            writer: AsyncMutex::new(Some(Box::new(write_half))),
             state: AsyncMutex::new(NamedPipeState {
                 line_buffer: String::with_capacity(4096),
                 read_buffer: Vec::with_capacity(8192),
@@ -174,7 +186,6 @@ impl NamedPipeTransport {
             connected: AtomicBool::new(true),
             messages_sent: AtomicU64::new(0),
             messages_received: AtomicU64::new(0),
-            is_server_side: false,
         }
     }
 
@@ -183,10 +194,11 @@ impl NamedPipeTransport {
         config: NamedPipeConfig,
         pipe: tokio::net::windows::named_pipe::NamedPipeServer,
     ) -> Self {
+        let (read_half, write_half) = tokio::io::split(pipe);
         Self {
             config,
-            pipe: AsyncMutex::new(None),
-            server_pipe: AsyncMutex::new(Some(pipe)),
+            reader: AsyncMutex::new(Some(Box::new(read_half))),
+            writer: AsyncMutex::new(Some(Box::new(write_half))),
             state: AsyncMutex::new(NamedPipeState {
                 line_buffer: String::with_capacity(4096),
                 read_buffer: Vec::with_capacity(8192),
@@ -194,7 +206,6 @@ impl NamedPipeTransport {
             connected: AtomicBool::new(true),
             messages_sent: AtomicU64::new(0),
             messages_received: AtomicU64::new(0),
-            is_server_side: true,
         }
     }
 
@@ -260,39 +271,22 @@ impl NamedPipeTransport {
 
         data.push(b'\n');
 
-        // Write to the appropriate pipe
-        if self.is_server_side {
-            let mut guard = self.server_pipe.lock().await;
-            if let Some(pipe) = guard.as_mut() {
-                pipe.write_all(&data)
-                    .await
-                    .map_err(|e| TransportError::Io {
-                        message: format!("Failed to write to named pipe: {e}"),
-                    })?;
-                pipe.flush().await.map_err(|e| TransportError::Io {
-                    message: format!("Failed to flush named pipe: {e}"),
-                })?;
-            } else {
+        // Write half only, so a concurrent read cannot block this.
+        {
+            let mut guard = self.writer.lock().await;
+            let Some(pipe) = guard.as_mut() else {
                 return Err(TransportError::Connection {
                     message: "Named pipe not available".to_string(),
                 });
-            }
-        } else {
-            let mut guard = self.pipe.lock().await;
-            if let Some(pipe) = guard.as_mut() {
-                pipe.write_all(&data)
-                    .await
-                    .map_err(|e| TransportError::Io {
-                        message: format!("Failed to write to named pipe: {e}"),
-                    })?;
-                pipe.flush().await.map_err(|e| TransportError::Io {
-                    message: format!("Failed to flush named pipe: {e}"),
+            };
+            pipe.write_all(&data)
+                .await
+                .map_err(|e| TransportError::Io {
+                    message: format!("Failed to write to named pipe: {e}"),
                 })?;
-            } else {
-                return Err(TransportError::Connection {
-                    message: "Named pipe not available".to_string(),
-                });
-            }
+            pipe.flush().await.map_err(|e| TransportError::Io {
+                message: format!("Failed to flush named pipe: {e}"),
+            })?;
         }
 
         self.messages_sent.fetch_add(1, Ordering::Relaxed);
@@ -330,43 +324,23 @@ impl NamedPipeTransport {
         // Need to read more data
         let mut temp_buf = [0u8; 4096];
 
-        let bytes_read = if self.is_server_side {
-            let mut guard = self.server_pipe.lock().await;
-            if let Some(pipe) = guard.as_mut() {
-                match pipe.read(&mut temp_buf).await {
-                    Ok(0) => {
-                        self.connected.store(false, Ordering::Release);
-                        return Ok(None);
-                    }
-                    Ok(n) => n,
-                    Err(e) => {
-                        self.connected.store(false, Ordering::Release);
-                        return Err(TransportError::Io {
-                            message: format!("Failed to read from named pipe: {e}"),
-                        });
-                    }
-                }
-            } else {
+        let bytes_read = {
+            let mut guard = self.reader.lock().await;
+            let Some(pipe) = guard.as_mut() else {
                 return Ok(None);
-            }
-        } else {
-            let mut guard = self.pipe.lock().await;
-            if let Some(pipe) = guard.as_mut() {
-                match pipe.read(&mut temp_buf).await {
-                    Ok(0) => {
-                        self.connected.store(false, Ordering::Release);
-                        return Ok(None);
-                    }
-                    Ok(n) => n,
-                    Err(e) => {
-                        self.connected.store(false, Ordering::Release);
-                        return Err(TransportError::Io {
-                            message: format!("Failed to read from named pipe: {e}"),
-                        });
-                    }
+            };
+            match pipe.read(&mut temp_buf).await {
+                Ok(0) => {
+                    self.connected.store(false, Ordering::Release);
+                    return Ok(None);
                 }
-            } else {
-                return Ok(None);
+                Ok(n) => n,
+                Err(e) => {
+                    self.connected.store(false, Ordering::Release);
+                    return Err(TransportError::Io {
+                        message: format!("Failed to read from named pipe: {e}"),
+                    });
+                }
             }
         };
 
@@ -440,13 +414,8 @@ impl Transport for NamedPipeTransport {
         self.connected.store(false, Ordering::Release);
 
         // Drop the pipe handles
-        if self.is_server_side {
-            let mut guard = self.server_pipe.lock().await;
-            *guard = None;
-        } else {
-            let mut guard = self.pipe.lock().await;
-            *guard = None;
-        }
+        *self.reader.lock().await = None;
+        *self.writer.lock().await = None;
 
         Ok(())
     }
