@@ -157,12 +157,37 @@ jobs:
 
           # No doc may pin any OTHER mcpkit version — this catches partially
           # bumped files, which the per-file presence check alone would pass.
-          # Allowlisted: files where old versions are intentional (migration
-          # rollback targets, stability policy examples, point-in-time ADRs).
-          STALE=$(grep -rnE "mcpkit(-[a-z]+)? = \"[0-9]" README.md docs/ \
-              --exclude=migration-to-1.0.md \
-              --exclude=api-stability.md \
-              --exclude-dir=adr \
+          #
+          # Exemptions are per line, not per file. This used to pass
+          # --exclude=migration-to-1.0.md --exclude=api-stability.md
+          # --exclude-dir=adr, because each holds legitimately-old versions
+          # (migration paths, post-1.0 contract examples, point-in-time ADRs).
+          # But a whole-file exclusion means one justified pin exempts every
+          # other line in that file forever — so a genuinely stale install
+          # snippet added to any of them would never be caught.
+          #
+          # A pin is exempt only where explicitly marked:
+          #   <!-- version-sync:ok — reason -->    on the line before a fenced
+          #                                        block, exempting that block
+          #   mcpkit = "1"  <!-- version-sync:ok -->   inline, one line
+          # HTML comments render invisibly, so this costs readers nothing and
+          # keeps the justification at the point of use.
+          STALE=$(find README.md docs -name '*.md' -print0 \
+            | xargs -0 awk '
+                /<!-- *version-sync:ok/ {
+                  if ($0 ~ /mcpkit[a-z-]* *= *"/) { next }
+                  pending = 1; next
+                }
+                /^[ \t]*```/ {
+                  if (in_block) { in_block = 0; exempt = 0 }
+                  else { in_block = 1; exempt = pending; pending = 0 }
+                  next
+                }
+                /mcpkit(-[a-z]+)? *= *"[0-9]/ {
+                  if (in_block && exempt) next
+                  print FILENAME ":" FNR ":" $0
+                }
+              ' \
             | grep -vE "mcpkit(-[a-z]+)? = \"$MAJOR_MINOR\"" || true)
           if [ -n "$STALE" ]; then
             echo "ERROR: stale mcpkit version references (expected $MAJOR_MINOR):"

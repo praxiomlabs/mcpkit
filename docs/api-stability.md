@@ -257,6 +257,7 @@ Security fixes take precedence over API stability. We follow responsible disclos
 
 These updates are safe and won't break your code:
 
+<!-- version-sync:ok — illustrates the post-1.0 semver contract, not a current install snippet -->
 ```toml
 # Any 1.x.y version is compatible with 1.0.0
 mcpkit = "1"
@@ -269,6 +270,7 @@ mcpkit = "1.0"
 
 If we release 2.0.0 with breaking changes:
 
+<!-- version-sync:ok — illustrates the post-1.0 semver contract, not a current install snippet -->
 ```toml
 # This pins to 1.x and won't get 2.0 changes
 mcpkit = "1"
