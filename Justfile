@@ -1257,19 +1257,25 @@ release-check: ci-release wip-check panic-audit version-sync typos machete metad
 [doc("Publish all crates to crates.io (dry run)")]
 publish-dry:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Publishing (dry run)...\n'
-    # Publish in dependency order
-    {{cargo}} publish --dry-run -p mcpkit-core
-    {{cargo}} publish --dry-run -p mcpkit-macros
-    {{cargo}} publish --dry-run -p mcpkit-transport
-    {{cargo}} publish --dry-run -p mcpkit-server
-    {{cargo}} publish --dry-run -p mcpkit-client
-    {{cargo}} publish --dry-run -p mcpkit-testing
-    {{cargo}} publish --dry-run -p mcpkit-axum
-    {{cargo}} publish --dry-run -p mcpkit-actix
-    {{cargo}} publish --dry-run -p mcpkit-rocket
-    {{cargo}} publish --dry-run -p mcpkit-warp
-    {{cargo}} publish --dry-run -p mcpkit
+    # One workspace-wide dry run, NOT a loop of per-crate ones.
+    #
+    # The per-crate loop this replaced could not pass before a release: every
+    # crate after mcpkit-core failed with "failed to select a version for the
+    # requirement mcpkit-core = ^X.Y.Z", because a dry run resolves internal
+    # dependencies from the registry and the new version is not published yet.
+    # 10 of 11 crates always failed, so the cardinal rule in RELEASING.md that
+    # says to run this before every publish was unfollowable.
+    #
+    # `--workspace` resolves sibling members locally and orders them itself.
+    # Verified on cargo 1.97.1 both before 0.7.0 was published and after, so it
+    # works whether or not the version already exists on crates.io.
+    #
+    # This does NOT replace scripts/publish-crates.sh for the real publish —
+    # native cargo has no skip-published/resume, which is the property the
+    # v0.6.0 incident hardened. See docs/adr/0005-v0.6.0-release-incident.md.
+    {{cargo}} publish --workspace --dry-run
     printf '{{green}}[OK]{{reset}}   Dry run complete\n'
 
 [group('release')]
