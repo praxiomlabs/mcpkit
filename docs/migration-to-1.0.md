@@ -4,7 +4,11 @@ This guide helps you migrate from mcpkit 0.x to the stable 1.0 release.
 
 ## TL;DR
 
-**If you're on 0.6.x**: No migration required. The 1.0 API is identical to 0.6.x.
+**If you're on 0.7.x**: No migration required for 1.0 as currently planned.
+
+**If you're on 0.6.x**: Migrate to 0.7.x first — that transition carried breaking
+changes. See [Pre-1.0 Breaking Changes Summary](#pre-10-breaking-changes-summary)
+below.
 
 **If you're on 0.4.x or earlier**: Follow the version-specific guides below.
 
@@ -189,6 +193,8 @@ Key changes:
 | 0.6.x → 0.7.x | Real MCP extension identifiers | Update `io.mcp*` comparisons |
 | 0.6.x → 0.7.x | MCP Apps MIME type is `text/html;profile=mcp-app` | Update comparisons |
 | 0.6.x → 0.7.x | Method-name constants moved to `mcpkit-core` | Paths unchanged (re-exported) |
+| 0.6.x → 0.7.x | `ElicitRequest`/`UrlElicitRequest` gained `task` and `meta` | Add `task: None, meta: None` to struct literals |
+| 0.6.x → 0.7.x | 16 further wire types are `#[non_exhaustive]` | Use the type's constructor instead of a struct literal |
 | 0.2.x → 0.3.x | MCP protocol default: 2025-06-18 → 2025-11-25 | No action needed |
 | 0.2.x → 0.3.x | Tasks API added | Optional: use `with_tasks()` |
 | 0.2.x → 0.3.x | Elicitation API added | Optional: use `with_elicitation()` |

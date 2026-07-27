@@ -112,6 +112,7 @@ structured to vendor a second revision alongside the current one.
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| 0.7.0 | 2026-07-27 | Spec conformance against the vendored 2025-11-25 schema, gated in CI; task-related `_meta`; per-adapter behavioural tests (#186, #187) |
 | 0.6.0 | 2026-06-18 | Concurrency & panic isolation, JWT/OAuth & transport hardening, macro fixes (#5–#24) |
 | 0.5.0 | 2025-12-25 | gRPC transport, Rocket/Warp integrations, deployment configs |
 | 0.4.0 | 2025-12-24 | `#[mcp_client]` macro, protocol extensions, debug tooling |
