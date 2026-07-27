@@ -106,3 +106,69 @@ async fn dropping_a_parked_recv_leaves_the_transport_usable() {
     client.abort();
     let _ = std::fs::remove_file(&path);
 }
+
+/// A frame split across a cancelled read must arrive whole.
+///
+/// The reader used to be tokio's, whose `read_line` moves the caller's `String`
+/// into the future, so dropping a parked `recv` discarded everything read so
+/// far. The next read then saw only the tail: a truncated frame, a parse error,
+/// and a stream desynchronized from that point on.
+#[tokio::test]
+async fn a_frame_split_across_a_cancelled_read_arrives_whole() {
+    use tokio::io::AsyncWriteExt;
+
+    let path = sock_path("partial");
+    let _ = std::fs::remove_file(&path);
+    let listener = UnixListener::bind(&path).await.expect("bind");
+
+    let client_path = path.clone();
+    let client = tokio::spawn(async move {
+        let mut stream = tokio::net::UnixStream::connect(&client_path)
+            .await
+            .expect("connect");
+        // First half of a frame, deliberately without its newline.
+        stream
+            .write_all(br#"{"jsonrpc":"2.0","id":1,"me"#)
+            .await
+            .expect("write head");
+        stream.flush().await.expect("flush head");
+
+        // Long enough for the server to poll, park, and drop its receive.
+        tokio::time::sleep(Duration::from_millis(400)).await;
+
+        stream
+            .write_all(b"thod\":\"ping\"}\n")
+            .await
+            .expect("write tail");
+        stream.flush().await.expect("flush tail");
+        tokio::time::sleep(Duration::from_secs(5)).await;
+    });
+
+    let server = listener.accept().await.expect("accept");
+
+    // Poll until the read parks mid-frame, then drop it.
+    {
+        let recv = server.recv();
+        tokio::pin!(recv);
+        assert!(
+            tokio::time::timeout(Duration::from_millis(200), &mut recv)
+                .await
+                .is_err(),
+            "the receive should still be parked mid-frame"
+        );
+    }
+
+    let msg = tokio::time::timeout(Duration::from_secs(5), server.recv())
+        .await
+        .expect("recv did not return")
+        .expect("recv errored — the frame was truncated by the cancellation")
+        .expect("stream closed");
+
+    match msg {
+        Message::Request(request) => assert_eq!(&*request.method, "ping"),
+        other => panic!("expected the reassembled request, got {other:?}"),
+    }
+
+    client.abort();
+    let _ = std::fs::remove_file(&path);
+}
