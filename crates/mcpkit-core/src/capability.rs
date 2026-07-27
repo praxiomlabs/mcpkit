@@ -183,13 +183,13 @@ impl ServerCapabilities {
     /// use mcpkit_core::extension::{Extension, ExtensionRegistry};
     ///
     /// let registry = ExtensionRegistry::new()
-    ///     .register(Extension::new("io.mcp.apps").with_version("0.1.0"));
+    ///     .register(Extension::new("com.example.myext").with_version("0.1.0"));
     ///
     /// let caps = ServerCapabilities::new()
     ///     .with_tools()
     ///     .with_extensions(registry);
     ///
-    /// assert!(caps.has_extension("io.mcp.apps"));
+    /// assert!(caps.has_extension("com.example.myext"));
     /// ```
     #[must_use]
     pub fn with_extensions(mut self, registry: ExtensionRegistry) -> Self {

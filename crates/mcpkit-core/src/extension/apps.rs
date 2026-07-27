@@ -152,6 +152,21 @@ impl UiResource {
 ///
 /// This metadata is included in the `_meta` field of tool definitions
 /// to link tools to UI resources.
+/// Tool `_meta` for MCP Apps.
+///
+/// **Known staleness (verified 2026-07-27 against ext-apps
+/// `specification/2026-01-26/apps.mdx`):** this emits the *flat* key shape, which
+/// that revision deprecates —
+///
+/// > The flat `_meta["ui/resourceUri"]` format is deprecated. Use
+/// > `_meta.ui.resourceUri` instead. The deprecated format will be removed
+/// > before GA.
+///
+/// and `ui/displayHints` does not appear in that revision at all. Neither is a
+/// conformance break against the 2025-11-25 target: MCP Apps is an optional
+/// extension and that revision postdates it. Tracked with the next-revision work
+/// in `ROADMAP.md`; moving to the nested shape is a wire change and wants its own
+/// decision.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolUiMeta {

@@ -301,10 +301,10 @@ mod tests {
     #[test]
     fn test_extension_registry() {
         let registry = ExtensionRegistry::new()
-            .register(Extension::new("io.mcp.apps").with_version("0.1.0"))
+            .register(Extension::new("com.example.myext").with_version("0.1.0"))
             .register(Extension::new("com.example.ext").with_version("2.0.0"));
 
-        assert!(registry.has("io.mcp.apps"));
+        assert!(registry.has("com.example.myext"));
         assert!(registry.has("com.example.ext"));
         assert!(!registry.has("unknown"));
         assert_eq!(registry.len(), 2);
@@ -312,15 +312,15 @@ mod tests {
 
     #[test]
     fn test_experimental_roundtrip() {
-        let registry =
-            ExtensionRegistry::new().register(Extension::new("io.mcp.apps").with_version("0.1.0"));
+        let registry = ExtensionRegistry::new()
+            .register(Extension::new("com.example.myext").with_version("0.1.0"));
 
         let json = registry.to_experimental();
         let parsed = ExtensionRegistry::from_experimental(&json).unwrap();
 
-        assert!(parsed.has("io.mcp.apps"));
+        assert!(parsed.has("com.example.myext"));
         assert_eq!(
-            parsed.get("io.mcp.apps").unwrap().version,
+            parsed.get("com.example.myext").unwrap().version,
             Some("0.1.0".to_string())
         );
     }

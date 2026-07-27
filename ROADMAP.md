@@ -89,6 +89,14 @@ Two things to watch:
   21 methods against 2025-11-25's 31, adding `server/discover`,
   `subscriptions/listen` and `notifications/subscriptions/acknowledged`.
 
+The MCP Apps extension (SEP-1865) has moved too. Verified 2026-07-27 against
+ext-apps `specification/2026-01-26/apps.mdx`: the flat `_meta["ui/resourceUri"]`
+shape mcpkit emits is deprecated there in favour of nested `_meta.ui.resourceUri`
+and "will be removed before GA", and `ui/displayHints` does not appear in that
+revision at all. Neither is a conformance break against 2025-11-25 — MCP Apps is
+optional and that revision postdates our target — but both are wire changes that
+should land with the revision work rather than piecemeal.
+
 Decision needed: track the next revision early behind a feature, as rmcp is
 doing, or wait for publication. `spec/` and the `schema-check` CI job are already
 structured to vendor a second revision alongside the current one.
