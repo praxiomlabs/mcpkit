@@ -28,7 +28,12 @@
 project_name := "mcpkit"
 # Version is read dynamically from Cargo.toml to avoid drift
 version := `cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "mcpkit") | .version'`
-msrv := "1.85"
+# Read from Cargo.toml for the same reason `version` above is: a hardcoded copy
+# drifts. It had — this said 1.85 after the floor moved to 1.88, so
+# `just msrv-check` ran against a toolchain the workspace no longer supports and
+# failed at resolve time. Plain grep rather than cargo metadata: this evaluates
+# on every `just` invocation, and cargo metadata is too slow for that.
+msrv := `grep -m1 '^rust-version' Cargo.toml | cut -d'"' -f2`
 edition := "2024"
 docker_image := project_name
 docker_tag := version
@@ -114,6 +119,7 @@ setup-quick: install-tools-minimal setup-hooks
 [doc("Install git pre-commit and pre-push hooks")]
 setup-hooks:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Installing git hooks...\n'
 
     # Ensure .git/hooks directory exists
@@ -148,6 +154,7 @@ setup-hooks:
 [doc("Remove git hooks")]
 remove-hooks:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Removing git hooks...\n'
     rm -f .git/hooks/pre-commit .git/hooks/pre-push
     printf '{{green}}[OK]{{reset}}   Git hooks removed\n'
@@ -160,6 +167,7 @@ remove-hooks:
 [doc("Build workspace in debug mode")]
 build:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '\n{{bold}}{{blue}}══════ Building (debug) ══════{{reset}}\n\n'
     {{cargo}} build --workspace --all-features -j {{jobs}}
     printf '{{green}}[OK]{{reset}}   Build complete\n'
@@ -168,6 +176,7 @@ build:
 [doc("Build workspace in release mode with optimizations")]
 release:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '\n{{bold}}{{blue}}══════ Building (release) ══════{{reset}}\n\n'
     {{cargo}} build --workspace --all-features --release -j {{jobs}}
     printf '{{green}}[OK]{{reset}}   Release build complete\n'
@@ -176,6 +185,7 @@ release:
 [doc("Fast type check without code generation")]
 check:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Type checking...\n'
     {{cargo}} check --workspace --all-features -j {{jobs}}
     printf '{{green}}[OK]{{reset}}   Type check passed\n'
@@ -184,6 +194,7 @@ check:
 [doc("Analyze build times")]
 build-timing:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Building with timing analysis...\n'
     {{cargo}} build --workspace --all-features --timings
     printf '{{green}}[OK]{{reset}}   Build timing report generated (see target/cargo-timings/)\n'
@@ -192,6 +203,7 @@ build-timing:
 [doc("Regenerate gRPC protobuf code (requires protoc or protobuf-src)")]
 generate-proto:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Regenerating protobuf code...\n'
     printf '{{cyan}}[INFO]{{reset}} Building with regenerate-proto feature...\n'
     {{cargo}} build -p mcpkit-transport --features regenerate-proto
@@ -260,6 +272,7 @@ generate-proto:
 [doc("Clean all build artifacts")]
 clean:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Cleaning build artifacts...\n'
     {{cargo}} clean
     rm -rf coverage/ lcov.info *.profraw *.profdata
@@ -323,6 +336,7 @@ cross-check:
 [doc("Run all tests")]
 test:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '\n{{bold}}{{blue}}══════ Running Tests ══════{{reset}}\n\n'
     {{cargo}} test --workspace --all-features -j {{jobs}}
     printf '{{green}}[OK]{{reset}}   All tests passed\n'
@@ -340,6 +354,7 @@ test-locked:
 [doc("Run tests with output visible")]
 test-verbose:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '\n{{bold}}{{blue}}══════ Running Tests (verbose) ══════{{reset}}\n\n'
     {{cargo}} test --workspace --all-features -j {{jobs}} -- --nocapture
     printf '{{green}}[OK]{{reset}}   All tests passed\n'
@@ -348,6 +363,7 @@ test-verbose:
 [doc("Test specific crate")]
 test-crate crate:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Testing crate: {{crate}}\n'
     {{cargo}} test -p {{crate}} --all-features -- --nocapture
     printf '{{green}}[OK]{{reset}}   Crate tests passed\n'
@@ -356,6 +372,7 @@ test-crate crate:
 [doc("Run documentation tests only")]
 test-doc:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Running doc tests...\n'
     {{cargo}} test --workspace --all-features --doc
     printf '{{green}}[OK]{{reset}}   Doc tests passed\n'
@@ -364,6 +381,7 @@ test-doc:
 [doc("Run ignored/slow tests")]
 test-ignored:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Running ignored tests...\n'
     {{cargo}} test --workspace --all-features -- --ignored
     printf '{{green}}[OK]{{reset}}   Ignored tests complete\n'
@@ -398,6 +416,7 @@ nextest-locked:
 [doc("Run tests under Miri for undefined behavior detection")]
 miri:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '\n{{bold}}{{blue}}══════ Running Miri ══════{{reset}}\n\n'
     {{cargo}} +nightly miri test --workspace
     printf '{{green}}[OK]{{reset}}   Miri passed (no UB detected)\n'
@@ -406,6 +425,7 @@ miri:
 [doc("Run tests with extra UB detection via cargo-careful")]
 test-careful:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '\n{{bold}}{{blue}}══════ Running Tests (careful) ══════{{reset}}\n\n'
     {{cargo}} +nightly careful test --workspace --all-features
     printf '{{green}}[OK]{{reset}}   Careful tests passed (no UB detected)\n'
@@ -414,6 +434,7 @@ test-careful:
 [doc("Run tests with various feature combinations")]
 test-features:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '\n{{bold}}{{blue}}══════ Testing Feature Matrix ══════{{reset}}\n\n'
     printf '{{cyan}}[INFO]{{reset}} Testing with no features...\n'
     {{cargo}} test --workspace --no-default-features -j {{jobs}}
@@ -427,6 +448,7 @@ test-features:
 [doc("Comprehensive feature matrix testing (per RELEASING.md)")]
 test-feature-matrix:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '\n{{bold}}{{blue}}══════ Comprehensive Feature Matrix ══════{{reset}}\n\n'
 
     # Verify no-default-features compiles for core crates
@@ -466,6 +488,7 @@ test-feature-matrix:
 [doc("Verify runtime exclusivity (tokio vs smol)")]
 test-runtime:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Testing runtime exclusivity...\n'
 
     # Test tokio runtime compiles
@@ -490,6 +513,7 @@ test-runtime:
 [doc("Format all code")]
 fmt:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Formatting code...\n'
     {{cargo}} fmt --all
     printf '{{green}}[OK]{{reset}}   Formatting complete\n'
@@ -516,6 +540,7 @@ clippy:
 [doc("Run clippy with strict deny on warnings")]
 clippy-strict:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Running clippy (strict)...\n'
     {{cargo}} clippy --workspace --all-targets --all-features -- \
         -D warnings \
@@ -530,6 +555,7 @@ clippy-strict:
 [doc("Auto-fix clippy warnings")]
 clippy-fix:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Auto-fixing clippy warnings...\n'
     {{cargo}} clippy --workspace --all-targets --all-features --fix --allow-dirty --allow-staged
     printf '{{green}}[OK]{{reset}}   Clippy fixes applied\n'
@@ -538,6 +564,7 @@ clippy-fix:
 [doc("Security vulnerability audit via cargo-audit")]
 audit:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Running security audit...\n'
     {{cargo}} audit
     printf '{{green}}[OK]{{reset}}   Security audit passed\n'
@@ -546,6 +573,7 @@ audit:
 [doc("Run cargo-deny checks (licenses, bans, advisories) - matches CI")]
 deny:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Running cargo-deny (matches CI)...\n'
     # Must match CI exactly: cargo-deny-action@v2 with command: check all
     {{cargo}} deny --all-features check all
@@ -555,6 +583,7 @@ deny:
 [doc("Find unused dependencies via cargo-udeps (requires nightly)")]
 udeps:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Finding unused dependencies...\n'
     {{cargo}} +nightly udeps --workspace --all-features
     printf '{{green}}[OK]{{reset}}   Unused deps check complete\n'
@@ -563,6 +592,7 @@ udeps:
 [doc("Find unused dependencies via cargo-machete (fast, heuristic)")]
 machete:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Finding unused dependencies (fast)...\n'
     {{cargo}} machete
     printf '{{green}}[OK]{{reset}}   Machete check complete\n'
@@ -571,6 +601,7 @@ machete:
 [doc("Verify MSRV compliance")]
 msrv-check:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Checking MSRV {{msrv}}...\n'
     {{cargo}} +{{msrv}} check --workspace --all-features
     printf '{{green}}[OK]{{reset}}   MSRV {{msrv}} check passed\n'
@@ -579,6 +610,7 @@ msrv-check:
 [doc("Test with minimal dependency versions")]
 minimal-versions:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Testing minimal versions...\n'
     {{cargo}} +nightly -Z minimal-versions check --workspace --all-features
     printf '{{green}}[OK]{{reset}}   Minimal versions check passed\n'
@@ -587,6 +619,7 @@ minimal-versions:
 [doc("Check for semver violations (for library crates)")]
 semver:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Checking semver compliance...\n'
     {{cargo}} semver-checks check-release
     printf '{{green}}[OK]{{reset}}   Semver check passed\n'
@@ -609,6 +642,7 @@ lint-full: fmt-check clippy-strict audit deny machete
 [doc("Generate documentation")]
 doc:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Generating documentation...\n'
     {{cargo}} doc --workspace --all-features --no-deps
     printf '{{green}}[OK]{{reset}}   Documentation generated\n'
@@ -617,6 +651,7 @@ doc:
 [doc("Generate and open documentation")]
 doc-open:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Generating documentation...\n'
     {{cargo}} doc --workspace --all-features --no-deps --open
     printf '{{green}}[OK]{{reset}}   Documentation opened\n'
@@ -625,6 +660,7 @@ doc-open:
 [doc("Generate docs including private items")]
 doc-private:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Generating documentation (with private items)...\n'
     {{cargo}} doc --workspace --all-features --no-deps --document-private-items --open
     printf '{{green}}[OK]{{reset}}   Documentation opened\n'
@@ -665,6 +701,7 @@ link-check:
 [doc("Generate HTML coverage report and open in browser")]
 coverage:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '\n{{bold}}{{blue}}══════ Generating Coverage Report ══════{{reset}}\n\n'
     {{cargo}} llvm-cov --workspace --all-features --html --open
     printf '{{green}}[OK]{{reset}}   Coverage report opened\n'
@@ -673,6 +710,7 @@ coverage:
 [doc("Generate LCOV coverage for CI integration")]
 coverage-lcov output="lcov.info":
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Generating LCOV coverage...\n'
     {{cargo}} llvm-cov --workspace --all-features --lcov --output-path {{output}}
     printf '{{green}}[OK]{{reset}}   Coverage saved to {{output}}\n'
@@ -681,6 +719,7 @@ coverage-lcov output="lcov.info":
 [doc("Generate coverage with nextest (faster)")]
 coverage-nextest:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '\n{{bold}}{{blue}}══════ Generating Coverage (nextest) ══════{{reset}}\n\n'
     {{cargo}} llvm-cov nextest --workspace --all-features --html --open
     printf '{{green}}[OK]{{reset}}   Coverage report opened\n'
@@ -689,6 +728,7 @@ coverage-nextest:
 [doc("Show coverage summary in terminal")]
 coverage-summary:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Coverage summary:\n'
     {{cargo}} llvm-cov --workspace --all-features --text
 
@@ -696,6 +736,7 @@ coverage-summary:
 [doc("Generate Codecov-compatible coverage")]
 coverage-codecov output="codecov.json":
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Generating Codecov coverage...\n'
     {{cargo}} llvm-cov --workspace --all-features --codecov --output-path {{output}}
     printf '{{green}}[OK]{{reset}}   Coverage saved to {{output}}\n'
@@ -708,6 +749,7 @@ coverage-codecov output="codecov.json":
 [doc("Run default fuzz target")]
 fuzz target=fuzz_target time=fuzz_time:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '\n{{bold}}{{blue}}══════ Fuzzing: {{target}} ══════{{reset}}\n\n'
     cd {{fuzz_dir}} && {{cargo}} +nightly fuzz run {{target}} -- -max_total_time={{time}}
     printf '{{green}}[OK]{{reset}}   Fuzzing complete\n'
@@ -716,6 +758,7 @@ fuzz target=fuzz_target time=fuzz_time:
 [doc("List available fuzz targets")]
 fuzz-list:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Available fuzz targets:\n'
     cd {{fuzz_dir}} && {{cargo}} +nightly fuzz list
 
@@ -748,6 +791,7 @@ fuzz-progress-token time=fuzz_time:
 [doc("Run all fuzz targets briefly (smoke test)")]
 fuzz-all time="30":
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '\n{{bold}}{{blue}}══════ Fuzzing All Targets ══════{{reset}}\n\n'
     for target in fuzz_jsonrpc_message fuzz_jsonrpc_request fuzz_jsonrpc_response \
                   fuzz_jsonrpc_structured fuzz_progress_token; do
@@ -760,6 +804,7 @@ fuzz-all time="30":
 [doc("Run mutation testing via cargo-mutants")]
 mutants package="mcpkit-core":
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '\n{{bold}}{{blue}}══════ Running Mutation Tests ══════{{reset}}\n\n'
     {{cargo}} mutants --package {{package}} --jobs {{jobs}} --timeout 300
     printf '{{green}}[OK]{{reset}}   Mutation testing complete\n'
@@ -772,6 +817,7 @@ mutants package="mcpkit-core":
 [doc("Build all examples")]
 examples:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Building all examples...\n'
     # Examples are workspace packages, not --examples targets
     {{cargo}} build -p minimal-server -p full-server -p http-server-example \
@@ -785,6 +831,7 @@ examples:
 [doc("Run minimal server example")]
 example-minimal:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Running minimal-server example...\n'
     RUST_LOG={{rust_log}} {{cargo}} run -p minimal-server
 
@@ -792,6 +839,7 @@ example-minimal:
 [doc("Run full server example")]
 example-full:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Running full-server example...\n'
     RUST_LOG={{rust_log}} {{cargo}} run -p full-server
 
@@ -799,6 +847,7 @@ example-full:
 [doc("Run HTTP server example")]
 example-http:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Running http-server example...\n'
     RUST_LOG={{rust_log}} {{cargo}} run -p http-server
 
@@ -806,6 +855,7 @@ example-http:
 [doc("Run WebSocket server example")]
 example-websocket:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Running websocket-server example...\n'
     RUST_LOG={{rust_log}} {{cargo}} run -p websocket-server
 
@@ -813,6 +863,7 @@ example-websocket:
 [doc("Run client example")]
 example-client:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Running client-example...\n'
     RUST_LOG={{rust_log}} {{cargo}} run -p client-example
 
@@ -820,6 +871,7 @@ example-client:
 [doc("Run middleware example")]
 example-middleware:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Running with-middleware example...\n'
     RUST_LOG={{rust_log}} {{cargo}} run -p with-middleware
 
@@ -827,6 +879,7 @@ example-middleware:
 [doc("Run database server example")]
 example-database:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Running database-server example...\n'
     RUST_LOG={{rust_log}} {{cargo}} run -p database-server
 
@@ -834,6 +887,7 @@ example-database:
 [doc("Run filesystem server example")]
 example-filesystem sandbox="/tmp/mcpkit-sandbox":
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Running filesystem-server example...\n'
     mkdir -p {{sandbox}}
     RUST_LOG={{rust_log}} {{cargo}} run -p filesystem-server -- {{sandbox}}
@@ -846,6 +900,7 @@ example-filesystem sandbox="/tmp/mcpkit-sandbox":
 [doc("Run benchmarks")]
 bench:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '\n{{bold}}{{blue}}══════ Running Benchmarks ══════{{reset}}\n\n'
     {{cargo}} bench --workspace
     printf '{{green}}[OK]{{reset}}   Benchmarks complete\n'
@@ -854,16 +909,28 @@ bench:
 [doc("Run benchmarks and save baseline")]
 bench-save name="baseline":
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Running benchmarks (saving baseline: {{name}})...\n'
-    {{cargo}} bench --workspace -- --save-baseline {{name}}
+    # --package mcpkit-benches --benches, not --workspace: `cargo bench
+    # --workspace` sweeps in lib/test targets built on the standard libtest
+    # harness, which rejects criterion's options with
+    # "Unrecognized option: 'save-baseline'". The stress-test workflow already
+    # scopes this way and records the same reason.
+    {{cargo}} bench --package mcpkit-benches --benches -- --save-baseline {{name}}
     printf '{{green}}[OK]{{reset}}   Baseline saved: {{name}}\n'
 
 [group('bench')]
 [doc("Run benchmarks and compare to baseline")]
 bench-compare name="baseline":
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Comparing to baseline: {{name}}...\n'
-    {{cargo}} bench --workspace -- --baseline {{name}}
+    # --package mcpkit-benches --benches, not --workspace: `cargo bench
+    # --workspace` sweeps in lib/test targets built on the standard libtest
+    # harness, which rejects criterion's options with
+    # "Unrecognized option: 'save-baseline'". The stress-test workflow already
+    # scopes this way and records the same reason.
+    {{cargo}} bench --package mcpkit-benches --benches -- --baseline {{name}}
     printf '{{green}}[OK]{{reset}}   Comparison complete\n'
 
 # ============================================================================
@@ -874,6 +941,7 @@ bench-compare name="baseline":
 [doc("Build Docker image")]
 docker-build:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Building Docker image {{docker_image}}:{{docker_tag}}...\n'
     {{docker}} build -t {{docker_image}}:{{docker_tag}} -t {{docker_image}}:latest .
     printf '{{green}}[OK]{{reset}}   Docker image built\n'
@@ -882,6 +950,7 @@ docker-build:
 [doc("Run tests in Docker container")]
 docker-test:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Running tests in Docker...\n'
     {{docker}} run --rm -v "$(pwd):/workspace" -w /workspace {{docker_image}}:{{docker_tag}} \
         cargo test --workspace --all-features --locked
@@ -891,6 +960,7 @@ docker-test:
 [doc("Run CI pipeline in Docker")]
 docker-ci:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Running CI in Docker...\n'
     {{docker}} run --rm -v "$(pwd):/workspace" -w /workspace {{docker_image}}:{{docker_tag}} \
         bash -c "cargo fmt --check && cargo clippy --workspace --all-targets --all-features -- -D warnings && cargo test --workspace --all-features --locked"
@@ -900,6 +970,7 @@ docker-ci:
 [doc("Interactive shell in Docker container")]
 docker-shell:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Opening Docker shell...\n'
     {{docker}} run --rm -it -v "$(pwd):/workspace" -w /workspace {{docker_image}}:{{docker_tag}} /bin/bash
 
@@ -917,6 +988,7 @@ dev: build test lint
 [doc("Watch mode: re-run tests on file changes")]
 watch:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Watching for changes (tests)...\n'
     {{cargo}} watch -x "test --workspace --all-features"
 
@@ -925,6 +997,7 @@ watch:
 [doc("Watch mode: re-run check on file changes")]
 watch-check:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Watching for changes (check)...\n'
     {{cargo}} watch -x "check --workspace --all-features"
 
@@ -933,6 +1006,7 @@ watch-check:
 [doc("Watch mode: re-run clippy on file changes")]
 watch-clippy:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Watching for changes (clippy)...\n'
     {{cargo}} watch -x "clippy --workspace --all-targets --all-features"
 
@@ -944,6 +1018,7 @@ watch-clippy:
 [doc("Check CI status for current branch (requires gh CLI)")]
 ci-status:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Checking CI status...\n'
     if ! command -v gh &> /dev/null; then
         printf '{{red}}[ERR]{{reset}}  GitHub CLI (gh) not installed\n'
@@ -987,6 +1062,7 @@ ci-status:
 [doc("Watch CI run in real-time (requires gh CLI)")]
 ci-watch:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Watching CI...\n'
     if ! command -v gh &> /dev/null; then
         printf '{{red}}[ERR]{{reset}}  GitHub CLI (gh) not installed\n'
@@ -998,6 +1074,7 @@ ci-watch:
 [doc("Check documentation versions match Cargo.toml")]
 version-sync:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Checking version sync...\n'
     VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "mcpkit") | .version')
     MAJOR_MINOR=$(echo "$VERSION" | cut -d. -f1,2)
@@ -1023,6 +1100,7 @@ version-sync:
 [doc("Standard CI pipeline (matches GitHub Actions)")]
 ci: fmt-check clippy cross-check nextest-locked doc-check link-check version-sync
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '\n{{bold}}{{blue}}══════ CI Pipeline Complete ══════{{reset}}\n\n'
     printf '{{green}}[OK]{{reset}}   All CI checks passed\n'
 
@@ -1059,6 +1137,7 @@ pre-push: ci
 [doc("Check for outdated dependencies")]
 outdated:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Checking for outdated dependencies...\n'
     {{cargo}} outdated -R
 
@@ -1066,6 +1145,7 @@ outdated:
 [doc("Update Cargo.lock to latest compatible versions")]
 update:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Updating dependencies...\n'
     {{cargo}} update
     printf '{{green}}[OK]{{reset}}   Dependencies updated\n'
@@ -1074,6 +1154,7 @@ update:
 [doc("Update specific dependency")]
 update-dep package:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Updating {{package}}...\n'
     {{cargo}} update -p {{package}}
     printf '{{green}}[OK]{{reset}}   {{package}} updated\n'
@@ -1082,6 +1163,7 @@ update-dep package:
 [doc("Show dependency tree")]
 tree:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Dependency tree:\n'
     {{cargo}} tree --workspace
 
@@ -1089,6 +1171,7 @@ tree:
 [doc("Show duplicate dependencies")]
 tree-duplicates:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Duplicate dependencies:\n'
     {{cargo}} tree --workspace --duplicates
 
@@ -1096,6 +1179,7 @@ tree-duplicates:
 [doc("Show dependencies with specific features")]
 tree-features package:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Features for {{package}}:\n'
     {{cargo}} tree -p {{package}} -f "{p} {f}"
 
@@ -1103,6 +1187,7 @@ tree-features package:
 [doc("Generate dependency graph visualization (requires graphviz)")]
 dep-graph output="deps.svg":
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Generating dependency graph...\n'
     if ! command -v dot &> /dev/null; then
         printf '{{red}}[ERR]{{reset}}  graphviz not installed (required for dot command)\n'
@@ -1122,6 +1207,7 @@ dep-graph output="deps.svg":
 [doc("Check for direct URL dependencies (not allowed on crates.io)")]
 check-deps:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Checking for prohibited dependencies...\n'
     # Check for git dependencies
     if grep -r 'git = "' Cargo.toml crates/*/Cargo.toml 2>/dev/null | grep -v '#'; then
@@ -1145,6 +1231,7 @@ check-deps:
 [doc("Check for WIP markers (TODO, FIXME, XXX, HACK, todo!, unimplemented!)")]
 wip-check:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Checking for WIP markers...\n'
 
     # Search for comment markers
@@ -1172,6 +1259,7 @@ wip-check:
 [doc("Audit panic paths (.unwrap(), .expect()) in production code")]
 panic-audit:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Auditing panic paths in production code...\n'
 
     # Find .unwrap() in src/ directories (production code)
@@ -1199,6 +1287,7 @@ panic-audit:
 [doc("Verify Cargo.toml metadata for crates.io publishing")]
 metadata-check:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Checking Cargo.toml metadata...\n'
 
     METADATA=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "mcpkit")')
@@ -1238,6 +1327,7 @@ metadata-check:
 [doc("Run typos spell checker")]
 typos:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Running typos spell checker...\n'
     if ! command -v typos &> /dev/null; then
         printf '{{yellow}}[WARN]{{reset}} typos not installed (cargo install typos-cli)\n'
@@ -1250,6 +1340,7 @@ typos:
 [doc("Prepare for release (full validation)")]
 release-check: ci-release wip-check panic-audit version-sync typos machete metadata-check
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '\n{{bold}}{{blue}}══════ Release Validation ══════{{reset}}\n\n'
     printf '{{cyan}}[INFO]{{reset}} Checking for uncommitted changes...\n'
     if ! git diff-index --quiet HEAD --; then
@@ -1292,6 +1383,7 @@ publish-dry:
 [doc("Publish all crates to crates.io in dependency order")]
 publish:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '\n{{bold}}{{blue}}══════ Publishing to crates.io ══════{{reset}}\n\n'
     printf '{{yellow}}[WARN]{{reset}} This action is IRREVERSIBLE!\n'
 
@@ -1332,6 +1424,7 @@ publish:
 [doc("Create git tag for release (verifies CI status first)")]
 tag:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Preparing to create tag v{{version}}...\n'
 
     # Check for uncommitted changes
@@ -1398,6 +1491,7 @@ tag:
 [doc("Yank a version from crates.io (for security incidents)")]
 yank version:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '\n{{bold}}{{red}}══════ Yanking Version {{version}} ══════{{reset}}\n\n'
     printf '{{yellow}}[WARN]{{reset}} Yanking prevents new projects from depending on this version.\n'
     printf '{{yellow}}[WARN]{{reset}} Existing Cargo.lock files will continue to work.\n\n'
@@ -1421,6 +1515,7 @@ yank version:
 [doc("Unyank a version from crates.io (restore availability)")]
 unyank version:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Unyanking version {{version}}...\n'
 
     CRATES="mcpkit-core mcpkit-macros mcpkit-transport mcpkit-server mcpkit-client mcpkit-testing mcpkit-axum mcpkit-actix mcpkit-rocket mcpkit-warp mcpkit"
@@ -1440,6 +1535,7 @@ unyank version:
 [doc("Count lines of code")]
 loc:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Lines of code:\n'
     tokei . --exclude target --exclude node_modules 2>/dev/null || \
         find crates -name '*.rs' | xargs wc -l | tail -1
@@ -1448,6 +1544,7 @@ loc:
 [doc("Analyze binary size bloat")]
 bloat crate="mcpkit":
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Binary size analysis for {{crate}}...\n'
     {{cargo}} bloat --release -p {{crate}} --crates
 
@@ -1455,6 +1552,7 @@ bloat crate="mcpkit":
 [doc("Check for unsafe code usage")]
 geiger:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Scanning for unsafe code...\n'
     for crate in crates/*/; do
         name=$(basename "$crate")
@@ -1467,6 +1565,7 @@ geiger:
 [doc("Show expanded macros")]
 expand crate:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '{{cyan}}[INFO]{{reset}} Expanding macros in {{crate}}...\n'
     {{cargo}} expand -p {{crate}}
 
@@ -1474,6 +1573,7 @@ expand crate:
 [doc("Generate and display project statistics")]
 stats: loc
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '\n{{bold}}{{blue}}══════ Project Statistics ══════{{reset}}\n\n'
     printf '{{cyan}}Crates:{{reset}}\n'
     find crates -maxdepth 1 -type d | tail -n +2 | while read dir; do
@@ -1498,6 +1598,7 @@ stats: loc
 [doc("Show version and environment info")]
 info:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '\n{{bold}}{{project_name}} v{{version}}{{reset}}\n'
     printf '═══════════════════════════════════════\n'
     printf '{{cyan}}MSRV:{{reset}}      {{msrv}}\n'
@@ -1513,6 +1614,7 @@ info:
 [doc("Check which development tools are installed")]
 check-tools:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '\n{{bold}}Development Tool Status{{reset}}\n'
     printf '═══════════════════════════════════════\n'
 
@@ -1552,6 +1654,7 @@ check-tools:
 [doc("Install all recommended development tools")]
 install-tools:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '\n{{bold}}Installing Development Tools{{reset}}\n'
     printf '═══════════════════════════════════════\n'
 
@@ -1574,6 +1677,7 @@ install-tools:
 [doc("Install minimal tools for CI/release checks")]
 install-tools-minimal:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '\n{{bold}}Installing Minimal Development Tools{{reset}}\n'
     printf '═══════════════════════════════════════\n'
     {{cargo}} install cargo-audit cargo-deny cargo-semver-checks
@@ -1583,6 +1687,7 @@ install-tools-minimal:
 [doc("Show all available recipes grouped by category")]
 help:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '\n{{bold}}{{project_name}} v{{version}}{{reset}} — MCP SDK Development Command Runner\n'
     printf 'MSRV: {{msrv}} | Edition: {{edition}} | Platform: {{platform}}\n\n'
     printf '{{bold}}Usage:{{reset}} just [recipe] [arguments...]\n\n'
