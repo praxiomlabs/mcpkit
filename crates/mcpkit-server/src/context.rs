@@ -52,6 +52,7 @@ use mcpkit_core::types::logging::{LoggingLevel, LoggingMessageNotificationParams
 use mcpkit_core::types::notifications::ProgressNotificationParams;
 use mcpkit_core::types::roots::{ListRootsResult, Root};
 use mcpkit_core::types::sampling::{CreateMessageRequest, CreateMessageResult};
+use mcpkit_core::types::task::TaskId;
 use std::borrow::Cow;
 use std::future::Future;
 use std::pin::Pin;
@@ -120,6 +121,13 @@ pub struct Context<'a> {
     peer: &'a dyn Peer,
     /// Cancellation token for this request.
     cancel: CancellationToken,
+    /// The task this request is executing as part of, if any.
+    ///
+    /// Set by [`run_augmented_tool`](crate::router::run_augmented_tool) for a
+    /// task-augmented tool call. When present, every outbound request this
+    /// context makes carries `io.modelcontextprotocol/related-task` in its
+    /// `_meta`, which the spec requires of task-related messages.
+    related_task: Option<TaskId>,
 }
 
 /// Sentinel [`RequestId`] for notification-scoped contexts (see
@@ -147,6 +155,7 @@ impl<'a> Context<'a> {
             protocol_version,
             peer,
             cancel: CancellationToken::new(),
+            related_task: None,
         }
     }
 
@@ -169,6 +178,7 @@ impl<'a> Context<'a> {
             protocol_version,
             peer,
             cancel,
+            related_task: None,
         }
     }
 
@@ -195,6 +205,42 @@ impl<'a> Context<'a> {
             protocol_version,
             peer,
             cancel: CancellationToken::new(),
+            related_task: None,
+        }
+    }
+
+    /// Associate this context with a task.
+    ///
+    /// Every outbound request made through it then carries
+    /// `_meta["io.modelcontextprotocol/related-task"]` with `task_id`, which
+    /// the spec requires of messages related to a task:
+    ///
+    /// > All requests, notifications, and responses related to a task **MUST**
+    /// > include the `io.modelcontextprotocol/related-task` key in their
+    /// > `_meta` field […] an elicitation that a task-augmented tool call
+    /// > depends on **MUST** share the same related task ID with that tool
+    /// > call's task.
+    ///
+    /// Applied automatically by the task-augmented tool path; call this only
+    /// when driving a task yourself.
+    #[must_use]
+    pub fn with_related_task(mut self, task_id: TaskId) -> Self {
+        self.related_task = Some(task_id);
+        self
+    }
+
+    /// The task this request is part of, if any.
+    #[must_use]
+    pub const fn related_task(&self) -> Option<&TaskId> {
+        self.related_task.as_ref()
+    }
+
+    /// Stamp the related-task `_meta` onto outbound request params, if this
+    /// context belongs to a task.
+    fn tag_related_task(&self, params: serde_json::Value) -> serde_json::Value {
+        match self.related_task.as_ref() {
+            Some(id) => mcpkit_core::tasks::inject_related_task(params, id),
+            None => params,
         }
     }
 
@@ -357,7 +403,7 @@ impl<'a> Context<'a> {
             ));
         }
 
-        let params = serde_json::to_value(&request).map_err(McpError::from)?;
+        let params = self.tag_related_task(serde_json::to_value(&request).map_err(McpError::from)?);
         let result = self.request("elicitation/create", Some(params)).await?;
         serde_json::from_value(result).map_err(McpError::from)
     }
@@ -415,7 +461,7 @@ impl<'a> Context<'a> {
             ));
         }
 
-        let params = serde_json::to_value(&request).map_err(McpError::from)?;
+        let params = self.tag_related_task(serde_json::to_value(&request).map_err(McpError::from)?);
         let result = self.request("elicitation/create", Some(params)).await?;
         serde_json::from_value(result).map_err(McpError::from)
     }
@@ -440,7 +486,7 @@ impl<'a> Context<'a> {
             ));
         }
 
-        let params = serde_json::to_value(&request).map_err(McpError::from)?;
+        let params = self.tag_related_task(serde_json::to_value(&request).map_err(McpError::from)?);
         let result = self.request("sampling/createMessage", Some(params)).await?;
         serde_json::from_value(result).map_err(McpError::from)
     }

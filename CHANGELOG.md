@@ -52,6 +52,29 @@ to make after 1.0. Migration for each is below.
    `mcpkit_core::methods`.** Paths are unchanged; only code expecting them to be
    *defined* in `mcpkit-server` needs adjusting.
 
+7. **`ElicitRequest` and `UrlElicitRequest` gain `task` and `meta` fields.**
+   The schema declares both on `ElicitRequestFormParams` and
+   `ElicitRequestURLParams`; mcpkit modelled neither, so a server could not
+   emit the `io.modelcontextprotocol/related-task` `_meta` the spec **requires**
+   of an elicitation raised by a task-augmented tool call. Serialized output is
+   unchanged when unset.
+   *Migration:* struct-literal construction must add `task: None, meta: None`;
+   `ElicitRequest::new`/`text`/`confirm`/`choice` and `UrlElicitRequest::new`
+   are unaffected.
+
+8. **16 further wire types are `#[non_exhaustive]`** — the `_meta`-bearing
+   types with no struct-literal construction anywhere in the workspace
+   (`AudioContent`, `ImageContent`, `ResourceContent`, `ResourceLinkContent`,
+   `ToolResultContent`, `ToolUseContent`, `CancelledNotificationParams`,
+   `ElicitRequest`, `ElicitResult`, `UrlElicitRequest`, `ListPromptsResult`,
+   `ListResourcesResult`, `ListResourceTemplatesResult`, `ReadResourceResult`,
+   `Root`, `SamplingMessage`). A later schema revision can add a field to any
+   of them without a major release. The 17 types users routinely build by hand
+   — `Tool`, `Prompt`, `Resource`, `GetPromptResult` and the other results —
+   are deliberately left constructible.
+   *Migration:* replace struct-literal construction with the type's
+   constructor, or `..Default::default()` where one exists.
+
 ### Added
 
 - Spec method and notification names in `mcpkit_core::methods`, so every crate
@@ -74,6 +97,22 @@ to make after 1.0. Migration for each is below.
   `RuntimeConfig::default_task_poll_interval_ms`, so a server can suggest a
   polling rate. Defaults to absent, which is legal.
 - `_meta` on `InitializeRequest` and 21 further types.
+- **The related-task `_meta` the spec requires on task-related messages.**
+  `Context::with_related_task` marks a context as belonging to a task, and
+  every outbound request it makes — `elicitation/create`,
+  `sampling/createMessage` — then carries
+  `io.modelcontextprotocol/related-task`. Applied automatically by
+  `run_augmented_tool`, so all five dispatch paths inherit it. Previously
+  `inject_related_task` was applied to `tasks/result` payloads only, leaving
+  the spec's MUST unsatisfiable through the public API. `tasks/get`,
+  `tasks/result`, `tasks/cancel` and `notifications/tasks/status` are
+  deliberately excluded, per the spec's SHOULD NOT.
+- `scripts/schema-diff.sh` resolves types whose Rust name differs from the
+  `$def` name via an alias map, so Tier 2 covers 79 types rather than 75.
+  `ElicitRequestFormParams`, `ElicitRequestURLParams`, `EmbeddedResource` and
+  `ResourceLink` were previously reported as having "no 1:1 Rust type" when
+  they simply had a different one — which is how the elicitation `_meta` gap
+  stayed invisible.
 
 ### Fixed
 

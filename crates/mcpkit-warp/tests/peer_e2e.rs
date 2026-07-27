@@ -449,6 +449,15 @@ async fn task_augmented_tool_elicits_over_the_stream() {
     // PR 6: the peer survives into the spawned task).
     let request = next_stream_request(&mut stream).await;
     assert_eq!(request["method"], "elicitation/create");
+    // Spec MUST (2025-11-25 tasks, "Associating Task-Related Messages"): an
+    // elicitation a task-augmented tool call depends on carries that call's
+    // task id. Key spelled out on purpose — asserting against the constant
+    // that produces it would pass even if the constant were wrong.
+    assert_eq!(
+        request["params"]["_meta"]["io.modelcontextprotocol/related-task"]["taskId"],
+        serde_json::json!(task_id),
+        "elicitation/create raised by a task-augmented tool must carry related-task _meta"
+    );
     let request_id = request["id"].clone();
     let _ = post(
         &state,
