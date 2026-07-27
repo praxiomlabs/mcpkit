@@ -178,88 +178,18 @@ jobs:
   # Performance Regression Detection
   # ==========================================================================
 
-  regression-check:
-    name: Regression Check
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - uses: dtolnay/rust-toolchain@1.96
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Restore baseline from main
-        uses: actions/cache/restore@v5
-        with:
-          path: target/criterion-baseline
-          key: criterion-baseline-${{ runner.os }}
-          restore-keys: |
-            criterion-baseline-
-
-      - name: Run benchmarks on PR
-        run: |
-          # Run benchmarks and save to different directory
-          # Use --benches to skip lib tests which don't understand criterion options
-          cargo bench --package mcpkit-benches --benches -- \
-            --sample-size 50 \
-            --measurement-time 5 \
-            --save-baseline pr-benchmark
-
-      - name: Compare with baseline
-        run: |
-          echo "# Performance Comparison" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          # Check for significant regressions (>10% slower)
-          REGRESSION_FOUND=false
-
-          for bench in serialization tool_invocation transport memory; do
-            baseline_dir="target/criterion-baseline/${bench}"
-            pr_dir="target/criterion/${bench}"
-
-            if [ -d "$baseline_dir" ] && [ -d "$pr_dir" ]; then
-              echo "## ${bench^}" >> $GITHUB_STEP_SUMMARY
-              echo "" >> $GITHUB_STEP_SUMMARY
-
-              # Compare estimates
-              for pr_estimate in $(find "$pr_dir" -name "estimates.json" 2>/dev/null); do
-                group=$(dirname "$pr_estimate" | xargs basename)
-                baseline_estimate="${baseline_dir}/${group}/new/estimates.json"
-
-                if [ -f "$baseline_estimate" ]; then
-                  baseline_mean=$(jq -r '.mean.point_estimate // 0' "$baseline_estimate" 2>/dev/null)
-                  pr_mean=$(jq -r '.mean.point_estimate // 0' "$pr_estimate" 2>/dev/null)
-
-                  if [ "$baseline_mean" != "0" ] && [ "$pr_mean" != "0" ]; then
-                    change=$(echo "scale=2; (($pr_mean - $baseline_mean) / $baseline_mean) * 100" | bc 2>/dev/null || echo "0")
-
-                    if [ "$(echo "$change > 10" | bc)" -eq 1 ]; then
-                      echo "⚠️ **${group}**: +${change}% (regression)" >> $GITHUB_STEP_SUMMARY
-                      REGRESSION_FOUND=true
-                    elif [ "$(echo "$change < -10" | bc)" -eq 1 ]; then
-                      echo "✅ **${group}**: ${change}% (improvement)" >> $GITHUB_STEP_SUMMARY
-                    else
-                      echo "➖ **${group}**: ${change}% (within tolerance)" >> $GITHUB_STEP_SUMMARY
-                    fi
-                  fi
-                fi
-              done
-              echo "" >> $GITHUB_STEP_SUMMARY
-            fi
-          done
-
-          if [ "$REGRESSION_FOUND" = true ]; then
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "⚠️ **Warning:** Significant performance regressions detected (>10% slower)" >> $GITHUB_STEP_SUMMARY
-            echo "Please review the changes and ensure the regression is acceptable." >> $GITHUB_STEP_SUMMARY
-          fi
-
-  # ==========================================================================
-  # Long-Running Stability Test
-  # ==========================================================================
+  # regression-check was removed here. It was gated `if: github.event_name ==
+  # 'pull_request'` while this workflow triggers only on schedule and
+  # workflow_dispatch — deliberately, per the comment above benchmarks: criterion
+  # on shared runners is too noisy to gate a PR on. So the job could never run.
+  #
+  # It would not have worked if resurrected: its restore step declared
+  # target/criterion-baseline while the benchmarks job saves to target/criterion,
+  # so the comparison loop would have read an empty directory and found no
+  # regressions by construction.
+  #
+  # If perf regression gating is wanted, it needs a design that accounts for
+  # shared-runner noise — not a revival of these ~80 lines.
 
   stability-test:
     name: Long-Running Stability
@@ -298,7 +228,9 @@ jobs:
   notify-on-failure:
     name: Notify on Failure
     runs-on: ubuntu-latest
-    needs: [benchmarks, stress-test]
+    # stability-test included: it is schedule-only, so without it here a
+    # stability failure on the weekly run filed no issue and surfaced nowhere.
+    needs: [benchmarks, stress-test, stability-test]
     if: failure() && github.event_name == 'schedule'
     steps:
       - name: Create issue on failure
