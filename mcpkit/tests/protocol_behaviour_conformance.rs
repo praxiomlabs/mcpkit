@@ -4,8 +4,13 @@
 //! discriminators, field shapes. It is blind to *sequencing* (may this request
 //! arrive yet?), *gating* (is a capability honoured only when advertised?),
 //! *response discipline* (a notification must not draw a reply), *lifecycle*
-//! (TTL eviction), and *emission* (is a spec-defined outbound message ever
-//! actually sent?).
+//! (TTL eviction), and *classification* (is every spec-defined outbound message
+//! deliberately accounted for?).
+//!
+//! Note what the classification test does **not** do: it checks a hand-maintained
+//! list against the schema, so adding a constant to that list with no emitter
+//! behind it would pass. Actual emission is proved per-transport by the
+//! `tasks/status` tests in the server and adapter crates.
 //!
 //! Each test here drives a real server over a transport. The emission test is
 //! anchored to the vendored schema rather than to mcpkit's own constants.

@@ -17,7 +17,7 @@ vendored spec — see the tables for what is checked and how.
 
 | Requirement | Status | Notes |
 |-------------|--------|-------|
-| Full MCP 2025-11-25 compliance | ✅ Complete | All 31 schema-defined methods, diffed against the vendored schema in CI. Structural conformance covers every `$def` with a same-named type — 75 of 145, the rest being envelopes, unions and aliases with no 1:1 Rust type — with no outstanding field gaps |
+| Full MCP 2025-11-25 compliance | ✅ Complete | All 31 schema-defined methods. The CI vocabulary diff proves the names exist in the sources, not that each is routed — routing and behaviour are covered by `mcpkit/tests/protocol_behaviour_conformance.rs`. Structural conformance covers every `$def` with a same-named type — 75 of 145, the rest being envelopes, unions and aliases with no 1:1 Rust type — with no outstanding field gaps |
 | Protocol version negotiation | ✅ Complete | All 4 published versions; table-driven conformance tests |
 | OAuth 2.1 + PKCE support | ✅ Complete | RFC 9728, 8414, 7636 compliant |
 | Tasks (async operations) | ✅ Complete | Full task lifecycle support |
@@ -32,7 +32,7 @@ vendored spec — see the tables for what is checked and how.
 | Warp integration | ✅ Complete | Router, SSE, CORS support |
 | Extension infrastructure | ✅ Complete | Structured extension support |
 | Comprehensive documentation | ✅ Complete | 34 doc files, 6 ADRs |
-| Test coverage | ✅ Complete | 1,446 tests incl. spec-anchored and behavioural conformance suites |
+| Test coverage | ✅ Complete | 1,455+ tests incl. spec-anchored and behavioural conformance suites |
 | Fuzzing | ✅ Complete | 6 fuzz targets, CI integration |
 | Zero clippy warnings | ✅ Complete | Strict lint configuration |
 

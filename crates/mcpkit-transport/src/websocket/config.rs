@@ -134,6 +134,17 @@ impl WebSocketConfig {
         self
     }
 
+    /// Set the reconnect backoff policy.
+    ///
+    /// `new()` seeds this with `ExponentialBackoff::default()`; before this
+    /// setter existed the only way to change it was a struct literal, which
+    /// `#[non_exhaustive]` now forbids downstream.
+    #[must_use]
+    pub fn with_reconnect_backoff(mut self, backoff: ExponentialBackoff) -> Self {
+        self.reconnect_backoff = backoff;
+        self
+    }
+
     /// Add a WebSocket subprotocol.
     #[must_use]
     pub fn with_subprotocol(mut self, protocol: impl Into<String>) -> Self {

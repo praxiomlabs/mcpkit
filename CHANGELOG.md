@@ -107,10 +107,12 @@ to make after 1.0. Migration for each is below.
 
 ### Removed
 
-- Unused dependencies from `mcpkit-core` (`schemars`, `futures`),
+- Eight unused dependencies: `mcpkit-core` (`schemars`, `futures`),
   `mcpkit-transport` (`axum`, `uuid`, `hyper`) and `mcpkit-server` (`chrono`,
-  `event-listener`, `thiserror`). Six of the eight were suppressed from
-  `cargo-machete` behind justifications that were false.
+  `event-listener`, `thiserror`). Four of the eight — `schemars`, `futures`,
+  `thiserror`, `hyper` — were suppressed from `cargo-machete` behind
+  justifications that were false; the other four were simply unreported until
+  the tool was wired into CI.
 
 ### CI
 

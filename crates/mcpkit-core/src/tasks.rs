@@ -320,6 +320,12 @@ pub struct TaskEvent {
 ///
 /// The store lock is **not** held when this is called, so an implementation may
 /// call back into the same [`TaskManager`] without deadlocking.
+///
+/// **No ordering guarantee.** Each event is built under the lock and delivered
+/// after it is released, so two threads transitioning the same task can deliver
+/// out of order — a consumer may see the newer status first. That is acceptable
+/// for the notification this drives, which the spec makes advisory, but a
+/// consumer that needs authoritative state must read it from the store.
 pub trait TaskObserver: Send + Sync + std::fmt::Debug {
     /// Called after a task's status changed.
     fn on_task_event(&self, event: &TaskEvent);
@@ -707,7 +713,10 @@ pub async fn route_task_store(
 /// Callers with no custom task handler should use
 /// [`or_unknown_task`](Self::or_unknown_task), which folds the unowned case
 /// into the correct error. Callers that do have one should match explicitly and
-/// offer the request there first.
+/// offer the request there first — for `tasks/get`, `tasks/result` and
+/// `tasks/cancel`. Note `tasks/list` takes no id and is therefore always
+/// [`Handled`](Self::Handled) by this store, so a custom handler's `list` never
+/// runs. That predates this type and is unchanged by it.
 #[derive(Debug)]
 pub enum TaskRoute {
     /// Not a `tasks/*` method at all. Try the next router.

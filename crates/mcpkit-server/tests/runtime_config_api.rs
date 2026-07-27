@@ -16,12 +16,14 @@ fn every_field_is_reachable_through_a_setter() {
         .max_concurrent_requests(7)
         .outbound_request_timeout(Duration::from_secs(3))
         .default_task_ttl_ms(None)
+        .default_task_poll_interval_ms(Some(250))
         .task_status_notifications(false);
 
     assert!(!config.auto_initialized);
     assert_eq!(config.max_concurrent_requests, 7);
     assert_eq!(config.outbound_request_timeout, Duration::from_secs(3));
     assert_eq!(config.default_task_ttl_ms, None);
+    assert_eq!(config.default_task_poll_interval_ms, Some(250));
     assert!(!config.task_status_notifications);
 }
 

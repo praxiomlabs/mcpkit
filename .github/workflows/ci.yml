@@ -107,9 +107,10 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Spell check
-        uses: crate-ci/typos@master
+        # Pinned: @master turns CI red on an upstream release with no repo change.
+        uses: crate-ci/typos@v1.29.4
         with:
-          files: ./crates ./docs ./README.md ./CHANGELOG.md ./RELEASING.md
+          files: ./crates ./mcpkit ./examples ./docs ./spec ./scripts ./README.md ./CHANGELOG.md ./RELEASING.md ./ROADMAP.md ./CONTRIBUTING.md
       - name: Install cargo-machete
         uses: taiki-e/install-action@v2
         with:

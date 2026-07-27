@@ -100,10 +100,13 @@ impl ServerState {
     /// synchronous and non-blocking, so it is safe to call from a lock-free
     /// callback (such as a `TaskObserver`).
     ///
-    /// Notifications published when no run loop is draining (for example under
-    /// an HTTP adapter, where each request is its own short-lived exchange) are
-    /// queued and discarded with the session; delivery is best-effort by design,
-    /// matching the spec's treatment of notifications.
+    /// Delivery is best-effort by design, matching the spec's treatment of
+    /// notifications: a failed write is logged, never fatal.
+    ///
+    /// The queue is unbounded, which is safe because the only producers are
+    /// in-process and the run loop drains continuously. The HTTP adapters do not
+    /// use this path at all — they never construct a `ServerState`, and reach
+    /// their client through the session's `StreamRegistry` instead.
     pub fn publish_notification(&self, notification: Notification) {
         // Fails only if the receiver was dropped, i.e. the session is gone.
         let _ = self.ambient_tx.unbounded_send(notification);

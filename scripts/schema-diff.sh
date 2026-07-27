@@ -42,6 +42,10 @@ set -euo pipefail
 # caller's locale makes CI disagree with a developer's machine.
 export LC_ALL=C
 
+# `grep` exits 1 on no match, and under `pipefail` that aborts the whole script
+# mid-report. Any grep whose match set could legitimately be empty is wrapped in
+# `{ ...; || true; }` so an empty row prints as empty instead of killing the run.
+
 MODE="${1:-report}"
 
 SCHEMA="spec/2025-11-25/schema.json"
@@ -188,7 +192,7 @@ only_in "$WORK/schema_methods.txt" "$WORK/mcpkit_literals.txt" | emit 'method in
 # ===========================================================================
 # Row 2 — notification methods
 # ===========================================================================
-grep '^notifications/' "$WORK/schema_methods.txt" | sort -u > "$WORK/schema_notifs.txt"
+{ grep '^notifications/' "$WORK/schema_methods.txt" || true; } | sort -u > "$WORK/schema_notifs.txt"
 grep '^notifications/' "$WORK/mcpkit_literals.txt" | sort -u > "$WORK/mcpkit_notifs.txt" || true
 
 hr "Row 2: notification methods (schema-side difference only)"
@@ -279,10 +283,10 @@ only_in "$WORK/schema_types.txt" "$WORK/mcpkit_types.txt" | emit 'content-type i
 # ===========================================================================
 hr "Error codes (informational — verify against prose spec by hand)"
 printf 'in schema.json:\n'
-grep -oE '\-3[0-9]{4}' "$SCHEMA" | sort -u | sed 's/^/  /'
+{ grep -oE '\-3[0-9]{4}' "$SCHEMA" || true; } | sort -u | sed 's/^/  /'
 printf 'in crates/mcpkit-core/src/error/codes.rs:\n'
-grep -oE '=[ ]*-3[0-9]{4}' crates/mcpkit-core/src/error/codes.rs 2>/dev/null |
-	grep -oE '\-3[0-9]{4}' | sort -u | sed 's/^/  /'
+{ grep -oE '=[ ]*-3[0-9]{4}' crates/mcpkit-core/src/error/codes.rs 2>/dev/null || true; } |
+	{ grep -oE '\-3[0-9]{4}' || true; } | sort -u | sed 's/^/  /'
 
 # ===========================================================================
 # Tier 2 — structural field diff, SAMPLE ONLY.
