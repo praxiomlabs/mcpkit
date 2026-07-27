@@ -194,6 +194,8 @@ jobs:
             --scheme https
             --max-retries 6
             --retry-wait-time 3
+            --timeout 30
+            --max-concurrency 16
             --accept 200,204,206
             --exclude "^https://crates.io"
             --exclude "^https://docs.rs"
