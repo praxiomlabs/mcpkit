@@ -260,6 +260,11 @@ where
     /// ```
     ///
     /// For more control over the server, use [`Self::configure_app`] instead.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`std::io::Error`] if the socket cannot be bound or the
+    /// server fails while running.
     pub async fn serve(self, addr: &str) -> std::io::Result<()> {
         let enable_cors = self.enable_cors;
         let enable_logging = self.enable_logging;

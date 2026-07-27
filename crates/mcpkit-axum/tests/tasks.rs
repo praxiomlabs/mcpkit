@@ -1,6 +1,16 @@
 //! E2E for #122: task-augmented `tools/call` and `tasks/*` served through the
 //! axum adapter, including per-session isolation and cancellation propagation.
 
+// Integration-test scaffolding: framework-shaped handler signatures, boxed
+// future types and guards held across assertions. None of this ships.
+#![allow(clippy::future_not_send)]
+#![allow(clippy::new_ret_no_self)]
+#![allow(clippy::match_same_arms)]
+#![allow(clippy::option_if_let_else)]
+#![allow(clippy::type_complexity)]
+#![allow(clippy::significant_drop_tightening)]
+#![allow(clippy::needless_pass_by_value)]
+
 use axum::extract::State;
 use axum::http::{HeaderMap, HeaderValue};
 use axum::response::IntoResponse;

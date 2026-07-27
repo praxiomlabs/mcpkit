@@ -1,5 +1,11 @@
 //! Error types for Warp MCP integration.
 
+// `clippy::match_same_arms`: the error -> HTTP status mapping below is a
+// lookup table. One line per variant is the point — merging the arms that
+// happen to share a status today makes the table harder to read and harder to
+// change when one of them needs a different status.
+#![allow(clippy::match_same_arms)]
+
 use thiserror::Error;
 use warp::http::StatusCode;
 use warp::reject::Reject;

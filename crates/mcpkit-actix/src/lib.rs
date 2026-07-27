@@ -81,6 +81,11 @@
 //! ```
 
 #![deny(missing_docs)]
+// actix-web hands extractors and payloads to handlers BY VALUE, and its
+// service futures are not `Send` (actix runs a single-threaded arbiter per
+// worker). Both signatures are dictated by the framework, not chosen here.
+#![allow(clippy::future_not_send)]
+#![allow(clippy::needless_pass_by_value)]
 
 mod error;
 mod handler;

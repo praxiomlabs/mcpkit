@@ -66,6 +66,7 @@ impl MockClient {
     }
 
     /// Create a mock client with custom info.
+    #[must_use]
     pub fn with_info(mut self, name: impl Into<String>, version: impl Into<String>) -> Self {
         self.info = ClientInfo::new(name, version);
         self
@@ -114,6 +115,10 @@ impl MockClient {
     }
 
     /// Process an initialize response.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`McpError`] if the underlying handler or transport fails.
     pub fn process_initialize_response(&self, response: &Response) -> Result<(), McpError> {
         if let Some(error) = &response.error {
             return Err(McpError::InternalMessage {
@@ -314,6 +319,10 @@ impl MockClient {
     }
 
     /// Parse a tool list response.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`McpError`] if the underlying handler or transport fails.
     pub fn parse_tool_list(&self, response: &Response) -> Result<Vec<Tool>, McpError> {
         if let Some(error) = &response.error {
             return Err(McpError::InternalMessage {
@@ -338,6 +347,10 @@ impl MockClient {
     }
 
     /// Parse a tool call response.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`McpError`] if the underlying handler or transport fails.
     pub fn parse_tool_call(&self, response: &Response) -> Result<CallToolResult, McpError> {
         if let Some(error) = &response.error {
             return Err(McpError::InternalMessage {
@@ -356,6 +369,10 @@ impl MockClient {
     }
 
     /// Parse a resource list response.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`McpError`] if the underlying handler or transport fails.
     pub fn parse_resource_list(&self, response: &Response) -> Result<Vec<Resource>, McpError> {
         if let Some(error) = &response.error {
             return Err(McpError::InternalMessage {
@@ -380,6 +397,10 @@ impl MockClient {
     }
 
     /// Parse a resource read response.
+    ///
+    /// # Errors
+    ///
+    /// Returns the error produced by the underlying operation.
     pub fn parse_resource_read(
         &self,
         response: &Response,
@@ -407,6 +428,10 @@ impl MockClient {
     }
 
     /// Parse a prompt list response.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`McpError`] if the underlying handler or transport fails.
     pub fn parse_prompt_list(&self, response: &Response) -> Result<Vec<Prompt>, McpError> {
         if let Some(error) = &response.error {
             return Err(McpError::InternalMessage {
@@ -431,6 +456,10 @@ impl MockClient {
     }
 
     /// Parse a prompt get response.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`McpError`] if the underlying handler or transport fails.
     pub fn parse_prompt_get(&self, response: &Response) -> Result<GetPromptResult, McpError> {
         if let Some(error) = &response.error {
             return Err(McpError::InternalMessage {

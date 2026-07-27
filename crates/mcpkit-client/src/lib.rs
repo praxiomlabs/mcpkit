@@ -65,6 +65,10 @@
 //! ```
 
 #![deny(missing_docs)]
+// the client's futures mirror the `!Send` runtime design documented on
+// Context.
+#![allow(clippy::future_not_send)]
+#![allow(clippy::needless_pass_by_value)]
 
 pub mod builder;
 pub mod client;

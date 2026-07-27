@@ -640,6 +640,15 @@ where
 /// disallowed origin or mismatched user — enforced against the same
 /// registry that holds the binding. `Last-Event-ID` resumes the stream with
 /// same-stream replay; an unknown or expired cursor opens a fresh stream.
+///
+/// # Panics
+///
+/// Panics if an internal lock is poisoned, i.e. another thread panicked
+/// while holding it.
+///
+/// # Errors
+///
+/// Returns the error produced by the underlying operation.
 pub fn handle_sse<H>(
     state: &McpState<H>,
     session_id: Option<String>,

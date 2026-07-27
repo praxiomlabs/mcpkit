@@ -2,6 +2,16 @@
 //!
 //! These tests verify the complete request/response flow through the Warp MCP integration.
 
+// Integration-test scaffolding: framework-shaped handler signatures, boxed
+// future types and guards held across assertions. None of this ships.
+#![allow(clippy::future_not_send)]
+#![allow(clippy::new_ret_no_self)]
+#![allow(clippy::match_same_arms)]
+#![allow(clippy::option_if_let_else)]
+#![allow(clippy::type_complexity)]
+#![allow(clippy::significant_drop_tightening)]
+#![allow(clippy::needless_pass_by_value)]
+
 use mcpkit_core::capability::{ServerCapabilities, ServerInfo};
 use mcpkit_core::error::McpError;
 use mcpkit_core::types::{GetPromptResult, Prompt, Resource, ResourceContents, Tool, ToolOutput};

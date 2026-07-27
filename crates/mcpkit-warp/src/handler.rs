@@ -99,6 +99,10 @@ fn reply_with_session(reply: impl warp::Reply, session_id: &str) -> warp::reply:
 /// Handle MCP POST requests.
 ///
 /// This is the core handler function that processes JSON-RPC messages.
+///
+/// # Errors
+///
+/// Returns the error produced by the underlying operation.
 pub async fn handle_mcp_post<H>(
     state: Arc<McpState<H>>,
     version: Option<String>,
@@ -548,6 +552,11 @@ where
 /// Handle SSE connections for server-to-client streaming.
 ///
 /// This returns a stream of Server-Sent Events.
+///
+/// # Panics
+///
+/// Panics if an internal lock is poisoned, i.e. another thread panicked
+/// while holding it.
 pub fn handle_sse<H>(
     state: Arc<McpState<H>>,
     session_id: Option<String>,

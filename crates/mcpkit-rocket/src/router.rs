@@ -162,6 +162,10 @@ where
     ///
     /// This is a convenience method that provides a stdio-like experience.
     /// Note: You'll need to mount the routes separately using macros.
+    ///
+    /// # Errors
+    ///
+    /// Returns the error produced by the underlying operation.
     pub async fn launch(self) -> Result<(), rocket::Error> {
         let _ = self.into_rocket().launch().await?;
         Ok(())

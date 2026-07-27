@@ -128,6 +128,11 @@ where
 /// # Errors
 ///
 /// Returns the last error if all attempts fail.
+///
+/// # Panics
+///
+/// Panics if an internal lock is poisoned, i.e. another thread panicked
+/// while holding it.
 pub async fn retry<T, E, F, Fut>(
     max_attempts: usize,
     delay: Duration,
@@ -259,8 +264,8 @@ where
 
         match tokio::time::timeout(remaining, stream.next()).await {
             Ok(Some(item)) => items.push(item),
-            Ok(None) => break,
-            Err(_) => break,
+            // Stream ended, or the deadline elapsed — either way, stop collecting.
+            Ok(None) | Err(_) => break,
         }
     }
 

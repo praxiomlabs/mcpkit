@@ -552,6 +552,11 @@ where
 /// the `Last-Event-ID` header to receive events they may have missed during
 /// a connection interruption. The server will replay stored events that
 /// occurred after the specified event ID.
+///
+/// # Panics
+///
+/// Panics if an internal lock is poisoned, i.e. another thread panicked
+/// while holding it.
 pub async fn handle_sse<H>(
     State(state): State<McpState<H>>,
     headers: HeaderMap,

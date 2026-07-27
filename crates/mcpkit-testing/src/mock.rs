@@ -3,6 +3,10 @@
 //! This module provides mock servers and tools that can be used in unit tests.
 //! The mocks are designed to be flexible and configurable.
 
+// clippy: the flagged branches build a multi-line error with tool-name suggestions;
+// a two-closure map_or_else hides which side is the miss.
+#![allow(clippy::option_if_let_else)]
+
 use mcpkit_core::capability::{ServerCapabilities, ServerInfo};
 use mcpkit_core::error::McpError;
 use mcpkit_core::types::{
@@ -58,6 +62,7 @@ impl MockTool {
     }
 
     /// Set the description.
+    #[must_use]
     pub fn description(mut self, description: impl Into<String>) -> Self {
         self.description = Some(description.into());
         self
@@ -78,6 +83,7 @@ impl MockTool {
     }
 
     /// Set the tool to return a text response.
+    #[must_use]
     pub fn returns_text(mut self, text: impl Into<String>) -> Self {
         self.response = MockResponse::Text(text.into());
         self
@@ -91,12 +97,14 @@ impl MockTool {
     }
 
     /// Set the tool to return an error.
+    #[must_use]
     pub fn returns_error(mut self, message: impl Into<String>) -> Self {
         self.response = MockResponse::Error(message.into());
         self
     }
 
     /// Set a dynamic handler.
+    #[must_use]
     pub fn handler<F>(mut self, handler: F) -> Self
     where
         F: Fn(Object) -> Result<ToolOutput, McpError> + Send + Sync + 'static,
@@ -122,6 +130,10 @@ impl MockTool {
     }
 
     /// Call the tool.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`McpError`] if the underlying handler or transport fails.
     pub fn call(&self, args: Object) -> Result<ToolOutput, McpError> {
         match &self.response {
             MockResponse::Text(text) => Ok(ToolOutput::text(text.clone())),
@@ -159,18 +171,21 @@ impl MockResource {
     }
 
     /// Set the description.
+    #[must_use]
     pub fn description(mut self, description: impl Into<String>) -> Self {
         self.description = Some(description.into());
         self
     }
 
     /// Set the MIME type.
+    #[must_use]
     pub fn mime_type(mut self, mime_type: impl Into<String>) -> Self {
         self.mime_type = Some(mime_type.into());
         self
     }
 
     /// Set the content.
+    #[must_use]
     pub fn content(mut self, content: impl Into<String>) -> Self {
         self.content = content.into();
         self
@@ -226,12 +241,14 @@ impl MockPrompt {
     }
 
     /// Set the description.
+    #[must_use]
     pub fn description(mut self, description: impl Into<String>) -> Self {
         self.description = Some(description.into());
         self
     }
 
     /// Set the message template.
+    #[must_use]
     pub fn template(mut self, template: impl Into<String>) -> Self {
         self.template = template.into();
         self
@@ -280,12 +297,14 @@ impl MockServerBuilder {
     }
 
     /// Set the server name.
+    #[must_use]
     pub fn name(mut self, name: impl Into<String>) -> Self {
         self.name = name.into();
         self
     }
 
     /// Set the server version.
+    #[must_use]
     pub fn version(mut self, version: impl Into<String>) -> Self {
         self.version = version.into();
         self
@@ -299,6 +318,7 @@ impl MockServerBuilder {
     }
 
     /// Add multiple mock tools.
+    #[must_use]
     pub fn tools(mut self, tools: impl IntoIterator<Item = MockTool>) -> Self {
         self.tools.extend(tools);
         self
@@ -382,6 +402,10 @@ impl MockServer {
     /// Create a new builder for constructing a [`MockServer`].
     ///
     /// This is an alias for [`MockServer::builder()`] for backwards compatibility.
+    // `clippy::new_ret_no_self`: deliberate and deprecated — this is the old
+    // constructor kept so 0.2.5 callers still compile, and it always returned a
+    // builder. Changing the return type defeats the compatibility shim.
+    #[allow(clippy::new_ret_no_self)]
     #[must_use]
     #[deprecated(since = "0.2.6", note = "Use `MockServer::builder()` instead")]
     pub fn new() -> MockServerBuilder {

@@ -56,12 +56,14 @@ impl DiscoveredServer {
     }
 
     /// Set the description.
+    #[must_use]
     pub fn description(mut self, description: impl Into<String>) -> Self {
         self.description = Some(description.into());
         self
     }
 
     /// Add an environment variable.
+    #[must_use]
     pub fn env(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.env.insert(key.into(), value.into());
         self
@@ -133,6 +135,7 @@ impl ServerDiscovery {
     }
 
     /// Add a custom configuration file path.
+    #[must_use]
     pub fn add_config_path(mut self, path: impl Into<PathBuf>) -> Self {
         self.config_paths.push(path.into());
         self

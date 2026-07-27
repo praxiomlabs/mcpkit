@@ -342,19 +342,30 @@ impl<T: Transport + 'static> ClientPool<T> {
 
     /// Clear all cached connections.
     pub async fn clear(&self) {
-        let mut connections = self.inner.connections.lock().await;
-        connections.clear();
+        {
+            let mut connections = self.inner.connections.lock().await;
+            connections.clear();
+        }
+        // Guard released before logging: formatting under the pool lock blocks
+        // every other acquire for no reason.
         debug!("Cleared all pooled connections");
     }
 
     /// Clear cached connections for a specific server.
     pub async fn clear_server(&self, key: &str) {
-        let mut connections = self.inner.connections.lock().await;
-        connections.remove(key);
+        {
+            let mut connections = self.inner.connections.lock().await;
+            connections.remove(key);
+        }
+        // See `clear`: the guard is released before logging.
         debug!(%key, "Cleared pooled connections for server");
     }
 
     /// Get statistics about the pool.
+    // `clippy::significant_drop_tightening`: the guard is held for the whole
+    // walk on purpose. This is a snapshot — releasing mid-iteration would let
+    // the per-server counts and the total disagree.
+    #[allow(clippy::significant_drop_tightening)]
     pub async fn stats(&self) -> PoolStats {
         let connections = self.inner.connections.lock().await;
         let mut total = 0;
@@ -412,6 +423,7 @@ impl ClientPoolBuilder {
     }
 
     /// Set the client info.
+    #[must_use]
     pub fn client_info(mut self, name: impl Into<String>, version: impl Into<String>) -> Self {
         self.client_info = Some(ClientInfo::new(name, version));
         self

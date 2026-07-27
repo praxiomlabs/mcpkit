@@ -87,6 +87,10 @@
 //! ```
 
 #![deny(missing_docs)]
+// test-support helpers take owned fixtures so callers can build them inline;
+// and the futures mirror the `!Send` server runtime they drive.
+#![allow(clippy::future_not_send)]
+#![allow(clippy::needless_pass_by_value)]
 
 pub mod assertions;
 pub mod async_helpers;

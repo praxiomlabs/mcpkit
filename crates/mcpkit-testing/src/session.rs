@@ -299,6 +299,7 @@ impl TestSessionBuilder {
     }
 
     /// Set the session name.
+    #[must_use]
     pub fn name(mut self, name: impl Into<String>) -> Self {
         self.name = Some(name.into());
         self

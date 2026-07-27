@@ -124,6 +124,10 @@ impl SessionStore {
     ///
     /// Returns `Ok(true)` if the session existed and was touched, `Ok(false)` if
     /// it did not exist, or `Err` on a binding violation.
+    ///
+    /// # Errors
+    ///
+    /// Returns the error produced by the underlying operation.
     pub fn touch_verified(
         &self,
         id: &str,

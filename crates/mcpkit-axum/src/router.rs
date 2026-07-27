@@ -274,6 +274,11 @@ where
     /// ```
     ///
     /// For more control over the server, use [`Self::into_router`] instead.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`std::io::Error`] if the socket cannot be bound or the
+    /// server fails while running.
     pub async fn serve(self, addr: &str) -> std::io::Result<()> {
         let router = self.into_router();
         let listener = tokio::net::TcpListener::bind(addr).await?;

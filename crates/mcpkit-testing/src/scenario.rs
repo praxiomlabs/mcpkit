@@ -131,6 +131,7 @@ impl ResponseMatcher {
     }
 
     /// Add a custom matcher function.
+    #[must_use]
     pub fn with_custom<F>(mut self, f: F) -> Self
     where
         F: Fn(&Response) -> Result<(), String> + Send + Sync + 'static,
@@ -140,6 +141,10 @@ impl ResponseMatcher {
     }
 
     /// Validate a response against this matcher.
+    ///
+    /// # Errors
+    ///
+    /// Returns the error produced by the underlying operation.
     pub fn validate(&self, response: &Response) -> Result<(), String> {
         // Check success/error expectation
         if let Some(expect_success) = self.expect_success {
@@ -184,6 +189,10 @@ pub struct JsonAssertion {
 
 impl JsonAssertion {
     /// Validate against a JSON value.
+    ///
+    /// # Errors
+    ///
+    /// Returns the error produced by the underlying operation.
     pub fn validate(&self, value: &serde_json::Value) -> Result<(), String> {
         let actual = get_json_path(value, &self.path)
             .ok_or_else(|| format!("Path '{}' not found in response", self.path))?;
@@ -253,12 +262,14 @@ impl NotificationMatcher {
     }
 
     /// Match a specific method.
+    #[must_use]
     pub fn method(mut self, method: impl Into<String>) -> Self {
         self.method = Some(method.into());
         self
     }
 
     /// Add a custom matcher.
+    #[must_use]
     pub fn with_custom<F>(mut self, f: F) -> Self
     where
         F: Fn(&Notification) -> Result<(), String> + Send + Sync + 'static,
@@ -268,6 +279,10 @@ impl NotificationMatcher {
     }
 
     /// Validate a notification against this matcher.
+    ///
+    /// # Errors
+    ///
+    /// Returns the error produced by the underlying operation.
     pub fn validate(&self, notification: &Notification) -> Result<(), String> {
         if let Some(expected_method) = &self.method
             && notification.method.as_ref() != expected_method
@@ -308,6 +323,7 @@ impl TestScenario {
     }
 
     /// Set the description.
+    #[must_use]
     pub fn description(mut self, description: impl Into<String>) -> Self {
         self.description = Some(description.into());
         self
@@ -343,6 +359,7 @@ impl TestScenario {
     }
 
     /// Add a custom assertion step.
+    #[must_use]
     pub fn assert<F>(mut self, description: impl Into<String>, check: F) -> Self
     where
         F: Fn() -> Result<(), String> + Send + Sync + 'static,
