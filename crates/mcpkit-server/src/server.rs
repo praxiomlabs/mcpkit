@@ -1183,11 +1183,14 @@ where
         // *method not found* — which tells the client this server has no
         // `tasks/get` at all, when it answered `tasks/*` a moment ago. Report
         // the unowned id as the defect instead.
-        if let Some(unowned) = unowned_task
-            && result.as_ref().err().map(McpError::code)
+        // Not a `let`-chain: chained `let` in `if` is unstable before Rust 1.88
+        // and this crate's MSRV is 1.85.
+        if let Some(unowned) = unowned_task {
+            if result.as_ref().err().map(McpError::code)
                 == Some(mcpkit_core::error::codes::METHOD_NOT_FOUND)
-        {
-            return Err(unowned);
+            {
+                return Err(unowned);
+            }
         }
         result
     }
