@@ -1,0 +1,58 @@
+name: Cross-platform
+
+# macOS coverage, on a schedule instead of on every pull request.
+#
+# It ran in ci.yml's `test-matrix` until 2026-07-27, costing 6m16s on every PR.
+# Across the 40 CI runs sampled at the time it had failed zero times, while the
+# Windows leg — which stays on the PR path — had caught one real break
+# (4ae4f9f, a cfg(unix) type referenced from an ungated test).
+#
+# The trade: a macOS-only regression is now caught within a week, or on demand
+# before a release, rather than within 6 minutes of opening a PR. Given the
+# measured hit rate that is a good trade; if macOS starts failing here, move it
+# back onto the PR path rather than leaving this note stale.
+#
+# Windows is included here too as a belt-and-braces run against the cache-cold
+# path — ci.yml only exercises it warm once main has seeded a cache entry.
+
+on:
+  schedule:
+    # Mondays 06:00 UTC, ahead of the weekly link check so a red week surfaces
+    # in one sitting.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -Dwarnings
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@1.96
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # Scheduled runs are on main, so this both restores and seeds the
+          # shared entry rather than writing a scope nothing can read.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      # --features full rather than --all-features excludes regenerate-proto
+      # (protobuf-src fails on Windows with abseil-cpp linker errors).
+      - run: cargo test -p mcpkit-transport --features full
+      # --all-features is safe here: regenerate-proto is only reachable through
+      # mcpkit-transport, which is excluded, so the rest of the workspace still
+      # gets its feature-gated code exercised cross-platform.
+      - run: cargo test --workspace --exclude mcpkit-transport --all-features
+      - name: Remove trybuild scratch before cache save
+        if: always()
+        shell: bash
+        run: rm -rf target/tests

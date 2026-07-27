@@ -398,16 +398,32 @@ jobs:
   test-matrix:
     name: Test (${{ matrix.os }})
     needs: [changes, test]
-    if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.code == 'true' }}
+    # Also runs on pushes to main — not because main needs the coverage, but
+    # because rust-cache can only be RESTORED from the current branch or the
+    # base branch. While this job was pull_request-only, main never wrote an
+    # entry, so every PR started cold. Measured on PR #189: the Windows job
+    # logged "No cache found." and took 12m52s, four times the ubuntu Test
+    # Suite, and it is the single longest job in the pipeline.
+    if: ${{ needs.changes.outputs.code == 'true' || github.event_name == 'push' }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
+        # macOS moved to .github/workflows/cross-platform.yml (scheduled). It
+        # cost 6m16s on every PR and, across the last 40 CI runs, failed zero
+        # times. Windows stays on the PR path: it has caught exactly one real
+        # break (4ae4f9f), which is one more than macOS.
+        os: [windows-latest]
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@1.96
       - uses: Swatinem/rust-cache@v2
+        with:
+          # Without this, PRs write ~GB entries scoped to their own ref that
+          # nothing else can restore, while competing for the 10 GB Actions
+          # cache limit and LRU-evicting main's entries. Same reasoning as the
+          # clippy/check jobs above.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       # Use --features full instead of --all-features to exclude regenerate-proto
       # (protobuf-src fails to build on Windows due to abseil-cpp linker issues)
       - run: cargo test -p mcpkit-transport --features full
@@ -526,10 +542,8 @@ jobs:
 
           # Mirrors each job's `if:` expression. Keep in sync when a job's
           # gating changes — a stale predicate here re-opens the hole.
-          gated=0   # clippy, check, test, deny, docs, msrv
+          gated=0   # clippy, check, test, deny, docs, msrv, test-matrix
           if [ "$CODE" = "true" ] || [ "$EVENT" = "push" ]; then gated=1; fi
-          matrix=0  # test-matrix: pull_request AND code
-          if [ "$EVENT" = "pull_request" ] && [ "$CODE" = "true" ]; then matrix=1; fi
           sem=0     # semver: (pull_request OR push) AND code
           if { [ "$EVENT" = "pull_request" ] || [ "$EVENT" = "push" ]; } && [ "$CODE" = "true" ]; then sem=1; fi
           pub=0     # publish-script: release-tooling OR push
@@ -549,7 +563,11 @@ jobs:
           require deny          '${{ needs.deny.result }}'          "$gated"
           require docs          '${{ needs.docs.result }}'          "$gated"
           require msrv          '${{ needs.msrv.result }}'          "$gated"
-          require test-matrix   '${{ needs.test-matrix.result }}'   "$matrix"
+          # test-matrix now shares the `gated` predicate: it gained the
+          # `|| push` arm so pushes to main seed the rust-cache entry that PRs
+          # restore from. It previously had its own `pull_request AND code`
+          # predicate here.
+          require test-matrix   '${{ needs.test-matrix.result }}'   "$gated"
           require semver        '${{ needs.semver.result }}'        "$sem"
           require publish-script '${{ needs.publish-script.result }}' "$pub"
 
