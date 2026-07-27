@@ -25,6 +25,11 @@
 // signatures are written for readability at the call site, not to satisfy
 // pedantic/nursery lints. None of this ships in the library.
 #![allow(clippy::similar_names)]
+// Suggests `Duration::from_mins`, which is unstable (`duration_constructors`)
+// and so cannot be used at this workspace's MSRV. The MSRV job builds these
+// examples, so taking the lint's advice turns a clippy error into a compile
+// error. Revisit when from_mins stabilizes and the MSRV clears it.
+#![allow(clippy::duration_suboptimal_units)]
 #![allow(clippy::redundant_else)]
 #![allow(clippy::wildcard_enum_match_arm)]
 #![allow(clippy::assertions_on_constants)]
@@ -229,7 +234,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Configure timeout layer
     let _timeout = TimeoutLayer::default()
         .send_timeout(Duration::from_secs(30))
-        .recv_timeout(Duration::from_mins(1));
+        .recv_timeout(Duration::from_secs(60));
 
     // Configure retry layer with exponential backoff
     let _retry = RetryLayer::new(3).backoff(
@@ -333,8 +338,8 @@ fn middleware_configuration_examples() {
 
     // Example 3: Custom timeouts
     let _timeout = TimeoutLayer::with_timeouts(
-        Duration::from_secs(10), // send timeout
-        Duration::from_mins(2),  // receive timeout
+        Duration::from_secs(10),  // send timeout
+        Duration::from_secs(120), // receive timeout
     );
 
     // Example 4: Timeout for send only, no receive timeout

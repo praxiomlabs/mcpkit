@@ -24,6 +24,11 @@
 // signatures are written for readability at the call site, not to satisfy
 // pedantic/nursery lints. None of this ships in the library.
 #![allow(clippy::similar_names)]
+// Suggests `Duration::from_mins`, which is unstable (`duration_constructors`)
+// and so cannot be used at this workspace's MSRV. The MSRV job builds these
+// examples, so taking the lint's advice turns a clippy error into a compile
+// error. Revisit when from_mins stabilizes and the MSRV clears it.
+#![allow(clippy::duration_suboptimal_units)]
 #![allow(clippy::redundant_else)]
 #![allow(clippy::wildcard_enum_match_arm)]
 #![allow(clippy::assertions_on_constants)]
@@ -73,7 +78,7 @@ fn demonstrate_client_config() {
     // Full configuration with all options
     let full_config = GrpcConfig::new("https://mcp.example.com:50051")
         .connect_timeout(Duration::from_secs(5))
-        .timeout(Duration::from_mins(1))
+        .timeout(Duration::from_secs(60))
         .with_tls()
         .with_metadata("authorization", "Bearer token123")
         .with_metadata("x-request-id", "req-001");
@@ -100,7 +105,7 @@ fn demonstrate_server_config() {
     let full_config = GrpcServerConfig::new("0.0.0.0:50051")
         .with_tls()
         .max_concurrent_streams(200)
-        .tcp_keepalive(Duration::from_mins(1))
+        .tcp_keepalive(Duration::from_secs(60))
         .http2_keepalive_interval(Duration::from_secs(30));
 
     info!(
@@ -112,8 +117,8 @@ fn demonstrate_server_config() {
     let server = GrpcServerBuilder::new("0.0.0.0:50051")
         .with_tls()
         .max_concurrent_streams(100)
-        .tcp_keepalive(Duration::from_mins(2))
-        .http2_keepalive_interval(Duration::from_mins(1))
+        .tcp_keepalive(Duration::from_secs(120))
+        .http2_keepalive_interval(Duration::from_secs(60))
         .build();
 
     info!(
