@@ -273,44 +273,47 @@ rebuild: clean build
 [doc("Cross-platform compilation check (per RELEASING.md Platform Notes)")]
 cross-check:
     #!/usr/bin/env bash
+    set -euo pipefail
     printf '\n{{bold}}{{blue}}══════ Cross-Platform Check ══════{{reset}}\n\n'
 
-    # Check native platform
     printf '{{cyan}}[INFO]{{reset}} Checking native platform ({{platform}})...\n'
-    {{cargo}} check --workspace --all-features
+    {{cargo}} check --workspace --all-features --all-targets
 
-    # Check Linux target (if not already on Linux)
-    if [ "{{platform}}" != "linux" ]; then
-        printf '{{cyan}}[INFO]{{reset}} Checking x86_64-unknown-linux-gnu...\n'
-        if rustup target list --installed | grep -q "x86_64-unknown-linux-gnu"; then
-            {{cargo}} check --workspace --all-features --target x86_64-unknown-linux-gnu
-        else
-            printf '{{yellow}}[WARN]{{reset}} Target not installed: rustup target add x86_64-unknown-linux-gnu\n'
-        fi
-    fi
-
-    # Check macOS target (if not already on macOS)
-    if [ "{{platform}}" != "macos" ]; then
-        printf '{{cyan}}[INFO]{{reset}} Checking x86_64-apple-darwin...\n'
-        if rustup target list --installed | grep -q "x86_64-apple-darwin"; then
-            {{cargo}} check --workspace --all-features --target x86_64-apple-darwin
-        else
-            printf '{{yellow}}[WARN]{{reset}} Target not installed (requires macOS SDK or cross)\n'
-        fi
-    fi
-
-    # Check Windows target (if not already on Windows)
+    # Windows, for real. This is the only cross target that works at full scope
+    # on a Linux box, and it is worth ~13 minutes of CI wait.
+    #
+    # Why gnu and not msvc: `cargo check` needs no linker for pure Rust, so a
+    # single crate checks fine against msvc or apple-darwin. At --all-features
+    # --all-targets the workspace pulls in C build scripts (ring, zstd-sys) that
+    # DO need a C cross-compiler for the target. mingw-w64 supplies one for
+    # x86_64-pc-windows-gnu; nothing here supplies one for msvc or darwin, and
+    # both fail on those build scripts. macOS additionally needs an SDK that
+    # Apple's licence ties to Apple hardware.
+    #
+    # Scope mirrors the Windows job: mcpkit-transport is excluded because its
+    # regenerate-proto feature fails on Windows (abseil-cpp linker errors).
+    #
+    # --all-targets matters. The only Windows failure in this repo's history
+    # (4ae4f9f) was a cfg(unix) type referenced from an ungated *test*, which a
+    # lib-only check would miss entirely.
+    #
+    # This CHECKS, it does not RUN. Running needs real Windows: Wine could not
+    # load the test binaries (missing bcryptprimitives.dll, no display driver).
     if [ "{{platform}}" != "windows" ]; then
-        printf '{{cyan}}[INFO]{{reset}} Checking x86_64-pc-windows-msvc...\n'
-        if rustup target list --installed | grep -q "x86_64-pc-windows-msvc"; then
-            {{cargo}} check --workspace --all-features --target x86_64-pc-windows-msvc
-        else
-            printf '{{yellow}}[WARN]{{reset}} Target not installed (requires Windows SDK or cross)\n'
+        printf '{{cyan}}[INFO]{{reset}} Checking x86_64-pc-windows-gnu (workspace, all targets)...\n'
+        if ! rustup target list --installed | grep -q "x86_64-pc-windows-gnu"; then
+            printf '{{red}}[ERR]{{reset}}  Target missing. Run: rustup target add x86_64-pc-windows-gnu\n'
+            exit 1
         fi
+        if ! command -v x86_64-w64-mingw32-gcc >/dev/null; then
+            printf '{{red}}[ERR]{{reset}}  mingw-w64 missing. Install it (Debian: apt install mingw-w64)\n'
+            exit 1
+        fi
+        {{cargo}} check --target x86_64-pc-windows-gnu \
+            --workspace --exclude mcpkit-transport --all-features --all-targets
     fi
 
     printf '{{green}}[OK]{{reset}}   Cross-platform check complete\n'
-    printf '{{cyan}}[INFO]{{reset}} For full cross-compilation, install cross: cargo install cross\n'
 
 # ============================================================================
 # TESTING RECIPES
@@ -1010,9 +1013,13 @@ version-sync:
     fi
     printf '{{green}}[OK]{{reset}}   Version sync passed (v%s)\n' "$MAJOR_MINOR"
 
+# cross-check runs early and cheaply (~32s cold, ~3s warm) so a Windows-only
+# compile break is caught here instead of 13 minutes into a CI run. It is the
+# only cross-platform coverage available locally — see the recipe for why msvc
+# and apple-darwin cannot work on a Linux box.
 [group('ci')]
 [doc("Standard CI pipeline (matches GitHub Actions)")]
-ci: fmt-check clippy test-locked doc-check link-check version-sync
+ci: fmt-check clippy cross-check test-locked doc-check link-check version-sync
     #!/usr/bin/env bash
     printf '\n{{bold}}{{blue}}══════ CI Pipeline Complete ══════{{reset}}\n\n'
     printf '{{green}}[OK]{{reset}}   All CI checks passed\n'

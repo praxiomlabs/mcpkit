@@ -46,6 +46,7 @@ See [API Stability](api-stability.md) for the complete tier definitions.
 
 Update the dependency:
 
+<!-- version-sync:ok — documents the 0.x -> 1.0 migration; the versions here are the path, not an install snippet -->
 ```toml
 # Before
 mcpkit = "0.6"
@@ -73,6 +74,7 @@ point at every site. If you only use the builders, there is nothing to do.
 
 #### Step 1: Update Dependency
 
+<!-- version-sync:ok — documents the 0.x -> 1.0 migration; the versions here are the path, not an install snippet -->
 ```toml
 mcpkit = "1"
 ```
@@ -128,6 +130,7 @@ let caps = ServerCapabilities::new()
 
 #### Step 1: Update Dependency
 
+<!-- version-sync:ok — documents the 0.x -> 1.0 migration; the versions here are the path, not an install snippet -->
 ```toml
 mcpkit = "1"
 ```
@@ -216,7 +219,7 @@ Key changes:
 
 ### Upgrade Process
 
-- [ ] Update `Cargo.toml`: `mcpkit = "1"`
+- [ ] Update `Cargo.toml`: `mcpkit = "1"`  <!-- version-sync:ok -->
 - [ ] Run `cargo build` and fix any compile errors
 - [ ] Address deprecation warnings: `cargo build 2>&1 | grep -i deprecated`
 - [ ] Run test suite: `cargo test`
@@ -255,6 +258,7 @@ If migration causes critical issues, you can roll back to your previous version.
 
 ### Rolling Back to 0.6.x
 
+<!-- version-sync:ok — documents the 0.x -> 1.0 migration; the versions here are the path, not an install snippet -->
 ```toml
 # Revert Cargo.toml
 mcpkit = "0.6"
@@ -268,6 +272,7 @@ cargo build
 
 ### Rolling Back to 0.2.x or Earlier
 
+<!-- version-sync:ok — documents the 0.x -> 1.0 migration; the versions here are the path, not an install snippet -->
 ```toml
 # Revert Cargo.toml
 mcpkit = "0.2"

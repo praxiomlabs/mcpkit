@@ -97,6 +97,7 @@ pub trait Transport: Send + Sync {
 ### Example Usage
 
 **With Tokio (default):**
+<!-- version-sync:ok — point-in-time architectural record; frozen at the version it was written against -->
 ```toml
 [dependencies]
 mcpkit-transport = "0.5"  # tokio-runtime is default
