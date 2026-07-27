@@ -58,8 +58,13 @@ jobs:
         with:
           workspaces: fuzz -> target
 
-      - name: Install cargo-fuzz
-        run: cargo install cargo-fuzz
+      # Prebuilt binary rather than `cargo install cargo-fuzz`, which compiled
+      # the tool from source at an unpinned version. rust-cache made it a no-op
+      # on a warm cache, so the cost only bit on cold or evicted caches — but
+      # the version was never pinned either way.
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
 
       - name: Skip if specific target requested
         if: ${{ github.event.inputs.target != '' && github.event.inputs.target != matrix.target }}
@@ -123,8 +128,13 @@ jobs:
         with:
           workspaces: fuzz -> target
 
-      - name: Install cargo-fuzz
-        run: cargo install cargo-fuzz
+      # Prebuilt binary rather than `cargo install cargo-fuzz`, which compiled
+      # the tool from source at an unpinned version. rust-cache made it a no-op
+      # on a warm cache, so the cost only bit on cold or evicted caches — but
+      # the version was never pinned either way.
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
 
       # These were previously a single step running a loop that only echoed
       # "Restoring corpus for $target" — no cache was ever restored. Since
