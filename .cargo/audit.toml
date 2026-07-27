@@ -1,14 +1,33 @@
 # cargo-audit configuration
 # https://rustsec.org/
+#
+# KEEP IN SYNC WITH deny.toml's [advisories] ignore list.
+#
+# These two files suppressed advisories independently and had drifted into
+# *disjoint* sets: deny.toml ignored RUSTSEC-2023-0071 and RUSTSEC-2025-0134,
+# this file ignored only RUSTSEC-2024-0436. Neither was a superset, so the real
+# suppression surface was three advisories while each file looked complete.
+#
+# The drift was not cosmetic. Because this file did not carry
+# RUSTSEC-2023-0071, `cargo audit` failed — and so did `just audit`, and
+# therefore `just ci-full` and `just release-check`, which depend on it. That
+# was true before this file was touched; verified by running cargo audit
+# against the previous config.
+#
+# Rationale for each suppression lives in deny.toml, not here — duplicating the
+# written risk assessments is how the two lists drifted in the first place.
+# deny.toml is also the copy CI enforces (the `deny` job); cargo-audit runs only
+# from `just audit`. So: add to deny.toml first, mirror the ID here.
+#
+# Removed 2026-07-27: RUSTSEC-2024-0436 (paste, unmaintained). `paste` is no
+# longer in the dependency tree at all — the workspace resolves `pastey` — so
+# the entry was silencing an advisory for a crate that is not present.
 
 [advisories]
-# Advisories to ignore with documented rationale
 ignore = [
-    # RUSTSEC-2024-0436: paste crate no longer maintained
-    # - Only pulled in through rmcp (dev-dependency for comparison benchmarks)
-    # - Not used in production code paths
-    # - See: https://rustsec.org/advisories/RUSTSEC-2024-0436
-    "RUSTSEC-2024-0436",
+    # Mirrors deny.toml. See there for the full risk assessment of each.
+    "RUSTSEC-2023-0071", # rsa / Marvin timing sidechannel — no fix available
+    "RUSTSEC-2025-0134", # rustls-pemfile unmaintained, via tonic 0.12
 ]
 
 # Treat unmaintained crates as warnings, not errors

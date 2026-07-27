@@ -142,6 +142,31 @@ jobs:
           mapfile -t scripts < <(git ls-files '*.sh')
           printf 'checking %d script(s)\n' "${#scripts[@]}"
           shellcheck -S warning "${scripts[@]}"
+      # deny.toml and .cargo/audit.toml suppress advisories independently and had
+      # drifted into disjoint sets — deny.toml carried two IDs, audit.toml a
+      # third and different one. That was not cosmetic: because audit.toml
+      # lacked RUSTSEC-2023-0071, `cargo audit` failed, and with it `just audit`,
+      # `just ci-full` and `just release-check`.
+      #
+      # Compares the parsed `ignore` arrays, not raw greps — the IDs also appear
+      # in prose comments, which a naive grep reports as a phantom difference.
+      - name: Advisory ignore lists are in sync
+        run: |
+          set -euo pipefail
+          extract() {
+            python3 -c "
+          import re,sys
+          s = open(sys.argv[1]).read()
+          m = re.search(r'ignore\s*=\s*\[(.*?)\]', s, re.S)
+          print('\n'.join(sorted(re.findall(r'\"(RUSTSEC-[0-9-]+)\"', m.group(1)))) if m else '')
+          " "$1"
+          }
+          if ! diff <(extract deny.toml) <(extract .cargo/audit.toml); then
+            echo "::error::deny.toml and .cargo/audit.toml ignore different advisory sets."
+            echo "Add to deny.toml first (CI enforces it), then mirror the ID in .cargo/audit.toml."
+            exit 1
+          fi
+          echo "Advisory ignore lists match."
 
   version-sync:
     name: Version Sync
