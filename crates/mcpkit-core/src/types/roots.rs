@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 /// A root a client exposes to servers (typically a project directory).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct Root {
     /// URI of the root (e.g. `file:///home/user/project`).
     pub uri: String,

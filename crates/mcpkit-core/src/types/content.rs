@@ -156,6 +156,7 @@ pub struct TextContent {
 
 /// Image content (base64 encoded).
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct ImageContent {
     /// Base64-encoded image data.
     pub data: String,
@@ -172,6 +173,7 @@ pub struct ImageContent {
 
 /// Audio content (base64 encoded).
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct AudioContent {
     /// Base64-encoded audio data.
     pub data: String,
@@ -191,6 +193,7 @@ pub struct AudioContent {
 /// The resource payload is nested under `resource` to match the spec's
 /// `EmbeddedResource` (`{ "type": "resource", "resource": { "uri": .. } }`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct ResourceContent {
     /// The embedded resource contents.
     pub resource: ResourceContents,
@@ -204,6 +207,7 @@ pub struct ResourceContent {
 
 /// A link to a resource (not embedded inline, just a URI reference).
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct ResourceLinkContent {
     /// URI of the resource.
     pub uri: String,
@@ -235,6 +239,7 @@ pub struct ResourceLinkContent {
 /// A tool call the model wants to make, in a sampling message
 /// (`type: "tool_use"`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct ToolUseContent {
     /// Unique id correlating this call with its later `tool_result`.
     pub id: String,
@@ -250,6 +255,7 @@ pub struct ToolUseContent {
 /// The result of a tool call, fed back into a sampling message
 /// (`type: "tool_result"`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct ToolResultContent {
     /// The id of the `tool_use` this result corresponds to.
     #[serde(rename = "toolUseId")]

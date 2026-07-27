@@ -671,7 +671,11 @@ pub async fn run_augmented_tool(
             protocol_version,
             peer.as_ref(),
         ),
-    };
+    }
+    // Spec: every request this tool raises while it runs — an
+    // `elicitation/create`, a `sampling/createMessage` — MUST carry the same
+    // related task id. Set once here so all 5 dispatch paths inherit it.
+    .with_related_task(handle.id().clone());
     match call_tool_json(handler.as_ref(), &name, args, &ctx).await {
         // Per spec, a tool result with `isError: true` moves the task to
         // `failed`, while `tasks/result` still returns that result.

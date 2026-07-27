@@ -19,6 +19,7 @@ pub enum ElicitMode {
 
 /// A form-mode request to elicit information from the user.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct ElicitRequest {
     /// The elicitation mode. Absent is equivalent to [`ElicitMode::Form`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -28,6 +29,18 @@ pub struct ElicitRequest {
     /// The schema describing what input is expected.
     #[serde(rename = "requestedSchema")]
     pub requested_schema: ElicitationSchema,
+    /// Request task-augmented execution. A client that declared
+    /// `tasks.requests.elicitation.create` replies with a `CreateTaskResult`
+    /// immediately; the `ElicitResult` is retrieved later via `tasks/result`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub task: Option<super::task::TaskMetadata>,
+    /// Optional protocol metadata (`_meta`).
+    ///
+    /// Per spec, an elicitation that a task-augmented request depends on MUST
+    /// carry `io.modelcontextprotocol/related-task` here with the associated
+    /// task id.
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 impl ElicitRequest {
@@ -38,6 +51,8 @@ impl ElicitRequest {
             mode: None,
             message: message.into(),
             requested_schema: schema,
+            task: None,
+            meta: None,
         }
     }
 
@@ -84,6 +99,7 @@ impl ElicitRequest {
 /// unguessable and bound to a verified user identity, and MUST NOT carry
 /// credentials in the URL.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct UrlElicitRequest {
     /// The elicitation mode (always [`ElicitMode::Url`]).
     pub mode: ElicitMode,
@@ -95,6 +111,18 @@ pub struct UrlElicitRequest {
     pub elicitation_id: String,
     /// The URL the user should navigate to.
     pub url: String,
+    /// Request task-augmented execution. A client that declared
+    /// `tasks.requests.elicitation.create` replies with a `CreateTaskResult`
+    /// immediately; the `ElicitResult` is retrieved later via `tasks/result`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub task: Option<super::task::TaskMetadata>,
+    /// Optional protocol metadata (`_meta`).
+    ///
+    /// Per spec, an elicitation that a task-augmented request depends on MUST
+    /// carry `io.modelcontextprotocol/related-task` here with the associated
+    /// task id.
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 impl UrlElicitRequest {
@@ -110,6 +138,8 @@ impl UrlElicitRequest {
             message: message.into(),
             elicitation_id: elicitation_id.into(),
             url: url.into(),
+            task: None,
+            meta: None,
         }
     }
 }
@@ -363,6 +393,7 @@ impl PropertySchema {
 
 /// Result of an elicitation request.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct ElicitResult {
     /// The action taken by the user.
     pub action: ElicitAction,

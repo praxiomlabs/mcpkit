@@ -14,11 +14,17 @@
 #   3. Closed enum variants— the 3 $defs carrying an `enum` array
 #   4. Content types       — the 16 $defs carrying a `const` on properties.type
 #
-# Direction rules (see the audit brief):
-#   Rows 1 and 2 are reported IN-SCHEMA-NOT-IN-MCPKIT only. The mcpkit side is a
-#   deliberately wide literal extraction; its complement is ~562 arbitrary Rust
-#   string literals and carries no conformance signal.
-#   Rows 3 and 4 are reported in both directions.
+# All four rows are reported in BOTH directions. Rows 1 and 2 previously
+# compared the schema against a wide literal sweep of crates/*/src and so were
+# reported one way only — and, it turned out, could not fail at all: the sweep
+# is saturated by doc comments and inline tests, so renaming a routing constant
+# left the gate green. They now compare against the declared constant set in
+# mcpkit-core/src/methods.rs, which is precise in both directions.
+#
+# What this still cannot see: whether a method is ROUTED. A constant can exist
+# and be dispatched nowhere, and it can be routed on some of the five dispatch
+# paths (the server runtime plus four HTTP adapters) and not others. Routing and
+# behaviour are the job of the test suite, not of this script.
 #
 # Usage:
 #   scripts/schema-diff.sh              human-readable report
@@ -163,48 +169,63 @@ printf 'schema sha256: %s\n' "$(sha256sum "$SCHEMA" | cut -d' ' -f1)"
 printf 'defs: %s\n' "$(jq '.["$defs"] | length' "$SCHEMA")"
 
 # ===========================================================================
-# Wide mcpkit literal extraction (shared by rows 1 and 2).
+# mcpkit method-constant extraction (shared by rows 1 and 2).
 #
-# Deliberately wide: `initialize` and `ping` contain no slash, so a
-# "<ns>/<method>" filter would silently drop them — including the one the
-# whole negotiation claim rests on. Extract broadly, intersect one way.
+# The declared `pub const NAME: &str = "..."` set in mcpkit-core's methods.rs —
+# the single place the wire names live, and what every crate routes on.
+#
+# This was a WIDE literal sweep of crates/*/src, and that made rows 1 and 2
+# incapable of failing. Every spec method also appears in doc comments, inline
+# #[cfg(test)] blocks and hand-written client call sites — measured: all 31
+# occur in >=4 distinct places, none only in its constant. Renaming TOOLS_LIST
+# to "tools/lst" left the gate green, as did renaming
+# "notifications/initialized". A row that cannot regress is decoration.
+#
+# Against the constant set both rows are precise, so BOTH directions are
+# meaningful and reported: a missing member means mcpkit cannot serve a spec
+# method, an extra one means it declares a name the spec does not define.
 # ===========================================================================
-grep -rhoE '"[a-z][a-zA-Z_/]*"' "$SRC_GLOB"/*/src --include='*.rs' 2>/dev/null |
-	tr -d '"' | sort -u > "$WORK/mcpkit_literals.txt"
+METHODS_RS="crates/mcpkit-core/src/methods.rs"
+[ -f "$METHODS_RS" ] || { echo "error: $METHODS_RS not found" >&2; exit 1; }
+grep -oE 'pub const [A-Z_]+: &str = "[^"]+"' "$METHODS_RS" |
+	grep -oE '"[^"]+"' | tr -d '"' | sort -u > "$WORK/mcpkit_methods.txt"
 
 # ===========================================================================
-# Row 1 — method names
+# Row 1 — method names (both directions)
 # ===========================================================================
 jq -r '.["$defs"] | to_entries[] | select(.value.properties.method.const)
        | .value.properties.method.const' "$SCHEMA" | sort -u > "$WORK/schema_methods.txt"
 
-hr "Row 1: method names (schema-side difference only)"
-printf 'wide literals from %s/*/src : %s\n' "$SRC_GLOB" "$(wc -l < "$WORK/mcpkit_literals.txt")"
-printf 'schema methods                : %s\n' "$(wc -l < "$WORK/schema_methods.txt")"
-printf 'intersect with schema methods : %s / %s\n' \
-	"$(both_in "$WORK/schema_methods.txt" "$WORK/mcpkit_literals.txt" | wc -l)" \
-	"$(wc -l < "$WORK/schema_methods.txt")"
-printf 'in-schema-not-in-mcpkit       :\n'
-only_in "$WORK/schema_methods.txt" "$WORK/mcpkit_literals.txt" | sed 's/^/  /' || true
-only_in "$WORK/schema_methods.txt" "$WORK/mcpkit_literals.txt" | grep -q . || printf '  (none)\n'
-only_in "$WORK/schema_methods.txt" "$WORK/mcpkit_literals.txt" | emit 'method in-schema-not-in-mcpkit'
+hr "Row 1: method names (both directions)"
+printf 'mcpkit method constants : %s (%s)\n' \
+	"$(wc -l < "$WORK/mcpkit_methods.txt")" "$METHODS_RS"
+printf 'schema methods          : %s\n' "$(wc -l < "$WORK/schema_methods.txt")"
+printf 'both                    : %s\n' \
+	"$(both_in "$WORK/schema_methods.txt" "$WORK/mcpkit_methods.txt" | wc -l)"
+printf 'in-schema-not-in-mcpkit :%s\n' \
+	"$(only_in "$WORK/schema_methods.txt" "$WORK/mcpkit_methods.txt" | paste -sd, - | sed 's/^/ /;s/^ $/ (none)/')"
+printf 'in-mcpkit-not-in-schema :%s\n' \
+	"$(only_in "$WORK/mcpkit_methods.txt" "$WORK/schema_methods.txt" | paste -sd, - | sed 's/^/ /;s/^ $/ (none)/')"
+only_in "$WORK/schema_methods.txt" "$WORK/mcpkit_methods.txt" | emit 'method in-schema-not-in-mcpkit'
+only_in "$WORK/mcpkit_methods.txt" "$WORK/schema_methods.txt" | emit 'method in-mcpkit-not-in-schema'
 
 # ===========================================================================
-# Row 2 — notification methods
+# Row 2 — notification methods (both directions)
 # ===========================================================================
 { grep '^notifications/' "$WORK/schema_methods.txt" || true; } | sort -u > "$WORK/schema_notifs.txt"
-grep '^notifications/' "$WORK/mcpkit_literals.txt" | sort -u > "$WORK/mcpkit_notifs.txt" || true
+{ grep '^notifications/' "$WORK/mcpkit_methods.txt" || true; } | sort -u > "$WORK/mcpkit_notifs.txt"
 
-hr "Row 2: notification methods (schema-side difference only)"
-printf 'mcpkit notifications/* literals: %s\n' "$(wc -l < "$WORK/mcpkit_notifs.txt")"
-printf 'schema notification methods    : %s\n' "$(wc -l < "$WORK/schema_notifs.txt")"
-printf 'intersect                      : %s / %s\n' \
-	"$(both_in "$WORK/schema_notifs.txt" "$WORK/mcpkit_notifs.txt" | wc -l)" \
-	"$(wc -l < "$WORK/schema_notifs.txt")"
-printf 'in-schema-not-in-mcpkit        :\n'
-only_in "$WORK/schema_notifs.txt" "$WORK/mcpkit_notifs.txt" | sed 's/^/  /' || true
-only_in "$WORK/schema_notifs.txt" "$WORK/mcpkit_notifs.txt" | grep -q . || printf '  (none)\n'
+hr "Row 2: notification methods (both directions)"
+printf 'mcpkit notification constants: %s\n' "$(wc -l < "$WORK/mcpkit_notifs.txt")"
+printf 'schema notification methods  : %s\n' "$(wc -l < "$WORK/schema_notifs.txt")"
+printf 'both                         : %s\n' \
+	"$(both_in "$WORK/schema_notifs.txt" "$WORK/mcpkit_notifs.txt" | wc -l)"
+printf 'in-schema-not-in-mcpkit      :%s\n' \
+	"$(only_in "$WORK/schema_notifs.txt" "$WORK/mcpkit_notifs.txt" | paste -sd, - | sed 's/^/ /;s/^ $/ (none)/')"
+printf 'in-mcpkit-not-in-schema      :%s\n' \
+	"$(only_in "$WORK/mcpkit_notifs.txt" "$WORK/schema_notifs.txt" | paste -sd, - | sed 's/^/ /;s/^ $/ (none)/')"
 only_in "$WORK/schema_notifs.txt" "$WORK/mcpkit_notifs.txt" | emit 'notification in-schema-not-in-mcpkit'
+only_in "$WORK/mcpkit_notifs.txt" "$WORK/schema_notifs.txt" | emit 'notification in-mcpkit-not-in-schema'
 
 # ===========================================================================
 # Row 3 — closed enum variants (both directions, per enum)
@@ -432,7 +453,36 @@ extract_struct_flat() {
 	done
 }
 
-hr "Tier 2: structural field diff (every \$def with a same-named mcpkit struct)"
+# ---------------------------------------------------------------------------
+# Alias map: $def name -> mcpkit type name, for types that ARE 1:1 but are
+# spelled differently.
+#
+# Name-based auto-discovery silently skips these, and "no same-named type" was
+# being reported as "no 1:1 Rust type" — which was wrong, and hid a real
+# conformance failure (elicitation params carry no `_meta`, a spec MUST for
+# task-related messages). Anything added here gets diffed like any other type.
+#
+# Deliberately NOT aliased:
+#   TextResourceContents / BlobResourceContents -> ResourceContents
+#     mcpkit flattens both siblings into one struct which is already diffed
+#     against the `ResourceContents` def; aliasing would double-report it.
+#   PromptReference / ResourceTemplateReference -> CompletionRef::{Prompt,Resource}
+#     enum variants, not structs — extract_struct cannot read them. Their
+#     discriminators are covered by Row 4.
+#   StringSchema / NumberSchema / BooleanSchema / *EnumSchema -> PropertySchema
+#     one open-typed struct models all seven; a deliberate modelling choice
+#     already recorded in the baseline.
+alias_for() {
+	case "$1" in
+	ElicitRequestFormParams) echo ElicitRequest ;;
+	ElicitRequestURLParams)  echo UrlElicitRequest ;;
+	EmbeddedResource)        echo ResourceContent ;;
+	ResourceLink)            echo ResourceLinkContent ;;
+	*)                       echo "" ;;
+	esac
+}
+
+hr "Tier 2: structural field diff (every \$def with a same-named or aliased mcpkit struct)"
 unresolved=0
 diffcount=0
 
@@ -440,6 +490,7 @@ diffcount=0
 # discovered rather than listed, so a type added to either side is picked up
 # instead of silently staying unchecked — the hardcoded 7-type list this
 # replaced left 138 defs unexamined and made the sample look like coverage.
+# Defs whose Rust counterpart has a different name are resolved via alias_for().
 #
 # For a `*Request` def the schema node is the JSON-RPC envelope (id/jsonrpc/
 # method/params) while the same-named Rust struct is the params, so when a def
@@ -448,23 +499,29 @@ TIER2="$(
 	jq -r '.["$defs"] | to_entries[]
 	       | .key + "|" + (if (.value.properties.params) then "params" else "self" end)' "$SCHEMA" |
 	while IFS='|' read -r ty kind; do
+		rust="$ty"
 		file="$(grep -rl "^pub struct $ty\b" "$SRC_GLOB"/*/src --include='*.rs' 2>/dev/null | awk 'NR==1')"
-		[ -n "$file" ] || continue
+		if [ -z "$file" ]; then
+			rust="$(alias_for "$ty")"
+			[ -n "$rust" ] || continue
+			file="$(grep -rl "^pub struct $rust\b" "$SRC_GLOB"/*/src --include='*.rs' 2>/dev/null | awk 'NR==1')"
+			[ -n "$file" ] || { echo "warn: alias $ty -> $rust not found in sources" >&2; continue; }
+		fi
 		if [ "$kind" = params ]; then
-			printf '%s|%s|.["$defs"].%s.properties.params\n' "$ty" "$file" "$ty"
+			printf '%s|%s|.["$defs"].%s.properties.params|%s\n' "$ty" "$file" "$ty" "$rust"
 		else
-			printf '%s|%s|.["$defs"].%s\n' "$ty" "$file" "$ty"
+			printf '%s|%s|.["$defs"].%s|%s\n' "$ty" "$file" "$ty" "$rust"
 		fi
 	done
 )"
 
-while IFS='|' read -r ty file path; do
+while IFS='|' read -r ty file path rust; do
 	[ -n "$ty" ] || continue
 	jq -r "$RESOLVE_JQ . as \$root | $path | resolve(\$root)
 	       | (.required) as \$r | .properties | keys[] as \$k
 	       | \$k + \"\t\" + (if (\$r | index(\$k)) then \"req\" else \"opt\" end)" \
 		"$SCHEMA" | sort > "$WORK/s2.txt"
-	extract_struct_flat "$file" "$ty" | sort > "$WORK/m2.txt"
+	extract_struct_flat "$file" "$rust" | sort > "$WORK/m2.txt"
 
 	# A schema node that resolves to zero properties is one this resolver cannot
 	# expand — an `anyOf` union (ElicitRequestParams) or an abstract JSON-RPC base
@@ -477,7 +534,11 @@ while IFS='|' read -r ty file path; do
 		continue
 	fi
 
-	printf '\n%s  (%s)\n' "$ty" "$file"
+	if [ "$rust" != "$ty" ]; then
+		printf '\n%s -> %s  (%s)  [alias]\n' "$ty" "$rust" "$file"
+	else
+		printf '\n%s  (%s)\n' "$ty" "$file"
+	fi
 	printf '  schema path: %s\n' "$path"
 	# `type` is the tagged-union discriminator. mcpkit supplies it from the
 	# enum wrapper (#[serde(tag = "type")]), never as a struct field, so its

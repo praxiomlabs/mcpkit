@@ -439,6 +439,15 @@ async fn task_augmented_tool_elicits_over_the_stream() {
     // PR 6: the peer survives into the spawned task).
     let request = next_stream_request(&mut stream).await;
     assert_eq!(request["method"], "elicitation/create");
+    // Spec MUST (2025-11-25 tasks, "Associating Task-Related Messages"): an
+    // elicitation a task-augmented tool call depends on carries that call's
+    // task id. Key spelled out on purpose — asserting against the constant
+    // that produces it would pass even if the constant were wrong.
+    assert_eq!(
+        request["params"]["_meta"]["io.modelcontextprotocol/related-task"]["taskId"],
+        serde_json::json!(task_id),
+        "elicitation/create raised by a task-augmented tool must carry related-task _meta"
+    );
     let request_id = request["id"].clone();
     let _ = post(
         &client,
@@ -470,4 +479,79 @@ async fn task_augmented_tool_elicits_over_the_stream() {
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
     }
     assert_eq!(text, "elicited: blue");
+}
+
+/// Spec: a notification carries no id and MUST NOT draw a response — including
+/// one the server does not handle, and one whose params are missing.
+///
+/// Asserted on this dispatch path specifically. Each adapter decides this in
+/// its own `handle_mcp_post`, not in the shared `route_*` helpers, so passing
+/// on one adapter says nothing about the other three.
+#[tokio::test]
+async fn notifications_never_draw_a_response() {
+    let (client, _state, _) = setup().await;
+    let sid = init(&client).await;
+
+    for method in [
+        "notifications/initialized",
+        "notifications/cancelled",
+        "notifications/roots/list_changed",
+        "notifications/progress",
+        "notifications/not_a_real_method",
+    ] {
+        let (status, body) = post(
+            &client,
+            Some(&sid),
+            serde_json::json!({ "jsonrpc": "2.0", "method": method }),
+        )
+        .await;
+        assert_eq!(
+            body,
+            serde_json::Value::Null,
+            "{method} drew a response body"
+        );
+        assert_eq!(status, 202, "{method} should be accepted with 202");
+    }
+}
+
+/// Spec: a server honours exactly the capabilities it advertised. This handler
+/// declares no `completion`, so `completion/complete` must be method-not-found
+/// (-32601) — the literal is spelled out rather than referenced through the
+/// constant that produces it.
+#[tokio::test]
+async fn capabilities_are_honoured_exactly_as_advertised() {
+    let (client, _state, _) = setup().await;
+    let (_, init_result) = post(
+        &client,
+        None,
+        serde_json::json!({
+            "jsonrpc": "2.0", "id": 0, "method": "initialize",
+            "params": { "protocolVersion": "2025-11-25", "capabilities": {} }
+        }),
+    )
+    .await;
+    assert!(
+        init_result["result"]["capabilities"]
+            .get("completion")
+            .is_none(),
+        "handler advertised completion it does not implement: {init_result}"
+    );
+    let sid = init(&client).await;
+
+    let (_, body) = post(
+        &client,
+        Some(&sid),
+        serde_json::json!({
+            "jsonrpc": "2.0", "id": 1, "method": "completion/complete",
+            "params": {
+                "ref": { "type": "ref/prompt", "name": "p" },
+                "argument": { "name": "a", "value": "" }
+            }
+        }),
+    )
+    .await;
+    assert_eq!(
+        body["error"]["code"], -32601,
+        "unadvertised completion/complete must be method-not-found: {body}"
+    );
 }

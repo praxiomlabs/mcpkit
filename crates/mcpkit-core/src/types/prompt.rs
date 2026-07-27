@@ -286,6 +286,7 @@ pub struct ListPromptsRequest {
 
 /// Response for listing prompts.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct ListPromptsResult {
     /// The list of available prompts.
     pub prompts: Vec<Prompt>,

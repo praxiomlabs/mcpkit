@@ -306,6 +306,7 @@ pub struct ListResourcesRequest {
 
 /// Response for listing resources.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct ListResourcesResult {
     /// The list of available resources.
     pub resources: Vec<Resource>,
@@ -330,6 +331,7 @@ pub struct ListResourceTemplatesRequest {
 
 /// Response for listing resource templates.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct ListResourceTemplatesResult {
     /// The list of resource templates.
     #[serde(rename = "resourceTemplates")]
@@ -354,6 +356,7 @@ pub struct ReadResourceRequest {
 
 /// Response for reading a resource.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct ReadResourceResult {
     /// The resource contents.
     pub contents: Vec<ResourceContents>,

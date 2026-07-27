@@ -656,10 +656,21 @@ impl TaskManager {
 // Dispatch
 // ============================================================================
 
-/// Attach `_meta["io.modelcontextprotocol/related-task"]` to a `tasks/result`
-/// payload (spec MUST for `tasks/result` responses). Merges with any existing
-/// `_meta` keys.
-fn inject_related_task(mut payload: Value, id: &TaskId) -> Value {
+/// Attach `_meta["io.modelcontextprotocol/related-task"]` to a JSON payload.
+/// Merges with any existing `_meta` keys.
+///
+/// Spec: *"All requests, notifications, and responses related to a task MUST
+/// include the `io.modelcontextprotocol/related-task` key in their `_meta`
+/// field"*. That covers both the `tasks/result` payload and every outbound
+/// request a task makes while it runs — an `elicitation/create` raised by a
+/// task-augmented tool call must carry the same task id as the tool call.
+///
+/// Do **not** apply this to `tasks/get`, `tasks/result` or `tasks/cancel`
+/// requests, nor to `notifications/tasks/status`: the spec says the `taskId`
+/// parameter is the source of truth there and a requestor SHOULD NOT duplicate
+/// it in `_meta`.
+#[must_use]
+pub fn inject_related_task(mut payload: Value, id: &TaskId) -> Value {
     if let Value::Object(map) = &mut payload {
         if let Value::Object(meta) = map
             .entry("_meta")
