@@ -312,33 +312,31 @@ impl Transport for UnixTransport {
             return Ok(None);
         }
 
-        let mut state = self.read_state.lock().await;
+        let mut guard = self.read_state.lock().await;
+        // Borrow the two fields disjointly through one guard. The reader used to
+        // be `take`n out and only restored after the await below; if the future
+        // was dropped while parked there — which the server run loop does on
+        // nearly every iteration — the reader went with it, and every later
+        // `recv` returned `Ok(None)` while `is_connected()` still said true. The
+        // run loop reads that as a clean close and ends the session.
+        let state = &mut *guard;
 
-        // Take the reader temporarily to avoid borrowing issues
-        let Some(reader) = state.reader.take() else {
+        let Some(reader) = state.reader.as_mut() else {
             return Ok(None);
         };
 
         // Clear the buffer and read a line
         state.line_buffer.clear();
 
-        // We need to read into a separate buffer to avoid borrow issues.
         // Bound the read to one byte past the limit so a peer that never sends a
         // newline cannot grow `line_buffer` without bound; the size check below
         // then rejects it. Without this, `read_line` would buffer unboundedly
         // before the post-read check could fire.
         let max = self.config.max_message_size;
-        let (result, reader) = {
-            let mut reader = reader;
-            let result = {
-                let mut limited = (&mut reader).take(max as u64 + 1);
-                limited.read_line(&mut state.line_buffer).await
-            };
-            (result, reader)
+        let result = {
+            let mut limited = (&mut *reader).take(max as u64 + 1);
+            limited.read_line(&mut state.line_buffer).await
         };
-
-        // Put the reader back
-        state.reader = Some(reader);
 
         match result {
             Ok(0) => {

@@ -59,3 +59,50 @@ async fn send_completes_while_recv_is_parked() {
     client.abort();
     let _ = std::fs::remove_file(&path);
 }
+
+#[tokio::test]
+async fn dropping_a_parked_recv_leaves_the_transport_usable() {
+    let path = sock_path("cancel");
+    let _ = std::fs::remove_file(&path);
+    let listener = UnixListener::bind(&path).await.expect("bind");
+
+    let client_path = path.clone();
+    let client = tokio::spawn(async move {
+        let t = UnixTransport::connect(&client_path).await.expect("connect");
+        // Send only after the server has polled and dropped its first `recv`.
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        t.send(Message::Request(Request::new("ping", RequestId::Number(1))))
+            .await
+            .expect("send");
+        tokio::time::sleep(Duration::from_secs(5)).await;
+    });
+
+    let server = listener.accept().await.expect("accept");
+
+    // Poll a receive to the point where it parks, then drop it. The server run
+    // loop does exactly this whenever another arm of its `select` wins.
+    {
+        let recv = server.recv();
+        tokio::pin!(recv);
+        assert!(
+            tokio::time::timeout(Duration::from_millis(100), &mut recv)
+                .await
+                .is_err(),
+            "recv() should still be parked; the test cannot exercise a drop otherwise"
+        );
+    }
+
+    let received = tokio::time::timeout(Duration::from_secs(5), server.recv())
+        .await
+        .expect("recv() did not return after the earlier one was dropped")
+        .expect("recv() errored");
+
+    assert!(
+        received.is_some(),
+        "recv() returned Ok(None) after a dropped receive — the reader was lost, \
+         and the run loop reads this as a closed connection"
+    );
+
+    client.abort();
+    let _ = std::fs::remove_file(&path);
+}
