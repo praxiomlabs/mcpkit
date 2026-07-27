@@ -186,51 +186,48 @@ jobs:
           fi
           echo "All version references are correct!"
 
+  # Relative links and anchors in markdown — offline, no network.
+  #
+  # This job used to check external http/https links too, and that made merges
+  # depend on third-party uptime. It has now failed three distinct ways with no
+  # change to the repo: lychee resolving `file://` fixtures against the runner
+  # filesystem, rate-limit timeouts from link volume, and (2026-07-27) a 415
+  # from effective-rust.com that turned `main` red on a docs-only release-prep
+  # commit while the same URL served 200 everywhere else. Each was answered with
+  # another exclude, and the list grew every time reality surprised it.
+  #
+  # External links moved to .github/workflows/link-check-external.yml, which
+  # runs on a schedule. A broken external link is worth knowing about; it is not
+  # worth blocking a merge that did not cause it.
+  #
+  # Scope is markdown only. Rust sources are deliberately excluded: they embed
+  # `file://` fixture URIs (46 of them) that offline mode resolves and reports
+  # as missing files. Rustdoc intra-doc links are already validated by the
+  # Documentation job's `RUSTDOCFLAGS=-D warnings`.
   link-check:
-    name: Link Check
+    name: Link Check (offline)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      # Covers Rust sources as well as markdown: rustdoc comments carry real
-      # reference links, and nothing was checking them — a 404 in
-      # extension/mod.rs survived because this job only ever globbed ./docs.
-      # The example.com/fixture-host exclusions below exist because doc examples
-      # and security tests embed deliberately-unreachable URLs.
-      - name: Check links in docs and rustdoc comments
+      - name: Check relative links and anchors
         uses: lycheeverse/lychee-action@v2
         with:
+          # --include-fragments=anchor-only checks `#section` targets inside the
+          # repo. It caught a real break the http/https-only job could never
+          # see: CONTRIBUTING.md pointed at
+          # docs/versioning.md#minimum-supported-rust-version, but the heading
+          # slug is #minimum-supported-rust-version-msrv.
           args: >
+            --offline
             --verbose
             --no-progress
-            --scheme http
-            --scheme https
-            --max-retries 6
-            --retry-wait-time 3
-            --timeout 30
-            --max-concurrency 16
-            --accept 200,204,206
-            --exclude "^https://crates.io"
-            --exclude "^https://docs.rs"
-            --exclude "^https://www.reddit.com"
-            --exclude "^https://cliffle.com"
-            --exclude "^https://img.shields.io"
-            --exclude "^https?://$"
-            --exclude "^https?://([^/]*\.)?example\.(com|org|net)([/:]|$)"
-            --exclude "^https?://([^/]*\.)?example([/:]|$)"
-            --exclude "^https?://[^./:]+([/:]|$)"
-            --exclude "^https?://[^/]*(trusted|malicious|evil)"
-            --exclude "^https?://(anything|app[0-9])\.com([/:]|$)"
-            --exclude-loopback
-            --exclude "^https?://[^/]*\.(test|invalid|localhost)([/:]|$)"
-            --exclude "YOUR_USERNAME"
+            --include-fragments=anchor-only
             './docs/**/*.md'
             './README.md'
             './CONTRIBUTING.md'
             './spec/**/*.md'
-            './crates/**/src/**/*.rs'
-            './mcpkit/src/**/*.rs'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          fail: true
+          failIfEmpty: true
 
   # Diffs mcpkit's wire vocabulary against the vendored official schema.
   # Ungated on purpose: spec/** and scripts/** match no path filter in the

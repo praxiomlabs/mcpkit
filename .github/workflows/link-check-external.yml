@@ -1,0 +1,75 @@
+name: Link Check (external)
+
+# External http/https links, on a schedule instead of on every merge.
+#
+# This ran as part of CI until 2026-07-27 and blocked merges on third-party
+# uptime. It failed three distinct ways with no change to the repo — lychee
+# resolving `file://` fixtures against the runner filesystem, rate-limit
+# timeouts from link volume, and a 415 from effective-rust.com that turned
+# `main` red on a docs-only commit while the same URL served 200 elsewhere.
+# Each was answered with another exclude, and the list grew every time reality
+# surprised it.
+#
+# A dead external link is worth knowing about. It is not worth blocking a merge
+# that did not cause it, so this reports rather than gates. Relative links and
+# anchors — the ones a change can actually break — stay gated in ci.yml's
+# offline `link-check` job.
+#
+# The args below are carried over verbatim: every exclude encodes a real
+# incident, and dropping one silently re-opens it.
+
+on:
+  schedule:
+    # Mondays 07:00 UTC. Weekly is enough for link rot; more often mostly
+    # re-samples the same flaky endpoints.
+    - cron: '0 7 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  link-check-external:
+    name: External links
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      # The example.com/fixture-host exclusions exist because doc examples and
+      # security tests embed deliberately-unreachable URLs.
+      - name: Check external links in docs and rustdoc comments
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: >
+            --verbose
+            --no-progress
+            --scheme http
+            --scheme https
+            --max-retries 6
+            --retry-wait-time 3
+            --timeout 30
+            --max-concurrency 16
+            --accept 200,204,206
+            --exclude "^https://crates.io"
+            --exclude "^https://docs.rs"
+            --exclude "^https://www.reddit.com"
+            --exclude "^https://cliffle.com"
+            --exclude "^https://img.shields.io"
+            --exclude "^https?://$"
+            --exclude "^https?://([^/]*\.)?example\.(com|org|net)([/:]|$)"
+            --exclude "^https?://([^/]*\.)?example([/:]|$)"
+            --exclude "^https?://[^./:]+([/:]|$)"
+            --exclude "^https?://[^/]*(trusted|malicious|evil)"
+            --exclude "^https?://(anything|app[0-9])\.com([/:]|$)"
+            --exclude-loopback
+            --exclude "^https?://[^/]*\.(test|invalid|localhost)([/:]|$)"
+            --exclude "YOUR_USERNAME"
+            './docs/**/*.md'
+            './README.md'
+            './CONTRIBUTING.md'
+            './spec/**/*.md'
+            './crates/**/src/**/*.rs'
+            './mcpkit/src/**/*.rs'
+          fail: true
+          failIfEmpty: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
