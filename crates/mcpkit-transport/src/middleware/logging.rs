@@ -135,13 +135,13 @@ impl LoggingLayer {
 /// impossible) serialization failure, returns a placeholder rather than
 /// exposing the raw message.
 fn redact_message(msg: &Message, keys: &HashSet<String>) -> Value {
-    match serde_json::to_value(msg) {
-        Ok(mut value) => {
+    serde_json::to_value(msg).map_or_else(
+        |_| Value::String("<redaction failed>".to_string()),
+        |mut value| {
             redact_in_place(&mut value, keys);
             value
-        }
-        Err(_) => Value::String("<redaction failed>".to_string()),
-    }
+        },
+    )
 }
 
 fn redact_in_place(value: &mut Value, keys: &HashSet<String>) {

@@ -211,6 +211,11 @@ pub async fn sleep(duration: std::time::Duration) {
 // =============================================================================
 
 /// Apply a timeout to a future.
+///
+/// # Errors
+///
+/// Returns [`TimeoutError`] if `future` has not completed when `duration`
+/// elapses.
 #[cfg(feature = "tokio-runtime")]
 pub async fn timeout<F, T>(duration: std::time::Duration, future: F) -> Result<T, TimeoutError>
 where
@@ -326,6 +331,10 @@ impl<R: AsyncRead + Unpin> BufReader<R> {
     ///
     /// For zero-copy scenarios, consider using [`read_line_bytes`](Self::read_line_bytes)
     /// which returns `Bytes` directly without UTF-8 conversion overhead.
+    ///
+    /// # Errors
+    ///
+    /// Returns any [`io::Error`] from the underlying reader.
     pub async fn read_line(&mut self, line: &mut String) -> io::Result<usize> {
         let bytes = self.read_line_bytes().await?;
         let len = bytes.len();
@@ -357,6 +366,10 @@ impl<R: AsyncRead + Unpin> BufReader<R> {
     ///     let message: Message = serde_json::from_slice(&line_bytes)?;
     /// }
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns any [`io::Error`] from the underlying reader.
     pub async fn read_line_bytes(&mut self) -> io::Result<Bytes> {
         use futures::io::AsyncReadExt;
 

@@ -2,6 +2,11 @@
 //!
 //! This middleware adds configurable timeouts to send and receive operations.
 
+// `clippy::option_if_let_else`: both send/recv match on an Option<Duration>
+// where each arm is a multi-line timeout-vs-passthrough branch. Folding them
+// into map_or_else closures obscures which path is the timeout path.
+#![allow(clippy::option_if_let_else)]
+
 use crate::error::TransportError;
 use crate::middleware::TransportLayer;
 use crate::traits::{Transport, TransportMetadata};

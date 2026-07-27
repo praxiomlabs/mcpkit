@@ -122,20 +122,17 @@ impl TransportError {
                     TransportErrorKind::ConnectionClosed
                 }
                 std::io::ErrorKind::TimedOut => TransportErrorKind::Timeout,
-                std::io::ErrorKind::WouldBlock
-                | std::io::ErrorKind::Interrupted
-                | std::io::ErrorKind::UnexpectedEof => TransportErrorKind::ReadFailed,
                 std::io::ErrorKind::WriteZero => TransportErrorKind::WriteFailed,
+                // WouldBlock / Interrupted / UnexpectedEof land here too.
                 _ => TransportErrorKind::ReadFailed,
             },
-            Self::Json(_) => TransportErrorKind::InvalidMessage,
+            Self::Json(_)
+            | Self::Deserialization { .. }
+            | Self::MessageTooLarge { .. }
+            | Self::InvalidMessage { .. } => TransportErrorKind::InvalidMessage,
             Self::Serialization { .. } => TransportErrorKind::WriteFailed,
-            Self::Deserialization { .. } => TransportErrorKind::InvalidMessage,
-            Self::Connection { .. } => TransportErrorKind::ConnectionFailed,
+            Self::Connection { .. } | Self::NotConnected => TransportErrorKind::ConnectionFailed,
             Self::ConnectionClosed | Self::AlreadyClosed => TransportErrorKind::ConnectionClosed,
-            Self::NotConnected => TransportErrorKind::ConnectionFailed,
-            Self::MessageTooLarge { .. } => TransportErrorKind::InvalidMessage,
-            Self::InvalidMessage { .. } => TransportErrorKind::InvalidMessage,
             Self::Protocol { .. } => TransportErrorKind::ProtocolViolation,
             Self::Timeout { .. } => TransportErrorKind::Timeout,
             Self::RateLimited { .. } => TransportErrorKind::RateLimited,

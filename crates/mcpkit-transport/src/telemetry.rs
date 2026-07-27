@@ -47,6 +47,15 @@
 //! | `mcp_errors_total` | Counter | Total errors by type |
 //! | `mcp_active_connections` | Gauge | Currently active connections |
 
+// `clippy::cast_*`: counter arithmetic for reporting: integer counters are divided as f64 to
+// produce display ratios, and Duration::as_millis (u128) is narrowed to u64 for
+// histogram buckets. No plausible message count or latency exceeds either
+// range, and there is no lossless alternative for a ratio.
+#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::cast_possible_wrap)]
+
 use crate::error::TransportError;
 use crate::traits::{Transport, TransportMetadata};
 use mcpkit_core::protocol::Message;
@@ -581,6 +590,10 @@ pub mod propagation {
 
     /// Extract trace context from headers.
     #[must_use]
+    // `clippy::implicit_hasher`: generalising to `HashMap<_, _, S>` would change
+    // a public signature for no caller benefit — the header maps handed in are
+    // always std-hasher maps built by the HTTP layer.
+    #[allow(clippy::implicit_hasher)]
     pub fn extract_context(headers: &HashMap<String, String>) -> Option<TraceContext> {
         // W3C Trace Context format
         let traceparent = headers.get("traceparent")?;
@@ -599,6 +612,9 @@ pub mod propagation {
     }
 
     /// Inject trace context into headers.
+    // `clippy::implicit_hasher`: see extract_context above — generalising the
+    // hasher would change a public signature for no caller benefit.
+    #[allow(clippy::implicit_hasher)]
     pub fn inject_context(context: &TraceContext, headers: &mut HashMap<String, String>) {
         headers.insert(
             "traceparent".to_string(),
@@ -792,7 +808,7 @@ pub mod otel {
     /// }
     /// ```
     pub fn init_tracing(
-        config: OtelConfig,
+        config: &OtelConfig,
     ) -> Result<TracingGuard, Box<dyn std::error::Error + Send + Sync>> {
         // Build resource attributes
         let mut attributes = vec![KeyValue::new("service.name", config.service_name.clone())];
@@ -863,7 +879,7 @@ pub mod otel {
             config.service_name = service_name;
         }
 
-        init_tracing(config)
+        init_tracing(&config)
     }
 }
 

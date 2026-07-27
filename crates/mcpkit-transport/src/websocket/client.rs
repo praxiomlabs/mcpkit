@@ -78,6 +78,11 @@ impl WebSocketTransport {
     }
 
     /// Connect to the WebSocket server.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError::Connection`] if the WebSocket handshake fails, the
+    /// URL is invalid, or TLS negotiation is rejected.
     #[cfg(feature = "websocket")]
     pub async fn connect(config: WebSocketConfig) -> Result<Self, TransportError> {
         let transport = Self::new(config);
@@ -176,11 +181,11 @@ impl WebSocketTransport {
     #[must_use]
     pub fn connection_state(&self) -> ConnectionState {
         match self.connection_state.load(Ordering::Acquire) {
-            0 => ConnectionState::Disconnected,
             1 => ConnectionState::Connecting,
             2 => ConnectionState::Connected,
             3 => ConnectionState::Reconnecting,
             4 => ConnectionState::Closed,
+            // 0, and any value the atomic should never hold, read as Disconnected.
             _ => ConnectionState::Disconnected,
         }
     }
@@ -253,9 +258,8 @@ impl WebSocketTransport {
             // Try to receive from the stream
             let ws_msg = {
                 let mut state = self.state.lock().await;
-                let stream = match state.stream.as_mut() {
-                    Some(s) => s,
-                    None => return Ok(None),
+                let Some(stream) = state.stream.as_mut() else {
+                    return Ok(None);
                 };
 
                 match stream.next().await {
@@ -459,6 +463,11 @@ impl WebSocketTransportBuilder {
     }
 
     /// Build the transport (connects immediately).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError::Connection`] if the WebSocket handshake fails with
+    /// the accumulated configuration.
     pub async fn connect(self) -> Result<WebSocketTransport, TransportError> {
         WebSocketTransport::connect(self.config).await
     }

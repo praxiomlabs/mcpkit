@@ -42,6 +42,14 @@
 //! }
 //! ```
 
+// `clippy::cast_*`: counter and timestamp arithmetic for rate-limit accounting: counters are
+// divided as f64 and durations narrowed to u64. Values are bounded by the
+// configured window and quota.
+#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::cast_possible_wrap)]
+
 use super::{RateLimitAlgorithm, RateLimitConfig};
 use async_lock::Mutex;
 use async_trait::async_trait;

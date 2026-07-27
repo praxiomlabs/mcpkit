@@ -170,6 +170,11 @@ impl UnixTransport {
     }
 
     /// Connect to a Unix socket server.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError::Connection`] if the socket path does not exist, is
+    /// not a socket, or the peer refuses the connection.
     #[cfg(feature = "tokio-runtime")]
     pub async fn connect(path: impl AsRef<Path>) -> Result<Self, TransportError> {
         let config = UnixSocketConfig::new(path);
@@ -185,6 +190,11 @@ impl UnixTransport {
     }
 
     /// Connect with custom configuration.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError::Connection`] if the socket path does not exist, is
+    /// not a socket, or the peer refuses the connection.
     #[cfg(feature = "tokio-runtime")]
     pub async fn connect_with_config(config: UnixSocketConfig) -> Result<Self, TransportError> {
         let stream =
@@ -290,9 +300,8 @@ impl Transport for UnixTransport {
         let mut state = self.state.lock().await;
 
         // Take the reader temporarily to avoid borrowing issues
-        let reader = match state.reader.take() {
-            Some(r) => r,
-            None => return Ok(None),
+        let Some(reader) = state.reader.take() else {
+            return Ok(None);
         };
 
         // Clear the buffer and read a line
@@ -403,13 +412,27 @@ pub struct UnixListener {
 
 impl UnixListener {
     /// Bind to a Unix socket path.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError::Connection`] if the path is already in use or the
+    /// process lacks permission to create the socket.
     pub async fn bind(path: impl AsRef<Path>) -> Result<Self, TransportError> {
         let config = UnixSocketConfig::new(path);
         Self::bind_with_config(config).await
     }
 
     /// Bind with custom configuration.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError::Connection`] if the path is already in use or the
+    /// process lacks permission to create the socket.
     #[cfg(feature = "tokio-runtime")]
+    // `clippy::unused_async`: no await in this body today, but the signature is
+    // public API and matches connect_with_config / the other transports' bind
+    // entry points. Dropping `async` is a breaking change for every caller.
+    #[allow(clippy::unused_async)]
     pub async fn bind_with_config(config: UnixSocketConfig) -> Result<Self, TransportError> {
         // Remove existing socket file if it exists
         if config.path.exists() {
@@ -597,11 +620,21 @@ impl UnixTransportBuilder {
     }
 
     /// Connect to the socket.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError::Connection`] if connecting with the accumulated
+    /// configuration fails.
     pub async fn connect(self) -> Result<UnixTransport, TransportError> {
         UnixTransport::connect_with_config(self.config).await
     }
 
     /// Create a listener on the socket.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError::Connection`] if binding with the accumulated
+    /// configuration fails.
     pub async fn listen(self) -> Result<UnixListener, TransportError> {
         UnixListener::bind_with_config(self.config).await
     }

@@ -32,6 +32,9 @@
 //! # }
 //! ```
 
+// `clippy::cast_*`: counter arithmetic for reporting: batch size averages as f64.
+#![allow(clippy::cast_precision_loss)]
+
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};

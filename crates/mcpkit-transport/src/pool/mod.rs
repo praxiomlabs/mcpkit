@@ -29,6 +29,12 @@
 //! assert!(config.test_on_acquire);
 //! ```
 
+// `clippy::cast_sign_loss`: test-support arithmetic on small loop indices.
+#![allow(clippy::cast_sign_loss)]
+// `clippy::cast_*`: test-support arithmetic: small loop indices narrowed for Duration helpers.
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_precision_loss)]
+
 mod config;
 mod connection;
 mod manager;

@@ -3,6 +3,12 @@
 //! This middleware adds automatic retry logic with configurable backoff
 //! for transient failures.
 
+// `clippy::cast_*`: exponential-backoff arithmetic: attempt count is small and bounded by
+// max_retries, so the i32 conversion for powi cannot wrap.
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::cast_possible_truncation)]
+
 use crate::error::TransportError;
 use crate::middleware::TransportLayer;
 use crate::traits::{Transport, TransportMetadata};
@@ -62,15 +68,13 @@ impl ExponentialBackoff {
         let base = self.initial_delay.as_secs_f64() * self.multiplier.powi(attempt as i32);
         let delay = base.min(self.max_delay.as_secs_f64());
 
-        let delay = if let Some(jitter) = self.jitter {
-            // Scale the delay by a random factor in [1 - jitter, 1 + jitter) so
-            // coordinated retries spread out (thundering-herd protection).
+        // Scale the delay by a random factor in [1 - jitter, 1 + jitter) so
+        // coordinated retries spread out (thundering-herd protection).
+        let delay = self.jitter.map_or(delay, |jitter| {
             let random = rand::random::<f64>(); // [0, 1)
             let jitter_factor = (2.0 * jitter).mul_add(random, 1.0 - jitter);
             delay * jitter_factor
-        } else {
-            delay
-        };
+        });
 
         Duration::from_secs_f64(delay)
     }
@@ -150,9 +154,9 @@ impl Default for RetryLayer {
     }
 }
 
-impl<T: Transport> TransportLayer<T> for RetryLayer
+impl<T> TransportLayer<T> for RetryLayer
 where
-    T: Clone,
+    T: Transport + Clone,
     T::Error: Into<TransportError> + From<TransportError>,
 {
     type Transport = RetryTransport<T>;

@@ -377,6 +377,10 @@ impl SyncStdioTransport {
     }
 
     /// Close the transport.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the underlying streams cannot be shut down.
     pub fn close(&self) -> Result<(), TransportError> {
         self.connected.store(false, Ordering::SeqCst);
         if let Ok(mut stdout) = self.stdout.lock() {

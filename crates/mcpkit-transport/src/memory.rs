@@ -119,12 +119,14 @@ impl Transport for MemoryTransport {
         }
 
         let mut receiver = self.receiver.lock().await;
-        if let Some(msg) = receiver.next().await {
-            Ok(Some(msg))
-        } else {
-            self.connected.store(false, Ordering::SeqCst);
-            Ok(None)
-        }
+        receiver.next().await.map_or_else(
+            || {
+                // Channel closed: the peer is gone, so mark this end disconnected.
+                self.connected.store(false, Ordering::SeqCst);
+                Ok(None)
+            },
+            |msg| Ok(Some(msg)),
+        )
     }
 
     async fn close(&self) -> Result<(), Self::Error> {

@@ -21,6 +21,11 @@
 //! }
 //! ```
 
+// `clippy::result_large_err`: the handshake callback's signature is fixed by tungstenite:
+// `Response` is its type, not ours, and the closure shape is required by
+// `accept_hdr_async`. Boxing is not available at this seam.
+#![allow(clippy::result_large_err)]
+
 use std::sync::atomic::{AtomicBool, Ordering};
 
 #[cfg(feature = "websocket")]
@@ -150,8 +155,7 @@ impl WebSocketServerConfig {
     #[must_use]
     pub fn is_origin_allowed(&self, origin: Option<&str>) -> bool {
         match self.origin_validation_mode {
-            OriginValidationMode::Disabled => true,
-            OriginValidationMode::WarnAndAllow => true,
+            OriginValidationMode::Disabled | OriginValidationMode::WarnAndAllow => true,
             OriginValidationMode::AllowList => {
                 if self.allowed_origins.is_empty() {
                     return true;
@@ -305,6 +309,11 @@ impl WebSocketListener {
     ///     // Handle the transport...
     /// }
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError::Connection`] if the listener fails or the incoming
+    /// connection does not complete a WebSocket handshake.
     pub async fn accept(&self) -> Result<AcceptedConnection, TransportError> {
         let mut rx = self.connection_rx.lock().await;
         rx.recv().await.ok_or_else(|| TransportError::Connection {
@@ -317,6 +326,15 @@ impl WebSocketListener {
     /// This spawns a background task that accepts connections and makes them
     /// available through [`accept`](Self::accept). Call [`stop`](Self::stop)
     /// to shut down the listener.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError::Connection`] if the listen address cannot be bound.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the hardcoded HTTP 403 rejection response fails to build, which
+    /// cannot happen for a fixed status and body.
     pub async fn start(&self) -> Result<(), TransportError> {
         use tokio::net::TcpListener;
 
@@ -466,7 +484,7 @@ impl WebSocketListener {
     pub async fn stop(&self) {
         self.running.store(false, Ordering::Release);
         if let Some(tx) = self.shutdown_tx.lock().await.take() {
-            let _ = tx.send(());
+            drop(tx.send(()));
         }
         tracing::info!(
             active_connections = self.active_connections(),

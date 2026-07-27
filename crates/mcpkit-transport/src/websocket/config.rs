@@ -1,5 +1,15 @@
 //! WebSocket transport configuration types.
 
+// `clippy::cast_possible_wrap`: `attempt` is bounded by max_retries, so the i32 conversion for powi
+// cannot wrap.
+#![allow(clippy::cast_possible_wrap)]
+// `clippy::cast_*`: exponential-backoff arithmetic: the delay is computed in f64 to apply the
+// multiplier, then narrowed to u64 milliseconds. Truncation is the intended
+// rounding, and the value is clamped by max_delay.
+#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_sign_loss)]
+
 use std::time::Duration;
 
 /// Configuration for WebSocket transport.
