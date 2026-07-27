@@ -52,6 +52,9 @@ fn client_configs_are_constructible() {
 ///   `mcpkit` can reach them.
 /// * `NamedPipeConfig` is `#[cfg(windows)]`; it is covered instead by
 ///   `cargo check --target x86_64-pc-windows-msvc`.
+///
+/// `UnixSocketConfig` is `#[cfg(unix)]` and lives in its own gated test below —
+/// this suite runs on Linux, macOS and Windows.
 #[test]
 fn transport_configs_are_constructible() {
     let _ = mcpkit_transport::pool::PoolConfig::new().max_connections(4);
@@ -59,6 +62,13 @@ fn transport_configs_are_constructible() {
     let _ = mcpkit_transport::middleware::BatchingConfig::default();
     let _ = mcpkit_transport::middleware::RateLimitConfig::new(10, Duration::from_secs(1));
     let _ = mcpkit_transport::TelemetryConfig::new("svc");
+}
+
+/// `UnixSocketConfig` is `#[cfg(unix)]`, so it needs its own gated test — putting
+/// it in the block above compiled on Linux and broke the Windows job.
+#[cfg(unix)]
+#[test]
+fn unix_transport_config_is_constructible() {
     let _ = mcpkit_transport::unix::UnixSocketConfig::new("/tmp/mcpkit-test.sock");
 }
 
