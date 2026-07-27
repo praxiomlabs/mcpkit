@@ -37,56 +37,55 @@ fn extract_text(msg: WsMessage) -> Option<String> {
 /// Simple WebSocket server that echoes JSON-RPC responses
 async fn spawn_test_server(listener: TcpListener) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
-        if let Ok((stream, _addr)) = listener.accept().await {
-            if let Ok(ws_stream) = accept_async(stream).await {
-                let (mut tx, mut rx) = ws_stream.split();
+        if let Ok((stream, _addr)) = listener.accept().await
+            && let Ok(ws_stream) = accept_async(stream).await
+        {
+            let (mut tx, mut rx) = ws_stream.split();
 
-                while let Some(Ok(msg)) = rx.next().await {
-                    if let Some(text) = extract_text(msg.clone()) {
-                        // Parse as MCP message
-                        if let Ok(mcp_msg) = serde_json::from_str::<Message>(&text) {
-                            let response = match mcp_msg {
-                                Message::Request(req) => {
-                                    let resp = match req.method.as_ref() {
-                                        "initialize" => Response::success(
-                                            req.id,
-                                            json!({
-                                                "protocolVersion": "2025-11-25",
-                                                "serverInfo": {
-                                                    "name": "test-ws-server",
-                                                    "version": "1.0.0"
-                                                },
-                                                "capabilities": {}
-                                            }),
-                                        ),
-                                        "tools/list" => {
-                                            Response::success(req.id, json!({ "tools": [] }))
-                                        }
-                                        "ping" => Response::success(req.id, json!({})),
-                                        _ => Response::error(
-                                            req.id,
-                                            mcpkit::error::JsonRpcError::method_not_found(
-                                                req.method.to_string(),
-                                            ),
-                                        ),
-                                    };
-                                    Some(Message::Response(resp))
-                                }
-                                Message::Notification(_) => None,
-                                Message::Response(_) => None,
-                            };
-
-                            if let Some(resp) = response {
-                                if let Ok(json) = serde_json::to_string(&resp) {
-                                    if tx.send(ws_text(json)).await.is_err() {
-                                        break;
+            while let Some(Ok(msg)) = rx.next().await {
+                if let Some(text) = extract_text(msg.clone()) {
+                    // Parse as MCP message
+                    if let Ok(mcp_msg) = serde_json::from_str::<Message>(&text) {
+                        let response = match mcp_msg {
+                            Message::Request(req) => {
+                                let resp = match req.method.as_ref() {
+                                    "initialize" => Response::success(
+                                        req.id,
+                                        json!({
+                                            "protocolVersion": "2025-11-25",
+                                            "serverInfo": {
+                                                "name": "test-ws-server",
+                                                "version": "1.0.0"
+                                            },
+                                            "capabilities": {}
+                                        }),
+                                    ),
+                                    "tools/list" => {
+                                        Response::success(req.id, json!({ "tools": [] }))
                                     }
-                                }
+                                    "ping" => Response::success(req.id, json!({})),
+                                    _ => Response::error(
+                                        req.id,
+                                        mcpkit::error::JsonRpcError::method_not_found(
+                                            req.method.to_string(),
+                                        ),
+                                    ),
+                                };
+                                Some(Message::Response(resp))
                             }
+                            Message::Notification(_) => None,
+                            Message::Response(_) => None,
+                        };
+
+                        if let Some(resp) = response
+                            && let Ok(json) = serde_json::to_string(&resp)
+                            && tx.send(ws_text(json)).await.is_err()
+                        {
+                            break;
                         }
-                    } else if let WsMessage::Close(_) = msg {
-                        break;
                     }
+                } else if let WsMessage::Close(_) = msg {
+                    break;
                 }
             }
         }

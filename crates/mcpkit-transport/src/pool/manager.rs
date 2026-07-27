@@ -228,12 +228,12 @@ where
                 }
 
                 // Check max connection lifetime
-                if let Some(max_lifetime) = self.config.max_connection_lifetime {
-                    if conn.is_expired(max_lifetime) {
-                        self.stats_recycled_lifetime.fetch_add(1, Ordering::Relaxed);
-                        self.stats_closed.fetch_add(1, Ordering::Relaxed);
-                        continue;
-                    }
+                if let Some(max_lifetime) = self.config.max_connection_lifetime
+                    && conn.is_expired(max_lifetime)
+                {
+                    self.stats_recycled_lifetime.fetch_add(1, Ordering::Relaxed);
+                    self.stats_closed.fetch_add(1, Ordering::Relaxed);
+                    continue;
                 }
 
                 conn.touch();
@@ -323,14 +323,14 @@ where
         }
 
         // Check max connection lifetime on release
-        if let Some(max_lifetime) = self.config.max_connection_lifetime {
-            if conn.is_expired(max_lifetime) {
-                self.stats_recycled_lifetime.fetch_add(1, Ordering::Relaxed);
-                self.stats_closed.fetch_add(1, Ordering::Relaxed);
-                // Notify waiters so they can try to create a new connection
-                self.notify.notify(1);
-                return;
-            }
+        if let Some(max_lifetime) = self.config.max_connection_lifetime
+            && conn.is_expired(max_lifetime)
+        {
+            self.stats_recycled_lifetime.fetch_add(1, Ordering::Relaxed);
+            self.stats_closed.fetch_add(1, Ordering::Relaxed);
+            // Notify waiters so they can try to create a new connection
+            self.notify.notify(1);
+            return;
         }
 
         conn.touch();

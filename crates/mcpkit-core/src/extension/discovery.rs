@@ -117,17 +117,16 @@ impl ExtensionQuery {
 
             if let Some(ext) = extension {
                 // Check version if specified
-                if let Some(min_version) = self.min_versions.get(name) {
-                    if let Some(ref actual_version) = ext.version {
-                        if !version_satisfies(actual_version, min_version) {
-                            version_mismatches.push(VersionMismatch {
-                                extension: name.clone(),
-                                required: min_version.clone(),
-                                actual: actual_version.clone(),
-                            });
-                            continue;
-                        }
-                    }
+                if let Some(min_version) = self.min_versions.get(name)
+                    && let Some(ref actual_version) = ext.version
+                    && !version_satisfies(actual_version, min_version)
+                {
+                    version_mismatches.push(VersionMismatch {
+                        extension: name.clone(),
+                        required: min_version.clone(),
+                        actual: actual_version.clone(),
+                    });
+                    continue;
                 }
                 found.insert(name.clone(), ext.clone());
             } else if *requirement == ExtensionRequirement::Required {
@@ -158,17 +157,16 @@ impl ExtensionQuery {
             let extension = registry.as_ref().and_then(|r| r.get(name));
 
             if let Some(ext) = extension {
-                if let Some(min_version) = self.min_versions.get(name) {
-                    if let Some(ref actual_version) = ext.version {
-                        if !version_satisfies(actual_version, min_version) {
-                            version_mismatches.push(VersionMismatch {
-                                extension: name.clone(),
-                                required: min_version.clone(),
-                                actual: actual_version.clone(),
-                            });
-                            continue;
-                        }
-                    }
+                if let Some(min_version) = self.min_versions.get(name)
+                    && let Some(ref actual_version) = ext.version
+                    && !version_satisfies(actual_version, min_version)
+                {
+                    version_mismatches.push(VersionMismatch {
+                        extension: name.clone(),
+                        required: min_version.clone(),
+                        actual: actual_version.clone(),
+                    });
+                    continue;
                 }
                 found.insert(name.clone(), ext.clone());
             } else if *requirement == ExtensionRequirement::Required {

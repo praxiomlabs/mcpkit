@@ -475,19 +475,18 @@ pub fn validate_claims(claims: &TokenClaims, validation: &TokenValidation) -> Re
         .map_or(0, |d| d.as_secs());
 
     // Validate expiration (use saturating arithmetic to prevent overflow)
-    if validation.validate_exp {
-        if let Some(exp) = claims.exp {
-            if now > exp.saturating_add(validation.leeway_seconds) {
-                return Err(JwtError::Expired);
-            }
-        }
+    if validation.validate_exp
+        && let Some(exp) = claims.exp
+        && now > exp.saturating_add(validation.leeway_seconds)
+    {
+        return Err(JwtError::Expired);
     }
 
     // Validate not before (use saturating arithmetic to prevent overflow)
-    if let Some(nbf) = claims.nbf {
-        if now.saturating_add(validation.leeway_seconds) < nbf {
-            return Err(JwtError::NotYetValid);
-        }
+    if let Some(nbf) = claims.nbf
+        && now.saturating_add(validation.leeway_seconds) < nbf
+    {
+        return Err(JwtError::NotYetValid);
     }
 
     // Validate issuer

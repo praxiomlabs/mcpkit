@@ -159,44 +159,37 @@ impl<H: ToolHandler> ToolHandler for ValidatingToolHandler<H> {
             }
         };
 
-        if self.mode.inputs {
-            if let Some(tool) = &tool {
-                if let Some(errors) =
-                    collect_errors(&tool.input_schema, &Value::Object(args.clone()))
-                {
-                    let message = format!(
-                        "Input does not conform to the tool's inputSchema:\n{}",
-                        errors.join("\n")
-                    );
-                    return Ok(ToolOutput::Success(CallToolResult::error(message)));
-                }
-            }
+        if self.mode.inputs
+            && let Some(tool) = &tool
+            && let Some(errors) = collect_errors(&tool.input_schema, &Value::Object(args.clone()))
+        {
+            let message = format!(
+                "Input does not conform to the tool's inputSchema:\n{}",
+                errors.join("\n")
+            );
+            return Ok(ToolOutput::Success(CallToolResult::error(message)));
         }
 
         let output = self.inner.call_tool(name, args, ctx).await?;
 
-        if self.mode.outputs {
-            if let (Some(tool), ToolOutput::Success(result)) = (&tool, &output) {
-                if let (Some(schema), Some(structured)) =
-                    (&tool.output_schema, &result.structured_content)
-                {
-                    if let Some(errors) = collect_errors(schema, &Value::Object(structured.clone()))
-                    {
-                        tracing::error!(
-                            tool = name,
-                            ?errors,
-                            "tool output violates its declared outputSchema (server bug); \
+        if self.mode.outputs
+            && let (Some(tool), ToolOutput::Success(result)) = (&tool, &output)
+            && let (Some(schema), Some(structured)) =
+                (&tool.output_schema, &result.structured_content)
+            && let Some(errors) = collect_errors(schema, &Value::Object(structured.clone()))
+        {
+            tracing::error!(
+                tool = name,
+                ?errors,
+                "tool output violates its declared outputSchema (server bug); \
                              dropping structuredContent"
-                        );
-                        let message = format!(
-                            "The tool produced structured output that does not conform to its \
+            );
+            let message = format!(
+                "The tool produced structured output that does not conform to its \
                              declared outputSchema:\n{}",
-                            errors.join("\n")
-                        );
-                        return Ok(ToolOutput::Success(CallToolResult::error(message)));
-                    }
-                }
-            }
+                errors.join("\n")
+            );
+            return Ok(ToolOutput::Success(CallToolResult::error(message)));
         }
 
         Ok(output)

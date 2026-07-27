@@ -101,20 +101,20 @@ pub fn expand_mcp_client(attr: TokenStream, item: TokenStream) -> Result<TokenSt
 /// Find and remove a handler method from the impl block.
 fn find_and_remove_handler(impl_block: &mut ItemImpl, handler_name: &str) -> Option<HandlerMethod> {
     for item in &mut impl_block.items {
-        if let ImplItem::Fn(method) = item {
-            if let Some(idx) = find_handler_attr(&method.attrs, handler_name) {
-                // Remove the handler attribute
-                method.attrs.remove(idx);
+        if let ImplItem::Fn(method) = item
+            && let Some(idx) = find_handler_attr(&method.attrs, handler_name)
+        {
+            // Remove the handler attribute
+            method.attrs.remove(idx);
 
-                let is_async = method.sig.asyncness.is_some();
-                let returns_result = is_result_type(&method.sig.output);
+            let is_async = method.sig.asyncness.is_some();
+            let returns_result = is_result_type(&method.sig.output);
 
-                return Some(HandlerMethod {
-                    name: method.sig.ident.clone(),
-                    is_async,
-                    returns_result,
-                });
-            }
+            return Some(HandlerMethod {
+                name: method.sig.ident.clone(),
+                is_async,
+                returns_result,
+            });
         }
     }
     None

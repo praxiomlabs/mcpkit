@@ -171,11 +171,11 @@ impl ServerMetrics {
 
     fn increment_method_counter(&self, map: &RwLock<HashMap<String, AtomicU64>>, method: &str) {
         // Try to increment existing counter
-        if let Ok(counts) = map.read() {
-            if let Some(counter) = counts.get(method) {
-                counter.fetch_add(1, Ordering::Relaxed);
-                return;
-            }
+        if let Ok(counts) = map.read()
+            && let Some(counter) = counts.get(method)
+        {
+            counter.fetch_add(1, Ordering::Relaxed);
+            return;
         }
 
         // Counter doesn't exist, need to create it
@@ -189,11 +189,11 @@ impl ServerMetrics {
 
     fn add_method_latency(&self, method: &str, latency_us: u64) {
         // Try to add to existing counter
-        if let Ok(latencies) = self.method_latency_us.read() {
-            if let Some(counter) = latencies.get(method) {
-                counter.fetch_add(latency_us, Ordering::Relaxed);
-                return;
-            }
+        if let Ok(latencies) = self.method_latency_us.read()
+            && let Some(counter) = latencies.get(method)
+        {
+            counter.fetch_add(latency_us, Ordering::Relaxed);
+            return;
         }
 
         // Counter doesn't exist, need to create it

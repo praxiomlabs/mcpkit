@@ -212,10 +212,10 @@ impl ServerState {
 
     /// Cancel a request by ID.
     pub fn cancel_request(&self, request_id: &str) {
-        if let Ok(cancellations) = self.cancellations.read() {
-            if let Some(token) = cancellations.get(request_id) {
-                token.cancel();
-            }
+        if let Ok(cancellations) = self.cancellations.read()
+            && let Some(token) = cancellations.get(request_id)
+        {
+            token.cancel();
         }
     }
 
@@ -1112,10 +1112,10 @@ where
         self.state.set_protocol_version(negotiated_version);
 
         // Extract client info and capabilities
-        if let Some(caps) = params.get("capabilities") {
-            if let Ok(client_caps) = serde_json::from_value::<ClientCapabilities>(caps.clone()) {
-                self.state.set_client_caps(client_caps);
-            }
+        if let Some(caps) = params.get("capabilities")
+            && let Ok(client_caps) = serde_json::from_value::<ClientCapabilities>(caps.clone())
+        {
+            self.state.set_client_caps(client_caps);
         }
 
         // Build response with negotiated version (serialized to string by serde)
@@ -1188,12 +1188,11 @@ where
         // the unowned id as the defect instead.
         // Not a `let`-chain: chained `let` in `if` is unstable before Rust 1.88
         // and this crate's MSRV is 1.85.
-        if let Some(unowned) = unowned_task {
-            if result.as_ref().err().map(McpError::code)
+        if let Some(unowned) = unowned_task
+            && result.as_ref().err().map(McpError::code)
                 == Some(mcpkit_core::error::codes::METHOD_NOT_FOUND)
-            {
-                return Err(unowned);
-            }
+        {
+            return Err(unowned);
         }
         result
     }
@@ -1411,25 +1410,25 @@ where
             return Ok(serde_json::json!({}));
         }
         let page_size = self.list_page_size;
-        if let Some(handler) = self.tools.as_tool_handler() {
-            if let Some(result) = route_tools(handler, method, params, ctx, page_size).await {
-                return result;
-            }
+        if let Some(handler) = self.tools.as_tool_handler()
+            && let Some(result) = route_tools(handler, method, params, ctx, page_size).await
+        {
+            return result;
         }
-        if let Some(handler) = self.resources.as_resource_handler() {
-            if let Some(result) = route_resources(handler, method, params, ctx, page_size).await {
-                return result;
-            }
+        if let Some(handler) = self.resources.as_resource_handler()
+            && let Some(result) = route_resources(handler, method, params, ctx, page_size).await
+        {
+            return result;
         }
-        if let Some(handler) = self.prompts.as_prompt_handler() {
-            if let Some(result) = route_prompts(handler, method, params, ctx, page_size).await {
-                return result;
-            }
+        if let Some(handler) = self.prompts.as_prompt_handler()
+            && let Some(result) = route_prompts(handler, method, params, ctx, page_size).await
+        {
+            return result;
         }
-        if let Some(handler) = self.tasks.as_task_handler() {
-            if let Some(result) = route_tasks(handler, method, params, ctx).await {
-                return result;
-            }
+        if let Some(handler) = self.tasks.as_task_handler()
+            && let Some(result) = route_tasks(handler, method, params, ctx).await
+        {
+            return result;
         }
         // `logging/setLevel` is handled by the base handler when the `logging`
         // capability is advertised (shared with the HTTP adapters).

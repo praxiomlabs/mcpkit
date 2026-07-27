@@ -232,63 +232,63 @@ impl SessionRecorder {
 
     /// Stop recording.
     pub fn stop(&self, reason: Option<String>) {
-        if let Ok(mut state) = self.state.write() {
-            if state.recording {
-                state.events.push(SessionEvent::SessionEnded {
-                    offset: self.started.elapsed(),
-                    reason,
-                });
-                state.recording = false;
-            }
+        if let Ok(mut state) = self.state.write()
+            && state.recording
+        {
+            state.events.push(SessionEvent::SessionEnded {
+                offset: self.started.elapsed(),
+                reason,
+            });
+            state.recording = false;
         }
     }
 
     /// Record a sent message.
     pub fn record_sent(&self, message: Message) {
-        if let Ok(mut state) = self.state.write() {
-            if state.recording {
-                state.events.push(SessionEvent::MessageSent {
-                    offset: self.started.elapsed(),
-                    message,
-                });
-            }
+        if let Ok(mut state) = self.state.write()
+            && state.recording
+        {
+            state.events.push(SessionEvent::MessageSent {
+                offset: self.started.elapsed(),
+                message,
+            });
         }
     }
 
     /// Record a received message.
     pub fn record_received(&self, message: Message) {
-        if let Ok(mut state) = self.state.write() {
-            if state.recording {
-                state.events.push(SessionEvent::MessageReceived {
-                    offset: self.started.elapsed(),
-                    message,
-                });
-            }
+        if let Ok(mut state) = self.state.write()
+            && state.recording
+        {
+            state.events.push(SessionEvent::MessageReceived {
+                offset: self.started.elapsed(),
+                message,
+            });
         }
     }
 
     /// Record an error.
     pub fn record_error(&self, error: impl Into<String>) {
-        if let Ok(mut state) = self.state.write() {
-            if state.recording {
-                state.events.push(SessionEvent::Error {
-                    offset: self.started.elapsed(),
-                    error: error.into(),
-                });
-            }
+        if let Ok(mut state) = self.state.write()
+            && state.recording
+        {
+            state.events.push(SessionEvent::Error {
+                offset: self.started.elapsed(),
+                error: error.into(),
+            });
         }
     }
 
     /// Record a custom event.
     pub fn record_custom(&self, name: impl Into<String>, data: serde_json::Value) {
-        if let Ok(mut state) = self.state.write() {
-            if state.recording {
-                state.events.push(SessionEvent::Custom {
-                    offset: self.started.elapsed(),
-                    name: name.into(),
-                    data,
-                });
-            }
+        if let Ok(mut state) = self.state.write()
+            && state.recording
+        {
+            state.events.push(SessionEvent::Custom {
+                offset: self.started.elapsed(),
+                name: name.into(),
+                data,
+            });
         }
     }
 

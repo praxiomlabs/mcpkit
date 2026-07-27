@@ -204,10 +204,10 @@ impl HttpTransport {
         let status = response.status();
 
         // Check for session ID in response headers
-        if let Some(session_id) = response.headers().get(MCP_SESSION_ID_HEADER) {
-            if let Ok(sid) = session_id.to_str() {
-                self.state.lock().await.session_id = Some(sid.to_string());
-            }
+        if let Some(session_id) = response.headers().get(MCP_SESSION_ID_HEADER)
+            && let Ok(sid) = session_id.to_str()
+        {
+            self.state.lock().await.session_id = Some(sid.to_string());
         }
 
         match status {

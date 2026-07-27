@@ -183,10 +183,10 @@ impl BatchBuffer {
         if self.total_bytes >= config.max_batch_bytes {
             return true;
         }
-        if let Some(first) = self.first_queued {
-            if first.elapsed() >= config.flush_interval {
-                return true;
-            }
+        if let Some(first) = self.first_queued
+            && first.elapsed() >= config.flush_interval
+        {
+            return true;
         }
         false
     }
