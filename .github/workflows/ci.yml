@@ -97,6 +97,39 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo check --all-features --all-targets
 
+  # Three checks that existed only as Justfile recipes and so never ran on any
+  # PR. That gap is how two dependencies stayed declared behind cargo-machete
+  # justifications that were false, and how spelling regressions reached main:
+  # the checks were written, nothing enforced them.
+  hygiene:
+    name: Hygiene (spelling, unused deps, shell)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Spell check
+        # Pinned: @master turns CI red on an upstream release with no repo change.
+        uses: crate-ci/typos@v1.29.4
+        with:
+          files: ./crates ./mcpkit ./examples ./docs ./spec ./scripts ./README.md ./CHANGELOG.md ./RELEASING.md ./ROADMAP.md ./CONTRIBUTING.md
+      - name: Install cargo-machete
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-machete
+      # Fails on an unused dependency *and* on an `ignored` entry whose
+      # dependency is actually used — a stale suppression is the thing that hid
+      # the unused deps in the first place.
+      - name: Unused dependencies
+        run: cargo machete
+      # shellcheck ships on ubuntu-latest. -S warning is the bar the repo's
+      # scripts already meet; info/style findings (e.g. SC2016 for jq programs
+      # quoted on purpose) are not failures.
+      - name: Shell check
+        run: |
+          set -euo pipefail
+          mapfile -t scripts < <(git ls-files '*.sh')
+          printf 'checking %d script(s)\n' "${#scripts[@]}"
+          shellcheck -S warning "${scripts[@]}"
+
   version-sync:
     name: Version Sync
     runs-on: ubuntu-latest
@@ -147,25 +180,96 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - name: Check markdown links
+      # Covers Rust sources as well as markdown: rustdoc comments carry real
+      # reference links, and nothing was checking them — a 404 in
+      # extension/mod.rs survived because this job only ever globbed ./docs.
+      # The example.com/fixture-host exclusions below exist because doc examples
+      # and security tests embed deliberately-unreachable URLs.
+      - name: Check links in docs and rustdoc comments
         uses: lycheeverse/lychee-action@v2
         with:
           args: >
             --verbose
             --no-progress
+            --scheme http
+            --scheme https
             --max-retries 6
             --retry-wait-time 3
+            --timeout 30
+            --max-concurrency 16
             --accept 200,204,206
             --exclude "^https://crates.io"
             --exclude "^https://docs.rs"
             --exclude "^https://www.reddit.com"
             --exclude "^https://cliffle.com"
             --exclude "^https://img.shields.io"
+            --exclude "^https?://$"
+            --exclude "^https?://([^/]*\.)?example\.(com|org|net)([/:]|$)"
+            --exclude "^https?://([^/]*\.)?example([/:]|$)"
+            --exclude "^https?://[^./:]+([/:]|$)"
+            --exclude "^https?://[^/]*(trusted|malicious|evil)"
+            --exclude "^https?://(anything|app[0-9])\.com([/:]|$)"
+            --exclude-loopback
+            --exclude "^https?://[^/]*\.(test|invalid|localhost)([/:]|$)"
+            --exclude "YOUR_USERNAME"
             './docs/**/*.md'
             './README.md'
             './CONTRIBUTING.md'
+            './spec/**/*.md'
+            './crates/**/src/**/*.rs'
+            './mcpkit/src/**/*.rs'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Diffs mcpkit's wire vocabulary against the vendored official schema.
+  # Ungated on purpose: spec/** and scripts/** match no path filter in the
+  # `changes` job, so without this job nothing in CI validates either artifact.
+  schema-check:
+    name: Schema Conformance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Diff against the vendored 2025-11-25 schema
+        run: |
+          set -euo pipefail
+          scripts/schema-diff.sh > /tmp/schema-report.txt
+          scripts/schema-diff.sh --baseline > /tmp/schema-actual.txt
+          grep -vE '^\s*(#|$)' spec/schema-diff-baseline.txt > /tmp/schema-expected.txt
+          if diff -u /tmp/schema-expected.txt /tmp/schema-actual.txt; then
+            echo "Schema difference set matches the baseline."
+          else
+            echo "::error::mcpkit's wire vocabulary drifted from the vendored schema."
+            echo "Lines prefixed '+' are new differences (a regression)."
+            echo "Lines prefixed '-' were closed — update spec/schema-diff-baseline.txt."
+            echo "Regenerate with: scripts/schema-diff.sh --baseline"
+            exit 1
+          fi
+      - name: Report
+        if: always()
+        run: cat /tmp/schema-report.txt
+      # Fails only when the vendored file genuinely differs from its pin. A fetch
+      # that cannot complete — GitHub outage, rate limit — warns and passes:
+      # turning someone else's downtime into a red build on an unrelated PR
+      # teaches people to ignore this job, which is the opposite of the point.
+      # Tampering is still caught pre-merge on any run where the network works.
+      - name: Verify the vendored schema still matches its pinned upstream commit
+        run: |
+          set -uo pipefail
+          sha="$(grep -oE '\b[0-9a-f]{40}\b' spec/PROVENANCE.md | awk 'NR==1')"
+          if [ -z "$sha" ]; then
+            echo "::error::no commit SHA found in spec/PROVENANCE.md"
+            exit 1
+          fi
+          if ! curl -fsSL --retry 3 --retry-delay 2 --max-time 30 -o /tmp/upstream-schema.json \
+            "https://raw.githubusercontent.com/modelcontextprotocol/modelcontextprotocol/$sha/schema/2025-11-25/schema.json"; then
+            echo "::warning::could not fetch upstream schema at $sha — integrity check skipped, not failed"
+            exit 0
+          fi
+          if ! diff -q /tmp/upstream-schema.json spec/2025-11-25/schema.json; then
+            echo "::error::spec/2025-11-25/schema.json differs from upstream commit $sha"
+            exit 1
+          fi
+          echo "Vendored schema matches upstream $sha."
 
   # ==========================================================================
   # Core tests - run after fast checks pass
@@ -363,6 +467,8 @@ jobs:
         check,
         version-sync,
         link-check,
+        schema-check,
+        hygiene,
         test,
         deny,
         docs,
@@ -373,14 +479,73 @@ jobs:
       ]
     runs-on: ubuntu-latest
     steps:
-      - name: Verify required jobs succeeded or were skipped
+      # Treating *any* skip as a pass made this gate green on a run where almost
+      # nothing executed: a PR touching only paths outside the `changes` filter
+      # skips clippy/check/test/deny/docs/msrv/semver and still reports success.
+      #
+      # Skipping is legitimate — a docs-only PR should not run the test matrix —
+      # so this does not simply fail on `skipped`. It re-evaluates each job's own
+      # gating condition and tolerates a skip only where that condition was
+      # genuinely false. A job that skipped while it was owed work is a filter
+      # bug, and fails here.
+      - name: Verify required jobs ran and passed
+        env:
+          CODE: ${{ needs.changes.outputs.code }}
+          RELEASE_TOOLING: ${{ needs.changes.outputs.release-tooling }}
+          EVENT: ${{ github.event_name }}
         run: |
-          results="${{ join(needs.*.result, ' ') }}"
-          echo "Job results: $results"
-          for r in $results; do
-            if [ "$r" = "failure" ] || [ "$r" = "cancelled" ]; then
-              echo "::error::A required job did not pass (result: $r)"
-              exit 1
-            fi
-          done
-          echo "All required checks passed or were skipped."
+          set -uo pipefail
+          fail=0
+
+          # require <job> <result> <expected-to-run 0|1>
+          require() {
+            case "$2" in
+              success) ;;
+              skipped)
+                if [ "$3" = 1 ]; then
+                  echo "::error::$1 was skipped, but its gating condition was true — required work did not run"
+                  fail=1
+                else
+                  echo "note: $1 skipped (not applicable to this run)"
+                fi
+                ;;
+              *)
+                echo "::error::$1 did not pass (result: $2)"
+                fail=1
+                ;;
+            esac
+          }
+
+          # Mirrors each job's `if:` expression. Keep in sync when a job's
+          # gating changes — a stale predicate here re-opens the hole.
+          gated=0   # clippy, check, test, deny, docs, msrv
+          if [ "$CODE" = "true" ] || [ "$EVENT" = "push" ]; then gated=1; fi
+          matrix=0  # test-matrix: pull_request AND code
+          if [ "$EVENT" = "pull_request" ] && [ "$CODE" = "true" ]; then matrix=1; fi
+          sem=0     # semver: (pull_request OR push) AND code
+          if { [ "$EVENT" = "pull_request" ] || [ "$EVENT" = "push" ]; } && [ "$CODE" = "true" ]; then sem=1; fi
+          pub=0     # publish-script: release-tooling OR push
+          if [ "$RELEASE_TOOLING" = "true" ] || [ "$EVENT" = "push" ]; then pub=1; fi
+
+          # Ungated jobs have no `if:` and must always run.
+          require changes       '${{ needs.changes.result }}'       1
+          require fmt           '${{ needs.fmt.result }}'           1
+          require version-sync  '${{ needs.version-sync.result }}'  1
+          require link-check    '${{ needs.link-check.result }}'    1
+          require schema-check  '${{ needs.schema-check.result }}'  1
+          require hygiene       '${{ needs.hygiene.result }}'       1
+
+          require clippy        '${{ needs.clippy.result }}'        "$gated"
+          require check         '${{ needs.check.result }}'         "$gated"
+          require test          '${{ needs.test.result }}'          "$gated"
+          require deny          '${{ needs.deny.result }}'          "$gated"
+          require docs          '${{ needs.docs.result }}'          "$gated"
+          require msrv          '${{ needs.msrv.result }}'          "$gated"
+          require test-matrix   '${{ needs.test-matrix.result }}'   "$matrix"
+          require semver        '${{ needs.semver.result }}'        "$sem"
+          require publish-script '${{ needs.publish-script.result }}' "$pub"
+
+          if [ "$fail" -ne 0 ]; then
+            exit 1
+          fi
+          echo "All required checks ran and passed."

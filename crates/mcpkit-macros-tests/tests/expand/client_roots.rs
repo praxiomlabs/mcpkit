@@ -18,10 +18,7 @@ impl RootsHandler {
 
 fn main() {
     let handler = RootsHandler {
-        roots: vec![Root {
-            uri: "file:///workspace".to_string(),
-            name: Some("Workspace".to_string()),
-        }],
+        roots: vec![Root::new("file:///workspace").name("Workspace")],
     };
     // Should have capabilities with roots enabled
     let caps = handler.capabilities();

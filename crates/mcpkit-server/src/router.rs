@@ -18,75 +18,15 @@ use mcpkit_core::protocol::Request;
 use mcpkit_core::types::Object;
 use serde_json::Value;
 
-/// Standard MCP method names as defined in the MCP specification.
-pub mod methods {
-    /// Initialize the connection and negotiate capabilities.
-    pub const INITIALIZE: &str = "initialize";
-    /// Ping to check if the connection is alive.
-    pub const PING: &str = "ping";
+/// Spec-defined MCP method names.
+///
+/// Re-exported from [`mcpkit_core::methods`], where they now live: they are
+/// protocol facts, and declaring them here left every other crate writing the
+/// names as literals.
+pub use mcpkit_core::methods;
 
-    /// List available tools.
-    pub const TOOLS_LIST: &str = "tools/list";
-    /// Call a specific tool with arguments.
-    pub const TOOLS_CALL: &str = "tools/call";
-
-    /// List available resources.
-    pub const RESOURCES_LIST: &str = "resources/list";
-    /// Read the contents of a resource.
-    pub const RESOURCES_READ: &str = "resources/read";
-    /// List available resource templates.
-    pub const RESOURCES_TEMPLATES_LIST: &str = "resources/templates/list";
-    /// Subscribe to resource updates.
-    pub const RESOURCES_SUBSCRIBE: &str = "resources/subscribe";
-    /// Unsubscribe from resource updates.
-    pub const RESOURCES_UNSUBSCRIBE: &str = "resources/unsubscribe";
-
-    /// List available prompts.
-    pub const PROMPTS_LIST: &str = "prompts/list";
-    /// Get a specific prompt with arguments.
-    pub const PROMPTS_GET: &str = "prompts/get";
-
-    /// List running tasks.
-    pub const TASKS_LIST: &str = "tasks/list";
-    /// Get status of a specific task.
-    pub const TASKS_GET: &str = "tasks/get";
-    /// Cancel a running task.
-    pub const TASKS_CANCEL: &str = "tasks/cancel";
-
-    /// Request the client to sample from a language model.
-    pub const SAMPLING_CREATE_MESSAGE: &str = "sampling/createMessage";
-
-    /// Request completion suggestions.
-    pub const COMPLETION_COMPLETE: &str = "completion/complete";
-
-    /// Set the logging level.
-    pub const LOGGING_SET_LEVEL: &str = "logging/setLevel";
-
-    /// Create an elicitation request.
-    pub const ELICITATION_CREATE: &str = "elicitation/create";
-}
-
-/// Standard MCP notification names as defined in the MCP specification.
-pub mod notifications {
-    /// Sent by client after successful initialization.
-    pub const INITIALIZED: &str = "notifications/initialized";
-    /// Sent when a request is cancelled.
-    pub const CANCELLED: &str = "notifications/cancelled";
-    /// Sent to report progress on a long-running operation.
-    pub const PROGRESS: &str = "notifications/progress";
-    /// Sent to deliver a log message.
-    pub const MESSAGE: &str = "notifications/message";
-    /// Sent when a resource's content has changed.
-    pub const RESOURCES_UPDATED: &str = "notifications/resources/updated";
-    /// Sent when the list of available resources has changed.
-    pub const RESOURCES_LIST_CHANGED: &str = "notifications/resources/list_changed";
-    /// Sent when the list of available tools has changed.
-    pub const TOOLS_LIST_CHANGED: &str = "notifications/tools/list_changed";
-    /// Sent when the list of available prompts has changed.
-    pub const PROMPTS_LIST_CHANGED: &str = "notifications/prompts/list_changed";
-    /// Sent when a URL-mode elicitation's out-of-band interaction has completed.
-    pub const ELICITATION_COMPLETE: &str = "notifications/elicitation/complete";
-}
+/// Spec-defined MCP notification names.
+pub use mcpkit_core::methods::notifications;
 
 /// Represents a parsed MCP request with typed parameters.
 ///
@@ -666,10 +606,10 @@ pub async fn dispatch_notification_hooks<H: crate::handler::ServerHandler>(
     ctx: &Context<'_>,
 ) {
     match method {
-        "notifications/initialized" => handler.on_initialized(ctx).await,
+        notifications::INITIALIZED => handler.on_initialized(ctx).await,
         // Only meaningful from a client that advertised the `roots`
         // capability; ignore it otherwise.
-        "notifications/roots/list_changed" if ctx.client_caps.has_roots() => {
+        notifications::ROOTS_LIST_CHANGED if ctx.client_caps.has_roots() => {
             handler.on_roots_list_changed(ctx).await;
         }
         _ => {}
@@ -1741,6 +1681,15 @@ mod tests {
             notifications::PROMPTS_LIST_CHANGED,
             "notifications/prompts/list_changed"
         );
+        assert_eq!(
+            notifications::ROOTS_LIST_CHANGED,
+            "notifications/roots/list_changed"
+        );
+        assert_eq!(
+            notifications::ELICITATION_COMPLETE,
+            "notifications/elicitation/complete"
+        );
+        assert_eq!(notifications::TASK_STATUS, "notifications/tasks/status");
     }
 
     #[tokio::test]

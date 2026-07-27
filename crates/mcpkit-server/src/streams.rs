@@ -42,6 +42,7 @@ pub struct StoredEvent {
 
 /// Configuration for a session's stream registry.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct StreamConfig {
     /// Maximum buffered events retained per stream for replay.
     pub max_events_per_stream: usize,
@@ -51,6 +52,35 @@ pub struct StreamConfig {
     /// Per-stream delivery channel capacity. A stream whose channel is full
     /// is killed explicitly (client resumes via `Last-Event-ID`).
     pub channel_capacity: usize,
+}
+
+impl StreamConfig {
+    /// A stream configuration with default values.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Maximum buffered events retained per stream for replay.
+    #[must_use]
+    pub const fn max_events_per_stream(mut self, max: usize) -> Self {
+        self.max_events_per_stream = max;
+        self
+    }
+
+    /// How long a dead stream's replay buffer is retained.
+    #[must_use]
+    pub const fn max_age(mut self, max_age: Duration) -> Self {
+        self.max_age = max_age;
+        self
+    }
+
+    /// Per-stream delivery channel capacity.
+    #[must_use]
+    pub const fn channel_capacity(mut self, capacity: usize) -> Self {
+        self.channel_capacity = capacity;
+        self
+    }
 }
 
 impl Default for StreamConfig {

@@ -40,9 +40,7 @@ See [API Stability](api-stability.md) for the complete tier definitions.
 
 ### From 0.6.x to 1.0
 
-**No changes required.** The 0.6.x API is the 1.0 API.
-
-Simply update your dependency:
+Update the dependency:
 
 ```toml
 # Before
@@ -51,6 +49,21 @@ mcpkit = "0.6"
 # After
 mcpkit = "1"
 ```
+
+0.7.0 carried breaking changes from the spec-conformance audit. Each is
+mechanical; most code touches none of them.
+
+| Change | Migration |
+|--------|-----------|
+| `route_task_store` returns `TaskRoute`, not `Option<Result<..>>` | Append `.or_unknown_task()`, or match on `TaskRoute` if you have your own task handler |
+| `RuntimeConfig` and 13 other public `*Config` structs are `#[non_exhaustive]` | Replace struct literals (including `..Default::default()`) with `new()`/`default()` plus setters |
+| 22 wire types gained a `meta` field | Add `meta: None` to struct literals; constructors and builders are unaffected |
+| `namespaces::MCP` is `io.modelcontextprotocol`, `MCP_APPS` is `io.modelcontextprotocol/ui` | Update comparisons against the old `io.mcp` / `io.mcp.apps` literals |
+| `apps::MIME_TYPE_HTML_MCP` is `text/html;profile=mcp-app` | Update comparisons; also changes `AppsConfig`'s default allowed MIME types |
+| `router::{methods, notifications}` re-export `mcpkit_core::methods` | Paths are unchanged; only code expecting them to be *defined* in `mcpkit-server` needs adjusting |
+
+If you construct wire types or configs by struct literal, the compiler will
+point at every site. If you only use the builders, there is nothing to do.
 
 ### From 0.2.x to 1.0
 
@@ -170,6 +183,12 @@ Key changes:
 
 | Version Transition | Change | Migration |
 |--------------------|--------|-----------|
+| 0.6.x → 0.7.x | `route_task_store` returns `TaskRoute` | Append `.or_unknown_task()` |
+| 0.6.x → 0.7.x | Public `*Config` structs are `#[non_exhaustive]` | Use `new()`/`default()` plus setters |
+| 0.6.x → 0.7.x | 22 wire types gained a `meta` field | Add `meta: None` to struct literals |
+| 0.6.x → 0.7.x | Real MCP extension identifiers | Update `io.mcp*` comparisons |
+| 0.6.x → 0.7.x | MCP Apps MIME type is `text/html;profile=mcp-app` | Update comparisons |
+| 0.6.x → 0.7.x | Method-name constants moved to `mcpkit-core` | Paths unchanged (re-exported) |
 | 0.2.x → 0.3.x | MCP protocol default: 2025-06-18 → 2025-11-25 | No action needed |
 | 0.2.x → 0.3.x | Tasks API added | Optional: use `with_tasks()` |
 | 0.2.x → 0.3.x | Elicitation API added | Optional: use `with_elicitation()` |

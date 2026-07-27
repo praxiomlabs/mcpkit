@@ -82,6 +82,9 @@ pub struct CompleteRequest {
     /// Additional, previously-resolved context (e.g. earlier template variables).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context: Option<CompletionContext>,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 /// The maximum number of completion values allowed on the wire per the spec.
@@ -202,6 +205,7 @@ mod tests {
                 value: "v".to_string(),
             },
             context: None,
+            meta: None,
         };
         assert!(serde_json::to_value(&bare)?.get("context").is_none());
         Ok(())
@@ -244,6 +248,7 @@ mod tests {
                 value: "val".to_string(),
             },
             context: None,
+            meta: None,
         };
 
         let json = serde_json::to_string(&request)?;

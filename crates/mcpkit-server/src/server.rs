@@ -37,7 +37,7 @@ use crate::context::{CancellationToken, Context, ContextData, Peer};
 use crate::dispatch::{PromptSlot, ResourceSlot, TaskSlot, ToolSlot};
 use crate::handler::ServerHandler;
 use crate::router::{route_prompts, route_resources, route_tasks, route_tools};
-use futures::channel::oneshot;
+use futures::channel::{mpsc, oneshot};
 use mcpkit_core::capability::{ClientCapabilities, ServerCapabilities};
 use mcpkit_core::error::McpError;
 use mcpkit_core::protocol::{Message, Notification, ProgressToken, Request, RequestId, Response};
@@ -68,12 +68,18 @@ pub struct ServerState {
     /// same implementation the adapter session peer uses (#153), so a
     /// correlation bug can only exist in one place.
     outbound: crate::adapter_peer::SessionOutbound,
+    /// Publish end of the ambient-notification queue (see
+    /// [`publish_notification`](Self::publish_notification)).
+    ambient_tx: mpsc::UnboundedSender<Notification>,
+    /// Drain end, taken once by the run loop.
+    ambient_rx: std::sync::Mutex<Option<mpsc::UnboundedReceiver<Notification>>>,
 }
 
 impl ServerState {
     /// Create a new server state.
     #[must_use]
     pub fn new(server_caps: ServerCapabilities) -> Self {
+        let (ambient_tx, ambient_rx) = mpsc::unbounded();
         Self {
             client_caps: RwLock::new(ClientCapabilities::default()),
             server_caps,
@@ -81,7 +87,35 @@ impl ServerState {
             cancellations: RwLock::new(HashMap::new()),
             negotiated_version: RwLock::new(None),
             outbound: crate::adapter_peer::SessionOutbound::new(),
+            ambient_tx,
+            ambient_rx: std::sync::Mutex::new(Some(ambient_rx)),
         }
+    }
+
+    /// Queue a notification produced by an *ambient* source — a state change
+    /// that no inbound request triggered, and which therefore has no
+    /// request-scoped [`Peer`] to send on.
+    ///
+    /// The run loop drains this queue and writes to the transport. Publishing is
+    /// synchronous and non-blocking, so it is safe to call from a lock-free
+    /// callback (such as a `TaskObserver`).
+    ///
+    /// Delivery is best-effort by design, matching the spec's treatment of
+    /// notifications: a failed write is logged, never fatal.
+    ///
+    /// The queue is unbounded, which is safe because the only producers are
+    /// in-process and the run loop drains continuously. The HTTP adapters do not
+    /// use this path at all — they never construct a `ServerState`, and reach
+    /// their client through the session's `StreamRegistry` instead.
+    pub fn publish_notification(&self, notification: Notification) {
+        // Fails only if the receiver was dropped, i.e. the session is gone.
+        let _ = self.ambient_tx.unbounded_send(notification);
+    }
+
+    /// Take the drain end of the ambient queue. Returns `None` on any call
+    /// after the first, so two concurrent run loops cannot split the stream.
+    fn take_ambient_receiver(&self) -> Option<mpsc::UnboundedReceiver<Notification>> {
+        self.ambient_rx.lock().ok()?.take()
     }
 
     /// Allocate a unique id for a server-initiated (outbound) request.
@@ -429,7 +463,22 @@ impl ServerNotifier {
 }
 
 /// Server runtime configuration.
+///
+/// Marked `#[non_exhaustive]`: the runtime gains settings over time, and with an
+/// exhaustive struct every one of those additions is a breaking change for any
+/// downstream struct-literal construction. Build one with
+/// [`new`](Self::new)/[`default`](Default::default) and the setters below, which
+/// keeps later additions compatible. (Doing this before 1.0 is the whole point —
+/// after 1.0 the type would be stuck exhaustive.)
+///
+/// ```
+/// use mcpkit_server::RuntimeConfig;
+/// let config = RuntimeConfig::new()
+///     .max_concurrent_requests(32)
+///     .task_status_notifications(false);
+/// ```
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct RuntimeConfig {
     /// Whether to automatically send initialized notification.
     pub auto_initialized: bool,
@@ -441,6 +490,16 @@ pub struct RuntimeConfig {
     /// Retention (milliseconds) applied to a task whose `tools/call` omits a
     /// `ttl`. `None` means unlimited (such tasks are never TTL-evicted).
     pub default_task_ttl_ms: Option<u64>,
+    /// Suggested polling interval (milliseconds) stamped on tasks the runtime
+    /// creates, surfaced to the client as `pollInterval`. `None` (the default)
+    /// leaves it absent, which is legal — the field is a hint, so a requestor
+    /// that receives none picks its own rate.
+    pub default_task_poll_interval_ms: Option<u64>,
+    /// Whether to publish `notifications/tasks/status` when a task changes
+    /// status. Optional per spec ("Receivers MAY send"), so this can be turned
+    /// off for a chattier-than-wanted session without affecting conformance;
+    /// the requesting peer must not rely on receiving it either way.
+    pub task_status_notifications: bool,
 }
 
 impl Default for RuntimeConfig {
@@ -450,7 +509,60 @@ impl Default for RuntimeConfig {
             max_concurrent_requests: 100,
             outbound_request_timeout: Duration::from_secs(60),
             default_task_ttl_ms: Some(crate::capability::tasks::DEFAULT_TASK_TTL_MS),
+            default_task_poll_interval_ms: None,
+            task_status_notifications: true,
         }
+    }
+}
+
+impl RuntimeConfig {
+    /// Create a runtime configuration with default values.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Whether to automatically send the `initialized` notification.
+    #[must_use]
+    pub const fn auto_initialized(mut self, yes: bool) -> Self {
+        self.auto_initialized = yes;
+        self
+    }
+
+    /// Maximum number of requests processed concurrently.
+    #[must_use]
+    pub const fn max_concurrent_requests(mut self, max: usize) -> Self {
+        self.max_concurrent_requests = max;
+        self
+    }
+
+    /// How long a server-initiated request waits for the client's response.
+    #[must_use]
+    pub const fn outbound_request_timeout(mut self, timeout: Duration) -> Self {
+        self.outbound_request_timeout = timeout;
+        self
+    }
+
+    /// Retention applied to a task whose `tools/call` omits a `ttl`.
+    /// `None` means unlimited.
+    #[must_use]
+    pub const fn default_task_ttl_ms(mut self, ttl_ms: Option<u64>) -> Self {
+        self.default_task_ttl_ms = ttl_ms;
+        self
+    }
+
+    /// Suggested polling interval (milliseconds) for tasks the runtime creates.
+    #[must_use]
+    pub const fn default_task_poll_interval_ms(mut self, poll_interval_ms: Option<u64>) -> Self {
+        self.default_task_poll_interval_ms = poll_interval_ms;
+        self
+    }
+
+    /// Whether to publish `notifications/tasks/status` on task transitions.
+    #[must_use]
+    pub const fn task_status_notifications(mut self, yes: bool) -> Self {
+        self.task_status_notifications = yes;
+        self
     }
 }
 
@@ -588,7 +700,29 @@ where
             // Boxed: `BackgroundExec` is large (it owns a `ContextData`), so an
             // unboxed variant makes `Step` lopsided (`clippy::large_enum_variant`).
             Progress(Option<Box<BackgroundExec>>),
+            /// A notification published by an ambient source, to be written out.
+            Ambient(Notification),
         }
+
+        /// Yield the next ambient notification, parking forever once the queue
+        /// is gone so a closed channel cannot spin the loop.
+        async fn next_ambient(
+            slot: &mut Option<mpsc::UnboundedReceiver<Notification>>,
+        ) -> Notification {
+            loop {
+                match slot {
+                    Some(rx) => match rx.next().await {
+                        Some(notification) => return notification,
+                        None => *slot = None,
+                    },
+                    None => std::future::pending::<()>().await,
+                }
+            }
+        }
+
+        // Drain end of the ambient-notification queue. `None` if another run
+        // loop already took it.
+        let mut ambient = self.state.take_ambient_receiver();
 
         let max = self.config.max_concurrent_requests.max(1);
         let mut in_flight = FuturesUnordered::new();
@@ -617,23 +751,30 @@ where
             // Always receive (so responses to our own outbound requests are
             // routed even when every slot is parked) while making progress on
             // in-flight requests and background tasks.
-            let step = if in_flight.is_empty() && background.is_empty() && notifications.is_empty()
-            {
-                match self.transport.recv().await {
-                    Ok(opt) => Step::Message(opt),
-                    Err(e) => break Err(e.into()),
+            // Ambient notifications race every other source, so a state change
+            // reaches the client even while the loop is otherwise idle.
+            let recv = std::pin::pin!(self.transport.recv());
+            let published = std::pin::pin!(next_ambient(&mut ambient));
+            let idle = in_flight.is_empty() && background.is_empty() && notifications.is_empty();
+            let step = if idle {
+                match select(recv, published).await {
+                    Either::Left((Ok(opt), _)) => Step::Message(opt),
+                    Either::Left((Err(e), _)) => break Err(e.into()),
+                    Either::Right((notification, _)) => Step::Ambient(notification),
                 }
             } else {
-                let recv = std::pin::pin!(self.transport.recv());
                 let progress = std::pin::pin!(drive_sets(
                     &mut in_flight,
                     &mut background,
                     &mut notifications
                 ));
-                match select(recv, progress).await {
-                    Either::Left((Ok(opt), _)) => Step::Message(opt),
-                    Either::Left((Err(e), _)) => break Err(e.into()),
-                    Either::Right((maybe_exec, _)) => Step::Progress(maybe_exec.map(Box::new)),
+                match select(select(recv, progress), published).await {
+                    Either::Left((Either::Left((Ok(opt), _)), _)) => Step::Message(opt),
+                    Either::Left((Either::Left((Err(e), _)), _)) => break Err(e.into()),
+                    Either::Left((Either::Right((maybe_exec, _)), _)) => {
+                        Step::Progress(maybe_exec.map(Box::new))
+                    }
+                    Either::Right((notification, _)) => Step::Ambient(notification),
                 }
             };
 
@@ -643,6 +784,19 @@ where
                     background.push(self.run_task(*exec));
                 }
                 Step::Progress(None) => {}
+                Step::Ambient(notification) => {
+                    // Written inline: a notification is a single small frame, so
+                    // this costs less than carrying another future set through
+                    // `drive_sets`. Delivery is best-effort — a failed write is
+                    // logged, never fatal to the session.
+                    if let Err(e) = self
+                        .transport
+                        .send(Message::Notification(notification))
+                        .await
+                    {
+                        tracing::warn!(error = ?e, "failed to send ambient notification");
+                    }
+                }
                 Step::Message(Some(Message::Request(request))) => {
                     if in_flight.len() < max {
                         in_flight.push(self.handle_request_isolated(request));
@@ -898,14 +1052,16 @@ where
         }
     }
 
-    /// Serve task queries from the built-in task store. Returns `None` for
-    /// non-task methods, and for `tasks/get`/`tasks/result`/`tasks/cancel` whose
-    /// id the store does not own (so a custom `with_tasks` handler can serve it).
+    /// Serve task queries from the built-in task store.
+    ///
+    /// Unlike the adapters, the runtime may have a custom `with_tasks` handler,
+    /// so it matches on [`TaskRoute`] rather than folding an unowned id straight
+    /// into an error: the custom handler gets its chance first.
     async fn route_runtime_tasks(
         &self,
         method: &str,
         params: Option<&serde_json::Value>,
-    ) -> Option<Result<serde_json::Value, McpError>> {
+    ) -> crate::capability::tasks::TaskRoute {
         crate::capability::tasks::route_task_store(&self.task_store, method, params).await
     }
 
@@ -979,11 +1135,14 @@ where
         let method = request.method.as_ref();
         let params = request.params.as_ref();
 
-        // Serve task queries from the built-in store first (falling through to a
-        // custom `with_tasks` handler for ids the store does not own).
-        if let Some(result) = self.route_runtime_tasks(method, params).await {
-            return result;
-        }
+        // Serve task queries from the built-in store first. An id the store does
+        // not own falls through to a custom `with_tasks` handler; hold the
+        // spec-correct error in case no such handler owns it either.
+        let unowned_task: Option<McpError> = match self.route_runtime_tasks(method, params).await {
+            crate::capability::tasks::TaskRoute::Handled(result) => return result,
+            crate::capability::tasks::TaskRoute::NotTaskMethod => None,
+            unowned => unowned.or_unknown_task().and_then(Result::err),
+        };
 
         // Extract progress token from params._meta.progressToken if present
         let progress_token = extract_progress_token(params);
@@ -1022,6 +1181,20 @@ where
         // Delegate to the router, then drop the cancellation registration.
         let result = self.server.route(method, params, &ctx).await;
         self.state.remove_cancellation(&cancel_key);
+
+        // No custom handler owned the task either, so the router reported
+        // *method not found* — which tells the client this server has no
+        // `tasks/get` at all, when it answered `tasks/*` a moment ago. Report
+        // the unowned id as the defect instead.
+        // Not a `let`-chain: chained `let` in `if` is unstable before Rust 1.88
+        // and this crate's MSRV is 1.85.
+        if let Some(unowned) = unowned_task {
+            if result.as_ref().err().map(McpError::code)
+                == Some(mcpkit_core::error::codes::METHOD_NOT_FOUND)
+            {
+                return Err(unowned);
+            }
+        }
         result
     }
 
@@ -1033,7 +1206,7 @@ where
 
         // `notifications/cancelled` is a runtime concern — it trips the
         // cancellation registry for an in-flight request, not a handler hook.
-        if method == "notifications/cancelled" {
+        if method == crate::router::notifications::CANCELLED {
             if let Some(request_id) = notification
                 .params
                 .as_ref()
@@ -1101,13 +1274,22 @@ where
         config: RuntimeConfig,
     ) -> Self {
         let caps = server.capabilities().clone();
-        let task_store = Arc::new(crate::capability::tasks::TaskManager::with_default_ttl(
-            config.default_task_ttl_ms,
-        ));
+        let task_store = Arc::new(
+            crate::capability::tasks::TaskManager::with_default_ttl(config.default_task_ttl_ms)
+                .with_poll_interval(config.default_task_poll_interval_ms),
+        );
+        let state = Arc::new(ServerState::new(caps));
+        if config.task_status_notifications {
+            // Transitions have no request-scoped peer, so they publish onto the
+            // ambient queue the run loop drains.
+            let _ = task_store.set_observer(Arc::new(
+                crate::capability::tasks::TaskStatusNotifier::new(state.clone()),
+            ));
+        }
         Self {
             server,
             transport: Arc::new(transport),
-            state: Arc::new(ServerState::new(caps)),
+            state,
             task_store,
             config,
         }
@@ -1520,16 +1702,24 @@ mod tests {
         Message::Request(Request::new(method, id))
     }
 
+    /// The next *response*, skipping any notifications the server publishes in
+    /// the meantime. Ambient notifications (e.g. `notifications/tasks/status`)
+    /// can legitimately interleave with responses, so a test that wants a
+    /// response must not treat one as a failure.
     async fn next_response(transport: &MemoryTransport) -> Response {
-        let msg = timeout(Duration::from_secs(2), transport.recv())
-            .await
-            .expect("no response (connection died?)")
-            .expect("recv ok")
-            .expect("some message");
-        match msg {
-            Message::Response(r) => r,
-            other => panic!("expected response, got {other:?}"),
+        for _ in 0..16 {
+            let msg = timeout(Duration::from_secs(2), transport.recv())
+                .await
+                .expect("no response (connection died?)")
+                .expect("recv ok")
+                .expect("some message");
+            match msg {
+                Message::Response(r) => return r,
+                Message::Notification(_) => continue,
+                other => panic!("expected response, got {other:?}"),
+            }
         }
+        panic!("no response after 16 messages");
     }
 
     fn notif_msg(method: &str) -> Message {
@@ -1674,6 +1864,86 @@ mod tests {
             0,
             "on_roots_list_changed must not fire without the roots capability"
         );
+
+        drop(client);
+        let _ = timeout(Duration::from_secs(2), handle).await;
+    }
+
+    #[tokio::test]
+    async fn task_transition_publishes_status_notification() {
+        let (client, server) = MemoryTransport::pair();
+        let state = Arc::new(ServerState::new(ServerCapabilities::default()));
+        state.set_initialized();
+        let task_store = Arc::new(crate::capability::tasks::TaskManager::new());
+        task_store
+            .set_observer(Arc::new(crate::capability::tasks::TaskStatusNotifier::new(
+                state.clone(),
+            )))
+            .expect("install observer");
+        let runtime = ServerRuntime {
+            server: PingRouter,
+            transport: Arc::new(server),
+            state,
+            task_store: Arc::clone(&task_store),
+            config: RuntimeConfig::default(),
+        };
+        let handle = tokio::spawn(async move { runtime.run().await });
+
+        // An ambient transition: no inbound request triggered it, so there is no
+        // request-scoped peer. It must still reach the wire.
+        let task = task_store.create(None);
+        task.complete(serde_json::json!({"ok": true}))
+            .expect("complete");
+
+        let msg = timeout(Duration::from_secs(2), client.recv())
+            .await
+            .expect("no notification (loop never drained the queue?)")
+            .expect("recv ok")
+            .expect("some message");
+        let Message::Notification(notification) = msg else {
+            panic!("expected notification, got {msg:?}");
+        };
+        assert_eq!(notification.method, "notifications/tasks/status");
+
+        let params = notification.params.expect("params");
+        assert_eq!(params["taskId"], task.id().as_str());
+        assert_eq!(params["status"], "completed");
+        // Per spec the status notification must not be tagged with
+        // `io.modelcontextprotocol/related-task`; the taskId is already here.
+        assert!(
+            params.get("_meta").is_none(),
+            "status notification must not carry _meta: {params}"
+        );
+
+        drop(client);
+        let _ = timeout(Duration::from_secs(2), handle).await;
+    }
+
+    #[tokio::test]
+    async fn task_status_notifications_can_be_disabled() {
+        let (client, server) = MemoryTransport::pair();
+        let state = Arc::new(ServerState::new(ServerCapabilities::default()));
+        state.set_initialized();
+        let config = RuntimeConfig::new().task_status_notifications(false);
+        // Mirrors `with_config`: the observer is simply not installed.
+        let task_store = Arc::new(crate::capability::tasks::TaskManager::new());
+        let runtime = ServerRuntime {
+            server: PingRouter,
+            transport: Arc::new(server),
+            state,
+            task_store: Arc::clone(&task_store),
+            config,
+        };
+        let handle = tokio::spawn(async move { runtime.run().await });
+
+        let task = task_store.create(None);
+        task.complete(serde_json::json!({})).expect("complete");
+
+        // Nothing ambient should appear; a ping still answers, proving the loop
+        // is alive rather than merely slow.
+        client.send(req("ping", 1)).await.expect("send");
+        let resp = next_response(&client).await;
+        assert_eq!(resp.id, RequestId::Number(1));
 
         drop(client);
         let _ = timeout(Duration::from_secs(2), handle).await;

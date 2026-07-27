@@ -18,6 +18,7 @@ use tokio::sync::{Mutex, Semaphore};
 
 /// Configuration for a client connection pool.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct PoolConfig {
     /// Maximum number of connections per server.
     pub max_connections: usize,

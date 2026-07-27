@@ -27,7 +27,8 @@ use mcpkit_core::types::{
     GetPromptRequest, GetPromptResult, GetTaskRequest, GetTaskResult, ListPromptsResult,
     ListResourceTemplatesResult, ListResourcesResult, ListTasksRequest, ListTasksResult,
     ListToolsResult, Prompt, ReadResourceRequest, ReadResourceResult, Resource, ResourceContents,
-    ResourceTemplate, SubscribeRequest, Task, TaskStatus, Tool, UnsubscribeRequest,
+    ResourceTemplate, SubscribeRequest, Task, TaskStatus, TaskStatusNotificationParams, Tool,
+    UnsubscribeRequest,
 };
 use mcpkit_transport::Transport;
 use std::collections::HashMap;
@@ -527,14 +528,17 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
                 )),
             );
         }
-        match route_task_store(store, method, request.params.as_ref()).await {
+        // The client has no fallback task handler, so an id the store does not
+        // own is invalid params (spec) — `or_unknown_task` is that rule.
+        match route_task_store(store, method, request.params.as_ref())
+            .await
+            .or_unknown_task()
+        {
             Some(Ok(value)) => Response::success(request.id.clone(), value),
             Some(Err(e)) => Response::error(request.id.clone(), (&e).into()),
-            // The store does not own this id; the client has no fallback
-            // handler, so an unknown taskId is invalid params (spec).
             None => Response::error(
                 request.id.clone(),
-                JsonRpcError::invalid_params("Unknown task"),
+                JsonRpcError::method_not_found(format!("Method '{method}' not found")),
             ),
         }
     }
@@ -655,6 +659,26 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
                 {
                     debug!(elicitation_id = %id, "Elicitation completed");
                     handler.on_elicitation_complete(id.to_string()).await;
+                }
+            }
+            "notifications/tasks/status" => {
+                match notification
+                    .params
+                    .as_ref()
+                    .map(|p| serde_json::from_value::<TaskStatusNotificationParams>(p.clone()))
+                {
+                    Some(Ok(params)) => {
+                        debug!(
+                            task_id = %params.task.task_id.as_str(),
+                            status = %params.task.status,
+                            "Task status changed"
+                        );
+                        handler.on_task_status(params).await;
+                    }
+                    Some(Err(e)) => {
+                        warn!(error = %e, "Malformed notifications/tasks/status params");
+                    }
+                    None => warn!("notifications/tasks/status carried no params"),
                 }
             }
             _ => {
@@ -828,6 +852,7 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
             name: name.into(),
             arguments,
             task: None,
+            meta: None,
         };
         self.request("tools/call", Some(serde_json::to_value(request)?))
             .await
@@ -890,7 +915,10 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
     ) -> Result<Vec<ResourceContents>, McpError> {
         self.ensure_capability("resources", self.has_resources())?;
 
-        let request = ReadResourceRequest { uri: uri.into() };
+        let request = ReadResourceRequest {
+            uri: uri.into(),
+            meta: None,
+        };
         let result: ReadResourceResult = self
             .request("resources/read", Some(serde_json::to_value(request)?))
             .await?;
@@ -944,6 +972,7 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
         let request = GetPromptRequest {
             name: name.into(),
             arguments,
+            meta: None,
         };
         self.request("prompts/get", Some(serde_json::to_value(request)?))
             .await
@@ -981,6 +1010,7 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
         // returned page client-side when a status is requested.
         let request = ListTasksRequest {
             cursor: cursor.map(String::from),
+            meta: None,
         };
         let mut result: ListTasksResult = self
             .request("tasks/list", Some(serde_json::to_value(request)?))
@@ -1058,6 +1088,7 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
                 value: current_value.into(),
             },
             context: None,
+            meta: None,
         };
         self.complete(request).await
     }
@@ -1104,6 +1135,7 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
                 value: current_value.into(),
             },
             context: None,
+            meta: None,
         };
         self.complete(request).await
     }
@@ -1131,7 +1163,10 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
             });
         }
 
-        let request = SubscribeRequest { uri: uri.into() };
+        let request = SubscribeRequest {
+            uri: uri.into(),
+            meta: None,
+        };
         let _: serde_json::Value = self
             .request("resources/subscribe", Some(serde_json::to_value(request)?))
             .await?;
@@ -1154,7 +1189,10 @@ impl<T: Transport + 'static, H: ClientHandler + 'static> Client<T, H> {
             });
         }
 
-        let request = UnsubscribeRequest { uri: uri.into() };
+        let request = UnsubscribeRequest {
+            uri: uri.into(),
+            meta: None,
+        };
         let _: serde_json::Value = self
             .request(
                 "resources/unsubscribe",
@@ -1860,6 +1898,65 @@ mod tests {
         assert_eq!(seen[0].progress_token, ProgressToken::Number(5));
         assert!((seen[0].progress - 0.25).abs() < f64::EPSILON);
         assert_eq!(seen[0].total, Some(1.0));
+    }
+
+    /// A conforming peer's task-status push must reach the handler instead of
+    /// falling through to the "unhandled notification" arm.
+    #[tokio::test]
+    async fn task_status_notification_routes_to_on_task_status() {
+        use std::sync::Mutex;
+
+        struct Rec(Arc<Mutex<Vec<TaskStatusNotificationParams>>>);
+        impl ClientHandler for Rec {
+            async fn on_task_status(&self, params: TaskStatusNotificationParams) {
+                self.0.lock().unwrap().push(params);
+            }
+        }
+
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let handler = Arc::new(Rec(Arc::clone(&seen)));
+        let notif = Notification::with_params(
+            "notifications/tasks/status",
+            serde_json::json!({
+                "taskId": "abc-123",
+                "status": "input_required",
+                "createdAt": "2026-07-26T00:00:00Z",
+                "lastUpdatedAt": "2026-07-26T00:00:01Z",
+                "ttl": 60000,
+            }),
+        );
+
+        Client::<SilentTransport, Rec>::handle_notification(notif, &handler).await;
+
+        let seen = seen.lock().unwrap();
+        assert_eq!(seen.len(), 1);
+        assert_eq!(seen[0].task.task_id.as_str(), "abc-123");
+        assert_eq!(seen[0].task.status, TaskStatus::InputRequired);
+        assert_eq!(seen[0].task.ttl, Some(60000));
+    }
+
+    /// A malformed status push must be logged and dropped, never panic or reach
+    /// the handler with junk.
+    #[tokio::test]
+    async fn malformed_task_status_notification_is_ignored() {
+        use std::sync::Mutex;
+
+        struct Rec(Arc<Mutex<u32>>);
+        impl ClientHandler for Rec {
+            async fn on_task_status(&self, _params: TaskStatusNotificationParams) {
+                *self.0.lock().unwrap() += 1;
+            }
+        }
+
+        let calls = Arc::new(Mutex::new(0));
+        let handler = Arc::new(Rec(Arc::clone(&calls)));
+        let notif = Notification::with_params(
+            "notifications/tasks/status",
+            serde_json::json!({ "taskId": "abc-123" }),
+        );
+
+        Client::<SilentTransport, Rec>::handle_notification(notif, &handler).await;
+        assert_eq!(*calls.lock().unwrap(), 0);
     }
 
     /// Per spec, a client must reject tool-augmented sampling unless it declared

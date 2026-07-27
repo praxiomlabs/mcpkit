@@ -50,8 +50,11 @@ use super::{Extension, namespaces};
 /// The MCP Apps extension version.
 pub const APPS_VERSION: &str = "0.1.0";
 
-/// MIME type for MCP HTML content.
-pub const MIME_TYPE_HTML_MCP: &str = "text/html+mcp";
+/// MIME type for MCP Apps HTML content, as published by SEP-1865.
+///
+/// This is a parameterized `text/html`, not a `+suffix` type: a host that does
+/// not understand the profile still sees HTML.
+pub const MIME_TYPE_HTML_MCP: &str = "text/html;profile=mcp-app";
 
 /// Standard MIME type for HTML content.
 pub const MIME_TYPE_HTML: &str = "text/html";
@@ -69,7 +72,7 @@ pub struct UiResource {
     /// Human-readable name for the UI.
     pub name: String,
 
-    /// MIME type (typically "text/html" or "text/html+mcp").
+    /// MIME type (typically "text/html" or "text/html;profile=mcp-app").
     #[serde(default = "default_mime_type")]
     pub mime_type: String,
 
@@ -112,7 +115,7 @@ impl UiResource {
     ///
     /// # Arguments
     ///
-    /// * `mime_type` - The MIME type (e.g., "text/html+mcp")
+    /// * `mime_type` - The MIME type (e.g., "text/html;profile=mcp-app")
     #[must_use]
     pub fn with_mime_type(mut self, mime_type: impl Into<String>) -> Self {
         self.mime_type = mime_type.into();
@@ -149,6 +152,21 @@ impl UiResource {
 ///
 /// This metadata is included in the `_meta` field of tool definitions
 /// to link tools to UI resources.
+/// Tool `_meta` for MCP Apps.
+///
+/// **Known staleness (verified 2026-07-27 against ext-apps
+/// `specification/2026-01-26/apps.mdx`):** this emits the *flat* key shape, which
+/// that revision deprecates —
+///
+/// > The flat `_meta["ui/resourceUri"]` format is deprecated. Use
+/// > `_meta.ui.resourceUri` instead. The deprecated format will be removed
+/// > before GA.
+///
+/// and `ui/displayHints` does not appear in that revision at all. Neither is a
+/// conformance break against the 2025-11-25 target: MCP Apps is an optional
+/// extension and that revision postdates it. Tracked with the next-revision work
+/// in `ROADMAP.md`; moving to the nested shape is a wire change and wants its own
+/// decision.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolUiMeta {
@@ -277,6 +295,7 @@ pub enum UiDisplayMode {
 /// This structure configures the Apps extension capabilities.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[non_exhaustive]
 pub struct AppsConfig {
     /// Whether UI resources are supported.
     #[serde(default = "default_true")]
@@ -311,6 +330,13 @@ impl AppsConfig {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Set whether UI resources are supported.
+    #[must_use]
+    pub const fn with_ui_resources(mut self, supported: bool) -> Self {
+        self.ui_resources = supported;
+        self
     }
 
     /// Set sandbox permissions.

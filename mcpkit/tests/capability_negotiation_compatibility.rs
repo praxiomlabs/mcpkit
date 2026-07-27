@@ -827,6 +827,7 @@ fn test_full_handshake_unknown_version() {
         protocol_version: "1.0.0".to_string(),
         capabilities: ClientCapabilities::default(),
         client_info: ClientInfo::new("old-client", "1.0"),
+        meta: None,
     };
 
     // Server responds with counter-offer

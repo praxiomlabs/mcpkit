@@ -183,13 +183,13 @@ impl ServerCapabilities {
     /// use mcpkit_core::extension::{Extension, ExtensionRegistry};
     ///
     /// let registry = ExtensionRegistry::new()
-    ///     .register(Extension::new("io.mcp.apps").with_version("0.1.0"));
+    ///     .register(Extension::new("com.example.myext").with_version("0.1.0"));
     ///
     /// let caps = ServerCapabilities::new()
     ///     .with_tools()
     ///     .with_extensions(registry);
     ///
-    /// assert!(caps.has_extension("io.mcp.apps"));
+    /// assert!(caps.has_extension("com.example.myext"));
     /// ```
     #[must_use]
     pub fn with_extensions(mut self, registry: ExtensionRegistry) -> Self {
@@ -746,6 +746,9 @@ pub struct InitializeRequest {
     /// Client information.
     #[serde(rename = "clientInfo")]
     pub client_info: ClientInfo,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 impl InitializeRequest {
@@ -756,6 +759,7 @@ impl InitializeRequest {
             protocol_version: PROTOCOL_VERSION.to_string(),
             capabilities,
             client_info,
+            meta: None,
         }
     }
 }
@@ -980,11 +984,19 @@ pub fn negotiate_version_detailed(requested_version: &str) -> VersionNegotiation
 
 /// Initialized notification (sent by client after receiving initialize result).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct InitializedNotification {}
+pub struct InitializedNotification {
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
+}
 
 /// Ping request for keep-alive.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct PingRequest {}
+pub struct PingRequest {
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
+}
 
 /// Ping response.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

@@ -14,14 +14,12 @@ readme = "README.md"
 # Serialization
 serde.workspace = true
 serde_json.workspace = true
-schemars.workspace = true
 
 # Error handling
 thiserror.workspace = true
 miette.workspace = true
 
 # Async (minimal - no runtime dependency)
-futures.workspace = true
 event-listener = "5.4"
 
 # Utilities
@@ -52,7 +50,7 @@ rsa = { version = "0.9", features = ["pkcs5"] }
 p256 = { version = "0.13", features = ["ecdsa", "pkcs8"] }
 
 # For comparison benchmarks
-rmcp = "1.7"
+rmcp = "2.2"
 
 [features]
 default = []
@@ -67,11 +65,6 @@ workspace = true
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
-
-[package.metadata.cargo-machete]
-# futures: re-exported for async trait bounds
-# schemars: used via derive macros in type definitions
-ignored = ["futures", "schemars"]
 
 [[bench]]
 name = "protocol"

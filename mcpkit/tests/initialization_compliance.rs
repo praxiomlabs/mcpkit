@@ -44,6 +44,7 @@ fn test_initialize_request() {
         protocol_version: PROTOCOL_VERSION.to_string(),
         capabilities: ClientCapabilities::default(),
         client_info,
+        meta: None,
     };
 
     let json = serde_json::to_value(&request).unwrap();

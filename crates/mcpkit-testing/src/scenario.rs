@@ -367,7 +367,9 @@ impl TestScenario {
         }));
 
         self.request(request, ResponseMatcher::success())
-            .send_notification(Notification::new("initialized"))
+            .send_notification(Notification::new(
+                mcpkit_server::router::notifications::INITIALIZED,
+            ))
     }
 }
 
@@ -497,6 +499,25 @@ impl MessageQueue {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The handshake a scenario builds must be one a conforming server routes.
+    /// Asserts the literal spec method, not the constant the builder uses — a
+    /// constant-anchored assertion passes even when the constant is wrong.
+    #[test]
+    fn initialize_handshake_sends_the_spec_notification() {
+        let scenario = TestScenario::new("handshake").initialize("c", "1.0");
+
+        let sent: Vec<&str> = scenario
+            .steps
+            .iter()
+            .filter_map(|step| match step {
+                TestStep::SendNotification(n) => Some(n.method.as_ref()),
+                _ => None,
+            })
+            .collect();
+
+        assert_eq!(sent, vec!["notifications/initialized"]);
+    }
 
     #[test]
     fn test_response_matcher_success() {

@@ -294,6 +294,43 @@ impl TaskHandle {
 /// (one hour, in milliseconds). Override via [`TaskManager::with_default_ttl`].
 pub const DEFAULT_TASK_TTL_MS: u64 = 60 * 60 * 1000;
 
+// ============================================================================
+// Lifecycle observation
+// ============================================================================
+
+/// A task status transition observed by the store.
+///
+/// This is a *domain* fact, not a protocol message: the store knows nothing
+/// about `notifications/tasks/status`, peers, or the wire. Consumers decide
+/// what a transition means — a receiver may map it to a status notification,
+/// a metrics sink may count it, a recorder may log it.
+#[derive(Debug, Clone)]
+pub struct TaskEvent {
+    /// The task's state immediately after the transition.
+    pub task: Task,
+    /// The status the task held before this transition.
+    pub previous_status: TaskStatus,
+}
+
+/// Observer notified of every task status transition in a [`TaskManager`].
+///
+/// Implementations must not block: the observer is called synchronously on the
+/// thread that performed the transition. To do async work (such as sending a
+/// notification), enqueue the event and drain it elsewhere.
+///
+/// The store lock is **not** held when this is called, so an implementation may
+/// call back into the same [`TaskManager`] without deadlocking.
+///
+/// **No ordering guarantee.** Each event is built under the lock and delivered
+/// after it is released, so two threads transitioning the same task can deliver
+/// out of order — a consumer may see the newer status first. That is acceptable
+/// for the notification this drives, which the spec makes advisory, but a
+/// consumer that needs authoritative state must read it from the store.
+pub trait TaskObserver: Send + Sync + std::fmt::Debug {
+    /// Called after a task's status changed.
+    fn on_task_event(&self, event: &TaskEvent);
+}
+
 /// Manager coordinating the lifecycle of tracked tasks.
 #[derive(Debug)]
 pub struct TaskManager {
@@ -301,6 +338,12 @@ pub struct TaskManager {
     /// Retention applied to a task when the request omits `ttl`. `None` means
     /// unlimited (such tasks are never TTL-evicted).
     default_ttl_ms: Option<u64>,
+    /// Optional observer of status transitions. Set at most once.
+    observer: std::sync::OnceLock<Arc<dyn TaskObserver>>,
+    /// Suggested polling interval (milliseconds) stamped on created tasks.
+    /// `None` leaves `pollInterval` absent, which is legal — the field is a
+    /// hint, not a requirement.
+    default_poll_interval_ms: Option<u64>,
 }
 
 impl Default for TaskManager {
@@ -325,6 +368,43 @@ impl TaskManager {
         Self {
             tasks: RwLock::new(HashMap::new()),
             default_ttl_ms,
+            observer: std::sync::OnceLock::new(),
+            default_poll_interval_ms: None,
+        }
+    }
+
+    /// Suggest a polling interval (milliseconds) on every task this manager
+    /// creates.
+    ///
+    /// `pollInterval` is optional in the spec — a requestor that receives none
+    /// simply picks its own rate. Setting one lets a server say how often it
+    /// expects to be polled, which is the difference between a client polling
+    /// sensibly and polling as fast as it can.
+    #[must_use]
+    pub const fn with_poll_interval(mut self, poll_interval_ms: Option<u64>) -> Self {
+        self.default_poll_interval_ms = poll_interval_ms;
+        self
+    }
+
+    /// Register the observer notified of every status transition.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if an observer was already registered; a manager
+    /// observes at most once so a late registration cannot silently replace an
+    /// earlier one and lose events.
+    pub fn set_observer(&self, observer: Arc<dyn TaskObserver>) -> Result<(), McpError> {
+        self.observer
+            .set(observer)
+            .map_err(|_| McpError::internal("task observer already registered"))
+    }
+
+    /// Fire the observer, if one is registered.
+    ///
+    /// Always called with no store lock held (see [`TaskObserver`]).
+    fn emit(&self, event: &TaskEvent) {
+        if let Some(observer) = self.observer.get() {
+            observer.on_task_event(event);
         }
     }
 
@@ -337,6 +417,7 @@ impl TaskManager {
 
         let mut task = Task::create();
         task.ttl = ttl.or(self.default_ttl_ms);
+        task.poll_interval = self.default_poll_interval_ms;
         let task_id = task.task_id.clone();
 
         if let Ok(mut tasks) = self.tasks.write() {
@@ -398,32 +479,43 @@ impl TaskManager {
     /// Cancelling a task already in a terminal status is rejected with
     /// *invalid params* (spec).
     pub fn cancel(&self, id: &TaskId) -> Result<(), McpError> {
-        let mut tasks = self
-            .tasks
-            .write()
-            .map_err(|_| McpError::internal("Failed to acquire task lock"))?;
+        // The observer must not run under the store lock, so the transition is
+        // applied in this scope and the event fired after it is released.
+        let event = {
+            let mut tasks = self
+                .tasks
+                .write()
+                .map_err(|_| McpError::internal("Failed to acquire task lock"))?;
 
-        if let Some(state) = tasks.get_mut(id) {
-            if state.task.status.is_terminal() {
+            if let Some(state) = tasks.get_mut(id) {
+                if state.task.status.is_terminal() {
+                    return Err(McpError::invalid_params(
+                        "tasks/cancel",
+                        format!(
+                            "Cannot cancel task: already in terminal status '{}'",
+                            state.task.status
+                        ),
+                    ));
+                }
+                let previous_status = state.task.status;
+                state.cancel_token.cancel();
+                state.task.set_status(TaskStatus::Cancelled);
+                state.last_access = Instant::now();
+                state.terminal.notify(usize::MAX);
+                TaskEvent {
+                    task: state.task.clone(),
+                    previous_status,
+                }
+            } else {
                 return Err(McpError::invalid_params(
                     "tasks/cancel",
-                    format!(
-                        "Cannot cancel task: already in terminal status '{}'",
-                        state.task.status
-                    ),
+                    format!("Unknown task: {}", id.as_str()),
                 ));
             }
-            state.cancel_token.cancel();
-            state.task.set_status(TaskStatus::Cancelled);
-            state.last_access = Instant::now();
-            state.terminal.notify(usize::MAX);
-            Ok(())
-        } else {
-            Err(McpError::invalid_params(
-                "tasks/cancel",
-                format!("Unknown task: {}", id.as_str()),
-            ))
-        }
+        };
+
+        self.emit(&event);
+        Ok(())
     }
 
     /// Set a task's status (and optional status message).
@@ -433,39 +525,48 @@ impl TaskManager {
         status: TaskStatus,
         message: Option<String>,
     ) -> Result<(), McpError> {
-        let mut tasks = self
-            .tasks
-            .write()
-            .map_err(|_| McpError::internal("Failed to acquire task lock"))?;
+        let event = {
+            let mut tasks = self
+                .tasks
+                .write()
+                .map_err(|_| McpError::internal("Failed to acquire task lock"))?;
 
-        if let Some(state) = tasks.get_mut(id) {
-            // Terminal statuses are final (spec): in particular, a cancelled
-            // task stays cancelled even if its execution later finishes.
-            if state.task.status.is_terminal() {
+            if let Some(state) = tasks.get_mut(id) {
+                // Terminal statuses are final (spec): in particular, a cancelled
+                // task stays cancelled even if its execution later finishes.
+                if state.task.status.is_terminal() {
+                    return Err(McpError::invalid_params(
+                        "tasks/get",
+                        format!(
+                            "task {} is already terminal ('{}')",
+                            id.as_str(),
+                            state.task.status
+                        ),
+                    ));
+                }
+                let previous_status = state.task.status;
+                state.task.set_status(status);
+                if message.is_some() {
+                    state.task.status_message = message;
+                }
+                state.last_access = Instant::now();
+                if status.is_terminal() {
+                    state.terminal.notify(usize::MAX);
+                }
+                TaskEvent {
+                    task: state.task.clone(),
+                    previous_status,
+                }
+            } else {
                 return Err(McpError::invalid_params(
                     "tasks/get",
-                    format!(
-                        "task {} is already terminal ('{}')",
-                        id.as_str(),
-                        state.task.status
-                    ),
+                    format!("Unknown task: {}", id.as_str()),
                 ));
             }
-            state.task.set_status(status);
-            if message.is_some() {
-                state.task.status_message = message;
-            }
-            state.last_access = Instant::now();
-            if status.is_terminal() {
-                state.terminal.notify(usize::MAX);
-            }
-            Ok(())
-        } else {
-            Err(McpError::invalid_params(
-                "tasks/get",
-                format!("Unknown task: {}", id.as_str()),
-            ))
-        }
+        };
+
+        self.emit(&event);
+        Ok(())
     }
 
     /// Move a task to a terminal status, storing its outcome.
@@ -476,39 +577,48 @@ impl TaskManager {
         payload: Option<TaskPayload>,
         message: Option<String>,
     ) -> Result<(), McpError> {
-        let mut tasks = self
-            .tasks
-            .write()
-            .map_err(|_| McpError::internal("Failed to acquire task lock"))?;
+        let event = {
+            let mut tasks = self
+                .tasks
+                .write()
+                .map_err(|_| McpError::internal("Failed to acquire task lock"))?;
 
-        if let Some(state) = tasks.get_mut(id) {
-            // Terminal statuses are final (spec): a cancelled task stays
-            // cancelled even if its execution later completes or fails, and
-            // its outcome is discarded.
-            if state.task.status.is_terminal() {
+            if let Some(state) = tasks.get_mut(id) {
+                // Terminal statuses are final (spec): a cancelled task stays
+                // cancelled even if its execution later completes or fails, and
+                // its outcome is discarded.
+                if state.task.status.is_terminal() {
+                    return Err(McpError::invalid_params(
+                        "tasks/result",
+                        format!(
+                            "task {} is already terminal ('{}')",
+                            id.as_str(),
+                            state.task.status
+                        ),
+                    ));
+                }
+                let previous_status = state.task.status;
+                state.task.set_status(status);
+                if message.is_some() {
+                    state.task.status_message = message;
+                }
+                state.payload = payload;
+                state.last_access = Instant::now();
+                state.terminal.notify(usize::MAX);
+                TaskEvent {
+                    task: state.task.clone(),
+                    previous_status,
+                }
+            } else {
                 return Err(McpError::invalid_params(
                     "tasks/result",
-                    format!(
-                        "task {} is already terminal ('{}')",
-                        id.as_str(),
-                        state.task.status
-                    ),
+                    format!("Unknown task: {}", id.as_str()),
                 ));
             }
-            state.task.set_status(status);
-            if message.is_some() {
-                state.task.status_message = message;
-            }
-            state.payload = payload;
-            state.last_access = Instant::now();
-            state.terminal.notify(usize::MAX);
-            Ok(())
-        } else {
-            Err(McpError::invalid_params(
-                "tasks/result",
-                format!("Unknown task: {}", id.as_str()),
-            ))
-        }
+        };
+
+        self.emit(&event);
+        Ok(())
     }
 
     /// Remove terminal tasks older than `max_age`.
@@ -580,6 +690,94 @@ fn inject_related_task(mut payload: Value, id: &TaskId) -> Value {
 /// so the spec's requirement is unsatisfiable there; the requestor already
 /// knows the task id it asked for.
 pub async fn route_task_store(
+    store: &TaskManager,
+    method: &str,
+    params: Option<&Value>,
+) -> TaskRoute {
+    TaskRoute::from_parts(
+        route_task_store_inner(store, method, params).await,
+        method,
+        params,
+    )
+}
+
+/// What a task store decided about a request.
+///
+/// This exists because an `Option` cannot say the one thing that matters here.
+/// A store declines a request for two unrelated reasons — *this is not a task
+/// method* and *this is a task method whose id I do not own* — and collapsing
+/// them into `None` led four of six call sites to answer an unknown `taskId`
+/// with **method not found**, telling the peer the server has no `tasks/get`
+/// when it plainly does. Per spec an unknown id is *invalid params*.
+///
+/// Callers with no custom task handler should use
+/// [`or_unknown_task`](Self::or_unknown_task), which folds the unowned case
+/// into the correct error. Callers that do have one should match explicitly and
+/// offer the request there first — for `tasks/get`, `tasks/result` and
+/// `tasks/cancel`. Note `tasks/list` takes no id and is therefore always
+/// [`Handled`](Self::Handled) by this store, so a custom handler's `list` never
+/// runs. That predates this type and is unchanged by it.
+#[derive(Debug)]
+pub enum TaskRoute {
+    /// Not a `tasks/*` method at all. Try the next router.
+    NotTaskMethod,
+    /// A `tasks/*` method whose id this store does not own.
+    UnownedTask {
+        /// The task method that was asked for.
+        method: String,
+        /// The id the store does not have.
+        task_id: String,
+    },
+    /// Served by this store.
+    Handled(Result<Value, McpError>),
+}
+
+impl TaskRoute {
+    fn from_parts(
+        inner: Option<Result<Value, McpError>>,
+        method: &str,
+        params: Option<&Value>,
+    ) -> Self {
+        match inner {
+            Some(result) => Self::Handled(result),
+            None if is_task_method(method) => Self::UnownedTask {
+                method: method.to_string(),
+                task_id: params
+                    .and_then(|p| p.get("taskId"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("<missing>")
+                    .to_string(),
+            },
+            None => Self::NotTaskMethod,
+        }
+    }
+
+    /// Collapse to a plain routing outcome for a caller that has no custom task
+    /// handler to try: an unowned id becomes *invalid params* naming the id.
+    ///
+    /// `None` here means only "not a task method", so it is safe to fall
+    /// through to the next router.
+    #[must_use]
+    pub fn or_unknown_task(self) -> Option<Result<Value, McpError>> {
+        match self {
+            Self::NotTaskMethod => None,
+            Self::UnownedTask { method, task_id } => Some(Err(McpError::invalid_params(
+                method,
+                format!("Unknown task: {task_id}"),
+            ))),
+            Self::Handled(result) => Some(result),
+        }
+    }
+}
+
+/// The `tasks/*` methods a store can be asked to serve by id.
+///
+/// `tasks/list` is excluded: it takes no id, so it can never be "unowned".
+fn is_task_method(method: &str) -> bool {
+    matches!(method, "tasks/get" | "tasks/result" | "tasks/cancel")
+}
+
+async fn route_task_store_inner(
     store: &TaskManager,
     method: &str,
     params: Option<&Value>,
@@ -670,7 +868,120 @@ pub async fn route_task_store(
 
 #[cfg(test)]
 mod tests {
+
+    /// `pollInterval` is a hint the server may offer. It must be absent by
+    /// default (legal, and the pre-existing behaviour) and present once a
+    /// manager is configured to suggest one — the builder on `Task` was
+    /// previously unreachable from the store, so no task ever carried it.
+    #[test]
+    fn poll_interval_is_absent_by_default_and_set_when_configured() {
+        let plain = Arc::new(TaskManager::new());
+        let a = plain.create(None);
+        assert_eq!(a.task().expect("task").poll_interval, None);
+
+        let suggesting = Arc::new(TaskManager::new().with_poll_interval(Some(250)));
+        let b = suggesting.create(None);
+        let task = b.task().expect("task");
+        assert_eq!(task.poll_interval, Some(250));
+
+        // And it reaches the wire under the spec's camelCase name.
+        let wire = serde_json::to_value(&task).expect("serialize");
+        assert_eq!(wire["pollInterval"], 250);
+    }
+
     use super::*;
+
+    /// Collects every event the manager emits.
+    #[derive(Debug, Default)]
+    struct Collector {
+        events: std::sync::Mutex<Vec<TaskEvent>>,
+    }
+
+    impl TaskObserver for Collector {
+        fn on_task_event(&self, event: &TaskEvent) {
+            if let Ok(mut events) = self.events.lock() {
+                events.push(event.clone());
+            }
+        }
+    }
+
+    impl Collector {
+        fn transitions(&self) -> Vec<(TaskStatus, TaskStatus)> {
+            self.events
+                .lock()
+                .map(|e| {
+                    e.iter()
+                        .map(|e| (e.previous_status, e.task.status))
+                        .collect()
+                })
+                .unwrap_or_default()
+        }
+    }
+
+    #[test]
+    fn test_observer_sees_every_transition() -> Result<(), Box<dyn std::error::Error>> {
+        let manager = Arc::new(TaskManager::new());
+        let collector = Arc::new(Collector::default());
+        manager.set_observer(collector.clone())?;
+
+        // set_status path
+        let a = manager.create(None);
+        a.mark_input_required()?;
+        // finish path
+        a.complete(serde_json::json!({"ok": true}))?;
+        // cancel path
+        let b = manager.create(None);
+        manager.cancel(b.id())?;
+
+        assert_eq!(
+            collector.transitions(),
+            vec![
+                (TaskStatus::Working, TaskStatus::InputRequired),
+                (TaskStatus::InputRequired, TaskStatus::Completed),
+                (TaskStatus::Working, TaskStatus::Cancelled),
+            ]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_observer_may_reenter_the_manager() -> Result<(), Box<dyn std::error::Error>> {
+        /// Reads back from the manager inside the callback. If the store lock
+        /// were still held when the observer fires, this would deadlock.
+        #[derive(Debug)]
+        struct Reentrant(std::sync::Weak<TaskManager>);
+
+        impl TaskObserver for Reentrant {
+            fn on_task_event(&self, event: &TaskEvent) {
+                if let Some(manager) = self.0.upgrade() {
+                    assert!(manager.get(&event.task.task_id).is_some());
+                    let _ = manager.list();
+                }
+            }
+        }
+
+        let manager = Arc::new(TaskManager::new());
+        manager.set_observer(Arc::new(Reentrant(Arc::downgrade(&manager))))?;
+
+        let handle = manager.create(None);
+        handle.complete(serde_json::json!({}))?;
+        assert_eq!(
+            manager.get(handle.id()).ok_or("not found")?.task.status,
+            TaskStatus::Completed
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_observer_registers_at_most_once() {
+        let manager = Arc::new(TaskManager::new());
+        assert!(manager.set_observer(Arc::new(Collector::default())).is_ok());
+        assert!(
+            manager
+                .set_observer(Arc::new(Collector::default()))
+                .is_err()
+        );
+    }
 
     #[test]
     fn test_task_manager_create_and_list() {
@@ -834,6 +1145,7 @@ mod tests {
         let params = result_params(&id);
         let result = route_task_store(&manager, "tasks/result", Some(&params))
             .await
+            .or_unknown_task()
             .expect("owned task")
             .expect("success");
         assert_eq!(result["answer"], 42);
@@ -861,10 +1173,11 @@ mod tests {
 
         let params = result_params(handle.id());
         let started = std::time::Instant::now();
-        let result = tokio::time::timeout(
-            std::time::Duration::from_secs(5),
-            route_task_store(&manager, "tasks/result", Some(&params)),
-        )
+        let result = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            route_task_store(&manager, "tasks/result", Some(&params))
+                .await
+                .or_unknown_task()
+        })
         .await
         .expect("must not hang")
         .expect("owned task")
@@ -892,6 +1205,7 @@ mod tests {
         let params = result_params(&id);
         let err = route_task_store(&manager, "tasks/result", Some(&params))
             .await
+            .or_unknown_task()
             .expect("owned task")
             .expect_err("stored error");
         let wire: JsonRpcError = (&err).into();
@@ -920,6 +1234,7 @@ mod tests {
         let params = result_params(&id);
         let result = route_task_store(&manager, "tasks/result", Some(&params))
             .await
+            .or_unknown_task()
             .expect("owned task")
             .expect("success");
         assert_eq!(result["_meta"]["keep"], 1);
@@ -947,6 +1262,7 @@ mod tests {
         let params = result_params(&id);
         let result = route_task_store(&manager, "tasks/result", Some(&params))
             .await
+            .or_unknown_task()
             .expect("owned task")
             .expect("isError result is still a successful JSON-RPC response");
         assert_eq!(result["isError"], true);
@@ -966,6 +1282,7 @@ mod tests {
         let params = result_params(&id);
         let err = route_task_store(&manager, "tasks/result", Some(&params))
             .await
+            .or_unknown_task()
             .expect("owned task")
             .expect_err("cancelled task has no result");
         assert_eq!(err.code(), -32602);
@@ -987,10 +1304,11 @@ mod tests {
         };
 
         let params = result_params(&id);
-        let outcome = tokio::time::timeout(
-            std::time::Duration::from_secs(5),
-            route_task_store(&manager, "tasks/result", Some(&params)),
-        )
+        let outcome = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            route_task_store(&manager, "tasks/result", Some(&params))
+                .await
+                .or_unknown_task()
+        })
         .await
         .expect("cancel must unblock the waiter")
         .expect("owned task");
@@ -1031,6 +1349,7 @@ mod tests {
         let params = result_params(&id);
         let err = route_task_store(&manager, "tasks/cancel", Some(&params))
             .await
+            .or_unknown_task()
             .expect("owned task")
             .expect_err("terminal cancel rejected");
         assert_eq!(err.code(), -32602);

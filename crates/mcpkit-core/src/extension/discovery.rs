@@ -16,7 +16,7 @@
 //!
 //! // Server declares extensions
 //! let registry = ExtensionRegistry::new()
-//!     .register(Extension::new("io.mcp.apps").with_version("0.1.0"))
+//!     .register(Extension::new("com.example.myext").with_version("0.1.0"))
 //!     .register(Extension::new("io.example.custom").with_version("1.0.0"));
 //!
 //! let caps = ServerCapabilities::new()
@@ -25,13 +25,13 @@
 //!
 //! // Client queries for extensions
 //! let query = ExtensionQuery::new()
-//!     .require("io.mcp.apps")
+//!     .require("com.example.myext")
 //!     .optional("io.example.custom")
 //!     .optional("io.example.missing");
 //!
 //! let result = query.check(&caps);
 //! assert!(result.is_satisfied());
-//! assert!(result.has("io.mcp.apps"));
+//! assert!(result.has("com.example.myext"));
 //! assert!(result.has("io.example.custom"));
 //! assert!(!result.has("io.example.missing"));
 //! ```
@@ -289,30 +289,30 @@ mod tests {
     #[test]
     fn test_extension_query_satisfied() {
         let registry = ExtensionRegistry::new()
-            .register(Extension::new("io.mcp.apps").with_version("0.1.0"))
+            .register(Extension::new("com.example.myext").with_version("0.1.0"))
             .register(Extension::new("io.example.custom").with_version("1.0.0"));
 
         let caps = ServerCapabilities::new().with_extensions(registry);
 
         let query = ExtensionQuery::new()
-            .require("io.mcp.apps")
+            .require("com.example.myext")
             .optional("io.example.custom");
 
         let result = query.check(&caps);
         assert!(result.is_satisfied());
-        assert!(result.has("io.mcp.apps"));
+        assert!(result.has("com.example.myext"));
         assert!(result.has("io.example.custom"));
     }
 
     #[test]
     fn test_extension_query_missing_required() {
-        let registry =
-            ExtensionRegistry::new().register(Extension::new("io.mcp.apps").with_version("0.1.0"));
+        let registry = ExtensionRegistry::new()
+            .register(Extension::new("com.example.myext").with_version("0.1.0"));
 
         let caps = ServerCapabilities::new().with_extensions(registry);
 
         let query = ExtensionQuery::new()
-            .require("io.mcp.apps")
+            .require("com.example.myext")
             .require("io.example.missing");
 
         let result = query.check(&caps);
@@ -326,13 +326,13 @@ mod tests {
 
     #[test]
     fn test_extension_query_optional_missing() {
-        let registry =
-            ExtensionRegistry::new().register(Extension::new("io.mcp.apps").with_version("0.1.0"));
+        let registry = ExtensionRegistry::new()
+            .register(Extension::new("com.example.myext").with_version("0.1.0"));
 
         let caps = ServerCapabilities::new().with_extensions(registry);
 
         let query = ExtensionQuery::new()
-            .require("io.mcp.apps")
+            .require("com.example.myext")
             .optional("io.example.missing");
 
         let result = query.check(&caps);
@@ -351,17 +351,17 @@ mod tests {
 
     #[test]
     fn test_version_requirement() {
-        let registry =
-            ExtensionRegistry::new().register(Extension::new("io.mcp.apps").with_version("0.1.0"));
+        let registry = ExtensionRegistry::new()
+            .register(Extension::new("com.example.myext").with_version("0.1.0"));
 
         let caps = ServerCapabilities::new().with_extensions(registry);
 
         // Version satisfied
-        let query = ExtensionQuery::new().with_min_version("io.mcp.apps", "0.1.0");
+        let query = ExtensionQuery::new().with_min_version("com.example.myext", "0.1.0");
         assert!(query.check(&caps).is_satisfied());
 
         // Version not satisfied
-        let query = ExtensionQuery::new().with_min_version("io.mcp.apps", "0.2.0");
+        let query = ExtensionQuery::new().with_min_version("com.example.myext", "0.2.0");
         let result = query.check(&caps);
         assert!(!result.is_satisfied());
         assert_eq!(result.version_mismatches.len(), 1);
@@ -370,11 +370,11 @@ mod tests {
     #[test]
     fn test_negotiate_extensions() {
         let client_registry = ExtensionRegistry::new()
-            .register(Extension::new("io.mcp.apps").with_version("0.1.0"))
+            .register(Extension::new("com.example.myext").with_version("0.1.0"))
             .register(Extension::new("io.client.only").with_version("1.0.0"));
 
         let server_registry = ExtensionRegistry::new()
-            .register(Extension::new("io.mcp.apps").with_version("0.2.0"))
+            .register(Extension::new("com.example.myext").with_version("0.2.0"))
             .register(Extension::new("io.server.only").with_version("1.0.0"));
 
         let client_caps = ClientCapabilities::new().with_extensions(client_registry);
@@ -383,13 +383,13 @@ mod tests {
         let negotiated = negotiate_extensions(&client_caps, &server_caps);
 
         // Only common extension should be present
-        assert!(negotiated.has("io.mcp.apps"));
+        assert!(negotiated.has("com.example.myext"));
         assert!(!negotiated.has("io.client.only"));
         assert!(!negotiated.has("io.server.only"));
 
         // Server's version should be used
         assert_eq!(
-            negotiated.get("io.mcp.apps").unwrap().version,
+            negotiated.get("com.example.myext").unwrap().version,
             Some("0.2.0".to_string())
         );
     }

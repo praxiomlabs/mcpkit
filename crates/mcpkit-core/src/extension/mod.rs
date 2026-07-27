@@ -31,7 +31,7 @@
 //! // Create a registry with multiple extensions
 //! let registry = ExtensionRegistry::new()
 //!     .register(healthcare)
-//!     .register(Extension::new("io.mcp.apps").with_version("0.1.0"));
+//!     .register(Extension::new("io.modelcontextprotocol/ui").with_version("0.1.0"));
 //!
 //! // Apply to capabilities
 //! let caps = ServerCapabilities::new()
@@ -48,7 +48,7 @@
 //!
 //! | Namespace | Description |
 //! |-----------|-------------|
-//! | `io.mcp.*` | Official MCP extensions (e.g., `io.mcp.apps`) |
+//! | `io.modelcontextprotocol/*` | Official MCP extensions (e.g., `io.modelcontextprotocol/ui`) |
 //! | `io.anthropic.*` | Anthropic-specific extensions |
 //! | `io.openai.*` | OpenAI-specific extensions |
 //!
@@ -56,7 +56,7 @@
 //!
 //! # References
 //!
-//! - [MCP Extensions](https://modelcontextprotocol.io/specification/2025-11-25/extensions)
+//! - [MCP specification 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/)
 //! - [SEP-1865: MCP Apps Extension](https://github.com/modelcontextprotocol/ext-apps)
 //!
 //! # Submodules
@@ -78,7 +78,7 @@ use std::collections::HashMap;
 /// and can include version information and custom configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Extension {
-    /// Extension name (e.g., "io.mcp.apps", "com.example.myext").
+    /// Extension name (e.g., "io.modelcontextprotocol/ui", "com.example.myext").
     pub name: String,
 
     /// Extension version (semver recommended).
@@ -228,7 +228,7 @@ impl ExtensionRegistry {
     /// ```json
     /// {
     ///   "extensions": {
-    ///     "io.mcp.apps": { "version": "0.1.0", ... },
+    ///     "io.modelcontextprotocol/ui": { "version": "0.1.0", ... },
     ///     "com.example.myext": { "version": "1.0.0", ... }
     ///   }
     /// }
@@ -268,10 +268,11 @@ impl ExtensionRegistry {
 /// Known extension namespaces.
 pub mod namespaces {
     /// Official MCP extensions namespace.
-    pub const MCP: &str = "io.mcp";
+    pub const MCP: &str = "io.modelcontextprotocol";
 
-    /// MCP Apps extension (SEP-1865).
-    pub const MCP_APPS: &str = "io.mcp.apps";
+    /// MCP Apps extension (SEP-1865), whose published identifier is
+    /// `io.modelcontextprotocol/ui`.
+    pub const MCP_APPS: &str = "io.modelcontextprotocol/ui";
 
     /// Anthropic-specific extensions.
     pub const ANTHROPIC: &str = "io.anthropic";
@@ -300,10 +301,10 @@ mod tests {
     #[test]
     fn test_extension_registry() {
         let registry = ExtensionRegistry::new()
-            .register(Extension::new("io.mcp.apps").with_version("0.1.0"))
+            .register(Extension::new("com.example.myext").with_version("0.1.0"))
             .register(Extension::new("com.example.ext").with_version("2.0.0"));
 
-        assert!(registry.has("io.mcp.apps"));
+        assert!(registry.has("com.example.myext"));
         assert!(registry.has("com.example.ext"));
         assert!(!registry.has("unknown"));
         assert_eq!(registry.len(), 2);
@@ -311,15 +312,15 @@ mod tests {
 
     #[test]
     fn test_experimental_roundtrip() {
-        let registry =
-            ExtensionRegistry::new().register(Extension::new("io.mcp.apps").with_version("0.1.0"));
+        let registry = ExtensionRegistry::new()
+            .register(Extension::new("com.example.myext").with_version("0.1.0"));
 
         let json = registry.to_experimental();
         let parsed = ExtensionRegistry::from_experimental(&json).unwrap();
 
-        assert!(parsed.has("io.mcp.apps"));
+        assert!(parsed.has("com.example.myext"));
         assert_eq!(
-            parsed.get("io.mcp.apps").unwrap().version,
+            parsed.get("com.example.myext").unwrap().version,
             Some("0.1.0".to_string())
         );
     }

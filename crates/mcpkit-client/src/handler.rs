@@ -12,7 +12,8 @@ use mcpkit_core::error::McpError;
 use mcpkit_core::tasks::{CancellationToken, CancelledFuture};
 use mcpkit_core::types::{
     CreateMessageRequest, CreateMessageResult, ElicitRequest, ElicitResult,
-    ProgressNotificationParams, TaskId, TaskProgress, UrlElicitRequest,
+    ProgressNotificationParams, TaskId, TaskProgress, TaskStatusNotificationParams,
+    UrlElicitRequest,
 };
 use std::future::Future;
 
@@ -135,6 +136,19 @@ pub trait ClientHandler: Send + Sync {
     /// Called when a URL-mode elicitation's out-of-band interaction has
     /// completed (`notifications/elicitation/complete`).
     fn on_elicitation_complete(&self, _elicitation_id: String) -> impl Future<Output = ()> + Send {
+        async {}
+    }
+
+    /// Called when a task the server is running changed status
+    /// (`notifications/tasks/status`).
+    ///
+    /// Sending this is optional for the server, so a client must not rely on
+    /// receiving it — poll `tasks/get` for authoritative state. Treat it as a
+    /// hint that polling now is worthwhile.
+    fn on_task_status(
+        &self,
+        _params: TaskStatusNotificationParams,
+    ) -> impl Future<Output = ()> + Send {
         async {}
     }
 

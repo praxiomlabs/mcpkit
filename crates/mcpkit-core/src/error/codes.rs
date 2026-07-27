@@ -26,7 +26,11 @@ pub const SERVER_ERROR_END: i32 = -32099;
 
 // MCP-specific codes
 
-/// User rejected the operation.
+/// The user rejected the operation.
+///
+/// Spec-defined: the 2025-11-25 sampling flow names `-1` for
+/// "User rejected sampling request". It sits outside the JSON-RPC reserved
+/// range (-32768..-32000), so it is an application-level code by design.
 pub const USER_REJECTED: i32 = -1;
 
 /// Resource was not found.

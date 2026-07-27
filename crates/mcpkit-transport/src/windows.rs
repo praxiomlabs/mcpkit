@@ -62,6 +62,7 @@ pub const DEFAULT_BUFFER_SIZE: usize = 64 * 1024;
 
 /// Configuration for Windows named pipe transport.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct NamedPipeConfig {
     /// The pipe name (e.g., `\\.\pipe\mcp-server`).
     pub name: String,

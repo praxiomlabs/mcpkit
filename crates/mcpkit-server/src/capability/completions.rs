@@ -191,6 +191,7 @@ impl CompleteRequestBuilder {
                 value: self.arg_value,
             },
             context: None,
+            meta: None,
         }
     }
 }

@@ -48,6 +48,9 @@ impl std::fmt::Display for LoggingLevel {
 pub struct SetLevelRequest {
     /// The minimum severity the client wants to receive.
     pub level: LoggingLevel,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 /// Params for `notifications/message` — a log message emitted by the server.
@@ -99,6 +102,7 @@ mod tests {
     fn set_level_request_round_trips() {
         let wire = serde_json::to_value(SetLevelRequest {
             level: LoggingLevel::Notice,
+            meta: None,
         })
         .unwrap();
         assert_eq!(wire, json!({ "level": "notice" }));

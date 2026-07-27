@@ -2,7 +2,7 @@
 
 This guide helps you migrate from the `rmcp` crate (the official Rust MCP SDK) to `mcpkit`. Both SDKs implement the same MCP protocol and are wire-compatible.
 
-> **Note**: This guide reflects rmcp's API as of June 2026 (rmcp 1.7.0). Check [rmcp's documentation](https://github.com/modelcontextprotocol/rust-sdk) for the latest API details.
+> **Note**: The rmcp side of this guide was verified against **rmcp 2.2.0** on 2026-07-26. rmcp's API changed substantially across the 1.x -> 2.x boundary — `Server::builder()` and `StdioTransport` are gone (replaced by `ServiceExt::serve` and `transport::stdio()`, which yields a stdin/stdout pair), and `model::Content` is now `model::ContentBlock`. Check [rmcp's documentation](https://github.com/modelcontextprotocol/rust-sdk) for anything not shown here.
 
 ## Quick Comparison
 
@@ -21,7 +21,7 @@ This guide helps you migrate from the `rmcp` crate (the official Rust MCP SDK) t
 
 ```toml
 [dependencies]
-rmcp = "1.7"
+rmcp = "2.2"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 schemars = "1"
@@ -43,12 +43,12 @@ serde = { version = "1", features = ["derive"] }
 
 ```rust
 use rmcp::{
-    Error as McpError,
+    ErrorData as McpError,
+    ServerHandler, ServiceExt,
     model::{
-        CallToolResult, Content, ServerCapabilities, ServerInfo,
+        CallToolResult, ContentBlock, ServerCapabilities, ServerInfo,
         Tool, ToolAnnotations,
     },
-    server::{Server, ServerHandler},
     tool,
 };
 ```
@@ -144,19 +144,14 @@ Key differences:
 ### Before (rmcp)
 
 ```rust
-use rmcp::server::{Server, ServerHandler};
-use rmcp::transport::stdio::StdioTransport;
+use rmcp::{ServerHandler, ServiceExt, transport::stdio};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let server = Server::builder()
-        .name("my-server")
-        .version("1.0.0")
-        .handler(MyHandler::new())
-        .build();
-
-    let transport = StdioTransport::new();
-    server.run(transport).await?;
+    // 2.x: the handler *is* the service; `serve` consumes it and a transport.
+    // `stdio()` yields the (Stdin, Stdout) pair, not a transport struct.
+    let service = MyHandler::new().serve(stdio()).await?;
+    service.waiting().await?;
     Ok(())
 }
 ```
@@ -165,11 +160,11 @@ async fn main() -> anyhow::Result<()> {
 
 ```rust
 use mcpkit::prelude::*;
-use mcpkit_transport::StdioTransport;
+use mcpkit_transport::SyncStdioTransport;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let transport = StdioTransport::new();
+    let transport = SyncStdioTransport::new();
 
     let server = ServerBuilder::new("my-server", "1.0.0")
         .with_transport(transport)
@@ -315,12 +310,14 @@ Version negotiation happens automatically during initialization.
 
 ### rmcp Transports
 
-- `StdioTransport`
-- `SseTransport` (SSE only)
+- `transport::stdio()` (stdin/stdout pair)
+- `transport::child_process`
+- `transport::streamable_http_client` / `streamable_http_server`
+- `transport::ws`
 
 ### mcpkit Transports
 
-- `StdioTransport`
+- `SyncStdioTransport`
 - `WebSocketTransport`
 - `HttpTransport` (full HTTP + SSE)
 - `UnixTransport`
@@ -335,7 +332,7 @@ Replace `rmcp` with `mcpkit`:
 
 ```toml
 [dependencies]
-- rmcp = "1.7"
+- rmcp = "2.2"
 + mcpkit = "0.7"
 ```
 

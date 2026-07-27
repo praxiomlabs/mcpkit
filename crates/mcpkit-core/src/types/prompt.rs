@@ -279,6 +279,9 @@ pub struct ListPromptsRequest {
     /// Cursor for pagination.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cursor: Option<String>,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 /// Response for listing prompts.
@@ -289,6 +292,9 @@ pub struct ListPromptsResult {
     /// Cursor for the next page.
     #[serde(rename = "nextCursor", skip_serializing_if = "Option::is_none")]
     pub next_cursor: Option<String>,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 /// Request parameters for getting a prompt.
@@ -299,11 +305,18 @@ pub struct GetPromptRequest {
     /// Arguments to pass to the prompt.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub arguments: Option<serde_json::Map<String, serde_json::Value>>,
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
 }
 
 /// Notification that the prompt list has changed.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct PromptListChangedNotification {}
+pub struct PromptListChangedNotification {
+    /// Optional protocol metadata (`_meta`).
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
+}
 
 #[cfg(test)]
 mod tests {

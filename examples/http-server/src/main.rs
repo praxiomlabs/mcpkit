@@ -501,7 +501,7 @@ async fn handle_mcp_post(
         }
         Message::Notification(notif) => {
             // Handle notifications (no response)
-            if notif.method == "initialized" {
+            if notif.method == mcpkit_server::router::notifications::INITIALIZED {
                 info!(session_id = %session_id, "Client initialized");
             }
             // Return 202 Accepted for notifications

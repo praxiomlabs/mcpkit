@@ -8,7 +8,8 @@
 //! - **Reduced boilerplate** via unified `#[mcp_server]` macro
 //! - **Type-safe state machines** via typestate pattern for connection lifecycle
 //! - **Rich error handling** with context chains and miette diagnostics
-//! - **Full MCP 2025-11-25 protocol coverage** including Tasks
+//! - **Complete MCP 2025-11-25 method coverage** — all 31 methods the schema
+//!   defines, including Tasks, verified in CI against the vendored schema
 //! - **Runtime-agnostic** async support
 //!
 //! ## Quick Start

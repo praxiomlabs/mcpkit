@@ -178,10 +178,16 @@ impl ProtocolValidator {
             "completion/complete",
             "sampling/createMessage",
             "roots/list",
+            "elicitation/create",
+            "resources/templates/list",
+            "tasks/get",
+            "tasks/list",
+            "tasks/cancel",
+            "tasks/result",
         ]);
 
         validator.register_notification_methods(&[
-            "initialized",
+            "notifications/initialized",
             "notifications/cancelled",
             "notifications/progress",
             "notifications/message",
@@ -190,6 +196,8 @@ impl ProtocolValidator {
             "notifications/tools/list_changed",
             "notifications/prompts/list_changed",
             "notifications/roots/list_changed",
+            "notifications/elicitation/complete",
+            "notifications/tasks/status",
         ]);
 
         validator
@@ -299,7 +307,7 @@ impl ProtocolValidator {
         }
 
         // Track initialization
-        if method == "initialized" {
+        if method == "notifications/initialized" {
             self.initialized = true;
         }
     }
@@ -362,7 +370,7 @@ mod tests {
         let messages = vec![
             Message::Request(Request::new("initialize", 1)),
             Message::Response(Response::success(RequestId::from(1), serde_json::json!({}))),
-            Message::Notification(Notification::new("initialized")),
+            Message::Notification(Notification::new("notifications/initialized")),
             Message::Request(Request::new("tools/list", 2)),
             Message::Response(Response::success(
                 RequestId::from(2),
@@ -424,6 +432,40 @@ mod tests {
                 .errors
                 .iter()
                 .any(|e| matches!(e, ValidationError::UnmatchedRequest { .. }))
+        );
+    }
+
+    #[test]
+    fn test_strict_mode_accepts_conforming_session() {
+        let mut validator = ProtocolValidator::new().strict();
+
+        for msg in [
+            Message::Request(Request::new("initialize", 1)),
+            Message::Response(Response::success(RequestId::from(1), serde_json::json!({}))),
+            Message::Notification(Notification::new("notifications/initialized")),
+            Message::Request(Request::new("tools/call", 2)),
+            Message::Response(Response::success(RequestId::from(2), serde_json::json!({}))),
+            Message::Request(Request::new("tasks/get", 3)),
+            Message::Response(Response::success(RequestId::from(3), serde_json::json!({}))),
+        ] {
+            validator.validate(&msg);
+        }
+
+        let result = validator.finalize();
+        assert!(
+            result.valid,
+            "conforming session rejected: {:?}",
+            result.errors
+        );
+        // The initialized flag must flip on the spec-named notification;
+        // otherwise every post-init request is flagged as pre-init.
+        assert!(
+            !result
+                .warnings
+                .iter()
+                .any(|w| w.contains("before initialization")),
+            "initialized flag never flipped: {:?}",
+            result.warnings
         );
     }
 

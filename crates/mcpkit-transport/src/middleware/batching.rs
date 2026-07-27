@@ -45,6 +45,7 @@ use mcpkit_core::protocol::Message;
 
 /// Configuration for message batching.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct BatchingConfig {
     /// Maximum number of messages per batch.
     pub max_batch_size: usize,

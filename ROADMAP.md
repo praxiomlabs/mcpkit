@@ -2,9 +2,14 @@
 
 This document outlines the path to a stable 1.0 release of mcpkit.
 
-## Current Status: v0.6.0
+## Current Status: v0.7.0 (unreleased)
 
-mcpkit is feature-complete and ready for 1.0. The SDK implements the full MCP 2025-11-25 specification with comprehensive transport and framework support. All 1.0 release criteria have been met.
+mcpkit implements every method the MCP 2025-11-25 schema defines, across stdio,
+WebSocket, Unix, in-memory and the four HTTP framework adapters.
+
+All 1.0 criteria below are met. Method coverage, structural conformance and the
+behavioural checks a schema diff cannot make are each verified in CI against the
+vendored spec — see the tables for what is checked and how.
 
 ## 1.0 Release Criteria
 
@@ -12,8 +17,8 @@ mcpkit is feature-complete and ready for 1.0. The SDK implements the full MCP 20
 
 | Requirement | Status | Notes |
 |-------------|--------|-------|
-| Full MCP 2025-11-25 compliance | ✅ Complete | All protocol features implemented |
-| Protocol version negotiation | ✅ Complete | Supports 4 protocol versions |
+| Full MCP 2025-11-25 compliance | ✅ Complete | All 31 schema-defined methods. The CI vocabulary diff proves the names exist in the sources, not that each is routed — routing and behaviour are covered by `mcpkit/tests/protocol_behaviour_conformance.rs`. Structural conformance covers every `$def` with a same-named type — 75 of 145, the rest being envelopes, unions and aliases with no 1:1 Rust type — with no outstanding field gaps |
+| Protocol version negotiation | ✅ Complete | All 4 published versions; table-driven conformance tests |
 | OAuth 2.1 + PKCE support | ✅ Complete | RFC 9728, 8414, 7636 compliant |
 | Tasks (async operations) | ✅ Complete | Full task lifecycle support |
 | Elicitation | ✅ Complete | Server-initiated user input |
@@ -26,8 +31,8 @@ mcpkit is feature-complete and ready for 1.0. The SDK implements the full MCP 20
 | Rocket integration | ✅ Complete | Router, SSE, session management |
 | Warp integration | ✅ Complete | Router, SSE, CORS support |
 | Extension infrastructure | ✅ Complete | Structured extension support |
-| Comprehensive documentation | ✅ Complete | 28+ doc files, ADRs |
-| Test coverage | ✅ Complete | 100+ tests, integration tests |
+| Comprehensive documentation | ✅ Complete | 34 doc files, 6 ADRs |
+| Test coverage | ✅ Complete | 1,455+ tests incl. spec-anchored and behavioural conformance suites |
 | Fuzzing | ✅ Complete | 6 fuzz targets, CI integration |
 | Zero clippy warnings | ✅ Complete | Strict lint configuration |
 
@@ -44,8 +49,8 @@ mcpkit is feature-complete and ready for 1.0. The SDK implements the full MCP 20
 
 | Requirement | Status | Notes |
 |-------------|--------|-------|
-| No security vulnerabilities | ✅ Complete | Regular `cargo audit` |
-| Performance benchmarks | ✅ Complete | Criterion benchmarks vs rmcp |
+| No security vulnerabilities | ✅ Complete | `cargo deny check advisories` clean. RUSTSEC-2026-0185 (quinn-proto) resolved by upgrading to 0.11.16; RUSTSEC-2023-0071 is deliberately ignored with rationale in `deny.toml` |
+| Performance benchmarks | ✅ Complete | Criterion benchmarks vs rmcp 2.2 |
 | Memory safety | ✅ Complete | `#![deny(unsafe_code)]` |
 | Error handling consistency | ✅ Complete | Unified McpError type |
 
@@ -68,6 +73,33 @@ mcpkit is feature-complete and ready for 1.0. The SDK implements the full MCP 20
 - `mcpkit` CLI tool for scaffolding
 - Integration test harness improvements
 - Debug/trace tooling
+
+### Next protocol revision
+
+A revision after `2025-11-25` is in flight upstream. As of 2026-07-26 it has **no
+published schema** — `modelcontextprotocol/modelcontextprotocol` carries the four
+released revisions plus `draft` — so mcpkit supporting all four published
+versions is current, not behind.
+
+Two things to watch:
+
+- `rmcp` 2.2.0 already accepts a `2026-07-28` protocol version and gates
+  behaviour on it (SEP-2164: `INVALID_PARAMS` for peers negotiating it or newer).
+- The upstream `draft` schema is a substantial restructure, not an increment —
+  21 methods against 2025-11-25's 31, adding `server/discover`,
+  `subscriptions/listen` and `notifications/subscriptions/acknowledged`.
+
+The MCP Apps extension (SEP-1865) has moved too. Verified 2026-07-27 against
+ext-apps `specification/2026-01-26/apps.mdx`: the flat `_meta["ui/resourceUri"]`
+shape mcpkit emits is deprecated there in favour of nested `_meta.ui.resourceUri`
+and "will be removed before GA", and `ui/displayHints` does not appear in that
+revision at all. Neither is a conformance break against 2025-11-25 — MCP Apps is
+optional and that revision postdates our target — but both are wire changes that
+should land with the revision work rather than piecemeal.
+
+Decision needed: track the next revision early behind a feature, as rmcp is
+doing, or wait for publication. `spec/` and the `schema-check` CI job are already
+structured to vendor a second revision alongside the current one.
 
 ### Future Considerations
 
@@ -104,4 +136,4 @@ No specific timeline is set for 1.0. Release will occur when all criteria above 
 
 ---
 
-*Last updated: December 2025*
+*Last updated: 2026-07-26*

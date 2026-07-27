@@ -45,6 +45,7 @@ pub const DEFAULT_MAX_MESSAGE_SIZE: usize = 16 * 1024 * 1024;
 
 /// Configuration for Unix socket transport.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct UnixSocketConfig {
     /// Socket path.
     pub path: PathBuf,

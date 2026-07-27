@@ -270,7 +270,7 @@ impl<'a> Context<'a> {
         };
 
         self.notify(
-            "notifications/progress",
+            mcpkit_core::methods::notifications::PROGRESS,
             Some(serde_json::to_value(params)?),
         )
         .await
@@ -292,8 +292,11 @@ impl<'a> Context<'a> {
             logger: logger.map(String::from),
             ..LoggingMessageNotificationParams::new(level, data)
         };
-        self.notify("notifications/message", Some(serde_json::to_value(params)?))
-            .await
+        self.notify(
+            mcpkit_core::methods::notifications::MESSAGE,
+            Some(serde_json::to_value(params)?),
+        )
+        .await
     }
 
     /// Send a request to the client and await its response.

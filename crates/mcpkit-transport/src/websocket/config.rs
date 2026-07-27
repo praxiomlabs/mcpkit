@@ -4,6 +4,7 @@ use std::time::Duration;
 
 /// Configuration for WebSocket transport.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct WebSocketConfig {
     /// WebSocket URL (ws:// or wss://).
     pub url: String,
@@ -130,6 +131,17 @@ impl WebSocketConfig {
     #[must_use]
     pub const fn with_max_reconnect_attempts(mut self, attempts: u32) -> Self {
         self.max_reconnect_attempts = attempts;
+        self
+    }
+
+    /// Set the reconnect backoff policy.
+    ///
+    /// `new()` seeds this with `ExponentialBackoff::default()`; before this
+    /// setter existed the only way to change it was a struct literal, which
+    /// `#[non_exhaustive]` now forbids downstream.
+    #[must_use]
+    pub fn with_reconnect_backoff(mut self, backoff: ExponentialBackoff) -> Self {
+        self.reconnect_backoff = backoff;
         self
     }
 

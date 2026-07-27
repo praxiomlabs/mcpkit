@@ -55,6 +55,7 @@ pub enum GrpcError {
 
 /// Configuration for gRPC transport.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct GrpcConfig {
     /// The endpoint URI (e.g., `http://localhost:50051`).
     pub endpoint: String,
@@ -331,6 +332,7 @@ impl Transport for GrpcTransport {
 
 /// Configuration for gRPC server.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct GrpcServerConfig {
     /// Bind address (e.g., "0.0.0.0:50051").
     pub addr: String,

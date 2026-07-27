@@ -1,0 +1,66 @@
+# Accepted differences between mcpkit's wire vocabulary and the vendored
+# official schema (spec/2025-11-25/schema.json).
+#
+# Regenerate with:  scripts/schema-diff.sh --baseline
+# CI (schema-check) fails when the live set differs from this file in either
+# direction. A NEW line is a regression. A REMOVED line means a difference was
+# closed — update this file in the same commit.
+#
+# Comments and blank lines are stripped before comparison.
+#
+# Methods, notification methods, and the three closed enums are all clean:
+# mcpkit implements 31/31 spec methods and 11/11 notifications, and
+# LoggingLevel / Role / TaskStatus match exactly. Nothing from those rows
+# appears below, which is the point — if any of them regresses, a line appears
+# here and the job fails.
+#
+# Everything below is a content-type discriminator, and every entry is
+# deliberate:
+#
+#   in-mcpkit-not-in-schema — these are not MCP content types at all. They are
+#   `#[serde(tag = "type")]` discriminators on two internal enums the extractor
+#   cannot distinguish from wire content:
+#     * ServerTransport (client .well-known discovery): http, stdio, websocket
+#     * debug::recorder::SessionEvent (local session recording, never on the
+#       wire): SessionStarted, SessionEnded, MessageSent, MessageReceived,
+#       Error, Custom
+#   None collides with a spec-defined discriminator.
+#
+#   in-schema-not-in-mcpkit — the elicitation primitive-schema types. mcpkit
+#   models PropertySchema.type as an open String rather than a tagged enum, so
+#   all three deserialize correctly; they simply have no const discriminator
+#   for the extractor to find. A modelling-shape difference, not a gap.
+#
+#
+#
+# ---------------------------------------------------------------------------
+# Tier 2 (structural). Every $def with a same-named mcpkit struct is diffed —
+# 75 types. `type` discriminators are filtered (mcpkit supplies them from the
+# #[serde(tag = "type")] enum wrapper, never as a struct field), and 4 defs are
+# reported UNRESOLVED rather than diffed because this resolver cannot expand an
+# `anyOf` union (ElicitRequestParams) or an abstract JSON-RPC base
+# (Request/Notification).
+#
+# The 21 missing `_meta` fields recorded here previously are closed: every type
+# the schema declares `_meta` on now carries it. What remains is one modelling
+# difference, and it is benign:
+#
+#   `ResourceContents blob|text` — the schema splits TextResourceContents and
+#   BlobResourceContents into sibling defs extending ResourceContents; mcpkit
+#   flattens them into one struct with optional `text` and `blob`. A peer sees
+#   exactly one of them either way.
+# ---------------------------------------------------------------------------
+content-type in-mcpkit-not-in-schema: Custom
+content-type in-mcpkit-not-in-schema: Error
+content-type in-mcpkit-not-in-schema: MessageReceived
+content-type in-mcpkit-not-in-schema: MessageSent
+content-type in-mcpkit-not-in-schema: SessionEnded
+content-type in-mcpkit-not-in-schema: SessionStarted
+content-type in-mcpkit-not-in-schema: http
+content-type in-mcpkit-not-in-schema: stdio
+content-type in-mcpkit-not-in-schema: websocket
+content-type in-schema-not-in-mcpkit: array
+content-type in-schema-not-in-mcpkit: boolean
+content-type in-schema-not-in-mcpkit: string
+field in-mcpkit-not-in-schema: ResourceContents blob
+field in-mcpkit-not-in-schema: ResourceContents text

@@ -143,9 +143,12 @@ impl MockClient {
     }
 
     /// Create an initialized notification.
+    ///
+    /// Uses the spec method constant rather than a literal: a harness that
+    /// sends a name no conforming server routes tests nothing.
     #[must_use]
     pub fn create_initialized_notification(&self) -> Notification {
-        Notification::new("initialized")
+        Notification::new(mcpkit_server::router::notifications::INITIALIZED)
     }
 
     /// Create a tools/list request.
@@ -506,6 +509,57 @@ mod tests {
 
         let call_tool = client.create_call_tool_request("test", serde_json::json!({}));
         assert_eq!(call_tool.method.as_ref(), "tools/call");
+    }
+
+    /// The spec method is `notifications/initialized`. This asserts the literal
+    /// deliberately: comparing against the constant the code now uses would
+    /// pass even if that constant were wrong, which is exactly how a bare
+    /// `"initialized"` survived in this harness and in the debug validator.
+    #[test]
+    fn initialized_notification_uses_the_spec_method_name() {
+        let client = MockClient::new();
+        assert_eq!(
+            client.create_initialized_notification().method.as_ref(),
+            "notifications/initialized"
+        );
+    }
+
+    /// Everything the harness emits must be a method a conforming server
+    /// routes. Anchored to the protocol validator's spec method registry, so a
+    /// future harness method that is not in the spec fails here rather than
+    /// silently testing nothing.
+    #[test]
+    fn every_method_the_harness_emits_is_a_spec_method() {
+        use mcpkit_core::debug::ProtocolValidator;
+        use mcpkit_core::protocol::Message;
+
+        let client = MockClient::new();
+        let mut validator = ProtocolValidator::new().strict();
+
+        for message in [
+            Message::Request(client.create_initialize_request()),
+            Message::Notification(client.create_initialized_notification()),
+            Message::Request(client.create_ping_request()),
+            Message::Request(client.create_list_tools_request()),
+            Message::Request(client.create_call_tool_request("t", serde_json::json!({}))),
+        ] {
+            validator.validate(&message);
+        }
+
+        let result = validator.result();
+        assert!(
+            result.errors.is_empty(),
+            "harness emits non-spec methods: {:?}",
+            result.errors
+        );
+        assert!(
+            !result
+                .warnings
+                .iter()
+                .any(|w| w.contains("before initialization")),
+            "handshake did not register as initialized: {:?}",
+            result.warnings
+        );
     }
 
     #[test]

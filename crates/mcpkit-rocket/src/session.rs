@@ -90,6 +90,9 @@ impl SessionStore {
         self.cleanup(self.idle_timeout);
         let id = Uuid::new_v4().to_string();
         let now = Instant::now();
+        // The store is built from the stream registry so task transitions
+        // publish `notifications/tasks/status` onto this session's SSE stream.
+        let streams = Arc::new(StreamRegistry::new(self.stream_config.clone()));
         self.sessions.insert(
             id.clone(),
             SessionState {
@@ -97,12 +100,11 @@ impl SessionStore {
                 protocol_version: None,
                 client_capabilities: None,
                 user,
-                tasks: Arc::new(
-                    mcpkit_server::capability::tasks::TaskManager::with_default_ttl(
-                        self.default_task_ttl,
-                    ),
+                tasks: mcpkit_server::capability::tasks::session_task_store(
+                    &streams,
+                    self.default_task_ttl,
                 ),
-                streams: Arc::new(StreamRegistry::new(self.stream_config.clone())),
+                streams,
                 outbound_owner: Arc::new(OutboundOwner::new()),
                 hooks: Arc::new(std::sync::Mutex::new(tokio::task::JoinSet::new())),
             },
