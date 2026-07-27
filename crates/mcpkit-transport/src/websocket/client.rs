@@ -14,7 +14,10 @@ use super::config::{ConnectionState, WebSocketConfig};
 
 #[cfg(feature = "websocket")]
 use {
-    futures::{SinkExt, StreamExt},
+    futures::{
+        SinkExt, StreamExt,
+        stream::{SplitSink, SplitStream},
+    },
     tokio::net::TcpStream,
     tokio_tungstenite::{
         MaybeTlsStream, WebSocketStream, connect_async_with_config,
@@ -25,13 +28,25 @@ use {
 /// Internal WebSocket state.
 #[cfg(feature = "websocket")]
 struct WebSocketState {
-    /// The WebSocket stream (split for concurrent read/write).
-    stream: Option<WebSocketStream<MaybeTlsStream<TcpStream>>>,
     /// Queue of received messages.
     message_queue: VecDeque<Message>,
     /// Reconnection attempt counter.
     reconnect_attempt: u32,
 }
+
+/// Write half of the WebSocket, guarded separately from the read half.
+///
+/// Both halves used to sit in one `WebSocketState` mutex. `recv` holds its
+/// guard across `stream.next().await`, which waits for the peer, so a
+/// concurrent `send` could never acquire the lock — a client that receives
+/// while sending deadlocked. `StreamExt::split` gives two independent halves,
+/// so each direction takes only its own lock.
+#[cfg(feature = "websocket")]
+type WsSink = SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, WsMessage>;
+
+/// Read half of the WebSocket. See [`WsSink`].
+#[cfg(feature = "websocket")]
+type WsSource = SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>;
 
 #[cfg(not(feature = "websocket"))]
 struct WebSocketState {
@@ -52,6 +67,10 @@ pub struct WebSocketTransport {
     config: WebSocketConfig,
     #[allow(dead_code)] // Used when websocket feature is enabled
     state: AsyncMutex<WebSocketState>,
+    #[cfg(feature = "websocket")]
+    sink: AsyncMutex<Option<WsSink>>,
+    #[cfg(feature = "websocket")]
+    source: AsyncMutex<Option<WsSource>>,
     connected: AtomicBool,
     connection_state: AtomicU32, // ConnectionState as u32
     messages_sent: AtomicU64,
@@ -65,11 +84,13 @@ impl WebSocketTransport {
         Self {
             config,
             state: AsyncMutex::new(WebSocketState {
-                #[cfg(feature = "websocket")]
-                stream: None,
                 message_queue: VecDeque::new(),
                 reconnect_attempt: 0,
             }),
+            #[cfg(feature = "websocket")]
+            sink: AsyncMutex::new(None),
+            #[cfg(feature = "websocket")]
+            source: AsyncMutex::new(None),
             connected: AtomicBool::new(false),
             connection_state: AtomicU32::new(ConnectionState::Disconnected as u32),
             messages_sent: AtomicU64::new(0),
@@ -138,11 +159,12 @@ impl WebSocketTransport {
             message: format!("WebSocket connection failed: {e}"),
         })?;
 
-        // Store the stream
+        // Store the two halves separately so the directions never contend.
         {
-            let mut state = self.state.lock().await;
-            state.stream = Some(ws_stream);
-            state.reconnect_attempt = 0;
+            let (tx, rx) = ws_stream.split();
+            *self.sink.lock().await = Some(tx);
+            *self.source.lock().await = Some(rx);
+            self.state.lock().await.reconnect_attempt = 0;
         }
 
         self.connected.store(true, Ordering::Release);
@@ -229,13 +251,10 @@ impl WebSocketTransport {
             message: format!("Failed to serialize message: {e}"),
         })?;
 
-        let mut state = self.state.lock().await;
-        let stream = state
-            .stream
-            .as_mut()
-            .ok_or_else(|| TransportError::Connection {
-                message: "WebSocket not connected".to_string(),
-            })?;
+        let mut sink = self.sink.lock().await;
+        let stream = sink.as_mut().ok_or_else(|| TransportError::Connection {
+            message: "WebSocket not connected".to_string(),
+        })?;
 
         stream
             .send(WsMessage::Text(json))
@@ -244,7 +263,7 @@ impl WebSocketTransport {
                 message: format!("Failed to send WebSocket message: {e}"),
             })?;
 
-        drop(state);
+        drop(sink);
         self.messages_sent.fetch_add(1, Ordering::Relaxed);
 
         Ok(())
@@ -264,10 +283,11 @@ impl WebSocketTransport {
                 }
             }
 
-            // Try to receive from the stream
+            // Try to receive from the stream. Only the read half is locked, so a
+            // concurrent `send` is free to proceed while this waits on the peer.
             let ws_msg = {
-                let mut state = self.state.lock().await;
-                let Some(stream) = state.stream.as_mut() else {
+                let mut source = self.source.lock().await;
+                let Some(stream) = source.as_mut() else {
                     return Ok(None);
                 };
 
@@ -280,7 +300,7 @@ impl WebSocketTransport {
 
                         // Try to reconnect if auto-reconnect is enabled
                         if self.config.auto_reconnect {
-                            drop(state);
+                            drop(source);
                             if self.reconnect().await.is_ok() {
                                 // Retry receive after reconnection (loop continues)
                                 continue;
@@ -322,8 +342,7 @@ impl WebSocketTransport {
                 }
                 WsMessage::Ping(data) => {
                     // Respond to ping with pong
-                    let mut state = self.state.lock().await;
-                    if let Some(stream) = state.stream.as_mut() {
+                    if let Some(stream) = self.sink.lock().await.as_mut() {
                         let _ = stream.send(WsMessage::Pong(data)).await;
                     }
                     // Continue receiving (loop continues)
@@ -372,14 +391,18 @@ impl WebSocketTransport {
     /// Close the WebSocket connection.
     #[cfg(feature = "websocket")]
     async fn do_close(&self) -> Result<(), TransportError> {
-        let mut state = self.state.lock().await;
-
-        if let Some(stream) = state.stream.as_mut() {
-            // Send close frame
-            let _ = stream.close(None).await;
+        {
+            let mut sink = self.sink.lock().await;
+            if let Some(stream) = sink.as_mut() {
+                // Sends the close frame and drives the closing handshake. The
+                // split sink's `close` takes no frame argument, where
+                // `WebSocketStream::close` accepted an optional one; this call
+                // site always passed `None`, so nothing is lost.
+                let _ = SinkExt::close(stream).await;
+            }
+            *sink = None;
         }
-
-        state.stream = None;
+        *self.source.lock().await = None;
         self.connected.store(false, Ordering::Release);
         self.set_connection_state(ConnectionState::Closed);
 
