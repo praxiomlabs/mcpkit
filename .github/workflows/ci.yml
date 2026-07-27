@@ -170,6 +170,17 @@ jobs:
             FAIL=1
           fi
 
+          # RELEASING.md declares the release it documents in its own header,
+          # using a different syntax from the dependency snippets above and
+          # living at the repo root — so neither the per-file presence check nor
+          # the stale sweep could see it. It sat at 0.6.0 for the whole 0.7.0
+          # cycle and was only caught by hand during release prep.
+          if ! grep -qE "^\*\*Version:\*\* ${VERSION}( |$)" RELEASING.md; then
+            echo "ERROR: RELEASING.md header does not declare **Version:** $VERSION"
+            grep -nE "^\*\*Version:\*\*" RELEASING.md || true
+            FAIL=1
+          fi
+
           if [ "$FAIL" -ne 0 ]; then
             exit 1
           fi
